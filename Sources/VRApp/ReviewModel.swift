@@ -39,9 +39,9 @@ final class ReviewModel {
     /// What the comment box holds, so that sending from inside the box
     /// queues it first.
     var composerText = ""
-    /// The batches sent and not finished, and the listener they go to. Kept
-    /// in memory for the run; the store takes its parcels over when reviews
-    /// are kept on disk.
+    /// The batches sent and not finished, and the listener they go to. Its
+    /// parcels are kept on disk on every change (`deliver`); the listener
+    /// lives for the run.
     private(set) var outbox = Outbox()
     /// Why the last send a person asked for didn't work, for the send bar;
     /// nil after one that did.
@@ -69,10 +69,9 @@ final class ReviewModel {
     /// Each comment's keyframe, and its region's crop, being written: nil
     /// once they're on disk, or why they couldn't be saved.
     @ObservationIgnored private var grabs: [String: Task<String?, Never>] = [:]
-    /// The reviews of the videos opened earlier in this run, by content
-    /// hash, so a video opened again has its comments. The store takes this
-    /// over when reviews are kept on disk.
-    @ObservationIgnored private var shelved: [String: ReviewSession] = [:]
+    /// Reads the transcripts of the videos whose batches the last run left
+    /// in the outbox; nil when it left none, and once they're read.
+    @ObservationIgnored private var restoring: Task<Void, Never>?
 
     init(
         player: any Playing,
@@ -88,6 +87,7 @@ final class ReviewModel {
         transcripts = TranscriptService(speech: speech, cache: TranscriptCache(root: library.root))
         self.demoFolder = demoFolder
         self.now = now
+        restoreOutbox()
     }
 
     var time: Double { player.time }
@@ -132,16 +132,31 @@ final class ReviewModel {
     /// can't play is refused with the reason, and the open video stays.
     func open(_ url: URL) async throws(ModelRefusal) {
         let file = try await VideoFile.read(url)
+        let hash = file.info.contentHash
+        // The history is by the file's content: a renamed copy has it too.
+        let stored: ReviewSession?
+        do {
+            stored = try library.session(for: hash)
+        } catch {
+            throw ModelRefusal("couldn't read the review kept for \(url.path): \(error.localizedDescription)")
+        }
         do {
             try await player.load(url)
         } catch {
             throw ModelRefusal("couldn't open \(url.path): \(error.localizedDescription)")
         }
         cancelComposer()
-        if let session { shelved[session.video.contentHash] = session }
-        var opened = shelved[file.info.contentHash] ?? ReviewSession(video: file.info)
-        // The file may have moved since: the review keeps the last path seen.
-        opened.video = file.info
+        // The open video opened again keeps what this run holds of it.
+        let open = session?.video.contentHash == hash ? session : nil
+        var opened = open ?? stored ?? ReviewSession(video: file.info)
+        if opened.video != file.info {
+            // The file may have moved since: the review keeps the last path seen.
+            opened.video = file.info
+            if stored != nil { try? library.save(opened) }
+        }
+        // What a draft left when the app quit with its comment box open.
+        library.removeImages(of: hash, keeping: Set(opened.comments.map(\.id)))
+        findImages(of: opened)
         session = opened
         selection = nil
         video = file
@@ -327,10 +342,25 @@ final class ReviewModel {
         } catch {
             throw ModelRefusal("couldn't number the batch: \(error.localizedDescription)")
         }
+        // The parcel is kept before the review says the batch was sent: a
+        // crash between the two leaves a parcel of no batch, which the next
+        // launch drops, and never a sent batch no listener gets.
+        var posting = outbox
+        posting.post(batchID: id, videoHash: hash)
+        do {
+            try library.save(posting)
+        } catch {
+            throw ModelRefusal("couldn't keep the batch: \(error.localizedDescription)")
+        }
+        outbox = posting
         var sent: Batch?
-        try change { (session) throws(ReviewRefusal) in sent = try session.send(batchID: id, at: now()) }
+        do throws(ModelRefusal) {
+            try change { (session) throws(ReviewRefusal) in sent = try session.send(batchID: id, at: now()) }
+        } catch {
+            deliver { $0.finish(id) }
+            throw error
+        }
         guard let sent else { throw ModelRefusal("the batch \(id) wasn't sent") }
-        outbox.post(batchID: id, videoHash: hash)
         sendFailure = nil
         posted?()
         return sent
@@ -355,24 +385,24 @@ final class ReviewModel {
     /// session than the last one, the batches that one took and didn't
     /// finish are pending again and their comments back to `sent`.
     func listenerArrived(key: String, name: String) {
-        for parcel in outbox.arrive(key: key, name: name, at: now()) {
+        for parcel in deliver({ $0.arrive(key: key, name: name, at: now()) }) {
             try? changeReview(of: parcel.videoHash) { (review) throws(ReviewRefusal) in review.requeue(parcel.batchID) }
         }
     }
 
     /// The oldest batch waiting for the listener, now taken by it.
     func takeParcel() -> Outbox.Parcel? {
-        outbox.take(at: now())
+        deliver { $0.take(at: now()) }
     }
 
     /// A taken batch's payload didn't reach its `wait`: it's pending again.
     func parcelUndelivered(_ batchID: String) {
-        outbox.undelivered(batchID)
+        deliver { $0.undelivered(batchID) }
     }
 
     /// A batch nothing can be delivered of leaves the outbox.
     func parcelDropped(_ batchID: String) {
-        outbox.finish(batchID)
+        deliver { $0.finish(batchID) }
     }
 
     /// A `wait` of the session `key` closed.
@@ -388,6 +418,7 @@ final class ReviewModel {
             throw ModelRefusal("there's no batch \(parcel.batchID)")
         }
         let hash = parcel.videoHash
+        findImages(of: review)
         return BatchPayload(
             batch: batch,
             session: review,
@@ -399,8 +430,8 @@ final class ReviewModel {
     }
 
     // The listener answers by a comment's or a batch's id alone. Its video
-    // needn't be the open one: the id is looked up in every review of this
-    // run (`hash(ofComment:)`).
+    // needn't be the open one, nor one opened in this run: the library's
+    // index says which video an id belongs to (`hash(ofComment:)`).
 
     /// `ack`: each comment of the batch still `sent` is `acknowledged`, and
     /// `text`, when given, is a message for the full batch.
@@ -421,7 +452,7 @@ final class ReviewModel {
         let hash = try hash(ofComment: commentID)
         try changeReview(of: hash) { (review) throws(ReviewRefusal) in try review.setStatus(commentID, to: state) }
         if let review = review(of: hash), let batch = review.comment(commentID)?.batchID, review.isFinished(batch) {
-            outbox.finish(batch)
+            deliver { $0.finish(batch) }
         }
     }
 
@@ -522,62 +553,149 @@ final class ReviewModel {
 
     /// Changes the open video's review; the review's refusal is the model's.
     private func change(_ body: (inout ReviewSession) throws(ReviewRefusal) -> Void) throws(ModelRefusal) {
-        _ = try openVideo()
-        guard var changed = session else { return }
-        do throws(ReviewRefusal) {
-            try body(&changed)
-        } catch {
-            throw ModelRefusal(error.reason)
-        }
-        session = changed
+        try changeReview(of: try openVideo().info.contentHash, body)
     }
 
-    /// The review of the video `hash`: the open one, or one opened earlier.
+    /// The review of the video `hash`: the open one, or the one the library
+    /// keeps.
     private func review(of hash: String) -> ReviewSession? {
-        session?.video.contentHash == hash ? session : shelved[hash]
+        if let session, session.video.contentHash == hash { return session }
+        return (try? library.session(for: hash)) ?? nil
     }
 
-    /// Changes the review of the video `hash`, open or opened earlier; the
-    /// review's refusal is the model's, and leaves the review as it was.
+    /// Changes the review of the video `hash`, open or not, and keeps it on
+    /// disk before the change shows. The review's refusal is the model's,
+    /// and so is a review that can't be saved; both leave it as it was.
     @discardableResult
     private func changeReview<Value>(
         of hash: String, _ body: (inout ReviewSession) throws(ReviewRefusal) -> Value
     ) throws(ModelRefusal) -> Value {
-        let isOpen = session?.video.contentHash == hash
-        guard var changed = isOpen ? session : shelved[hash] else { throw ModelRefusal("there's no review of that video") }
+        guard let review = review(of: hash) else { throw ModelRefusal("there's no review of that video") }
+        var changed = review
         let value: Value
         do throws(ReviewRefusal) {
             value = try body(&changed)
         } catch {
             throw ModelRefusal(error.reason)
         }
-        if isOpen { session = changed } else { shelved[hash] = changed }
+        // A draft isn't kept, so a change to one writes nothing.
+        if changed.kept != review.kept {
+            do {
+                try library.save(changed)
+            } catch {
+                throw ModelRefusal("couldn't save the review of \(review.video.title): \(error.localizedDescription)")
+            }
+        }
+        if session?.video.contentHash == hash { session = changed }
         return value
     }
 
-    /// The video whose review has the comment `id`: the open one, or one
-    /// opened earlier in this run. The store's index takes this over when
-    /// reviews are kept on disk.
+    /// The video whose review has the comment `id`: the open one, or the
+    /// one the library's index names.
     private func hash(ofComment id: String) throws(ModelRefusal) -> String {
-        guard let review = reviews.first(where: { $0.comment(id) != nil }) else {
+        if let session, session.comment(id) != nil { return session.video.contentHash }
+        guard let hash = library.videoHash(forComment: id), review(of: hash)?.comment(id) != nil else {
             throw ModelRefusal("there's no comment \(id)")
         }
-        return review.video.contentHash
+        return hash
     }
 
     /// The video whose review has the batch `id`.
     private func hash(ofBatch id: String) throws(ModelRefusal) -> String {
-        guard let review = reviews.first(where: { $0.batch(id) != nil }) else {
+        if let session, session.batch(id) != nil { return session.video.contentHash }
+        guard let hash = library.videoHash(forBatch: id), review(of: hash)?.batch(id) != nil else {
             throw ModelRefusal("there's no batch \(id)")
         }
-        return review.video.contentHash
+        return hash
     }
 
-    /// Every review of this run: the open video's, then those of the videos
-    /// opened earlier.
-    private var reviews: [ReviewSession] {
-        let open = session.map { [$0] } ?? []
-        return open + shelved.values.filter { $0.video.contentHash != session?.video.contentHash }
+    /// Changes the outbox, and keeps its parcels on disk when they changed.
+    /// A change that can't be kept still holds for this run.
+    @discardableResult
+    private func deliver<Value>(_ body: (inout Outbox) -> Value) -> Value {
+        let before = outbox.parcels
+        let value = body(&outbox)
+        if outbox.parcels != before {
+            do {
+                try library.save(outbox)
+            } catch {
+                Self.complain("couldn't keep the outbox: \(error.localizedDescription)")
+            }
+        }
+        return value
+    }
+
+    /// Takes up the outbox the last run kept. The `wait` that took a batch
+    /// ended with that run, so a batch taken and not finished is pending
+    /// again and its unfinished comments are back to `sent`. A parcel whose
+    /// batch is finished, or isn't in its review, is what a crash between
+    /// two writes left: it's dropped.
+    private func restoreOutbox() {
+        do {
+            outbox = try library.outbox()
+        } catch {
+            Self.complain("couldn't read the outbox: \(error.localizedDescription)")
+            return
+        }
+        guard !outbox.parcels.isEmpty else { return }
+        deliver { outbox in
+            for parcel in outbox.restart() {
+                try? changeReview(of: parcel.videoHash) { (review) throws(ReviewRefusal) in review.requeue(parcel.batchID) }
+            }
+            for parcel in outbox.parcels {
+                // A review that can't be read keeps its parcel.
+                let kept: ReviewSession?
+                do { kept = try library.session(for: parcel.videoHash) } catch { continue }
+                if kept?.batch(parcel.batchID) == nil || kept?.isFinished(parcel.batchID) == true {
+                    outbox.finish(parcel.batchID)
+                }
+            }
+        }
+        // A batch may go to a `wait` before its video is opened in this
+        // run: what the video says is read now.
+        let waiting = Set(outbox.parcels.map(\.videoHash)).compactMap { review(of: $0)?.video }
+        guard !waiting.isEmpty else { return }
+        restoring = Task { [transcripts, weak self] in
+            for video in waiting {
+                // A file that moved or changed is read when it's opened again.
+                guard let file = try? await VideoFile.read(URL(fileURLWithPath: video.path)),
+                      file.info.contentHash == video.contentHash else { continue }
+                await transcripts.start(file)
+            }
+            // Nothing to wait for from here on: a `wait` goes straight on.
+            self?.restoring = nil
+        }
+    }
+
+    /// Returns once what the last run left is ready for a listener: the
+    /// transcripts of the videos whose batches wait. At once when it left
+    /// nothing.
+    func restored() async {
+        await restoring?.value
+    }
+
+    /// Finds the images on disk of the review's comments that this run
+    /// didn't write: those of an earlier run.
+    private func findImages(of review: ReviewSession) {
+        let hash = review.video.contentHash
+        for comment in review.comments where grabs[comment.id] == nil {
+            if !keyframes.contains(comment.id), Self.isFile(library.keyframeURL(hash, comment: comment.id)) {
+                keyframes.insert(comment.id)
+            }
+            if comment.region != nil, !crops.contains(comment.id), Self.isFile(library.cropURL(hash, comment: comment.id)) {
+                crops.insert(comment.id)
+            }
+        }
+    }
+
+    private static func isFile(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Says on standard error what couldn't be kept or read, where nobody
+    /// is asking who could be refused.
+    private static func complain(_ line: String) {
+        FileHandle.standardError.write(Data("video-review: \(line)\n".utf8))
     }
 
     /// Forgets a dropped comment's keyframe and crop and removes their

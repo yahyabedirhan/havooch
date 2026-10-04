@@ -35,11 +35,21 @@ private struct FlakyFrames: FrameGrabbing {
 final class BatchRig {
     let player = FakePlayer()
     let clock = FakeClock()
-    let library = scratchLibrary()
+    let library: Library
+    /// Whether the library's folder is this rig's to remove: not when a
+    /// test hands the rig a library, as an app that starts again has one.
+    private let ownsLibrary: Bool
     let model: ReviewModel
     let server: ControlServer
 
-    init(frames: any FrameGrabbing = FakeFrames(), socket: URL = URL(fileURLWithPath: "/tmp/vr-unused/control.sock")) {
+    init(
+        frames: any FrameGrabbing = FakeFrames(),
+        socket: URL = URL(fileURLWithPath: "/tmp/vr-unused/control.sock"),
+        library: Library? = nil
+    ) {
+        self.library = library ?? scratchLibrary()
+        ownsLibrary = library == nil
+        let library = self.library
         clock.set(1_759_579_200)
         let model = ReviewModel(player: player, frames: frames, library: library, now: { [clock] in clock.now })
         self.model = model
@@ -53,7 +63,7 @@ final class BatchRig {
     }
 
     deinit {
-        try? FileManager.default.removeItem(at: library.root)
+        if ownsLibrary { try? FileManager.default.removeItem(at: library.root) }
     }
 
     func opened() async -> BatchRig {

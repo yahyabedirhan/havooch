@@ -18,14 +18,14 @@ let package = Package(
         .executableTarget(name: "VRCLI", dependencies: ["VRCommand"]),
         .target(name: "VRReview"),
         .target(name: "VRTranscript"),
-        .target(name: "VRStore", dependencies: ["VRTranscript"]),
+        .target(name: "VRStore", dependencies: ["VRReview", "VRTranscript"]),
         .executableTarget(name: "VRApp", dependencies: ["VRLease", "VRWire", "VRReview", "VRTranscript", "VRStore"]),
         .testTarget(name: "VRLeaseTests", dependencies: ["VRLease"]),
         .testTarget(name: "VRWireTests", dependencies: ["VRWire", "VRLease"]),
         .testTarget(name: "VRCommandTests", dependencies: ["VRCommand", "VRWire", "VRLease"]),
         .testTarget(name: "VRReviewTests", dependencies: ["VRReview"]),
         .testTarget(name: "VRTranscriptTests", dependencies: ["VRTranscript"]),
-        .testTarget(name: "VRStoreTests", dependencies: ["VRStore", "VRTranscript"]),
+        .testTarget(name: "VRStoreTests", dependencies: ["VRStore", "VRReview", "VRTranscript"]),
         .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRCommand", "VRWire", "VRLease", "VRReview", "VRTranscript", "VRStore"]),
     ]
 )

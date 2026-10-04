@@ -62,8 +62,25 @@ public struct Outbox: Equatable, Sendable {
     /// The context text this listener session already got, by video hash.
     private var contexts: [String: String] = [:]
 
+    /// An outbox with the parcels the store kept. The listener, its open
+    /// `wait`s and the context it has aren't kept: they live for one run of
+    /// the app.
     public init(parcels: [Parcel] = []) {
         self.parcels = parcels
+    }
+
+    /// The app started again: the `wait` of whoever took a batch ended with
+    /// the app that held it, so every batch taken and not finished is
+    /// pending again for the next `wait`, the same listener's too. Returns
+    /// the parcels put back, so their comments go back to `sent`.
+    @discardableResult
+    public mutating func restart() -> [Parcel] {
+        var requeued: [Parcel] = []
+        for index in parcels.indices where parcels[index].delivery != .pending {
+            parcels[index].delivery = .pending
+            requeued.append(parcels[index])
+        }
+        return requeued
     }
 
     public func parcel(_ batchID: String) -> Parcel? {

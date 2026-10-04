@@ -48,6 +48,27 @@ private func at(_ seconds: TimeInterval) -> Date {
         #expect(outbox.take(at: at(60)) == Outbox.Parcel(batchID: "b1", videoHash: "abc", delivery: .taken(by: "two", at: at(60))))
     }
 
+    @Test func afterAnAppRestartEveryTakenBatchIsPendingForTheNextWaitOfTheSameListenerToo() {
+        var kept = Outbox()
+        kept.post(batchID: "b1", videoHash: "abc")
+        kept.post(batchID: "b2", videoHash: "abc")
+        kept.arrive(key: "one", name: "Claude Code", at: at(0))
+        _ = kept.take(at: at(0))
+
+        // What the store kept: the parcels, not the listener.
+        var outbox = Outbox(parcels: kept.parcels)
+        let requeued = outbox.restart()
+
+        #expect(requeued.map(\.batchID) == ["b1"])
+        #expect(outbox.parcels.map(\.delivery) == [.pending, .pending])
+        #expect(outbox.presence(at: at(1)) == .absent)
+        // The listener that had it runs `wait` again, and gets it again.
+        #expect(outbox.arrive(key: "one", name: "Claude Code", at: at(60)).isEmpty)
+        #expect(outbox.take(at: at(60))?.batchID == "b1")
+        // Nothing counts as already sent to it.
+        #expect(outbox.context(for: "abc", text: "the context") == "the context")
+    }
+
     @Test func theSameListenerWaitingAgainGetsNoSecondCopyOfItsBatch() {
         var outbox = Outbox()
         outbox.post(batchID: "b1", videoHash: "abc")

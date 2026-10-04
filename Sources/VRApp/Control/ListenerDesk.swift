@@ -53,6 +53,8 @@ final class ListenerDesk {
     /// session than the last listener's ends that one's parked waits: one
     /// listener at a time.
     func wait(by holder: Holder, timeout seconds: Int?, ticket: UUID) async -> ControlServer.Answer {
+        // A batch the last run left goes out with its transcript.
+        await model.restored()
         for other in parked where other.key != holder.key {
             end(other.ticket, with: ControlServer.Answer(reply: .refused("another listener, \(holder.name), took over")))
         }

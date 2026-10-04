@@ -60,6 +60,14 @@ public struct ReviewSession: Codable, Equatable, Sendable {
         unheard = try container.decodeIfPresent(Set<String>.self, forKey: .unheard) ?? []
     }
 
+    /// The review as the store keeps it: a draft isn't kept, so a comment
+    /// box left open when the app quit leaves nothing behind.
+    public var kept: ReviewSession {
+        var kept = self
+        kept.comments.removeAll { $0.state == .draft }
+        return kept
+    }
+
     /// The comments waiting to be sent, in time order.
     public var queue: [Comment] {
         comments.filter { $0.state == .queued }

@@ -28,11 +28,14 @@ struct FakeFrames: FrameGrabbing {
     var failsCrop = false
     /// Counts the crops written, when a test waits for one.
     var crops: Count?
+    /// Counts the keyframes written, when a test waits for one.
+    var keyframes: Count?
 
     func writeKeyframe(of video: URL, at seconds: Double, to file: URL) async throws -> CGSize {
         if fails { throw Failure() }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("frame of \(video.lastPathComponent) at \(seconds)".utf8).write(to: file)
+        keyframes?.add()
         return CGSize(width: 1920, height: 1080)
     }
 
@@ -228,13 +231,15 @@ private func exists(_ file: URL) -> Bool {
     }
 
     @Test func aDraftCancelledWhileItsFrameIsWrittenLeavesNoFile() async throws {
-        let rig = await CommentRig().opened()
+        let written = FakeFrames.Count()
+        let rig = await CommentRig(frames: FakeFrames(keyframes: written)).opened()
         rig.model.compose()
         let draft = try #require(rig.model.composing)
 
         rig.model.cancelComposer()
         // The frame lands after the cancel, and removes itself.
-        try await Task.sleep(for: .milliseconds(100))
+        await rig.settle { written.value == 1 }
+        await rig.settle { !exists(rig.keyframe(draft)) }
 
         #expect(!exists(rig.keyframe(draft)))
         #expect(rig.model.keyframeURL(for: draft) == nil)
