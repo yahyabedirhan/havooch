@@ -206,7 +206,16 @@ import VRWire
         #expect(comments[2].region == keys)
         #expect(model.desk.draft == nil)
 
-        let crops = try comments.map { try Data(contentsOf: model.desk.crop(of: $0.id)) }
+        // The three comments keep the same frame and the same part of it:
+        // every pixel equal, with no tolerance. The decoded pixels are
+        // compared and not the files' bytes, because each read of a frame
+        // gets a colour profile stamped with the second it was made in, and
+        // the PNG carries it: the files of one frame read either side of a
+        // second's tick differ in that one byte and in nothing else.
+        let frames = try comments.map { try Self.pixels(of: Self.image(at: model.desk.keyframe(of: $0.id))) }
+        #expect(frames[0] == frames[2])
+        #expect(frames[1] == frames[2])
+        let crops = try comments.map { try Self.pixels(of: Self.image(at: model.desk.crop(of: $0.id))) }
         #expect(crops[0] == crops[2])
         #expect(crops[1] == crops[2])
         #expect(tall.id != broad.id)
