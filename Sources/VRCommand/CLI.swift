@@ -69,20 +69,29 @@ public enum CLI {
     /// command table, the request sent as this command's holder, the
     /// reply's output and error to print and the exit code.
     public static func run(arguments: [String], environment: CommandEnvironment) -> CommandResult {
-        // `--json` is accepted anywhere on the line.
-        let json = arguments.contains("--json")
-        let words = arguments.filter { $0 != "--json" }
-        if words.isEmpty {
+        // `--` ends the options: every word after it is taken as it is, so
+        // a text may start with `--` or be `--json`.
+        let separator = arguments.firstIndex(of: "--")
+        let before = separator.map { Array(arguments[..<$0]) } ?? arguments
+        let literal = separator.map { Array(arguments[($0 + 1)...]) } ?? []
+        // `--json` is accepted anywhere on the line before a `--`.
+        let json = before.contains("--json")
+        let words = before.filter { $0 != "--json" }
+        guard let first = words.first else {
             return CommandResult(error: CommandTable.help, exitCode: CommandResult.usage)
         }
-        if words == ["help"] || words.contains("--help") || words.contains("-h") {
+        // Help is asked for by the line's first word only: `-h` later on
+        // the line is a text.
+        if ["help", "-h", "--help"].contains(first) {
             return CommandResult(output: CommandTable.help)
         }
         guard let command = CommandTable.match(words) else {
             let named = words.prefix(2).prefix { !$0.hasPrefix("--") }.joined(separator: " ")
             return CommandResult(error: "video-review: unknown command `\(named)`\n" + CommandTable.help, exitCode: CommandResult.usage)
         }
-        var rest = Arguments(Array(words.dropFirst(command.words.count)), workingDirectory: environment.workingDirectory)
+        var rest = Arguments(
+            Array(words.dropFirst(command.words.count)), literal: literal, workingDirectory: environment.workingDirectory
+        )
         let invocation: Invocation
         do throws(UsageError) {
             invocation = try command.parse(&rest)

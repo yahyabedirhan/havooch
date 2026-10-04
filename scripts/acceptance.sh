@@ -18,7 +18,8 @@
 # What it leans on: exit codes, the batch payload's fields and the item states,
 # all fixed by the spec. Two things the spec leaves open are each kept in one
 # place below: the shape of `state --json`, and the names of a region's and a
-# transcript line's fields. It needs bash, jq and sips, which macOS ships.
+# transcript line's fields. It needs bash, jq, sips and xxd, which
+# macOS ships, and says so first when one is missing.
 set -u
 
 # --- The one setting ---------------------------------------------------------
@@ -29,6 +30,12 @@ if [ -z "$cli" ] || [ ! -x "$cli" ]; then
     echo "       (or VIDEO_REVIEW_CLI); \`make install\` first" >&2
     exit 2
 fi
+for tool in jq sips xxd; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "scripts/acceptance.sh needs \`$tool\`, which isn't on PATH" >&2
+        exit 2
+    fi
+done
 
 # --- The fixture (fixtures/sample/README.md) ----------------------------------
 

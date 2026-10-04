@@ -103,8 +103,9 @@ import VRWire
         #expect(try await take(by: Wait.first, of: run).context != nil)
         clock.now += 1
         await ask(.ack(id: names.b(1), text: "got it"), of: run, by: Wait.first)
-        let asking = Task { await ask(.ask(id: names.c(2), text: "Which box?", waitSeconds: 60), of: run, by: Wait.first) }
-        for _ in 0..<500 where (try? run.model.desk.open?.comment(CommentID(rawValue: names.c(2))))?.openQuestion == nil {
+        let second = names.c(2)
+        let asking = Task { await ask(.ask(id: second, text: "Which box?", waitSeconds: 60), of: run, by: Wait.first) }
+        for _ in 0..<500 where (try? run.model.desk.open?.comment(CommentID(rawValue: second)))?.openQuestion == nil {
             try await Task.sleep(for: .milliseconds(10))
         }
         clock.now += 1

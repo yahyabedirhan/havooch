@@ -173,7 +173,7 @@ VRApp ─▶ VRReview, VRTranscript
 
 `Package.swift` is the guard: `VRCLI` and `VRCommand` list only `VRWire` and `VRLease`. An agent-side target importing `VRReview`, `VRStore` or `VRTranscript` is a design change, not a shortcut.
 
-SwiftPM refuses a target with no source file, so `Package.swift` lists a target from the ticket that writes its first file: the four agent-side targets, `VRApp`, `VRReview`, `VRStore` and `VRTranscript`. Each test target joins with its first test.
+`Package.swift` lists eight targets: the four agent-side ones (`VRLease`, `VRWire`, `VRCommand`, `VRCLI`), then `VRReview`, `VRTranscript`, `VRStore` and `VRApp`. Each library and the app has a test target of its own.
 
 Two choices keep the agent side thin:
 
@@ -207,7 +207,7 @@ public enum Identity {
 ### Folder tree
 
 ```text
-Package.swift                         the targets and their links (eight once every module has code); swift-tools-version 6.2, macOS 26
+Package.swift                         the eight targets and their links; swift-tools-version 6.2, macOS 26
 Makefile                              build, test, bundle, install, acceptance, run, clean; reads Identity.variant
 Packaging/
   Info.plist                          the bundle's template: name, bundle id, version, video document types, usage strings
@@ -566,7 +566,9 @@ enum Invocation { case send(ControlRequest), appStatus, appOpen(demo: URL?), app
 `support` is the real support folder (the sockets and the demo pointer) and `pause` the wait between two looks at an app that starts or quits; tests give both. A row's parser returns an `Invocation`: one request to send, or one of the three `app` commands, which have steps of their own (`AppCommand`).
 
 - `CommandTable.all` is the one list of commands; `video-review help` and a usage error print from it.
-- `--json` is accepted anywhere on the line and travels as the message's `json`.
+- `--json` is accepted anywhere on the line before a `--` and travels as the message's `json`.
+- `--` ends the options. `CLI.run` splits the line at the first one, and `Arguments` keeps the words after it apart (`literal`): `positional` takes them as they are, after the words before the `--`, and `option` never looks at them. So a text may start with `--` or be `--json` (`reply <id> -- '--force is gone'`). Before the `--`, a positional that starts with `--` is refused as an unknown option, as an option nobody asked for is.
+- Help is the line's first word: `help`, `-h` or `--help`. Anywhere else those are words like any other, so `thread answer <id> -h` answers with `-h`.
 - A relative `player open` path and `--demo` folder are made absolute against the working folder; `screenshot` refuses a relative path, since the spec says `<abs.png>`.
 - Every command but the `app` ones is: parse, find the holder, locate the socket, send, print, exit.
 - `app status` prints `not running` and exits 0 when nothing answers. `app quit` sends `app.quit`, then waits up to 10 s until nothing answers on the socket.
@@ -575,12 +577,14 @@ enum Invocation { case send(ControlRequest), appStatus, appOpen(demo: URL?), app
 
 ```text
 app open [--demo <folder>]
-  wanted = the demo folder made absolute, or nil for the person's data
+  wanted = the demo folder made absolute, made when it is missing and then standardized, or nil for the person's data
+                                                         one spelling for the comparison, the pointer and the launch: a path
+                                                         standardizes differently once it exists (/private/tmp/x → /tmp/x)
   ask `app.status` on demo.sock, then on control.sock    both, so a stale pointer or socket hides no running app
   if one answers:                                        demo.sock's data is the pointer's folder, control.sock's the person's
       same data as wanted  → send `app.open` (leased; renews the lease), print its status
       other data           → send `app.quit` (leased); keep the lease from its reply; wait for the socket to go
-  make the demo folder and record the demo pointer (wanted != nil), or remove the pointer (wanted == nil)
+  record the demo pointer, refusing a folder that couldn't be made (wanted != nil), or remove the pointer (wanted == nil)
   launcher.launch(bundle: the .app this CLI sits in, environment:
       VIDEO_REVIEW_SUPPORT_DIR = wanted, VIDEO_REVIEW_CONTROL_LEASE = the lease handed over)
   send `app.open` every quarter second, up to 10 s, until the app answers; print its status
@@ -937,7 +941,7 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
     private(set) var selection: CommentID?           // the marker and card in focus
 
     // one method per action; the views and ControlServer are its only callers
-    func open(_ video: URL) async throws(ActionError) -> VideoInfo       // hashes the file, opens it in the player, prepares its transcript, loads its review
+    func open(_ video: URL) async throws(ActionError) -> VideoInfo       // hashes the file, opens it in the player, loads its review with nothing awaited between, then prepares its transcript
     func play() throws(ActionError);  func pause() throws(ActionError)
     func seek(to seconds: Double) async throws(ActionError) -> Double    // exact; refused outside 0...duration
     func scrub(to seconds: Double);  func setSpeed(_ speed: Double)      // the scrubber's drag and the speed menu: the person's only
@@ -1170,7 +1174,7 @@ The wire carries a region as any four numbers (`WireRegion`). The `comment.add` 
 
 `SocketListener` owns the POSIX side off the main actor: bind (0600), listen, accept, read one request to its end (8 MB at most), await `reply(to:)` with the heartbeat running, write, close, then tell the server `written` or `undelivered` for an answer that hands something over.
 
-The server grows with its tickets. `written` marks a `wait`'s batch taken; `undelivered` leaves the batch pending and releases a lease a `take` was granted. A request whose route isn't built yet (`context set`) is refused in words: ``this build of video-review doesn't answer `context.set` yet``.
+Every request of the contract has its route. `written` marks a `wait`'s batch taken; `undelivered` leaves the batch pending and releases a lease a `take` was granted.
 
 The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo run, else on `control.sock`, both in the real support folder. A socket file nothing answers on (left by an app that was killed) is replaced.
 
@@ -1246,7 +1250,7 @@ The lease banner is the one view that doesn't read `AppModel`: the lease belongs
 - **`SKILL.md`** is the loop: start `listen` in the background; on a batch, listen again first, read the context and each comment's keyframe, crop and transcript, decide each comment's intent, and for each one set `working`, do the work, commit once when files changed, `reply`, then `done` or `failed`; `ask` in the background when a comment isn't clear and go on with the next; one `reply` to the batch's id at the end. It also says what each exit code means for the loop and what each refusal asks for.
 - **`scripts/vr.sh`** is the only code. Every command of the skill goes through it.
 
-`vr.sh` finds the CLI, never on `PATH`, in this order: the path in `VIDEO_REVIEW_CLI`; `/Applications/Video Review.app`; the only `Video Review*.app` in `/Applications`; among several, the only one whose `app status --json` says `"running": true`. The last choice is kept for the session in `$TMPDIR/video-review-mate/cli-<session id>`, so a second prototype that starts later doesn't make the commands of a running loop ambiguous. With no app, or several and no single one running, it refuses and names `VIDEO_REVIEW_CLI`. `vr.sh which` prints the choice and its reason. So the variant's name is in no rule of the skill: clearing `Identity.variant` changes nothing in it.
+`vr.sh` finds the CLI, never on `PATH`, in this order: the path in `VIDEO_REVIEW_CLI`; `/Applications/Video Review.app`; the only `Video Review*.app` in `/Applications`; among several, the only one whose app runs. An app runs when its `state --json` exits 0: the contract fixes that command and its exit code, and leaves the shape of `app status --json` to each build. The last choice is kept for the session in `$TMPDIR/video-review-mate/cli-<session id>`, so a second prototype that starts later doesn't make the commands of a running loop ambiguous. With no app, or several and no single one running, it refuses and names `VIDEO_REVIEW_CLI`. `vr.sh which` prints the choice and its reason. So the variant's name is in no rule of the skill: clearing `Identity.variant` changes nothing in it.
 
 `vr.sh listen` is `wait`, then `ack <batch id>` at once, then the payload on standard output and in `$TMPDIR/video-review-mate/<batch id>.json`. The batch's id is read with `plutil`, which every Mac has. The acknowledgement is the script's and not the session's on purpose: a session that is mid-task, in a long test run, wakes only when that tool call ends, and the person would wait for the acknowledgement that long. A `wait` refused because the app isn't running makes `listen` wait until `app status` says it runs, then wait again; any other refusal, and exit 3, pass through.
 
@@ -1283,7 +1287,7 @@ The skill has no test in `make test`. `vr.sh` was run against stand-in command l
 
 #### The acceptance scenario
 
-`scripts/acceptance.sh <path to Contents/Helpers/video-review>` (or `VIDEO_REVIEW_CLI`) runs the spec's eight steps against an installed app and prints one `PASS` or `FAIL` line per check, then `PASSED: 8 of 8 steps, 69 checks` (exit 0) or `FAILED: …` with the steps that failed (exit 1). `make acceptance` gives it this build's path, made from `Identity.variant`; the script itself knows nothing of the build, so the same file runs against any build that keeps the spec's CLI contract. It needs `bash`, `jq` and `sips`, which macOS ships.
+`scripts/acceptance.sh <path to Contents/Helpers/video-review>` (or `VIDEO_REVIEW_CLI`) runs the spec's eight steps against an installed app and prints one `PASS` or `FAIL` line per check, then `PASSED: 8 of 8 steps, 69 checks` (exit 0) or `FAILED: …` with the steps that failed (exit 1). `make acceptance` gives it this build's path, made from `Identity.variant`; the script itself knows nothing of the build, so the same file runs against any build that keeps the spec's CLI contract. It needs `bash`, `jq`, `sips` and `xxd`, which macOS ships, and exits 2 naming the one that is missing before it touches the app.
 
 - **A run of its own.** Each run makes a new folder under `$TMPDIR` with the demo folder, the payload and the screenshots in it (`ACCEPTANCE_SCREENSHOTS` moves the screenshots), opens the video from `fixtures/sample/`, and quits the app at the end, passed or not. It never reads the person's data.
 - **Two shells.** The operator and the listener are two holders, set through `VIDEO_REVIEW_CONTROL_KEY`. The operator's first leased command takes the lease and `app quit` hands it to the app that opens next, so the script never calls `control take`. After its first `wait` returns the batch, the listener keeps a second `wait` open in the background, as the skill does, so the app shows it present; the script ends that `wait` before the quit.

@@ -106,6 +106,38 @@ import VRWire
         #expect(payload.comments[0].transcript.contains { $0.text.contains("Press command enter") })
     }
 
+    /// A transcriber with no lines, which tells `look` each video it is
+    /// asked to prepare.
+    struct Looking: Transcriber {
+        let look: @MainActor @Sendable (URL) -> Void
+
+        func prepare(_ video: URL) async { await look(video) }
+        func lines(for video: URL, in window: ClosedRange<TimeInterval>) async -> [TimedLine] { [] }
+        func status(for video: URL) async -> TranscriptStatus { TranscriptStatus() }
+    }
+
+    /// Which review was open each time a transcript was prepared.
+    @MainActor final class Seen {
+        var model: AppModel?
+        var reviews: [String?] = []
+    }
+
+    @Test func theOpenReviewIsTheVideosOwnWhileItsTranscriptIsPrepared() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let seen = Seen()
+        let model = AppModel(
+            environment: [SupportFolder.overrideVariable: folder.appendingPathComponent("support").path],
+            transcriber: Looking { _ in seen.reviews.append(seen.model?.desk.open?.video.path) }
+        )
+        seen.model = model
+        model.player.player.isMuted = true
+
+        try await model.open(RegionCommentTests.fixture)
+
+        // The player has the video by then, so a comment made meanwhile needs its review.
+        #expect(seen.reviews == [RegionCommentTests.fixture.path])
+    }
+
     @Test func withNoVideoOpenStateHasNoTranscript() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = AppModel(environment: [SupportFolder.overrideVariable: folder.appendingPathComponent("support").path])

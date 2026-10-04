@@ -71,6 +71,28 @@ import VRWire
         #expect(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isFolder) && isFolder.boolValue)
     }
 
+    @Test func aDemoFolderIsSpelledTheSameWayBeforeItExistsAndAfter() throws {
+        let harness = CommandHarness()
+        try FileManager.default.createDirectory(at: harness.support, withIntermediateDirectories: true)
+        // A folder that isn't there yet, named through `/private`, which
+        // a path loses when it is standardized once it exists. Where the
+        // temporary folder has no such twin, its own name does.
+        let plain = harness.support.standardizedFileURL.path
+        let root = FileManager.default.fileExists(atPath: "/private" + plain) ? "/private" + plain : plain
+        let folder = root + "/demo-data"
+        let first = harness.run("app", "open", "--demo", folder, transport: app(at: [], afterLaunch: "demo.sock", launcher: harness.launcher))
+        #expect(first == CommandResult(output: Self.status))
+        let spelled = URL(fileURLWithPath: folder, isDirectory: true).standardizedFileURL.path
+        #expect(DemoPointer.recorded(in: harness.support)?.path == spelled)
+
+        // The same line again, with no app there: launched on the same folder, spelled the same.
+        _ = harness.run("app", "open", "--demo", folder, transport: .nothingListens)
+        #expect(harness.launcher.launches.current == [
+            .init(bundle: harness.bundle, environment: ["VIDEO_REVIEW_SUPPORT_DIR": spelled]),
+            .init(bundle: harness.bundle, environment: ["VIDEO_REVIEW_SUPPORT_DIR": spelled]),
+        ])
+    }
+
     @Test func aRelativeDemoFolderIsTakenAgainstTheWorkingFolder() throws {
         let harness = CommandHarness()
         try DemoPointer.record(demo, in: harness.support)

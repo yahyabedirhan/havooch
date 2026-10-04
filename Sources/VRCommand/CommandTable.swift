@@ -24,11 +24,15 @@ struct UsageError: Error, Equatable {
 /// The words after a command's name, taken apart by its parser.
 struct Arguments {
     private var words: [String]
+    /// The words after a `--` on the line: each is a positional as it is
+    /// written, never an option, and they come after the ones in `words`.
+    private var literal: [String]
     /// What a relative path is taken against.
     let workingDirectory: URL
 
-    init(_ words: [String], workingDirectory: URL) {
+    init(_ words: [String], literal: [String] = [], workingDirectory: URL) {
         self.words = words
+        self.literal = literal
         self.workingDirectory = workingDirectory
     }
 
@@ -41,9 +45,14 @@ struct Arguments {
         return value
     }
 
-    /// The next word, taken out. Call it after every `option`.
+    /// The next word, taken out. Call it after every `option`. A word
+    /// before the `--` that starts with `--` is an option nobody asked
+    /// for; one after it is taken whatever it starts with.
     mutating func positional(_ name: String) throws(UsageError) -> String {
-        guard let word = words.first else { throw UsageError("missing <\(name)>") }
+        guard let word = words.first else {
+            guard !literal.isEmpty else { throw UsageError("missing <\(name)>") }
+            return literal.removeFirst()
+        }
         guard !word.hasPrefix("--") else { throw UsageError("unknown option `\(word)`") }
         words.removeFirst()
         return word
@@ -51,8 +60,10 @@ struct Arguments {
 
     /// Refuses whatever the parser left.
     func finish() throws(UsageError) {
-        guard let extra = words.first else { return }
-        throw UsageError(extra.hasPrefix("--") ? "unknown option `\(extra)`" : "unexpected `\(extra)`")
+        if let extra = words.first {
+            throw UsageError(extra.hasPrefix("--") ? "unknown option `\(extra)`" : "unexpected `\(extra)`")
+        }
+        if let extra = literal.first { throw UsageError("unexpected `\(extra)`") }
     }
 
     /// `path`, taken against the working folder when it's relative.
@@ -272,6 +283,8 @@ enum CommandTable {
             \(rows.joined(separator: "\n"))
 
             --json, anywhere on the line, gives the output as one JSON object.
+            `--` ends the options: every word after it is taken as it is, so a text that
+            starts with `--` goes after one (`video-review reply <id> -- '--force is gone'`).
             One agent at a time drives the app. A command that drives it takes or renews
             the lease, which ends 60 s after its holder's last command and 5 min after it
             was taken at most. While another agent holds it, such a command exits 1 and

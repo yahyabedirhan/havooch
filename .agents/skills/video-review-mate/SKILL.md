@@ -66,7 +66,7 @@ A batch can be one that an earlier listener session took and left unfinished. It
 
 `done` and `failed` are final. A correction afterwards is another `reply`.
 
-Write each text as one single-quoted argument, so the shell leaves its backticks and `$` alone.
+Write each text as one single-quoted argument, so the shell leaves its backticks and `$` alone. Put `--` before a text that starts with `--`, so it isn't read as an option: `vr reply <comment-id> -- '--force is gone now'`.
 
 ## A question
 

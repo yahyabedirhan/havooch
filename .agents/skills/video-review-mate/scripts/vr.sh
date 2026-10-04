@@ -27,8 +27,11 @@ refuse() {
     exit 1
 }
 
+# Whether the app of that command line runs: `state --json` exits 0 only when
+# an app answers, which the spec's contract fixes. The shape of `app status`
+# is each build's own.
 runs() {
-    "$1" app status --json 2>/dev/null | grep -Eq '"running" *: *true'
+    "$1" state --json >/dev/null 2>&1
 }
 
 find_cli() {

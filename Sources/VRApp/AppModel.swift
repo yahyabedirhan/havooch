@@ -114,11 +114,14 @@ final class AppModel {
             throw .cannotOpen(path: video.path, why: error.why)
         }
         selection = nil
+        // The review comes with the player's video, with nothing awaited
+        // between the two: a comment made while the transcript is prepared
+        // goes to this video's review, never to the one open before.
+        let video = desk.load(VideoInfo(contentHash: hash, path: opened.url.path, title: opened.title, duration: opened.duration)).video
+        remember(video, at: 0)
         // Finds the video's transcript source. Speech recognition, when it
         // is the source, runs on in the background.
         await transcriber.prepare(opened.url)
-        let video = desk.load(VideoInfo(contentHash: hash, path: opened.url.path, title: opened.title, duration: opened.duration)).video
-        remember(video, at: 0)
         return video
     }
 

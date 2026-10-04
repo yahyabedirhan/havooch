@@ -175,6 +175,31 @@ import VRWire
         #expect(plain.exchanges.current.map(\.message.json) == [false])
     }
 
+    @Test func aTextAfterTheSeparatorIsTakenAsItIsWhateverItStartsWith() {
+        #expect(request("reply", "7f3a9c21-c1", "--", "--force is gone now") == .reply(id: "7f3a9c21-c1", text: "--force is gone now"))
+        #expect(request("comment", "add", "--at", "0:10", "--", "--at is a flag") == .commentAdd(text: "--at is a flag", at: 10, region: nil))
+        #expect(request("thread", "answer", "--", "7f3a9c21-c1", "--json") == .threadAnswer(id: "7f3a9c21-c1", text: "--json"))
+        #expect(request("ack", "7f3a9c21-b1", "--", "--help") == .ack(id: "7f3a9c21-b1", text: "--help"))
+        #expect(request("context", "set", "--", "--") == .contextSet(text: "--"))
+        // An option after the separator is a text, not an option.
+        #expect(request("ask", "7f3a9c21-c1", "--wait", "30", "--", "--wait or not?") == .ask(id: "7f3a9c21-c1", text: "--wait or not?", waitSeconds: 30))
+
+        // `--json` counts before the separator only.
+        let transport = FakeTransport(reply: .done("{}\n"))
+        _ = harness.run("--json", "reply", "7f3a9c21-c1", "--", "--json", transport: transport)
+        #expect(transport.exchanges.current.map(\.message.json) == [true])
+        #expect(transport.requests == [.reply(id: "7f3a9c21-c1", text: "--json")])
+        let plain = FakeTransport(reply: .done("replied\n"))
+        _ = harness.run("reply", "7f3a9c21-c1", "--", "--json", transport: plain)
+        #expect(plain.exchanges.current.map(\.message.json) == [false])
+    }
+
+    @Test func aTextOfDashHIsSentAndNotTakenForHelp() {
+        #expect(request("thread", "answer", "7f3a9c21-c1", "-h") == .threadAnswer(id: "7f3a9c21-c1", text: "-h"))
+        #expect(request("reply", "7f3a9c21-c1", "help") == .reply(id: "7f3a9c21-c1", text: "help"))
+        #expect(request("comment", "add", "--", "--help") == .commentAdd(text: "--help", at: nil, region: nil))
+    }
+
     @Test func everyRequestCarriesTheHolderTheCommandFound() {
         let transport = FakeTransport(reply: .done(""))
         _ = harness.run("player", "play", transport: transport)
@@ -246,6 +271,9 @@ import VRWire
         (["thread", "answer"], "thread answer: missing <comment-id>", "thread answer <comment-id> <text>"),
         (["control", "release", "--wait", "5"], "control release: unknown option `--wait`", "control release"),
         (["app", "quit", "now"], "app quit: unexpected `now`", "app quit"),
+        (["reply", "7f3a9c21-c1", "--force is gone"], "reply: unknown option `--force is gone`", "reply <comment-id|batch-id> <text>"),
+        (["player", "play", "--", "--fast"], "player play: unexpected `--fast`", "player play"),
+        (["reply", "7f3a9c21-c1", "--"], "reply: missing <text>", "reply <comment-id|batch-id> <text>"),
     ])
     func aLineThatDoesNotParseExitsTwoWithItsUsageAndSendsNothing(line: [String], error: String, usage: String) {
         let transport = FakeTransport(reply: .done(""))
@@ -273,8 +301,13 @@ import VRWire
         for command in CommandTable.all {
             #expect(help.output.contains("video-review \(command.usage)"))
         }
-        #expect(harness.run("player", "seek", "--help", transport: transport) == help)
+        #expect(help.output.contains("`--` ends the options"))
+        // Asked for by the line's first word only.
+        #expect(harness.run("--help", transport: transport) == help)
+        #expect(harness.run("-h", "player", "seek", transport: transport) == help)
+        #expect(harness.run("player", "seek", "--help", transport: transport).exitCode == 2)
         #expect(harness.run(line: [], transport: transport) == CommandResult(error: help.output, exitCode: 2))
+        #expect(harness.run("--", "help", transport: transport) == CommandResult(error: help.output, exitCode: 2))
         #expect(transport.requests.isEmpty)
     }
 
@@ -298,8 +331,9 @@ import VRWire
     }
 
     @Test func theCommandFindsTheBundleItSitsIn() {
-        let inside = URL(fileURLWithPath: "/Applications/Video Review (proto-1).app/Contents/Helpers/video-review")
-        #expect(CommandEnvironment.enclosingBundle(of: inside)?.path == "/Applications/Video Review (proto-1).app")
+        let bundle = "/Applications/\(Identity.appName).app"
+        let inside = URL(fileURLWithPath: "\(bundle)/Contents/Helpers/video-review")
+        #expect(CommandEnvironment.enclosingBundle(of: inside)?.path == bundle)
         #expect(CommandEnvironment.enclosingBundle(of: URL(fileURLWithPath: "/repo/.build/release/video-review-cli")) == nil)
         #expect(CommandEnvironment.enclosingBundle(of: URL(fileURLWithPath: "/usr/local/Helpers/video-review")) == nil)
         #expect(CommandEnvironment.enclosingBundle(of: nil) == nil)

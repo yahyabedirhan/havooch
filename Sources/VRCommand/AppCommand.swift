@@ -52,12 +52,14 @@ struct AppCommand {
     /// data) and prints its status. An app that already runs on that data
     /// is only asked, which renews the lease. One on other data is quit
     /// first, and its lease handed over to the app launched. The demo
-    /// pointer is written before a demo is launched and removed again when
-    /// none comes to run.
-    func open(demo wanted: URL?) -> CommandResult {
+    /// folder is spelled once (`spelled`), and that spelling is the one
+    /// compared, recorded and launched with. The demo pointer is written
+    /// before a demo is launched and removed again when none comes to run.
+    func open(demo requested: URL?) -> CommandResult {
+        let wanted = requested.map(Self.spelled)
         var handover: ControlLease.Term?
         if let (socket, data) = running() {
-            if data == (wanted.map { .demo($0.standardizedFileURL.path) } ?? .real) {
+            if data == (wanted.map { .demo($0.path) } ?? .real) {
                 return Self.result(of: client(at: socket).send(.appOpen, json: json))
             }
             switch quit(at: socket) {
@@ -81,6 +83,17 @@ struct AppCommand {
             try? DemoPointer.remove(in: support)
         }
         return outcome
+    }
+
+    /// The demo folder `requested` names, spelled the one way every run
+    /// spells it. A path is standardized differently once it exists
+    /// (`/private/tmp/demo` becomes `/tmp/demo`), so the folder is made
+    /// first: the pointer, the app's data folder and every path in `state`
+    /// then read the same at the first open and at each later one. A folder
+    /// that can't be made is refused where `open` sets the demo up.
+    private static func spelled(_ requested: URL) -> URL {
+        try? FileManager.default.createDirectory(at: requested, withIntermediateDirectories: true)
+        return requested.standardizedFileURL
     }
 
     /// The app that answers, if any: its socket and the data it runs on.
