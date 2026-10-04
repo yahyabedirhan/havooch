@@ -6,6 +6,8 @@ Sources: the spec decides the modules, the CLI contract, the batch payload and t
 
 NOTE: ADR 0001 names the listener commands `done` and `fail`. The spec's CLI contract names one command, `status <comment-id> working|done|failed`. The spec's contract is the one built.
 
+NOTE: This document describes the whole build. [What is built so far](#7-what-is-built-so-far) lists the parts that exist in the code today.
+
 ## For a newcomer, in one screen
 
 Video Review is one Swift package. It builds two executables: the macOS app and the `video-review` command, which ships inside the app bundle at `Contents/Helpers/video-review`. The code is seven modules, split by concern. The agent's side never links the app's rules.
@@ -205,7 +207,9 @@ APP_NAME  := Video Review$(if $(VARIANT), ($(VARIANT)))
 BUNDLE_ID := com.yahyabedirhan.video-review$(if $(VARIANT),.$(VARIANT))
 ```
 
-`make bundle` writes `APP_NAME`, `BUNDLE_ID` and the version into `Packaging/Info.plist` (placeholders `__APP_NAME__`, `__BUNDLE_ID__`, `__VERSION__`). The executable inside the bundle is always `Contents/MacOS/VideoReview`, and the CLI is always `Contents/Helpers/video-review`. The constant is the source and not a `Makefile` variable, so `swift test` sees the same identity with no generated file. `make install` quits only this bundle (`pkill -f` on the installed bundle's full executable path), never another prototype's app.
+`make bundle` writes `APP_NAME`, `BUNDLE_ID` and the version into `Packaging/Info.plist` (placeholders `__APP_NAME__`, `__BUNDLE_ID__`, `__VERSION__`). The executable inside the bundle is always `Contents/MacOS/VideoReview`, and the CLI is always `Contents/Helpers/video-review`. The constant is the source and not a `Makefile` variable, so `swift test` sees the same identity with no generated file. `make install` quits only this bundle (`pkill -f` on the installed bundle's full executable path), never another prototype's app. The app quits cleanly on that `SIGTERM`, so it removes its socket.
+
+The CLI starts the app whose bundle it ships in (`<app>/Contents/Helpers/video-review`), so each prototype's command starts its own app. Outside a bundle it falls back to the installed app with this build's bundle id.
 
 ### Folder tree
 
@@ -228,7 +232,7 @@ Sources/
     ControlReply.swift             {ok, output, error, lease?}
     ControlProtocolError.swift     unreadable, otherVersion, unknownCommand, each with its line
     TimeCode.swift                 "90", "1:30", "0:01:30.5" to seconds and back
-    UnixSocket.swift               POSIX calls: connect, listen, write all, half-close, read to end
+    UnixSocket.swift               POSIX calls: the address (through a short link for a long path), connect, bind, write all, half-close, read to end
     ControlClient.swift            one exchange over the socket; the ControlTransport seam for tests
     ControlSocket.swift            where control.sock is; follows the demo pointer
     DemoPointer.swift              demo.json in the normal support folder
@@ -237,7 +241,7 @@ Sources/
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
-    VideoReviewCLI.swift           run(arguments, environment) → output, error, exit code
+    VideoReviewCLI.swift           run(arguments, environment) → output, error, exit code; CommandResult and CommandEnvironment
     AppCommands.swift              app status | open [--demo] | quit, and state
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
@@ -327,7 +331,8 @@ A module and a type never share a name, so a type can always be qualified by its
 - On the wire a message is one JSON object: `version`, `command` (`player.seek`), `holder` (`key`, `name`, `place`), `json` (the caller passed `--json`) and the command's own fields. Protocol version 1.
 - `ControlMessage.decode` refuses in this order: not JSON, another version (naming both), no holder, unknown command, a missing or invalid field.
 - `Holder.find(variables, workingDirectory, processes)`: the key is `VIDEO_REVIEW_CONTROL_KEY` when set, else `CLAUDE_CODE_SESSION_ID`, else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`. The name is `Claude Code` or the process name. The place is the Herdr pane when there is one, else the working folder. The process table is a protocol with the system's `sysctl` reader and a fake.
-- `ControlClient.send(request)` writes the message, half-closes, reads to the end. Its read timeout is 15 s plus `holdSeconds`, or none when the request has no limit.
+- `ControlClient.send(request)` writes the message, half-closes, reads to the end. Its read timeout is 15 s plus `holdSeconds`, or none when the request has no limit. A connection that closes with no reply reads as an app that is not running.
+- `UnixSocket.address(path)`: a socket address holds 103 bytes. A longer path (a demo folder deep in a worktree) is reached through a symbolic link to its folder, in the user's temporary folder (`confstr(_CS_DARWIN_USER_TEMP_DIR)`), named after a hash of the folder's path. The app and the CLI each make the same link, so neither tells the other.
 - `SupportFolder.app(environment)`: `VIDEO_REVIEW_SUPPORT_DIR` when it is an absolute path, else `~/Library/Application Support/<AppIdentity.supportFolderName>/`.
 - `ControlSocket.locate(support)`: the demo's socket while `demo.json` names a demo folder whose socket exists, else the folder's own.
 
@@ -353,7 +358,9 @@ A module and a type never share a name, so a type can always be qualified by its
 - `VideoReviewCLI.run(arguments, environment)` returns `CommandResult(output, error, exitCode)`. `environment` holds the variables, the working folder, the process table, the transport and the launcher, so tests replace all of them.
 - The CLI makes paths absolute against its own working folder before it sends them (`player open`, `app open --demo`); `screenshot` requires an absolute path, as the contract says.
 - `app status` answers without the app: `not running`, exit 0. Every other command but `app open` and `wait` exits 1 with `Video Review isn't running; run video-review app open` when nothing listens.
-- `app open [--demo <folder>]`: when the app does not run, it launches it by bundle id without activating it, with `VIDEO_REVIEW_SUPPORT_DIR` for a demo, waits for the socket, then sends `app.open`. When the app runs on other data, it sends `app.quit`, takes the lease from the reply and relaunches with the handover. `--demo` records the pointer; plain `app open` removes it.
+- `app open [--demo <folder>]`: when the app does not run, it launches the bundle the command ships in without activating it, with `VIDEO_REVIEW_SUPPORT_DIR` for a demo, waits for the socket, then sends `app.open`. When the app already runs on the data asked for, it only sends `app.open`. When the app runs on other data, it sends `app.quit`, takes the lease from the reply and relaunches with the handover. `--demo` records the pointer; plain `app open` removes it. A demo that does not come to run leaves no pointer.
+- The launcher waits for a quitting copy of the app to end. For a demo launch, a copy that is still there (one that `make install` has just opened and that does not answer yet) is asked to quit first: Launch Services would hand that copy back on its own data.
+- `--json` is taken from anywhere on the command line. An action then prints the parts of the state it changed (`player seek` prints `{"player": {…}}`, `player open` adds `video`, `screenshot` prints `{"path": …}`). `app status --json` prints `{"running": false}` when the app is not running.
 - `wait` connects again while the app is not running or quits, once a second, until its timeout. A listener can start before the app.
 
 ### ReviewCore
@@ -478,7 +485,9 @@ public protocol Transcriber: Sendable {
 | `setContextNote(text)` | saved on the review | no video |
 
 - `ReviewDesk.change(hash) { review in … }` is the one path for every change to a `VideoReview`: it takes the open review from memory or loads another video's from the `Library`, runs the change, saves, and publishes when the review is the open one. A thrown `ReviewRefusal` changes nothing.
-- `PlayerEngine` wraps `AVPlayer`. `seek` uses zero tolerance and returns when the seek has finished, so `state` reports the time that was asked for.
+- `PlayerEngine` wraps `AVPlayer`. `seek` uses zero tolerance and returns when the seek has finished, so `state` reports the time that was asked for. The duration is the video track's own length (21.233 s for the fixture), not the container's, whose sound track can run a few milliseconds longer. A file that does not play is refused, and the video that was open stays open.
+- `PlayerSurface` is an `AVPlayerView` with no controls that takes no click and no key (`hitTest` gives nil). The stage's own layer above it takes the mouse.
+- `Shortcuts` is one local key monitor. It maps a key to an action in a pure function and stands back while a text view has the focus. The Playback menu has the same actions with no key equivalents, since a menu key with no modifier would take the key from a text field.
 - `FrameGrabber` makes the keyframe with `AVAssetImageGenerator` at the exact time, from the asset and not from the window. The crop is the keyframe cut by the region. The UI and the CLI therefore produce the same pixels at any window size.
 - `ListenerQueue` holds the `Outbox`, the one open `wait` (a continuation) and the open `ask`s by comment id. It assembles the payload when a `wait` takes a batch. `ack`, `status`, `reply` and `ask` go through `ReviewDesk.change` and raise a notice.
 - `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests, and settles the lease on a timer at `nextEnd`. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake.
@@ -502,7 +511,8 @@ public protocol Transcriber: Sendable {
 ```
 
   `comments` and `queue` are in time order. `video` is `null` with no video open.
-- `Screenshotter` captures the app's own window with ScreenCaptureKit. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. The lease banner is hidden for the capture, since the holder would be in every picture.
+- `Screenshotter` captures the app's own window with ScreenCaptureKit, from this process's shareable content only, which needs no Screen Recording permission. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. Captures take turns, so two of them never mix their appearances. It makes the PNG's folder when it is missing. The lease banner is hidden for the capture, since the holder would be in every picture.
+- The app has one `Window` scene. Closing the window quits the app. A second copy started on the same support folder finds the socket taken and quits.
 
 ### The UX of this prototype
 
@@ -511,7 +521,7 @@ The idea: **the video is the stage, the timeline carries the markers, and a rail
 | # | Choice | Reason |
 |---|---|---|
 | 1 | One window, one video at a time. Opening another video replaces the open one. | The CLI commands name no window, and there is one queue and one listener. |
-| 2 | Three parts: the stage (video) on the left, the timeline lane under it, the rail (340 pt, can collapse) on the right. | Answers stay next to the feedback and stay visible while the video plays. One screenshot shows markers, a region and a thread. |
+| 2 | Three parts: the stage (video) on the left, the timeline lane under it, the rail (340 pt, can collapse) on the right. The rail is the system's inspector column, with a toolbar button that hides it. The stage is a black card with round corners. The lane has a ruler of times under the track. The default window (1360 by 730 pt) shows a 16:9 video with no letterbox. | Answers stay next to the feedback and stay visible while the video plays. One screenshot shows markers, a region and a thread. The inspector resizes and collapses as the Mac's other apps do. |
 | 3 | The app's own player surface (`AVPlayerView` with no built-in controls) and its own timeline lane, always visible. | The stock controls cannot carry markers, and they take the mouse drags the region overlay needs. Markers are the core of the app, so the lane never hides. |
 | 4 | QuickTime keys: Space or K plays and pauses, Left and Right move 5 s, Shift+Left and Shift+Right move one frame, Up and Down jump to the previous and next marker. A click on the frame plays or pauses. | Playback should feel like QuickTime. Frame steps matter for pointing at an exact frame. |
 | 5 | C or Return starts a comment at the current time and pauses. No automatic focus on pause. | One key from watching to typing, and Space still resumes. Typing never reaches the player: the shortcuts are off while a text field has the focus. |
@@ -684,7 +694,7 @@ the listener restarts as session L2 while b-5d0c2a91 is taken and unfinished
 ### Build and tests
 
 - `Package.swift`: tools version 6.2, `platforms: [.macOS(.v26)]`, no package dependencies. Library targets for the six modules, executable targets `ReviewCLI` (product `video-review`) and `ReviewApp` (product `VideoReview`), one test target per module.
-- `Makefile`, after Shipyard's: `make test` (`swift test`, with the Command Line Tools flags for Swift Testing and a shared module cache), `make bundle` (builds both products, lays out the `.app`, stamps `Info.plist`, signs the CLI then the bundle ad hoc), `make install` (quits this bundle's app, replaces `/Applications/<APP_NAME>.app`, opens it).
+- `Makefile`, after Shipyard's: `make test` (`swift test`, with the Command Line Tools flags for Swift Testing and a shared module cache), `make bundle` (builds both products, lays out the `.app`, stamps `Info.plist`, signs the CLI then the bundle ad hoc), `make install` (quits this bundle's app, replaces `/Applications/<APP_NAME>.app`, opens it in the background with `open -g`).
 - `make test` never drives the Mac. Each contract has one owner test at its strongest boundary:
 
 | Contract | Owner test |
@@ -752,3 +762,32 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D28 | The lease banner is left out of screenshots. | The agent that takes the screenshot always holds the lease. |
 | D29 | `state --json` has the shape shown under `StateReport`. | The contract names the command, not its fields. |
 | D30 | The lease keeps Shipyard's handover across a relaunch, and leaves out Allow. | `app open --demo` on a running app must keep the operator's lease. Nothing in v1 lifts a bar early. |
+| D31 | A socket path longer than an address holds is reached through a short symbolic link in the user's temporary folder. | A demo folder under `.scratch/` in a worktree is longer than 103 bytes. Shipyard refuses such a folder; here the tests need it. |
+| D32 | The CLI launches the bundle it ships in, and falls back to the bundle id. | Three prototypes are installed side by side, and a build folder holds a second copy with the same bundle id. |
+| D33 | `app open --demo` on the demo that already runs keeps it running. | A test script can call it again without losing the open video. |
+| D34 | For a demo launch, the launcher asks a copy of the app that does not answer yet to quit. | `make install` opens the app; a demo launch right after it would get that copy back, on the person's data. |
+| D35 | With `--json`, an action prints the parts of the state it changed. | An agent reads the result of its command without a second `state` call. |
+| D36 | `video.duration` is the video track's length. | A comment points at a frame, and the last frame ends there. The sound track of the fixture runs 15 ms longer. |
+| D37 | Closing the window quits the app. | There is one window and nothing to do without it. `screenshot` and `state` always have a window to show. |
+| D38 | The app quits cleanly on `SIGTERM`. | `make install` ends the app with it, and a socket file left behind would hide a normal app from the CLI while a demo pointer exists. |
+
+## 7. What is built so far
+
+The sections above describe the whole build. This list says what the code holds today. Each ticket moves its line.
+
+Built (the first build ticket, "Control: Play a video and drive the player through the CLI"):
+
+- `Package.swift`, `Makefile`, `Packaging/Info.plist`.
+- `ReviewWire`: every file in the tree. `ControlRequest` has the cases `appStatus`, `state`, `appOpen`, `appQuit`, `playerOpen`, `playerPlay`, `playerPause`, `playerSeek` and `screenshot`. `LeaseTerm` is data only.
+- `ReviewCommand`: `CommandTable`, `VideoReviewCLI`, `AppCommands`, `PlayerCommands`, `ScreenshotCommand`, `AppLauncher`. `ReviewCLI/main.swift`.
+- `ReviewApp`: `VideoReviewApp`, `AppModel` (open, play, pause, seek), `Player/PlayerEngine`, `Player/PlayerSurface`, `Player/Shortcuts` (play and pause, 5 s, one frame), `Control/ControlServer`, `Control/StateReport`, `Control/Screenshotter`, `UI/RootView`, `UI/Theme`, `UI/EmptyState`, `UI/Stage/StageView`, `UI/Timeline/TimelineLane`, `UI/Rail/RailView`, `UI/Rail/SendBar`.
+- Tests: `ReviewWireTests`, `ReviewCommandTests`, `ReviewAppTests` (the control server with a fake app and over the real socket, the player's keys).
+
+Not built yet, and what stands in its place:
+
+- The lease. `ControlServer.reply(to:)` admits every holder. Each request already carries its `holder` and has a `role`; the lease check goes before the dispatch. The reply's `lease` is always absent, and `state` reports `"lease": null`.
+- `ReviewLease`, `ReviewCore`, `ReviewTranscript`, `ReviewStore` and their test targets. `Package.swift` gets each target with its ticket.
+- `state --json` has the keys `app`, `lease`, `video` (`path`, `title`, `duration`) and `player`. The keys `listener`, `transcript`, `draft`, `comments`, `queue` and `batches`, and `video.contentHash` and `video.contextNote`, come with their tickets.
+- Comments, regions, markers, batches, threads, the listener commands, the context popover and the transcript chip. The rail shows an empty queue and a Send button that is off. The presence pill says "No agent listening". The timeline lane has no markers.
+- The last video does not open again on launch. That comes with the store.
+- The keys Up, Down, C and Return, and Cmd+Return.

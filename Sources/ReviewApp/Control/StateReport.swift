@@ -1,0 +1,131 @@
+import Foundation
+import ReviewWire
+
+/// What the app shows, for `state` and `app status`: as one JSON object
+/// with `--json`, as lines otherwise. Keys that have no value are `null`,
+/// never left out, so a reader can tell "nothing" from "not reported".
+struct StateReport: Encodable, Equatable {
+    struct App: Encodable, Equatable {
+        var version: String
+        var variant: String
+        /// Whether the app runs on a demo's data.
+        var demo: Bool
+        /// The support folder this run keeps its data in.
+        var support: String
+    }
+
+    struct Video: Encodable, Equatable {
+        var path: String
+        var title: String
+        var duration: Double
+    }
+
+    struct Player: Encodable, Equatable {
+        var time: Double
+        var playing: Bool
+    }
+
+    var app: App
+    /// Who drives the app; `null` while nobody does.
+    var lease: LeaseTerm?
+    /// The open video; `null` with none.
+    var video: Video?
+    var player: Player
+
+    init(app: App, lease: LeaseTerm?, video: Video?, player: Player) {
+        self.app = app
+        self.lease = lease
+        self.video = video.map { Video(path: $0.path, title: $0.title, duration: Self.milliseconds($0.duration)) }
+        self.player = Player(time: Self.milliseconds(player.time), playing: player.playing)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case app, lease, video, player
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(app, forKey: .app)
+        try container.encode(lease, forKey: .lease)
+        try container.encode(video, forKey: .video)
+        try container.encode(player, forKey: .player)
+    }
+
+    // MARK: - state
+
+    /// `state --json`.
+    var json: String { Self.json(self) }
+
+    /// `state`.
+    var lines: String {
+        """
+        \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
+        video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
+        player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
+
+        """
+    }
+
+    // MARK: - app status
+
+    /// `app status --json`.
+    var statusJSON: String {
+        Self.json(Status(
+            running: true, version: app.version, variant: app.variant, demo: app.demo, support: app.support,
+            video: video?.path, lease: lease
+        ))
+    }
+
+    /// `app status`, and what `app open` prints.
+    var statusLines: String {
+        """
+        running: \(AppIdentity.appName) \(app.version)
+        data: \(app.demo ? "demo" : "yours"), \(app.support)
+        video: \(video?.path ?? "none")
+        lease: \(lease.map { "held by \($0.holder.name) in \($0.holder.place)" } ?? "free")
+
+        """
+    }
+
+    private struct Status: Encodable {
+        var running: Bool
+        var version: String
+        var variant: String
+        var demo: Bool
+        var support: String
+        var video: String?
+        var lease: LeaseTerm?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(running, forKey: .running)
+            try container.encode(version, forKey: .version)
+            try container.encode(variant, forKey: .variant)
+            try container.encode(demo, forKey: .demo)
+            try container.encode(support, forKey: .support)
+            try container.encode(video, forKey: .video)
+            try container.encode(lease, forKey: .lease)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case running, version, variant, demo, support, video, lease
+        }
+    }
+
+    // MARK: - JSON
+
+    /// `value` as the JSON the command prints: readable, keys in order.
+    static func json(_ value: some Encodable) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        // The reports are strings, numbers and booleans: encoding can't fail.
+        return String(decoding: try! encoder.encode(value), as: UTF8.self) + "\n"
+    }
+
+    /// `seconds` to the millisecond: a time read back from the player
+    /// carries the noise of its timescale.
+    private static func milliseconds(_ seconds: Double) -> Double {
+        (seconds * 1000).rounded() / 1000
+    }
+}
