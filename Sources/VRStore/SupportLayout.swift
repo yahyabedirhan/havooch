@@ -5,6 +5,7 @@ import VRReview
 ///
 ///     <root>/videos/<content hash>/frames/<comment id>.png
 ///     <root>/videos/<content hash>/crops/<comment id>.png
+///     <root>/videos/<content hash>/transcript.json
 ///
 /// The root is the person's support folder, or a demo's.
 public struct SupportLayout: Equatable, Sendable {
@@ -33,5 +34,10 @@ public struct SupportLayout: Equatable, Sendable {
     /// its keyframe its region points at.
     public func crop(_ id: CommentID, of hash: String) -> URL {
         folder(hash).appendingPathComponent("crops", isDirectory: true).appendingPathComponent("\(id.rawValue).png")
+    }
+
+    /// The speech transcript of the video `hash` names, once it finished.
+    public func transcriptFile(_ hash: String) -> URL {
+        folder(hash).appendingPathComponent("transcript.json")
     }
 }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import VRLease
 import VRReview
 import VRStore
+import VRTranscript
 import VRWire
 
 /// Why an action is refused: its `message` is the one line a command
@@ -46,6 +47,8 @@ final class AppModel {
     let desk: ReviewDesk
     /// The listener's side: the open `wait`s and the batches on their way.
     let listener: ListenerQueue
+    /// The timed lines of a video, as far as they exist.
+    @ObservationIgnored let transcriber: any Transcriber
     /// The time a batch is sent at and presence is judged at.
     @ObservationIgnored private let now: @MainActor () -> Date
     /// The folder this run keeps its data in, and whether it's a demo's.
@@ -62,11 +65,17 @@ final class AppModel {
     /// The app's one window, for `Screenshotter`.
     @ObservationIgnored weak var window: NSWindow?
 
-    init(environment: [String: String], now: @escaping @MainActor () -> Date = { Date() }) {
+    /// `transcriber` is the spec's sources in their order unless a test
+    /// gives its own.
+    init(
+        environment: [String: String], transcriber: (any Transcriber)? = nil, now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         support = SupportFolder.current(environment: environment)
         isDemo = SupportFolder.demo(environment: environment) != nil
-        let desk = ReviewDesk(layout: SupportLayout(root: support))
+        let layout = SupportLayout(root: support)
+        let desk = ReviewDesk(layout: layout)
         self.desk = desk
+        self.transcriber = transcriber ?? OrderedTranscriber(cache: TranscriptCache(layout: layout))
         self.now = now
         listener = ListenerQueue(desk: desk, now: now)
     }
@@ -92,6 +101,9 @@ final class AppModel {
             throw .cannotOpen(path: video.path, why: error.why)
         }
         selection = nil
+        // Finds the video's transcript source. Speech recognition, when it
+        // is the source, runs on in the background.
+        await transcriber.prepare(opened.url)
         return desk.load(VideoInfo(contentHash: hash, path: opened.url.path, title: opened.title, duration: opened.duration)).video
     }
 
@@ -281,9 +293,15 @@ final class AppModel {
         }
         // Read again: queueing the box's text waited for its frame.
         guard let review = desk.open else { throw .noVideo }
-        // The transcript lines around each comment, as they exist at the
-        // send, go here once there is a transcriber; none until then.
-        let lines: [CommentID: [BatchPayload.Line]] = [:]
+        // The transcript lines around each comment, as they exist now: a
+        // transcription that still runs gives what it has so far.
+        var lines: [CommentID: [BatchPayload.Line]] = [:]
+        if let video = player.video?.url {
+            for comment in review.queue {
+                lines[comment.id] = await transcriber.lines(for: video, in: TranscriptWindow.around(comment.time))
+                    .map { BatchPayload.Line(start: $0.start, end: $0.end, text: $0.text) }
+            }
+        }
         let sent = now()
         let batch = try desk.change(review.video.contentHash) { review throws(ReviewError) in
             try review.sendBatch(transcripts: lines, now: sent)
@@ -408,8 +426,15 @@ final class AppModel {
 
     // MARK: - State
 
-    /// What the window shows now, for `state` and `app status`.
-    func snapshot(lease: ControlLease.Status?) -> StateSnapshot {
+    /// Where the open video's transcript stands; nil with no video open.
+    func transcriptStatus() async -> TranscriptStatus? {
+        guard let video = player.video?.url else { return nil }
+        return await transcriber.status(for: video)
+    }
+
+    /// What the window shows now, for `state` and `app status`, with the
+    /// transcript as `transcriptStatus` gave it.
+    func snapshot(lease: ControlLease.Status?, transcript: TranscriptStatus? = nil) -> StateSnapshot {
         StateSnapshot(
             app: .init(version: Identity.version, variant: Identity.variant, demo: isDemo, support: support.path),
             video: player.video.map {
@@ -426,6 +451,10 @@ final class AppModel {
                 )
             } ?? [],
             context: .init(sidecarPath: sidecar?.url.path, note: desk.open?.note ?? ""),
+            transcript: .init(
+                source: transcript?.source, complete: transcript?.complete ?? false, lines: transcript?.lines ?? 0,
+                problem: transcript?.problem
+            ),
             listener: shownListener,
             lease: lease
         )

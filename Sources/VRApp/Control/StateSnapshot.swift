@@ -37,10 +37,17 @@ struct StateSnapshot: Encodable {
         var note: String
     }
 
+    /// Where the open video's transcript stands.
     struct Transcript: Encodable {
+        /// `voiceover`, `subtitles` or `speech`.
         @Nulled var source: String?
+        /// Whether the source has every line: false while speech
+        /// recognition runs.
         var complete: Bool
+        /// How many lines there are so far, in the whole video.
         var lines: Int
+        /// Why the source stopped before it had every line.
+        @Nulled var problem: String?
     }
 
     struct Listener: Encodable {
@@ -96,7 +103,7 @@ struct StateSnapshot: Encodable {
     var queue: [String] = []
     var batches: [Batch] = []
     var context = Context(sidecarPath: nil, note: "")
-    var transcript = Transcript(source: nil, complete: false, lines: 0)
+    var transcript = Transcript(source: nil, complete: false, lines: 0, problem: nil)
     var listener = Listener(presence: "absent", name: nil, place: nil)
     @Nulled var lease: ControlLease.Status?
     @Nulled var notice: Unbuilt?

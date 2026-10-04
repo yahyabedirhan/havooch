@@ -116,10 +116,10 @@ final class ControlServer {
         do throws(ActionError) {
             switch message.request {
             case .appStatus, .appOpen:
-                let status = snapshot().status
+                let status = await snapshot().status
                 return done(json ? status.json : status.text)
             case .state:
-                return done(snapshot().json)
+                return done(await snapshot().json)
             case .controlTake(let seconds):
                 return await take(by: message.holder, waiting: seconds, json: json)
             case .controlRelease:
@@ -135,7 +135,7 @@ final class ControlServer {
                     @Nulled var video: StateSnapshot.Video?
                 }
                 let video = try await model.open(URL(fileURLWithPath: path))
-                return done(json ? JSONText.line(Opened(video: snapshot().video)) : video.path + "\n")
+                return done(json ? JSONText.line(Opened(video: await snapshot().video)) : video.path + "\n")
             case .playerPlay:
                 try model.play()
                 return playhead(json)
@@ -200,9 +200,11 @@ final class ControlServer {
         }
     }
 
-    /// What the window shows, with the lease as it is now.
-    private func snapshot() -> StateSnapshot {
-        model.snapshot(lease: lease.status(at: now()))
+    /// What the window shows, with the transcript and the lease as they
+    /// are now.
+    private func snapshot() async -> StateSnapshot {
+        let transcript = await model.transcriptStatus()
+        return model.snapshot(lease: lease.status(at: now()), transcript: transcript)
     }
 
     private func done(_ output: String) -> Answer {

@@ -172,9 +172,13 @@ import VRWire
         #expect(payload.comments == [
             .init(
                 id: "\(prefix)-c2", time: 4, text: "this box", keyframePath: "\(frames)/\(prefix)-c2.png",
-                region: Region(x: 0.1, y: 0.2, w: 0.3, h: 0.2), cropPath: "\(crops)/\(prefix)-c2.png", transcript: []
+                region: Region(x: 0.1, y: 0.2, w: 0.3, h: 0.2), cropPath: "\(crops)/\(prefix)-c2.png",
+                transcript: TranscriptBatchTests.scenes
             ),
-            .init(id: "\(prefix)-c1", time: 10, text: "too fast", keyframePath: "\(frames)/\(prefix)-c1.png", region: nil, cropPath: nil, transcript: []),
+            .init(
+                id: "\(prefix)-c1", time: 10, text: "too fast", keyframePath: "\(frames)/\(prefix)-c1.png", region: nil, cropPath: nil,
+                transcript: TranscriptBatchTests.scenes
+            ),
         ])
         for path in payload.comments.map(\.keyframePath) + payload.comments.compactMap(\.cropPath) {
             #expect(path.hasPrefix("/"))
