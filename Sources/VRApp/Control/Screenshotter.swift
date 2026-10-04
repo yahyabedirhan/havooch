@@ -123,11 +123,7 @@ final class Screenshotter {
     /// The video's frame at the playhead, read from the file.
     private func currentFrame() async -> CGImage? {
         guard let video = model.player.video else { return nil }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: video.url))
-        generator.appliesPreferredTrackTransform = true
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
-        return try? await generator.image(at: CMTime(seconds: model.player.time, preferredTimescale: 60_000)).image
+        return try? await FrameGrabber.frame(of: video.url, at: model.player.time)
     }
 
     private static func playerView(in view: NSView) -> PlayerLayerView? {

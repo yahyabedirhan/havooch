@@ -24,7 +24,23 @@ struct TransportBar: View {
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(.secondary)
 
-            Timeline(time: player.time, duration: player.video?.duration ?? 0) { model.scrub(to: $0) }
+            Timeline(
+                time: player.time, duration: player.video?.duration ?? 0,
+                comments: model.desk.open?.comments ?? [], selection: model.selection,
+                scrub: { model.scrub(to: $0) }, select: { model.select($0) }
+            )
+
+            Button {
+                model.attempt { () throws(ActionError) in try model.startDraft() }
+            } label: {
+                Image(systemName: "plus.bubble")
+                    .font(.title3)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Comment at this moment (Return)")
+            .accessibilityLabel("Comment at this moment")
 
             Menu {
                 ForEach(PlayerEngine.speeds, id: \.self) { speed in

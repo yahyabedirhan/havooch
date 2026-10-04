@@ -1,5 +1,6 @@
 import Foundation
 import VRLease
+import VRReview
 import VRWire
 
 /// What `state` prints: everything the window shows, as one JSON object
@@ -18,8 +19,7 @@ struct StateSnapshot: Encodable {
 
     struct Video: Encodable {
         var path: String
-        /// The hash that names the video whatever its file is called; null
-        /// until reviews are kept by it.
+        /// The hash that names the video whatever its file is called.
         @Nulled var contentHash: String?
         var title: String
         var duration: Double
@@ -49,14 +49,36 @@ struct StateSnapshot: Encodable {
         @Nulled var place: String?
     }
 
+    /// The comment being written in the comment box.
+    struct Draft: Encodable {
+        var time: Double
+        @Nulled var region: Unbuilt? = nil
+    }
+
+    /// One comment, as `state` lists it and as `comment add --json` prints it.
+    struct Comment: Encodable {
+        var id: String
+        var time: Double
+        var text: String
+        @Nulled var region: Unbuilt? = nil
+        var state: String
+        @Nulled var batchId: String?
+        /// The PNG of the frame at `time`, as an absolute path.
+        var keyframePath: String
+        @Nulled var cropPath: String? = nil
+        var thread: [ThreadMessage]
+    }
+
     /// A part that has no shape yet: its key is there, with nothing in it.
     struct Unbuilt: Encodable {}
 
     var app: App
     @Nulled var video: Video?
     var player: Player
-    @Nulled var draft: Unbuilt?
-    var comments: [Unbuilt] = []
+    @Nulled var draft: Draft?
+    /// The open video's comments, in time order.
+    var comments: [Comment] = []
+    /// The ids of the queued ones, in the same order.
     var queue: [String] = []
     var batches: [Unbuilt] = []
     var context = Context(sidecarPath: nil, note: "")

@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The lease as the window shows it; the server keeps it current.
     let lease = LeaseIndicator()
     private let server: ControlServer
+    private let shortcuts: ShortcutMonitor
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
@@ -46,12 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             indicator: lease,
             quit: { NSApp.terminate(nil) }
         )
+        shortcuts = ShortcutMonitor(model: model)
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Run from `.build` without a bundle, the app would otherwise have no window or menu.
         NSApp.setActivationPolicy(.regular)
+        shortcuts.start()
         do {
             try server.start()
         } catch {
@@ -75,10 +78,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 /// The window's content: the lease banner while an agent controls the app,
-/// then the frame above the transport bar.
+/// then the frame above the transport bar, with the comment box over the
+/// frame's foot while a comment is written, and the sidebar on the trailing
+/// edge.
 struct MainView: View {
     let model: AppModel
     let lease: LeaseIndicator
+    @State private var sidebar = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,10 +100,29 @@ struct MainView: View {
                         .background(.background)
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let draft = model.desk.draft {
+                    Composer(model: model, time: draft.time)
+                }
+            }
             Divider()
             TransportBar(model: model)
         }
         .frame(minWidth: 640, minHeight: 420)
+        .inspector(isPresented: $sidebar) {
+            Sidebar(model: model)
+                .inspectorColumnWidth(min: 240, ideal: 300, max: 440)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    sidebar.toggle()
+                } label: {
+                    Label("Comments", systemImage: "sidebar.trailing")
+                }
+                .help(sidebar ? "Hide the comments" : "Show the comments")
+            }
+        }
         .navigationTitle(model.player.video?.url.lastPathComponent ?? Identity.appName)
         .dropDestination(for: URL.self) { urls, _ in
             guard let video = urls.first else { return false }

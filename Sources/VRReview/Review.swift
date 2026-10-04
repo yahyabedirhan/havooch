@@ -1,0 +1,98 @@
+import Foundation
+
+/// The video a review is about: the hash that names it whatever its file
+/// is called, and the file it was last opened from.
+public struct VideoInfo: Codable, Equatable, Sendable {
+    public var contentHash: String
+    public var path: String
+    public var title: String
+    public var duration: Double
+
+    public init(contentHash: String, path: String, title: String, duration: Double) {
+        self.contentHash = contentHash
+        self.path = path
+        self.title = title
+        self.duration = duration
+    }
+}
+
+/// Everything kept for one video, and every rule that changes it. A value:
+/// whoever holds it changes a copy through these methods, so a refused
+/// change leaves nothing behind.
+public struct Review: Codable, Equatable, Sendable {
+    public var video: VideoInfo
+    /// In time order; comments at the same time, in the order they were made.
+    public private(set) var comments: [Comment]
+    /// The number the next comment gets. It only goes up, so a deleted
+    /// comment's id is never given again.
+    private var nextComment: Int
+
+    public init(video: VideoInfo) {
+        self.video = video
+        comments = []
+        nextComment = 1
+    }
+
+    /// The comments waiting to be sent, in time order.
+    public var queue: [Comment] {
+        comments.filter { $0.state == .queued }
+    }
+
+    /// The comment `id` names.
+    public func comment(_ id: CommentID) throws(ReviewError) -> Comment {
+        guard let comment = comments.first(where: { $0.id == id }) else { throw .unknownComment(id.rawValue) }
+        return comment
+    }
+
+    /// The text `addComment` would keep for a comment at `time`, or its
+    /// refusal, with nothing changed: for a caller that has work to do (the
+    /// keyframe) before the comment exists.
+    public func checkedText(_ text: String, at time: Double) throws(ReviewError) -> String {
+        let kept = try Self.kept(text)
+        guard time.isFinite, (0...video.duration).contains(time) else {
+            throw .timeOutsideVideo(time, duration: video.duration)
+        }
+        return kept
+    }
+
+    /// A new comment at `time`, straight into the queue.
+    @discardableResult
+    public mutating func addComment(text: String, time: Double, now: Date) throws(ReviewError) -> Comment {
+        let comment = Comment(
+            id: CommentID(contentHash: video.contentHash, number: nextComment),
+            time: time, text: try checkedText(text, at: time), state: .queued, createdAt: now
+        )
+        nextComment += 1
+        // After every comment at or before its time, so equal times keep the order they were made in.
+        let index = comments.firstIndex { $0.time > time } ?? comments.endIndex
+        comments.insert(comment, at: index)
+        return comment
+    }
+
+    /// New text for a comment that is still queued.
+    @discardableResult
+    public mutating func editComment(_ id: CommentID, text: String) throws(ReviewError) -> Comment {
+        let index = try queuedIndex(id)
+        comments[index].text = try Self.kept(text)
+        return comments[index]
+    }
+
+    /// Takes a comment that is still queued out of the review.
+    public mutating func deleteComment(_ id: CommentID) throws(ReviewError) {
+        comments.remove(at: try queuedIndex(id))
+    }
+
+    /// Where the comment `id` names is, when it may still be changed.
+    private func queuedIndex(_ id: CommentID) throws(ReviewError) -> Int {
+        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.rawValue) }
+        guard comments[index].state == .queued else { throw .notQueued(id, comments[index].state) }
+        return index
+    }
+
+    /// `text` without the blank space around it; refused when nothing is left.
+    private static func kept(_ text: String) throws(ReviewError) -> String {
+        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !kept.isEmpty else { throw .emptyText }
+        return kept
+    }
+}

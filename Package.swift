@@ -4,8 +4,8 @@ import PackageDescription
 // The modules of docs/low-level-design.md, one target each. This manifest is
 // the guard between the two sides: the agent side (VRLease, VRWire, VRCommand,
 // VRCLI) never links an app-side library, so it builds and tests without the
-// app. The app-side libraries (VRReview, VRTranscript, VRStore) join the list
-// with the ticket that writes their first file; only VRApp may depend on them.
+// app. The app-side libraries (VRReview, VRStore, and VRTranscript once it has
+// a file) are for VRApp alone to depend on.
 let package = Package(
     name: "VideoReview",
     platforms: [.macOS(.v26)],
@@ -22,13 +22,19 @@ let package = Package(
         .target(name: "VRCommand", dependencies: ["VRWire", "VRLease"]),
         .executableTarget(name: "VRCLI", dependencies: ["VRCommand"]),
 
+        // ── app side ──
+        .target(name: "VRReview"),
+        .target(name: "VRStore", dependencies: ["VRReview"]),
+
         // ── the app: the only UI code ──
-        .executableTarget(name: "VRApp", dependencies: ["VRWire", "VRLease"]),
+        .executableTarget(name: "VRApp", dependencies: ["VRWire", "VRLease", "VRReview", "VRStore"]),
 
         .testTarget(name: "VRLeaseTests", dependencies: ["VRLease"]),
         .testTarget(name: "VRWireTests", dependencies: ["VRWire", "VRLease"]),
         .testTarget(name: "VRCommandTests", dependencies: ["VRCommand", "VRWire", "VRLease"]),
-        .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRWire", "VRLease"]),
+        .testTarget(name: "VRReviewTests", dependencies: ["VRReview"]),
+        .testTarget(name: "VRStoreTests", dependencies: ["VRStore", "VRReview"]),
+        .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRWire", "VRLease", "VRReview", "VRStore"]),
     ],
     swiftLanguageModes: [.v6]
 )

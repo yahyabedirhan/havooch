@@ -136,6 +136,30 @@ enum CommandTable {
             return .send(.playerSeek(seconds: seconds))
         },
         Command(
+            words: ["comment", "add"], usage: "comment add <text> [--at <time>]",
+            summary: "queue a comment at a time, or at the playhead"
+        ) { arguments throws(UsageError) in
+            var at: Double?
+            if let text = try arguments.option("at") {
+                guard let seconds = TimeArgument.seconds(text) else {
+                    throw UsageError("`\(text)` isn't a time; write seconds (10, 10.5) or mm:ss (0:10)")
+                }
+                at = seconds
+            }
+            return .send(.commentAdd(text: try arguments.positional("text"), at: at, region: nil))
+        },
+        Command(
+            words: ["comment", "edit"], usage: "comment edit <id> <text>", summary: "change a queued comment's text"
+        ) { arguments throws(UsageError) in
+            let id = try arguments.positional("id")
+            return .send(.commentEdit(id: id, text: try arguments.positional("text")))
+        },
+        Command(
+            words: ["comment", "delete"], usage: "comment delete <id>", summary: "delete a queued comment"
+        ) { arguments throws(UsageError) in
+            .send(.commentDelete(id: try arguments.positional("id")))
+        },
+        Command(
             words: ["screenshot"], usage: "screenshot <abs.png> [--appearance light|dark]",
             summary: "write the app's window as a PNG"
         ) { arguments throws(UsageError) in

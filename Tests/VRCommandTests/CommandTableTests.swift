@@ -53,6 +53,14 @@ import VRWire
         }
     }
 
+    @Test func eachCommentLineBecomesItsRequest() {
+        #expect(request("comment", "add", "the title is small") == .commentAdd(text: "the title is small", at: nil, region: nil))
+        #expect(request("comment", "add", "too fast", "--at", "0:10") == .commentAdd(text: "too fast", at: 10, region: nil))
+        #expect(request("comment", "add", "--at", "3.5", "too fast") == .commentAdd(text: "too fast", at: 3.5, region: nil))
+        #expect(request("comment", "edit", "7f3a9c21-c1", "new text") == .commentEdit(id: "7f3a9c21-c1", text: "new text"))
+        #expect(request("comment", "delete", "7f3a9c21-c1") == .commentDelete(id: "7f3a9c21-c1"))
+    }
+
     @Test func aRelativeVideoPathIsTakenAgainstTheWorkingFolder() {
         #expect(request("player", "open", "fixtures/sample.mp4") == .playerOpen(path: "/work/fixtures/sample.mp4"))
         #expect(request("player", "open", "../sample.mp4") == .playerOpen(path: "/sample.mp4"))
@@ -94,6 +102,12 @@ import VRWire
             "screenshot: no appearance `sepia`; it takes `light` or `dark`", "screenshot <abs.png> [--appearance light|dark]"
         ),
         (["screenshot", "/tmp/w.png", "--appearance"], "screenshot: --appearance needs a value", "screenshot <abs.png> [--appearance light|dark]"),
+        (["comment", "add"], "comment add: missing <text>", "comment add <text> [--at <time>]"),
+        (["comment", "add", "late", "--at", "soon"], "comment add: `soon` isn't a time; write seconds (10, 10.5) or mm:ss (0:10)", "comment add <text> [--at <time>]"),
+        (["comment", "add", "late", "--at"], "comment add: --at needs a value", "comment add <text> [--at <time>]"),
+        (["comment", "add", "one", "two"], "comment add: unexpected `two`", "comment add <text> [--at <time>]"),
+        (["comment", "edit", "7f3a9c21-c1"], "comment edit: missing <text>", "comment edit <id> <text>"),
+        (["comment", "delete"], "comment delete: missing <id>", "comment delete <id>"),
         (["app", "open", "--demo"], "app open: --demo needs a value", "app open [--demo <folder>]"),
         (["control", "take", "--wait"], "control take: --wait needs a value", "control take [--wait <s>]"),
         (["control", "take", "--wait", "soon"], "control take: --wait takes whole seconds from 0 to 3600, not `soon`", "control take [--wait <s>]"),

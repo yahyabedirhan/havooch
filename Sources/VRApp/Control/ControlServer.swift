@@ -1,5 +1,6 @@
 import Foundation
 import VRLease
+import VRReview
 import VRWire
 
 /// App control's server: while the app runs it listens on the control
@@ -121,7 +122,7 @@ final class ControlServer {
                     @Nulled var video: StateSnapshot.Video?
                 }
                 let video = try await model.open(URL(fileURLWithPath: path))
-                return done(json ? JSONText.line(Opened(video: snapshot().video)) : video.url.path + "\n")
+                return done(json ? JSONText.line(Opened(video: snapshot().video)) : video.path + "\n")
             case .playerPlay:
                 try model.play()
                 return playhead(json)
@@ -133,7 +134,20 @@ final class ControlServer {
                 return playhead(json)
             case .screenshot(let path, let appearance):
                 return await screenshot(to: path, appearance: appearance, json: json)
-            case .commentAdd, .commentEdit, .commentDelete, .batchSend, .threadAnswer,
+            case .commentAdd(let text, let at, let region):
+                guard region == nil else {
+                    return Answer(reply: .refused("this build of video-review doesn't take a comment's region yet"))
+                }
+                return comment(try await model.addComment(text: text, at: at), json)
+            case .commentEdit(let id, let text):
+                return comment(try model.editComment(CommentID(rawValue: id), text: text), json)
+            case .commentDelete(let id):
+                struct Deleted: Encodable {
+                    var deleted: String
+                }
+                try model.deleteComment(CommentID(rawValue: id))
+                return done(json ? JSONText.line(Deleted(deleted: id)) : "deleted \(id)\n")
+            case .batchSend, .threadAnswer,
                  .contextSet, .wait, .ack, .status, .reply, .ask:
                 return Answer(reply: .refused("this build of video-review doesn't answer `\(message.request.command)` yet"))
             }
@@ -159,6 +173,12 @@ final class ControlServer {
         }
         let player = model.player
         return done(json ? JSONText.line(Playhead(time: player.time, playing: player.playing)) : TimeText.precise(player.time) + "\n")
+    }
+
+    /// What `comment add` and `comment edit` print: the comment's id, or
+    /// the comment as `state` shows it.
+    private func comment(_ comment: Comment, _ json: Bool) -> Answer {
+        done(json ? JSONText.line(model.shown(comment)) : comment.id.rawValue + "\n")
     }
 
     private func screenshot(to path: String, appearance: ControlRequest.Appearance?, json: Bool) async -> Answer {
