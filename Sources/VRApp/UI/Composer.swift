@@ -2,16 +2,22 @@ import SwiftUI
 
 /// The comment box: opens focused over the stage, so the person types (or
 /// dictates) at once. Enter queues the comment, Shift+Enter adds a line,
-/// Escape cancels.
+/// Escape cancels. For a comment on a region it's narrower, to stand beside
+/// the rectangle, and Escape takes the rectangle away with it.
 struct Composer: View {
     /// The time the comment is at.
     let time: Double
+    /// Whether the comment is on a drawn region of the frame.
+    var isOnRegion = false
     /// Queues the text; false when it's refused, and the box stays.
     let commit: (String) -> Bool
     let cancel: () -> Void
 
     @State private var text = ""
     @FocusState private var isFocused: Bool
+
+    /// The box's width beside a region.
+    static let regionWidth: CGFloat = 320
 
     private var isBlank: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -20,12 +26,17 @@ struct Composer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Comment at \(TimeText.short(time))", systemImage: "plus.bubble")
-                    .font(.headline)
+                Label(
+                    isOnRegion ? "Comment on the region at \(TimeText.short(time))" : "Comment at \(TimeText.short(time))",
+                    systemImage: isOnRegion ? "rectangle.dashed" : "plus.bubble"
+                )
+                .font(.headline)
                 Spacer()
-                Text("Enter queues · Shift+Enter adds a line · Esc cancels")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if !isOnRegion {
+                    Text("Enter queues · Shift+Enter adds a line · Esc cancels")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             TextEditor(text: $text)
                 .font(.body)
@@ -45,6 +56,11 @@ struct Composer: View {
                     return .handled
                 }
             HStack {
+                if isOnRegion {
+                    Text("Enter queues · Esc cancels")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("Cancel", action: cancel)
                 Button("Queue") { _ = commit(text) }
@@ -53,7 +69,7 @@ struct Composer: View {
             }
         }
         .padding(Theme.gap)
-        .frame(maxWidth: 480)
+        .frame(maxWidth: isOnRegion ? Self.regionWidth : 480)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.cardCorner + 2))
         .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         .onAppear { isFocused = true }

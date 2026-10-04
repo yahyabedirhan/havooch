@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+import VRReview
 
 /// What the model asks for a comment's picture: AVFoundation in the app, a
 /// fake in tests.
@@ -9,6 +10,9 @@ protocol FrameGrabbing: Sendable {
     /// Writes the frame the video shows at `seconds` as a PNG at `file`,
     /// creating its folder, and returns the frame's size in pixels.
     func writeKeyframe(of video: URL, at seconds: Double, to file: URL) async throws -> CGSize
+    /// Writes the part of the keyframe at `keyframe` that `region` covers as
+    /// a PNG at `file`, creating its folder.
+    func writeCrop(of keyframe: URL, region: Region, to file: URL) async throws
 }
 
 /// Why a frame couldn't be saved.
@@ -16,9 +20,10 @@ struct FrameFailure: LocalizedError {
     var errorDescription: String?
 }
 
-/// Frames read from the video file itself, never from the screen: a comment
-/// made in the window and one made from the command line at the same time
-/// give the same pixels, at any window size.
+/// Frames read from the video file itself, never from the screen, and crops
+/// cut from those frames: a comment made in the window and one made from the
+/// command line at the same time and region give the same pixels, at any
+/// window size.
 struct FrameGrabber: FrameGrabbing {
     /// How far before the asked time a frame may be when none is exactly
     /// there: a time at the video's very end, after its last frame.
@@ -29,6 +34,20 @@ struct FrameGrabber: FrameGrabbing {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Self.write(frame.image, to: file)
         return CGSize(width: frame.image.width, height: frame.image.height)
+    }
+
+    func writeCrop(of keyframe: URL, region: Region, to file: URL) async throws {
+        guard let source = CGImageSourceCreateWithURL(keyframe as CFURL, nil),
+              let frame = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw FrameFailure(errorDescription: "couldn't read \(keyframe.path)")
+        }
+        // A CGImage's pixels count from its top left, as a region does.
+        let pixels = region.pixelRect(in: CGSize(width: frame.width, height: frame.height))
+        guard let crop = frame.cropping(to: pixels) else {
+            throw FrameFailure(errorDescription: "couldn't cut the region \(region.text) from \(keyframe.path)")
+        }
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Self.write(crop, to: file)
     }
 
     /// The frame shown at `seconds`, at the track's natural size with its

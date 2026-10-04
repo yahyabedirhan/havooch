@@ -35,7 +35,7 @@ struct StateReport: Equatable {
         self.lease = lease
         video = model.video?.info
         player = Player(time: TimeText.rounded(model.time), playing: model.isPlaying)
-        comments = (model.session?.comments ?? []).map { CommentReport($0, keyframe: model.keyframeURL(for: $0.id)) }
+        comments = (model.session?.comments ?? []).map { CommentReport($0, keyframe: model.keyframeURL(for: $0.id), crop: model.cropURL(for: $0.id)) }
     }
 
     // MARK: - state
@@ -149,24 +149,31 @@ struct StateReport: Equatable {
 }
 
 /// One comment as `state` and `comment add` report it: `{id, time, text,
-/// state, keyframePath}`. `keyframePath` is the keyframe's absolute path, or
-/// `null` while the file isn't on disk.
+/// state, region, keyframePath, cropPath}`. `keyframePath` is the keyframe's
+/// absolute path, or `null` while the file isn't on disk. `region` is
+/// `{x, y, w, h}` and `cropPath` its crop's absolute path; both are `null`
+/// for a comment on the whole frame, and `cropPath` while the file isn't on
+/// disk.
 struct CommentReport: Encodable, Equatable {
     var id: String
     var time: Double
     var text: String
     var state: CommentState
+    var region: Region?
     var keyframePath: String?
+    var cropPath: String?
 
-    init(_ comment: Comment, keyframe: URL?) {
+    init(_ comment: Comment, keyframe: URL?, crop: URL?) {
         id = comment.id
         time = comment.time
         text = comment.text
         state = comment.state
+        region = comment.region
         keyframePath = keyframe?.path
+        cropPath = crop?.path
     }
 
-    enum Keys: String, CodingKey { case id, time, text, state, keyframePath }
+    enum Keys: String, CodingKey { case id, time, text, state, region, keyframePath, cropPath }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Keys.self)
@@ -175,7 +182,9 @@ struct CommentReport: Encodable, Equatable {
         try container.encode(text, forKey: .text)
         try container.encode(state, forKey: .state)
         // Encoded also when nil: `null`, never left out.
+        try container.encode(region, forKey: .region)
         try container.encode(keyframePath, forKey: .keyframePath)
+        try container.encode(cropPath, forKey: .cropPath)
     }
 }
 

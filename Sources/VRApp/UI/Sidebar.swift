@@ -28,7 +28,7 @@ struct Sidebar: View {
                             ForEach(comments) { comment in
                                 CommentCard(
                                     comment: comment,
-                                    keyframe: model.keyframeURL(for: comment.id),
+                                    picture: model.cropURL(for: comment.id) ?? model.keyframeURL(for: comment.id),
                                     isSelected: model.selection == comment.id,
                                     show: { model.showByPerson(comment.id) },
                                     edit: { (try? model.editComment(comment.id, text: $0)) != nil },
@@ -58,7 +58,7 @@ struct Sidebar: View {
                 .foregroundStyle(.secondary)
             Text("No comments yet")
                 .font(.headline)
-            Text("Press C to comment at the player's time.")
+            Text("Press C to comment at the player's time, or drag on the frame to comment on a part of it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

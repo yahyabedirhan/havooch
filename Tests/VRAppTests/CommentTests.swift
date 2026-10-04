@@ -15,13 +15,32 @@ struct FakeFrames: FrameGrabbing {
         var errorDescription: String? { "the disk is full" }
     }
 
+    /// A number a test reads while the grabber counts on another thread.
+    final class Count: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+
+        var value: Int { lock.withLock { count } }
+        func add() { lock.withLock { count += 1 } }
+    }
+
     var fails = false
+    var failsCrop = false
+    /// Counts the crops written, when a test waits for one.
+    var crops: Count?
 
     func writeKeyframe(of video: URL, at seconds: Double, to file: URL) async throws -> CGSize {
         if fails { throw Failure() }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("frame of \(video.lastPathComponent) at \(seconds)".utf8).write(to: file)
         return CGSize(width: 1920, height: 1080)
+    }
+
+    func writeCrop(of keyframe: URL, region: Region, to file: URL) async throws {
+        if failsCrop { throw Failure() }
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("crop \(region.text) of \(keyframe.lastPathComponent)".utf8).write(to: file)
+        crops?.add()
     }
 }
 
@@ -36,7 +55,7 @@ private let holder = Holder(key: "test", name: "Claude Code", place: "/Users/me/
 /// A control server over a fake player and a library of its own, for the comment tests, with the
 /// fixture video open.
 @MainActor
-private final class CommentRig {
+final class CommentRig {
     let player = FakePlayer()
     let library = scratchLibrary()
     let model: ReviewModel
@@ -87,6 +106,10 @@ private final class CommentRig {
         Timeline.markers(for: model.comments, selection: model.selection)
     }
 
+    func crop(_ id: String) -> URL {
+        library.cropURL(model.video?.info.contentHash ?? "", comment: id)
+    }
+
     func keyframe(_ id: String) -> URL {
         library.keyframeURL(model.video?.info.contentHash ?? "", comment: id)
     }
@@ -109,7 +132,7 @@ private func exists(_ file: URL) -> Bool {
         let rig = await CommentRig().opened()
         _ = await rig.send(.playerSeek(seconds: 10))
 
-        #expect(await rig.send(.commentAdd(text: " too fast ", at: nil)) == .done("c1 at 0:10.000\n"))
+        #expect(await rig.send(.commentAdd(text: " too fast ", at: nil, region: nil)) == .done("c1 at 0:10.000\n"))
 
         let comment = try #require(try await rig.comments().first)
         #expect(comment["id"] as? String == "c1")
@@ -128,9 +151,9 @@ private func exists(_ file: URL) -> Bool {
         let rig = await CommentRig().opened()
         _ = await rig.send(.playerPlay)
 
-        let reply = await rig.send(.commentAdd(text: "here", at: 5.5), json: true)
+        let reply = await rig.send(.commentAdd(text: "here", at: 5.5, region: nil), json: true)
 
-        #expect(reply.output == #"{"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","state":"queued","text":"here","time":5.5}"# + "\n")
+        #expect(reply.output == #"{"cropPath":null,"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","region":null,"state":"queued","text":"here","time":5.5}"# + "\n")
         #expect(rig.player.time == 5.5)
         #expect(!rig.player.isPlaying)
     }
@@ -138,7 +161,7 @@ private func exists(_ file: URL) -> Bool {
     @Test func stateListsTheQueueAndTheCommentsInTimeOrder() async throws {
         let rig = await CommentRig().opened()
         for time in [15.0, 3, 10] {
-            _ = await rig.send(.commentAdd(text: "at \(time)", at: time))
+            _ = await rig.send(.commentAdd(text: "at \(time)", at: time, region: nil))
         }
 
         #expect(try await rig.queue() == ["c2", "c3", "c1"])
@@ -172,7 +195,7 @@ private func exists(_ file: URL) -> Bool {
         #expect(rig.model.commitComposer(text: "from the window"))
         #expect(rig.model.composing == nil)
 
-        _ = await rig.send(.commentAdd(text: "from the command line", at: 12))
+        _ = await rig.send(.commentAdd(text: "from the command line", at: 12, region: nil))
 
         #expect(rig.markers.map(\.id) == [draft, "c2"])
         #expect(rig.markers.map(\.time) == [4, 12])
@@ -217,8 +240,8 @@ private func exists(_ file: URL) -> Bool {
 
     @Test func editAndDeleteChangeTheQueueAndTheMarkers() async throws {
         let rig = await CommentRig().opened()
-        _ = await rig.send(.commentAdd(text: "one", at: 10))
-        _ = await rig.send(.commentAdd(text: "two", at: 5))
+        _ = await rig.send(.commentAdd(text: "one", at: 10, region: nil))
+        _ = await rig.send(.commentAdd(text: "two", at: 5, region: nil))
 
         #expect(await rig.send(.commentEdit(id: "c1", text: "one, better")) == .done("edited c1\n"))
         #expect(try await rig.comments().map { $0["text"] as? String } == ["two", "one, better"])
@@ -234,27 +257,27 @@ private func exists(_ file: URL) -> Bool {
         #expect(try await rig.queue().isEmpty)
         #expect(rig.markers.isEmpty)
         // A deleted comment's id isn't given again.
-        #expect(await rig.send(.commentAdd(text: "three", at: nil)).output.hasPrefix("c3 at "))
+        #expect(await rig.send(.commentAdd(text: "three", at: nil, region: nil)).output.hasPrefix("c3 at "))
     }
 
     @Test func whatCannotBeDoneIsRefusedAndChangesNothing() async throws {
         let closed = CommentRig()
         let noVideo = ControlReply.refused("no video is open; `video-review player open <path>`")
-        #expect(await closed.send(.commentAdd(text: "x", at: nil)) == noVideo)
+        #expect(await closed.send(.commentAdd(text: "x", at: nil, region: nil)) == noVideo)
         #expect(await closed.send(.commentEdit(id: "c1", text: "x")) == noVideo)
         #expect(await closed.send(.commentDelete(id: "c1")) == noVideo)
 
         let rig = await CommentRig().opened()
         _ = await rig.send(.playerSeek(seconds: 10))
-        #expect(await rig.send(.commentAdd(text: " ", at: 5)) == .refused("a comment needs its text"))
-        #expect(await rig.send(.commentAdd(text: "x", at: 30)) == .refused("0:30.000 is outside the video (0:00.000 to 0:21.233)"))
+        #expect(await rig.send(.commentAdd(text: " ", at: 5, region: nil)) == .refused("a comment needs its text"))
+        #expect(await rig.send(.commentAdd(text: "x", at: 30, region: nil)) == .refused("0:30.000 is outside the video (0:00.000 to 0:21.233)"))
         #expect(await rig.send(.commentEdit(id: "c9", text: "x")) == .refused("there's no comment c9"))
         #expect(await rig.send(.commentDelete(id: "c9")) == .refused("there's no comment c9"))
         // Nothing moved the player or left a comment.
         #expect(rig.player.time == 10)
         #expect(try await rig.comments().isEmpty)
 
-        _ = await rig.send(.commentAdd(text: "kept", at: nil))
+        _ = await rig.send(.commentAdd(text: "kept", at: nil, region: nil))
         #expect(await rig.send(.commentEdit(id: "c1", text: "")) == .refused("a comment needs its text"))
         #expect(rig.model.comments.map(\.text) == ["kept"])
     }
@@ -262,7 +285,7 @@ private func exists(_ file: URL) -> Bool {
     @Test func aCommentWhoseFrameCannotBeSavedIsRefused() async throws {
         let rig = await CommentRig(frames: FakeFrames(fails: true)).opened()
 
-        let reply = await rig.send(.commentAdd(text: "x", at: 10))
+        let reply = await rig.send(.commentAdd(text: "x", at: 10, region: nil))
 
         #expect(reply == .refused("couldn't save the frame at 0:10.000: the disk is full"))
         #expect(try await rig.comments().isEmpty)
@@ -270,8 +293,8 @@ private func exists(_ file: URL) -> Bool {
 
     @Test func showingACommentSeeksPausesAndSelectsIt() async throws {
         let rig = await CommentRig().opened()
-        _ = await rig.send(.commentAdd(text: "one", at: 10))
-        _ = await rig.send(.commentAdd(text: "two", at: 5))
+        _ = await rig.send(.commentAdd(text: "one", at: 10, region: nil))
+        _ = await rig.send(.commentAdd(text: "two", at: 5, region: nil))
         _ = await rig.send(.playerPlay)
 
         // What a click on c1's marker does.
@@ -286,7 +309,7 @@ private func exists(_ file: URL) -> Bool {
 
     @Test func aVideoOpenedAgainHasItsComments() async throws {
         let rig = await CommentRig().opened()
-        _ = await rig.send(.commentAdd(text: "one", at: 10))
+        _ = await rig.send(.commentAdd(text: "one", at: 10, region: nil))
 
         _ = await rig.send(.playerOpen(path: fixtureVideo.path))
 

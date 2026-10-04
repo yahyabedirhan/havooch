@@ -3,13 +3,14 @@ import ImageIO
 import SwiftUI
 import VRReview
 
-/// One comment in the sidebar: its time, its state, its keyframe and its
+/// One comment in the sidebar: its time, its state, its picture and its
 /// text. A click shows its moment. While it's queued it can be edited in
 /// place or deleted.
 struct CommentCard: View {
     let comment: Comment
-    /// The keyframe's file, or nil while it isn't on disk.
-    let keyframe: URL?
+    /// The file of the crop of its region, else of its keyframe, or nil
+    /// while it isn't on disk.
+    let picture: URL?
     let isSelected: Bool
     let show: () -> Void
     /// Replaces the text; false when it's refused.
@@ -29,6 +30,12 @@ struct CommentCard: View {
                 Text(Theme.label(for: comment.state))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if comment.region != nil {
+                    Image(systemName: "rectangle.dashed")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("On a region of the frame")
+                }
                 Spacer()
                 if comment.state == .queued, editing == nil {
                     Button {
@@ -47,7 +54,7 @@ struct CommentCard: View {
             .buttonStyle(.borderless)
 
             HStack(alignment: .top, spacing: 8) {
-                Thumbnail(file: keyframe)
+                Thumbnail(file: picture)
                 if let editing {
                     editor(editing)
                 } else {
@@ -88,7 +95,7 @@ struct CommentCard: View {
     }
 }
 
-/// A comment's keyframe, small. Read off the main actor and scaled down, so
+/// A comment's keyframe or crop, small. Read off the main actor and scaled down, so
 /// a list of full-size frames stays light.
 private struct Thumbnail: View {
     let file: URL?

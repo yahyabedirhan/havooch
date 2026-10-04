@@ -33,12 +33,14 @@ final class ReviewModel {
     private(set) var composing: String?
     /// The comments whose keyframe is on disk.
     private(set) var keyframes: Set<String> = []
+    /// The comments whose region's crop is on disk.
+    private(set) var crops: Set<String> = []
 
     @ObservationIgnored private let player: any Playing
     @ObservationIgnored private let frames: any FrameGrabbing
     @ObservationIgnored private let library: Library
-    /// Each comment's keyframe being written: nil once it's on disk, or why
-    /// it couldn't be saved.
+    /// Each comment's keyframe, and its region's crop, being written: nil
+    /// once they're on disk, or why they couldn't be saved.
     @ObservationIgnored private var grabs: [String: Task<String?, Never>] = [:]
     /// The reviews of the videos opened earlier in this run, by content
     /// hash, so a video opened again has its comments. The store takes this
@@ -65,6 +67,18 @@ final class ReviewModel {
     func keyframeURL(for id: String) -> URL? {
         guard keyframes.contains(id), let session else { return nil }
         return library.keyframeURL(session.video.contentHash, comment: id)
+    }
+
+    /// Where the crop of the region of the comment `id` is, or nil when it
+    /// has no region or the crop isn't on disk yet.
+    func cropURL(for id: String) -> URL? {
+        guard crops.contains(id), let session else { return nil }
+        return library.cropURL(session.video.contentHash, comment: id)
+    }
+
+    /// The rectangles the stage draws over the frame now.
+    var marks: [RegionMark] {
+        RegionMark.shown(of: session?.comments ?? [], selection: selection, composing: composing, time: time)
     }
 
     // MARK: - What a person and an operator can do
@@ -109,10 +123,12 @@ final class ReviewModel {
         await player.seek(to: seconds)
     }
 
-    /// Starts a comment at `seconds`, or at the player's time: a draft with
-    /// its time, whose keyframe starts being written from the video file.
-    /// Returns the draft's id, for `commitComment` or `discardComment`.
-    func beginComment(at seconds: Double? = nil) throws(ModelRefusal) -> String {
+    /// Starts a comment at `seconds`, or at the player's time, on `region`
+    /// of the frame when one is given: a draft with its time, whose keyframe
+    /// starts being written from the video file, and its region's crop cut
+    /// from that keyframe. Returns the draft's id, for `commitComment` or
+    /// `discardComment`.
+    func beginComment(at seconds: Double? = nil, region: Region? = nil) throws(ModelRefusal) -> String {
         let video = try openVideo()
         if let seconds { try inside(seconds, of: video) }
         let time = TimeText.rounded(min(max(0, seconds ?? player.time), video.info.duration))
@@ -122,22 +138,28 @@ final class ReviewModel {
         } catch {
             throw ModelRefusal("couldn't number the comment: \(error.localizedDescription)")
         }
-        session?.draft(id: id, time: time)
+        session?.draft(id: id, time: time, region: region)
         let hash = video.info.contentHash
         let file = library.keyframeURL(hash, comment: id)
+        let crop = library.cropURL(hash, comment: id)
         grabs[id] = Task { [frames, weak self] in
+            var failure: String?
             do {
                 _ = try await frames.writeKeyframe(of: video.url, at: time, to: file)
+                if let region { try await frames.writeCrop(of: file, region: region, to: crop) }
             } catch {
-                return error.localizedDescription
+                failure = error.localizedDescription
             }
-            // The comment may have been dropped while its frame was written.
-            if let self, self.review(of: hash)?.comment(id) != nil {
-                self.keyframes.insert(id)
-            } else {
-                try? FileManager.default.removeItem(at: file)
+            // The comment may have been dropped while its images were written.
+            let kept = self?.review(of: hash)?.comment(id) != nil
+            for (image, isCrop) in [(file, false), (crop, true)] where FileManager.default.fileExists(atPath: image.path) {
+                if kept, let self {
+                    if isCrop { self.crops.insert(id) } else { self.keyframes.insert(id) }
+                } else {
+                    try? FileManager.default.removeItem(at: image)
+                }
             }
-            return nil
+            return failure
         }
         return id
     }
@@ -149,18 +171,19 @@ final class ReviewModel {
         selection = id
     }
 
-    /// Drops the draft `id` and its keyframe.
+    /// Drops the draft `id`, its keyframe and its crop.
     func discardComment(_ id: String) throws(ModelRefusal) {
         try change { (session) throws(ReviewRefusal) in try session.discard(id) }
         if composing == id { composing = nil }
-        dropKeyframe(of: id)
+        dropImages(of: id)
     }
 
     /// Queues a comment in one step, as the command line does: the video is
     /// paused, and moved to `seconds` first when it's given, so the window
-    /// shows what was commented on. Returns once the keyframe is on disk; a
-    /// frame that can't be saved refuses the comment.
-    func addComment(text: String, at seconds: Double? = nil) async throws(ModelRefusal) -> Comment {
+    /// shows what was commented on. Returns once the keyframe, and the crop
+    /// of `region` when one is given, are on disk; a frame or a crop that
+    /// can't be saved refuses the comment.
+    func addComment(text: String, at seconds: Double? = nil, region: Region? = nil) async throws(ModelRefusal) -> Comment {
         let video = try openVideo()
         do throws(ReviewRefusal) {
             _ = try ReviewSession.written(text)
@@ -172,7 +195,7 @@ final class ReviewModel {
             await player.seek(to: seconds)
         }
         player.pause()
-        let id = try beginComment(at: seconds)
+        let id = try beginComment(at: seconds, region: region)
         if let failure = await grabs[id]?.value {
             let time = session?.comment(id)?.time ?? 0
             try? discardComment(id)
@@ -188,11 +211,11 @@ final class ReviewModel {
         try change { (session) throws(ReviewRefusal) in try session.edit(id, text: text) }
     }
 
-    /// Takes a queued comment out, with its keyframe.
+    /// Takes a queued comment out, with its keyframe and its crop.
     func deleteComment(_ id: String) throws(ModelRefusal) {
         try change { (session) throws(ReviewRefusal) in try session.delete(id) }
         if selection == id { selection = nil }
-        dropKeyframe(of: id)
+        dropImages(of: id)
     }
 
     /// Shows a comment's moment: the video paused at its time and its card
@@ -243,12 +266,17 @@ final class ReviewModel {
         session?.video.contentHash == hash ? session : shelved[hash]
     }
 
-    /// Forgets a dropped comment's keyframe and removes its file. A frame
-    /// still being written removes itself when it lands.
-    private func dropKeyframe(of id: String) {
+    /// Forgets a dropped comment's keyframe and crop and removes their
+    /// files. An image still being written removes itself when it lands.
+    private func dropImages(of id: String) {
         grabs[id] = nil
-        guard keyframes.remove(id) != nil, let session else { return }
-        try? FileManager.default.removeItem(at: library.keyframeURL(session.video.contentHash, comment: id))
+        guard let hash = session?.video.contentHash else { return }
+        if keyframes.remove(id) != nil {
+            try? FileManager.default.removeItem(at: library.keyframeURL(hash, comment: id))
+        }
+        if crops.remove(id) != nil {
+            try? FileManager.default.removeItem(at: library.cropURL(hash, comment: id))
+        }
     }
 
     // MARK: - A person's gestures
@@ -293,12 +321,22 @@ final class ReviewModel {
         scrub(to: player.time + Double(frames) / video.frameRate)
     }
 
-    /// Pauses and opens the comment box at the player's time. With the box
-    /// already open, it stays on its draft.
-    func compose() {
+    /// Pauses and opens the comment box at the player's time, on `region`
+    /// of the frame when the person drew one. With the box already open, it
+    /// stays on its draft.
+    func compose(region: Region? = nil) {
         guard video != nil, composing == nil else { return }
         try? pause()
-        composing = try? beginComment()
+        composing = try? beginComment(region: region)
+    }
+
+    /// The person started to draw on the frame: the video pauses, so the
+    /// rectangle lands on the frame they point at. False when there's
+    /// nothing to draw on, or the comment box is open.
+    func beginDrawing() -> Bool {
+        guard video != nil, composing == nil else { return false }
+        try? pause()
+        return true
     }
 
     /// Queues what the comment box holds; false when it's refused (no

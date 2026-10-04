@@ -5,6 +5,7 @@ import Foundation
 ///
 ///     index.json                          the next comment number
 ///     videos/<contentHash>/frames/<id>.png   a comment's keyframe
+///     videos/<contentHash>/crops/<id>.png    the crop of a comment's region
 public struct Library: Sendable {
     public let root: URL
 
@@ -26,10 +27,20 @@ public struct Library: Sendable {
 
     /// Where the keyframe of the comment `comment` on the video `hash` is.
     public func keyframeURL(_ hash: String, comment: String) -> URL {
+        image("frames", hash, comment: comment)
+    }
+
+    /// Where the crop of the region of the comment `comment` on the video
+    /// `hash` is.
+    public func cropURL(_ hash: String, comment: String) -> URL {
+        image("crops", hash, comment: comment)
+    }
+
+    private func image(_ folder: String, _ hash: String, comment: String) -> URL {
         root
             .appendingPathComponent("videos", isDirectory: true)
             .appendingPathComponent(hash, isDirectory: true)
-            .appendingPathComponent("frames", isDirectory: true)
+            .appendingPathComponent(folder, isDirectory: true)
             .appendingPathComponent(comment + ".png")
     }
 

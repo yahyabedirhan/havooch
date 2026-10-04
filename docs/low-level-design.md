@@ -184,7 +184,7 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
               VRApp ──▶ VRReview, VRTranscript
 ```
 
-`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the comment ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `ReviewSession`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; no dependencies yet, since `Library` does not keep sessions before the persistence ticket) and `VRApp`; `VRTranscript` is not there yet.
+`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the region ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `Region`, `ReviewSession`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; no dependencies yet, since `Library` does not keep sessions before the persistence ticket) and `VRApp`; `VRTranscript` is not there yet.
 
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
@@ -198,7 +198,7 @@ Test targets, all run by `make test` without the app:
 | `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
 | `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` against `fixtures/sample/sample.mp4`; the key routing |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`) |
 
 ### Folder tree
 
@@ -229,7 +229,7 @@ Sources/
     CommandTable.swift              name → entry; the standard table; run(arguments) → CommandResult; top-level help
     CommandResult.swift             output, error, exit status (0, 1, 2, 3)
     CommandContext.swift            CommandEnvironment (what the command reads from outside); support folder, client, launcher for one invocation
-    Arguments.swift                 shared parsing: time (seconds or mm:ss), region, --json, options
+    Arguments.swift                 shared parsing: time (seconds or mm:ss), region (x,y,w,h), --json, options
     AppCommand.swift                app status | open [--demo] | quit; launch, relaunch, demo pointer
     ControlCommand.swift            control take [--wait] | release
     StateCommand.swift              state
@@ -245,7 +245,7 @@ Sources/
     main.swift                      runs CommandTable.standard, prints, exits
   VRReview/
     Comment.swift                   Comment, CommentState and its allowed moves
-    Region.swift                    normalized rectangle, validation, pixel rectangle for a frame size
+    Region.swift                    normalized rectangle, validation, pixel rectangle for a frame size, its x,y,w,h text
     ThreadMessage.swift             author, kind, text, time
     Batch.swift                     id, sentAt, comment ids, its own thread
     VideoInfo.swift                 content hash, path, title, duration
@@ -291,7 +291,7 @@ Sources/
       MainWindow.swift              stage and sidebar laid out
       EmptyState.swift              no video open: drop, open, the demo folder's videos
       Stage.swift                   the video, the overlay, the composer, the notice
-      RegionOverlay.swift           drawing and showing rectangles in frame coordinates
+      RegionOverlay.swift           drawing and showing rectangles in frame coordinates: FrameFit (the frame inside the stage), RegionMark (which regions show), ComposerPlacement (the box beside a region), the overlay view
       Composer.swift                the comment box
       TransportBar.swift            play, time, the timeline
       Timeline.swift                the scrubber track and the marker pins
@@ -301,7 +301,7 @@ Sources/
       SendBar.swift                 queued count, Send, the presence chip
       LeaseBanner.swift             who controls the app, time left, Stop
       ContextPopover.swift          the sidecar's text and the editable note
-      Shortcuts.swift               the player's keys (PlayerKey) and where the focus is (KeyFocus): given up in a panel, under a sheet and while a text view has focus
+      Shortcuts.swift               the player's keys (PlayerKey, Escape among them) and where the focus is (KeyFocus): given up in a panel, under a sheet and while a text view has focus
       Theme.swift                   state colours and glyphs, spacing, fonts
 Tests/
   VRLeaseTests/  VRWireTests/  VRCommandTests/  VRReviewTests/
@@ -390,6 +390,7 @@ public enum ControlRequest: Equatable, Sendable {
     public static let longestWait = 3600   // a take's wait in line, in seconds, at most
     public var wait: TimeInterval      // how long the app may hold the connection: a take's wait in line, else 0
     public var isLongPoll: Bool        // wait and ask: the app holds the connection and sends a heartbeat
+    public struct WireRegion: Codable, Equatable { var x, y, w, h: Double }   // four numbers as --region gave them, not yet checked
 }
 
 public struct ControlMessage { var request: ControlRequest; var holder: Holder; var json: Bool
@@ -402,9 +403,11 @@ public struct ControlClient { var socket: URL; var holder: Holder; var transport
     public func send(_ request: ControlRequest, json: Bool) -> Result<ControlReply, Failure> }
 ```
 
-Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `wait`; the comment ticket adds the three `comment` cases, `commentAdd` as `(text:at:)` until the region ticket gives it `region`; `isLongPoll` arrives with the listener's `wait`. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `wait`. On the wire, `comment.add` carries `text` and, for `--at`, `time`; `comment.edit` carries `id` and `text`; `comment.delete` carries `id`.
+Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `wait`; the comment ticket adds the three `comment` cases, and the region ticket gives `commentAdd` its `region`; `isLongPoll` arrives with the listener's `wait`. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `wait`. On the wire, `comment.add` carries `text`, for `--at` its `time`, and for `--region` a `region` object `{x, y, w, h}`; `comment.edit` carries `id` and `text`; `comment.delete` carries `id`.
 
 `ControlMessage.decode` checks the version before it reads the holder or the command, so a request of another version is refused by its version whatever else it holds. A path on the wire (`player.open`, `screenshot`) must be absolute.
+
+`WireRegion` is four numbers and no rule: `VRWire` cannot import `VRReview`, and the rule belongs to `Region`. `OperatorDesk` makes the `Region` from it, so a rectangle outside the frame is refused by the app in `Region`'s words, with exit 1.
 
 On the socket a message is one flat JSON object, keys sorted: `{"command":"player.seek","holder":{…},"json":false,"time":10,"version":1}`. Command names are the CLI words joined by a dot (`comment.add`, `control.take`, `wait`).
 
@@ -426,9 +429,10 @@ Each `…Command.swift` has its `entry` for the table, `parse(_ arguments:) -> R
 ```swift
 public enum CommentState: String, Codable { case draft, queued, sent, acknowledged, working, done, failed }
 
-public struct Region: Codable, Equatable { var x, y, w, h: Double      // 0..1, origin top left of the video frame
-    public init(x:y:w:h:) throws(ReviewRefusal)
-    public func pixelRect(in size: CGSize) -> CGRect }
+public struct Region: Codable, Equatable { let x, y, w, h: Double      // 0..1, origin top left of the video frame
+    public init(x:y:w:h:) throws(ReviewRefusal)                          // inside the frame, w and h above 0
+    public var text: String                                              // "0.5,0,0.5,0.5", as --region takes it
+    public func pixelRect(in size: CGSize) -> CGRect }                   // whole pixels, rounded outward, inside the frame
 
 public struct ThreadMessage: Codable { var author: Author; var kind: Kind; var text: String; var at: Date
     public enum Author: String, Codable { case person, agent }
@@ -479,7 +483,9 @@ public struct Outbox: Codable, Equatable {
 public struct BatchPayload: Codable { … }     // exactly the spec's shape, see "The batch payload"
 ```
 
-Each ticket adds its own fields and methods. After the comment ticket, `Comment` is `id`, `time`, `text` and `state`, and `CommentState` has all seven states with `canMove(to:)`, the whole table of allowed moves. `ReviewSession` has `video`, `comments`, `queue`, `comment(_:)`, `draft(id:time:)`, `commit`, `discard`, `edit`, `delete` and `written(_:)`, the rule for a comment's text: trimmed, and not empty. `ReviewRefusal` is one line, `reason`. The region, the batches, the threads and the note arrive with their tickets.
+Each ticket adds its own fields and methods. After the region ticket, `Comment` is `id`, `time`, `text`, `region` and `state`, and `CommentState` has all seven states with `canMove(to:)`, the whole table of allowed moves. `ReviewSession` has `video`, `comments`, `queue`, `comment(_:)`, `draft(id:time:region:)`, `commit`, `discard`, `edit`, `delete` and `written(_:)`, the rule for a comment's text: trimmed, and not empty. `ReviewRefusal` is one line, `reason`. The batches, the threads and the note arrive with their tickets.
+
+A region's parts are constants (`let`), so a `Region` that exists passed its rule; one read back from disk is trusted as it was kept. A part may reach past the frame's edge by rounding alone (a slack of 1e-9), and `pixelRect` snaps an edge that is whole but for rounding, so `0.3 × 1920` is 576 and not a pixel more.
 
 **VRTranscript**
 
@@ -515,7 +521,7 @@ public enum ContentHash { static func of(_ file: URL) throws -> String }
 public struct TranscriptCache { func load(_ hash: String) -> [TranscriptLine]?; func save(_ lines: [TranscriptLine], for hash: String) throws }
 ```
 
-After the comment ticket, `Library` has `init(root:)`, `nextCommentID()` and `keyframeURL(_:comment:)`, and `index.json` holds the next comment number only. An id that was given out is never given again, also when its draft was cancelled or its comment deleted, so ids may have gaps.
+After the region ticket, `Library` has `init(root:)`, `nextCommentID()`, `keyframeURL(_:comment:)` and `cropURL(_:comment:)`, and `index.json` holds the next comment number only. An id that was given out is never given again, also when its draft was cancelled or its comment deleted, so ids may have gaps.
 
 **VRApp**
 
@@ -526,7 +532,7 @@ After the comment ticket, `Library` has `init(root:)`, `nextCommentID()` and `ke
 }
 protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in the app, a fake in VRAppTests
     func writeKeyframe(of video: URL, at: Double, to: URL) async throws -> CGSize
-    func writeCrop(of keyframe: URL, region: Region, to: URL) throws
+    func writeCrop(of keyframe: URL, region: Region, to: URL) async throws
 }
 
 @MainActor @Observable final class ReviewModel {
@@ -536,6 +542,7 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
     private(set) var selection: String?             // the selected comment
     private(set) var composing: String?             // the draft the comment box is open on
     private(set) var keyframes: Set<String>         // the comments whose keyframe is on disk
+    private(set) var crops: Set<String>             // the comments whose region's crop is on disk
     private(set) var notices: [Notice]
 
     // what a person and an operator can do
@@ -564,7 +571,9 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
 
 The video's length has one source, `VideoFile.info.duration` (the asset's, rounded to the millisecond), so `Playing` has no `duration`. `play` is `async` because playing at the end first seeks to the start. Beside the calls above, `ReviewModel` has a person's gestures (`openByPerson`, `togglePlay`, `scrub`, `skip`, `step`, `compose`, `commitComposer`, `cancelComposer`, `showByPerson`): the same calls with a time kept inside the video instead of refused, and a failed open kept in `openFailure` for the window's alert.
 
-`beginComment` is not `async`: it makes the draft and starts the keyframe's write as a task, and `addComment` waits for that task. Until the region ticket, `beginComment` and `addComment` take no `region`, and `FrameGrabbing` has `writeKeyframe` only. `comments` is what the views show: the open video's comments without the drafts. `keyframeURL(for:)` is a comment's keyframe file, or nil while it is not on disk.
+`beginComment` is not `async`: it makes the draft and starts one task that writes the keyframe and then, for a region, cuts the crop from it; `addComment` waits for that task. `writeCrop` is `async` so that reading, cutting and writing a full frame stays off the main actor. `comments` is what the views show: the open video's comments without the drafts. `keyframeURL(for:)` and `cropURL(for:)` are a comment's image files, or nil while they are not on disk. `marks` is the rectangles the stage draws now (`RegionMark.shown`).
+
+The region's gestures are `beginDrawing()` (a drag started: pause; false while the comment box is open or no video is) and `compose(region:)` (the drag ended: the comment box on the rectangle). The geometry between the stage's points and a `Region` is not the model's: `FrameFit`, in `RegionOverlay.swift`, is a value the tests use without a window.
 
 Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over.
 
@@ -599,7 +608,7 @@ Exit codes: 0 done; 1 refused, app not running, or no reply; 2 usage; 3 a `wait`
 
 `control take --wait` takes whole seconds from 0 to 3600. A take refused or waited out exits 1, like every refusal. `control release` exits 0 whoever sends it. The holder key has no flag: `VIDEO_REVIEW_CONTROL_KEY` is the one way to name it (Shipyard's `--key` is not in the contract).
 
-The comment object of `comment add --json` is the one in `state --json`'s `comments`. A comment's text is one argument; a second word is refused with exit 2 and the advice to quote it. An option starts with two dashes, so a text may start with one (`"-3 dB would be better"`). Until the region ticket, `--region` is an unknown option.
+The comment object of `comment add --json` is the one in `state --json`'s `comments`. A comment's text is one argument; a second word is refused with exit 2 and the advice to quote it. An option starts with two dashes, so a text may start with one (`"-3 dB would be better"`). `--region` takes `x,y,w,h` as one argument: four numbers of digits and a dot, with spaces allowed around them. Anything else is refused with exit 2. Four numbers that are not a rectangle inside the frame are refused by the app with exit 1, and no comment is left. The text printed for a comment with a region is the same `c1 at 0:10.000`; the region and the crop's path are in `--json`.
 
 Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also `h:mm:ss`. A time outside the video is refused. `screenshot` needs an absolute `.png` path whose folder exists. `player open` takes a relative path against the folder the command runs in.
 
@@ -633,9 +642,9 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
 
 The player's time is in two places with the same value: `player.time`, and a top-level `time` for a script that reads one field. Both are rounded to the millisecond.
 
-Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; `region` and `cropPath`, `batchId` and `thread` arrive with their tickets.
+Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; the region ticket adds `region` and `cropPath`; `batchId` and `thread` arrive with their tickets.
 
-`lease`, `video`, `demo`, `region` and `keyframePath` are `null` when there is none, never left out. `comments` is in time order and holds every comment of the open video, a draft included (state `draft`, empty text) while the comment box is open; `queue` holds the ids still `queued`, in time order. Both are `[]` with no video. `keyframePath` is `null` until the PNG is on disk. `state` as lines lists the comments only when there are some: `comments: 2, 1 queued`, then one line per comment, `  c1 queued at 0:10.000: <text>`. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
+`lease`, `video`, `demo`, `region`, `keyframePath` and `cropPath` are `null` when there is none, never left out. `cropPath` is `null` for a comment without a region, and until the PNG is on disk. `comments` is in time order and holds every comment of the open video, a draft included (state `draft`, empty text) while the comment box is open; `queue` holds the ids still `queued`, in time order. Both are `[]` with no video. `keyframePath` is `null` until the PNG is on disk. `state` as lines lists the comments only when there are some: `comments: 2, 1 queued`, then one line per comment, `  c1 queued at 0:10.000: <text>`. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
 
 ### The batch payload
 
@@ -868,17 +877,37 @@ The banner's Stop calls `ControlServer.stopLease`, which calls `lease.stop(at:)`
 ```text
 writeKeyframe(video, at t, to url):  AVAssetImageGenerator, zero tolerance before and after, the track's
                                      natural size with its transform applied → PNG
-writeCrop(keyframe, region, to url): region.pixelRect(in: keyframe size), rounded outward → PNG
+writeCrop(keyframe, region, to url): read the keyframe's PNG, cut region.pixelRect(in: its size) → PNG
 ```
 
-Both come from the asset, never from the screen. So a comment from the UI and one from the CLI at the same time and region give the same pixels, at any window size. `beginComment` starts the grab when the composer opens; `sendBatch` and `comment add` wait for it.
+The keyframe comes from the asset, never from the screen, and the crop is cut from the keyframe's file. So a comment from the UI and one from the CLI at the same time and region give the same pixels, at any window size: both end in `beginComment(at:region:)`, and a test compares the two crops' pixels. The tests compare decoded pixels, not file bytes: two PNGs written from one frame sometimes differ in their bytes (seen in about one test run in three on this Mac) and never in what they show. `beginComment` starts the grab when the composer opens; `sendBatch` and `comment add` wait for it.
 
 - A comment's time is the player's time (or `--at`) rounded to the millisecond, and the keyframe is the frame the video shows at that time: the last frame that starts at or before it.
 - At the video's very end no frame starts exactly there, and the zero-tolerance read fails. The grabber then reads again with one second of tolerance before the time, which gives the last frame.
-- A draft that is cancelled, and a comment that is deleted, lose their PNG. A write still running when its comment is dropped removes its file when it lands.
-- `comment add` whose keyframe cannot be written is refused and leaves no comment. A comment from the window whose keyframe cannot be written stays queued with `keyframePath: null`; the batch ticket decides what `sendBatch` does with it.
+- A draft that is cancelled, and a comment that is deleted, lose their PNGs, the crop too. A write still running when its comment is dropped removes its files when it lands.
+- `comment add` whose keyframe or crop cannot be written is refused and leaves no comment and no file. A comment from the window whose crop cannot be written stays, with `cropPath: null`.
+- A comment from the window whose keyframe cannot be written stays queued with `keyframePath: null`; the batch ticket decides what `sendBatch` does with it.
 
-**The region in the view** (`RegionOverlay.swift`): the overlay computes the video rectangle inside the stage (aspect fit) and converts between view points and normalized frame coordinates through it. A stored region is redrawn from its normalized values on every layout, so it stays correct when the window size changes. A drag that starts or ends outside the video rectangle is clamped to it. A rectangle under 8 points on a side is ignored as a click.
+**The region in the view** (`RegionOverlay.swift`)
+
+```text
+FrameFit(video size, stage size):   frame = the video's rectangle in the stage, fitted whole and centred
+                                    (what AVPlayerView's resizeAspect shows)
+rect(for region):                   frame.origin + region × frame.size
+selection(from a, to b):            the rectangle between the two points, each kept inside frame
+region(from a, to b):               selection under 8 points on a side → nil (a click)
+                                    else (selection − frame.origin) ÷ frame.size, each part kept to 1/10000
+
+RegionMark.shown(comments, selection, composing, time):
+    a draft's region   → only the draft the comment box is open on
+    a comment's region → when its card is selected, or the player is within 0.5 s of its time
+
+ComposerPlacement.centre(box, beside rect, in stage), with a 12 point gap:
+    right of rect when the box fits there, else left, else below, else the stage's bottom centre
+    beside: level with rect's top; below: centred under it; always kept inside the stage
+```
+
+`Stage` makes one `FrameFit` from its own size on every layout and hands it to `RegionOverlay`, which draws every mark through `rect(for:)`. So a stored region is redrawn from its normalized values whenever the window changes, and stays on the same part of the picture. A drag draws through the same `FrameFit`: the first movement calls `ReviewModel.beginDrawing` (pause), the frame around the rectangle dims while it is drawn, and the release calls `compose(region:)`. The drag in progress is the view's own state; everything it computes is `FrameFit`'s. The comment box measures itself (`onGeometryChange`) and is placed by `ComposerPlacement`.
 
 **The transcript** (`TranscriptService.swift`, `VRTranscript`)
 
@@ -946,9 +975,14 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | `AVPlayerView` with its controls off, and our own transport bar. | The built-in scrubber cannot show markers. Playback itself stays AVKit's. |
 | Keys: Space or K play and pause, ← and → 5 s, `,` and `.` one frame, C comment, Cmd+O open. | The keys QuickTime and editors use, so nothing is new to learn. |
 | C pauses and opens the comment box in one keystroke, already focused. | "Pause and type at once" is the main action, so it costs one key. Wispr Flow dictates into the focused box. |
-| A drag on the frame draws a rectangle with a dimmed surround, like Cmd+Shift+4. It pauses the video. | The gesture the person already knows. No tool to pick first. |
-| The comment box opens beside the rectangle (right, else left, else below), and at the bottom centre of the stage for a comment without a region. | Writing happens where the person points, and the box never covers the region. |
+| A drag on the frame draws a rectangle with a dimmed surround, like Cmd+Shift+4. It pauses the video when the drag starts (after 4 points of movement), not when it ends. | The gesture the person already knows. No tool to pick first. The rectangle lands on the frame the person points at, not on one a moment later. |
+| A click, or a rectangle under 8 points on a side, opens nothing. The video stays paused when the pointer moved. | A slip of the hand is not a region. |
+| While the comment box is open, a drag on the frame draws nothing. Escape first, then draw again. | One draft at a time, and what was typed is never thrown away by a stray drag. |
+| The rectangle being drawn, and the one the comment box is open on, are white with the frame dimmed around them. A saved region is an outline in the accent colour with nothing dimmed. Both have a dark edge under them. | The dim says "you are choosing"; a saved region must not hide the frame. The dark edge keeps the line readable on a light frame. |
+| A region comment's card shows the crop as its thumbnail and a small dashed-rectangle glyph beside its state. | The card shows what was pointed at, and region comments stand out in the list. |
+| The comment box opens beside the rectangle (right, else left, else below), 320 points wide, and at the bottom centre of the stage for a comment without a region. A rectangle that leaves no room on any side gets the box at the bottom centre too, over it. | Writing happens where the person points, and the box never covers the region while a side has room. |
 | In the comment box, Enter queues the comment, Shift+Enter adds a line, Escape cancels. | Fast for one-line notes. Escape also removes the rectangle. |
+| Escape also cancels the open comment box when the focus is on the player, not in the box. With no box open, Escape is left to the window. | A click on the stage takes the focus out of the box; Escape must still cancel the region. |
 | Cmd+Enter sends from anywhere, also from inside the comment box (it queues the open comment first). | One keystroke delivers the feedback, as the spec asks, with no need to leave the box. |
 | Player keys are ignored while a text view has focus. | Typing "k" in a comment must not pause the video. |
 | The transport bar has a comment button beside the video's length. | The same action as C, for the mouse. |
@@ -970,7 +1004,8 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | The context note is a popover from a toolbar button, with the sidecar's text above it, read-only. | Context is set once per video, so it should not take sidebar space. |
 | With no video: a drop target, an Open button, and in a demo run the demo folder's videos as a list. | An operator still uses `player open`; a person in a demo gets one click. |
 | System colours, materials and SF Symbols only. | Light and dark both work without a second palette. |
-| `comment add` from the CLI pauses the video, and seeks first when `--at` is given. | The window then shows what the operator did, as if a person had done it. |
+| `comment add` from the CLI pauses the video, and seeks first when `--at` is given. Its comment is selected, so a region given with it shows on the stage. | The window then shows what the operator did, as if a person had done it. |
+| A region drawn in the window is kept to four decimals per part. One from `--region` is kept as given. | A ten-thousandth of the frame is finer than a pixel of any video, and the numbers stay short in `state --json` and the payload. |
 
 ## Which ticket builds what
 
@@ -979,7 +1014,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | #3 | `Package.swift`, `Makefile`, `Packaging/`, `VRWire`, `VRCommand` (app, state, player, screenshot), `VRLease/Holder` and `ProcessTable`, a pass-through `ControlLease` and `LeaseStatus`, `VRReview/VideoInfo`, `VRStore/ContentHash`, `VRApp` shell: `AppServices`, `ReviewModel` (the player's part), `ControlServer`, `SocketListener`, `OperatorDesk`, `StateReport`, `Screenshotter`, `Player/` without `FrameGrabber`, `TimeText`, `MainWindow`, `EmptyState`, `Stage`, `TransportBar`, `Timeline` (the scrubber), `Shortcuts` (the player's keys), `Theme` |
 | #4 | `ControlLease`, `control take` and `release` (`ControlCommand`), the gate with its timer and line of takes, the lease's handover on a relaunch, `LeaseIndicator`, `LeaseBanner` |
 | #5 | `VRReview` (`Comment`, `CommentState`, `ReviewSession`), `FrameGrabber` (keyframes), `Composer`, `Timeline` markers, `Sidebar`, `CommentCard`, the C key and `KeyFocus`, `comment` commands, `queue` and `comments` in `state`; `Library` (comment ids, frame paths) and `JSONFile` |
-| #6 | `Region`, `RegionOverlay`, crops, `--region` |
+| #6 | `Region`, `WireRegion`, `RegionOverlay` (`FrameFit`, `RegionMark`, `ComposerPlacement`), crops (`writeCrop`, `Library.cropURL`), `--region`, `region` and `cropPath` in `state`, the Escape key on the player |
 | #7 | `Batch`, `Outbox`, `BatchPayload`, `ListenerDesk`, long polls, `wait`, `batch send`, `SendBar`, presence |
 | #8 | `VRTranscript`, `TranscriptService`, `SpeechSource`, `TranscriptCache` |
 | #9 | `ContextSidecar`, the note, `ContextPopover`, `context set`, `Outbox.context` |

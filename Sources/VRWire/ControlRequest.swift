@@ -32,9 +32,10 @@ public enum ControlRequest: Equatable, Sendable {
     case playerPause
     /// `player seek <time>`: the player at `seconds`, exactly.
     case playerSeek(seconds: Double)
-    /// `comment add <text> [--at <time>]`: a comment queued at `at`, or at
-    /// the player's time, with the frame there as its keyframe.
-    case commentAdd(text: String, at: Double?)
+    /// `comment add <text> [--at <time>] [--region x,y,w,h]`: a comment
+    /// queued at `at`, or at the player's time, with the frame there as its
+    /// keyframe; on `region` of that frame when it's given, with its crop.
+    case commentAdd(text: String, at: Double?, region: WireRegion?)
     /// `comment edit <id> <text>`: a queued comment's text replaced.
     case commentEdit(id: String, text: String)
     /// `comment delete <id>`: a queued comment taken out.
@@ -43,6 +44,23 @@ public enum ControlRequest: Equatable, Sendable {
     /// written as a PNG at `path`, absolute since the app runs in another
     /// folder; in `appearance` when it's set, as the Mac shows it otherwise.
     case screenshot(path: String, appearance: Appearance?)
+
+    /// A rectangle on the frame as `--region x,y,w,h` gives it: four
+    /// numbers, parts of the frame from its top left. The app decides
+    /// whether they are inside the frame.
+    public struct WireRegion: Codable, Equatable, Sendable {
+        public var x: Double
+        public var y: Double
+        public var w: Double
+        public var h: Double
+
+        public init(x: Double, y: Double, w: Double, h: Double) {
+            self.x = x
+            self.y = y
+            self.w = w
+            self.h = h
+        }
+    }
 
     /// The appearance `screenshot` draws in.
     public enum Appearance: String, Equatable, Sendable, CaseIterable {

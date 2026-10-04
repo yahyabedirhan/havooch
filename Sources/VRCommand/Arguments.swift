@@ -1,4 +1,5 @@
 import Foundation
+import VRWire
 
 /// The parsing every command shares.
 enum Arguments {
@@ -27,6 +28,23 @@ enum Arguments {
             total = total * 60 + value
         }
         return total
+    }
+
+    /// A region as the command line gives it: `x,y,w,h`, four numbers. Nil
+    /// when it doesn't read. Whether they are inside the frame is the app's
+    /// to say.
+    static func region(_ text: String) -> ControlRequest.WireRegion? {
+        let parts = text.split(separator: ",", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var numbers: [Double] = []
+        for part in parts {
+            let digits = part.trimmingCharacters(in: .whitespaces)
+            // Digits and one dot only, as for a time.
+            guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }),
+                  let value = Double(digits) else { return nil }
+            numbers.append(value)
+        }
+        return ControlRequest.WireRegion(x: numbers[0], y: numbers[1], w: numbers[2], h: numbers[3])
     }
 
     /// `path` as a file, taken against `directory` when it's relative.

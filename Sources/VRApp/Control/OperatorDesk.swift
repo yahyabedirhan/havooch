@@ -43,11 +43,19 @@ struct OperatorDesk {
         }
     }
 
-    func addComment(text: String, at seconds: Double?, json: Bool) async -> ControlReply {
+    func addComment(text: String, at seconds: Double?, region wire: ControlRequest.WireRegion?, json: Bool) async -> ControlReply {
         await answer { () async throws(ModelRefusal) in
-            let comment = try await model.addComment(text: text, at: seconds)
+            var region: Region?
+            if let wire {
+                do throws(ReviewRefusal) {
+                    region = try Region(x: wire.x, y: wire.y, w: wire.w, h: wire.h)
+                } catch {
+                    throw ModelRefusal(error.reason)
+                }
+            }
+            let comment = try await model.addComment(text: text, at: seconds, region: region)
             return json
-                ? JSONLine.string(CommentReport(comment, keyframe: model.keyframeURL(for: comment.id)))
+                ? JSONLine.string(CommentReport(comment, keyframe: model.keyframeURL(for: comment.id), crop: model.cropURL(for: comment.id)))
                 : "\(comment.id) at \(TimeText.exact(comment.time))\n"
         }
     }

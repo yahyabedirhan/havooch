@@ -7,18 +7,22 @@ enum PlayerKey: Equatable {
     case previousFrame, nextFrame
     /// Pause and open the comment box.
     case comment
+    /// Close the comment box, and drop its draft and its region.
+    case cancel
 
     /// How far the arrow keys move, in seconds.
     static let skip = 5.0
 
     /// The key pressed, or nil when it isn't the player's: Space or K play
-    /// and pause, ← and → move 5 s, `,` and `.` move one frame, C comments.
+    /// and pause, ← and → move 5 s, `,` and `.` move one frame, C comments,
+    /// Escape cancels the comment being written.
     /// A key held with Command, Control or Option belongs to the menu.
     init?(characters: String?, keyCode: UInt16, hasCommandModifiers: Bool) {
         guard !hasCommandModifiers else { return nil }
         switch (keyCode, characters?.lowercased()) {
         case (123, _): self = .back
         case (124, _): self = .forward
+        case (53, _): self = .cancel
         case (_, " "), (_, "k"): self = .togglePlay
         case (_, ","): self = .previousFrame
         case (_, "."): self = .nextFrame
@@ -108,6 +112,10 @@ final class Shortcuts {
         case .previousFrame: model.step(frames: -1)
         case .nextFrame: model.step(frames: 1)
         case .comment: model.compose()
+        case .cancel:
+            // With no comment box open, Escape is the window's.
+            guard model.composing != nil else { return false }
+            model.cancelComposer()
         }
         return true
     }

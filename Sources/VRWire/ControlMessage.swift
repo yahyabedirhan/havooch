@@ -47,8 +47,8 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "player.pause")
         case .playerSeek(let seconds):
             wire = Wire(command: "player.seek", time: seconds)
-        case .commentAdd(let text, let at):
-            wire = Wire(command: "comment.add", time: at, text: text)
+        case .commentAdd(let text, let at, let region):
+            wire = Wire(command: "comment.add", time: at, text: text, region: region)
         case .commentEdit(let id, let text):
             wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id):
@@ -110,7 +110,7 @@ public struct ControlMessage: Equatable, Sendable {
             if let time = wire.time, !time.isFinite || time < 0 {
                 throw .unreadable("the control command `comment.add` needs a `time` of 0 or more, not \(time)")
             }
-            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.time)
+            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.time, region: wire.region)
         case "comment.edit":
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
@@ -163,6 +163,7 @@ public struct ControlMessage: Equatable, Sendable {
         var waitSeconds: Int?
         var id: String?
         var text: String?
+        var region: ControlRequest.WireRegion?
     }
 }
 

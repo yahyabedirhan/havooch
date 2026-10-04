@@ -3,6 +3,25 @@ import ImageIO
 import Testing
 @testable import VRApp
 
+/// The picture in the PNG at `file`.
+func image(_ file: URL) throws -> CGImage {
+    let source = try #require(CGImageSourceCreateWithURL(file as CFURL, nil))
+    #expect(CGImageSourceGetType(source) as String? == "public.png")
+    return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+}
+
+/// An image's pixels as RGBA bytes, row by row from the top: what it shows,
+/// however its file keeps them.
+func pixels(_ image: CGImage) throws -> [UInt8] {
+    var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+    let context = try #require(CGContext(
+        data: &bytes, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ))
+    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    return bytes
+}
+
 /// The grabber against the fixture video: 1920x1080 at 30 fps, 637 frames.
 @Suite struct FrameGrabberTests {
     private func scratchFolder() -> URL {
@@ -52,8 +71,11 @@ import Testing
         _ = try await grabber.writeKeyframe(of: fixtureVideo, at: 10, to: again)
         _ = try await grabber.writeKeyframe(of: fixtureVideo, at: 2, to: other)
 
-        #expect(try Data(contentsOf: first) == Data(contentsOf: again))
-        #expect(try Data(contentsOf: first) != Data(contentsOf: other))
+        // What the files show, not their bytes: two PNGs of one frame
+        // sometimes differ in their bytes and never in what they show.
+        let shown = try pixels(try image(first))
+        #expect(try pixels(try image(again)) == shown)
+        #expect(try pixels(try image(other)) != shown)
     }
 
     @Test func aFileThatIsNotAVideoFails() async {

@@ -6,17 +6,20 @@ import VRWire
 public enum CommentCommand {
     public static let entry = CommandTable.Entry(
         name: "comment",
-        summary: "add <text> [--at <time>] | edit <id> <text> | delete <id>: change the queue",
+        summary: "add <text> [--at <time>] [--region x,y,w,h] | edit <id> <text> | delete <id>: change the queue",
         run: run
     )
 
     static let usageText = """
-        usage: video-review comment add <text> [--at <time>] | edit <id> <text> | delete <id>
+        usage: video-review comment add <text> [--at <time>] [--region x,y,w,h] | edit <id> <text> | delete <id>
 
           add <text>         queue a comment at the player's time, with the
                              frame there as its keyframe. The video is paused.
             --at <time>      at this time instead; the player moves there.
                              Seconds (10, 10.5), mm:ss (0:10) or h:mm:ss.
+            --region x,y,w,h on this rectangle of the frame, kept with its
+                             crop. Parts of the frame from 0 to 1, from its
+                             top left: 0.5,0,0.5,0.5 is the top right quarter.
           edit <id> <text>   replace a queued comment's text
           delete <id>        take a queued comment out
 
@@ -44,6 +47,7 @@ public enum CommentCommand {
     private static func add(_ arguments: [String]) -> Result<ControlRequest, CommandResult> {
         var text: String?
         var at: Double?
+        var region: ControlRequest.WireRegion?
         var rest = arguments[...]
         while let argument = rest.popFirst() {
             switch argument {
@@ -55,6 +59,14 @@ public enum CommentCommand {
                     return .failure(misread("video-review comment add: `\(value)` isn't a time; use seconds, mm:ss or h:mm:ss"))
                 }
                 at = seconds
+            case "--region":
+                guard let value = rest.popFirst() else {
+                    return .failure(misread("video-review comment add: --region needs x,y,w,h"))
+                }
+                guard let rectangle = Arguments.region(value) else {
+                    return .failure(misread("video-review comment add: `\(value)` isn't a region; use x,y,w,h, four numbers from 0 to 1"))
+                }
+                region = rectangle
             case let option where option.hasPrefix("--") && option.count > 2:
                 return .failure(misread("video-review comment add: unknown option `\(option)`"))
             case let words where text == nil:
@@ -66,7 +78,7 @@ public enum CommentCommand {
         guard let text, !isBlank(text) else {
             return .failure(misread("video-review comment add: missing <text>"))
         }
-        return .success(.commentAdd(text: text, at: at))
+        return .success(.commentAdd(text: text, at: at, region: region))
     }
 
     private static func edit(_ arguments: [String]) -> Result<ControlRequest, CommandResult> {

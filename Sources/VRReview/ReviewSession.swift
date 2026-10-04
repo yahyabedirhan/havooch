@@ -33,10 +33,11 @@ public struct ReviewSession: Codable, Equatable, Sendable {
 
     // MARK: - Changes
 
-    /// Starts a comment at `time`: a draft, with no text yet.
+    /// Starts a comment at `time`, on `region` of the frame when one was
+    /// drawn: a draft, with no text yet.
     @discardableResult
-    public mutating func draft(id: String, time: Double) -> Comment {
-        let comment = Comment(id: id, time: time)
+    public mutating func draft(id: String, time: Double, region: Region? = nil) -> Comment {
+        let comment = Comment(id: id, time: time, region: region)
         let index = comments.firstIndex { $0.time > time } ?? comments.endIndex
         comments.insert(comment, at: index)
         return comment

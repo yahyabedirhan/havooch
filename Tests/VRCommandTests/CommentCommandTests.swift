@@ -5,11 +5,22 @@ import VRWire
 
 @Suite struct CommentCommandTests {
     @Test func addReadsItsTextAndItsTime() throws {
-        #expect(try CommentCommand.parse(["add", "too fast"]).get() == .commentAdd(text: "too fast", at: nil))
-        #expect(try CommentCommand.parse(["add", "too fast", "--at", "0:10"]).get() == .commentAdd(text: "too fast", at: 10))
-        #expect(try CommentCommand.parse(["add", "--at", "10.5", "too fast"]).get() == .commentAdd(text: "too fast", at: 10.5))
+        #expect(try CommentCommand.parse(["add", "too fast"]).get() == .commentAdd(text: "too fast", at: nil, region: nil))
+        #expect(try CommentCommand.parse(["add", "too fast", "--at", "0:10"]).get() == .commentAdd(text: "too fast", at: 10, region: nil))
+        #expect(try CommentCommand.parse(["add", "--at", "10.5", "too fast"]).get() == .commentAdd(text: "too fast", at: 10.5, region: nil))
         // A text that starts with a dash is still the text.
-        #expect(try CommentCommand.parse(["add", "-3 dB would be better"]).get() == .commentAdd(text: "-3 dB would be better", at: nil))
+        #expect(try CommentCommand.parse(["add", "-3 dB would be better"]).get() == .commentAdd(text: "-3 dB would be better", at: nil, region: nil))
+    }
+
+    @Test func addReadsItsRegion() throws {
+        let region = ControlRequest.WireRegion(x: 0.1, y: 0.2, w: 0.3, h: 0.25)
+        #expect(try CommentCommand.parse(["add", "this button", "--region", "0.1,0.2,0.3,0.25"]).get()
+            == .commentAdd(text: "this button", at: nil, region: region))
+        #expect(try CommentCommand.parse(["add", "--region", "0.1, 0.2, 0.3, 0.25", "--at", "0:10", "this button"]).get()
+            == .commentAdd(text: "this button", at: 10, region: region))
+        // Whether the numbers are inside the frame is the app's to say.
+        #expect(try CommentCommand.parse(["add", "x", "--region", "0,0,1,2"]).get()
+            == .commentAdd(text: "x", at: nil, region: ControlRequest.WireRegion(x: 0, y: 0, w: 1, h: 2)))
     }
 
     @Test func editAndDeleteReadTheirId() throws {
@@ -25,6 +36,11 @@ import VRWire
         (["add", "x", "--at"], "video-review comment add: --at needs a time"),
         (["add", "x", "--at", "soon"], "video-review comment add: `soon` isn't a time; use seconds, mm:ss or h:mm:ss"),
         (["add", "x", "--loud"], "video-review comment add: unknown option `--loud`"),
+        (["add", "x", "--region"], "video-review comment add: --region needs x,y,w,h"),
+        (["add", "x", "--region", "0.1,0.2,0.3"], "video-review comment add: `0.1,0.2,0.3` isn't a region; use x,y,w,h, four numbers from 0 to 1"),
+        (["add", "x", "--region", "0.1,0.2,0.3,wide"], "video-review comment add: `0.1,0.2,0.3,wide` isn't a region; use x,y,w,h, four numbers from 0 to 1"),
+        (["add", "x", "--region", "-0.1,0.2,0.3,0.4"], "video-review comment add: `-0.1,0.2,0.3,0.4` isn't a region; use x,y,w,h, four numbers from 0 to 1"),
+        (["add", "x", "--region", "0.1,,0.3,0.4"], "video-review comment add: `0.1,,0.3,0.4` isn't a region; use x,y,w,h, four numbers from 0 to 1"),
         (["edit"], "video-review comment edit: missing <id>"),
         (["edit", "c1"], "video-review comment edit: missing <text>"),
         (["edit", "c1", ""], "video-review comment edit: missing <text>"),
@@ -51,7 +67,7 @@ import VRWire
         let result = table.run(["comment", "add", "too fast", "--at", "0:10", "--json"], environment: app.environment)
 
         #expect(result == CommandResult(output: "c1 at 0:10.000\n"))
-        #expect(app.requests == [.commentAdd(text: "too fast", at: 10)])
+        #expect(app.requests == [.commentAdd(text: "too fast", at: 10, region: nil)])
         #expect(app.messages.map(\.json) == [true])
     }
 

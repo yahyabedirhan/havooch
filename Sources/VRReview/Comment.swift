@@ -40,19 +40,24 @@ public enum CommentState: String, Codable, Equatable, Sendable, CaseIterable {
 }
 
 /// One piece of feedback: a time in the video, what the person wrote about
-/// it, and where it is on its way. Its keyframe is a file the store names by
-/// the comment's id.
+/// it, the part of the frame it points at when the person drew one, and
+/// where it is on its way. Its keyframe and its region's crop are files the
+/// store names by the comment's id.
 public struct Comment: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     /// In seconds, to the millisecond.
     public var time: Double
     public var text: String
+    /// The rectangle drawn on the frame, or nil for a comment on the whole
+    /// frame.
+    public var region: Region?
     public var state: CommentState
 
-    public init(id: String, time: Double, text: String = "", state: CommentState = .draft) {
+    public init(id: String, time: Double, text: String = "", region: Region? = nil, state: CommentState = .draft) {
         self.id = id
         self.time = time
         self.text = text
+        self.region = region
         self.state = state
     }
 }
