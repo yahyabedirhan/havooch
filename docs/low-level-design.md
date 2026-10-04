@@ -218,9 +218,11 @@ The CLI starts the app whose bundle it ships in (`<app>/Contents/Helpers/video-r
 
 ```text
 Package.swift                      targets below; platforms: macOS 26; no dependencies
-Makefile                           test, build, bundle, install, clean; reads VARIANT and VERSION from ReviewWire
+Makefile                           test, build, bundle, install, acceptance, clean; reads VARIANT and VERSION from ReviewWire
 Packaging/Info.plist               the bundle's template; speech recognition usage text
 scripts/acceptance.sh              the v1 acceptance scenario, CLI only (#13)
+scripts/screenshots.sh             the scene of the pictures in assets/screenshots/v1-acceptance/, CLI only
+assets/screenshots/v1-acceptance/  the app in light and dark: a thread and a region, an open question and the queue, the lease banner
 .agents/skills/video-review-mate/  the listener skill (#12)
 fixtures/sample/                   the fixture video and its sidecars
 
@@ -826,7 +828,7 @@ the listener restarts as session L2 while b-5d0c2a91 is taken and unfinished
 ### Build and tests
 
 - `Package.swift`: tools version 6.2, `platforms: [.macOS(.v26)]`, no package dependencies. Library targets for the six modules, executable targets `ReviewCLI` (product `video-review`) and `ReviewApp` (product `VideoReview`), one test target per module.
-- `Makefile`, after Shipyard's: `make test` (`swift test`, with the Command Line Tools flags for Swift Testing and a shared module cache), `make bundle` (builds both products, lays out the `.app`, stamps `Info.plist`, signs the CLI then the bundle ad hoc), `make install` (quits this bundle's app, replaces `/Applications/<APP_NAME>.app`, opens it in the background with `open -g`).
+- `Makefile`, after Shipyard's: `make test` (`swift test`, with the Command Line Tools flags for Swift Testing and a shared module cache), `make bundle` (builds both products, lays out the `.app`, stamps `Info.plist`, signs the CLI then the bundle ad hoc), `make install` (quits this bundle's app, replaces `/Applications/<APP_NAME>.app`, opens it in the background with `open -g`), `make acceptance` (runs `scripts/acceptance.sh` against the installed app; it is not part of `make test`).
 - `make test` never drives the Mac. Each contract has one owner test at its strongest boundary:
 
 | Contract | Owner test |
@@ -842,6 +844,36 @@ the listener restarts as session L2 while b-5d0c2a91 is taken and unfinished
 | everything end to end | `scripts/acceptance.sh` against the installed app in demo mode |
 
 - `app open --demo <folder>`: the folder is the demo run's own support folder, made when missing (the scenario uses a folder under `.scratch/`). The fixture video is opened with `player open`.
+
+### The acceptance scenario
+
+`scripts/acceptance.sh` is the spec's v1 acceptance scenario as one bash script. It drives the installed app through the `video-review` command only, in demo mode, and checks what the commands print and write. Run it after an install:
+
+```text
+make install && make acceptance
+VIDEO_REVIEW_CLI="/Applications/Video Review.app/Contents/Helpers/video-review" scripts/acceptance.sh     another build of the spec
+```
+
+- The command is named in one place: `VIDEO_REVIEW_CLI`, else the installed app of this checkout's `AppIdentity.variant`, read as the `Makefile` reads it. The script needs `jq`, `sips` and `xxd`, which macOS ships.
+- Each run has its own folder, `.scratch/acceptance/<date>-<time>-<pid>/` (`ACCEPTANCE_DIR` moves it): `demo/` is the demo's support folder, `payload.json` is what `wait` printed, `logs/` holds each command's output, `state-before-quit.json` and `state-after-open.json` are the two sides of step 7, and `screenshots/` holds `light.png` and `dark.png`. The fixture folder is only read.
+- Two holder keys, set with `VIDEO_REVIEW_CONTROL_KEY`: the operator's for every leased command, and the listener's for `wait`, `ack`, `status`, `reply` and `ask`, which stands for the scenario's second shell. The operator takes the lease in step 1 (`control take`) and releases it at the end of step 8.
+- The demo rule: after each `app open --demo` the script reads `app status --json`, and when that does not say `"demo": true` it prints the answer and exits 3 at once. Nothing more is sent, the clean-up's `app quit` included.
+- A step prints one line per check (`ok` or `FAIL`), then `PASS  step N: …` or `FAIL  step N: …`. The first failed step ends the run with exit 1, since each step builds on the one before. Exit 0 means all eight passed; 69 means a tool, the command or the fixture is missing. On every exit the script ends its held `ask` and quits the demo app.
+
+| Step | Commands | Checks |
+|---|---|---|
+| 1 | `app open --demo`, `app status --json`, `control take` | the exit codes; `"demo": true` |
+| 2 | `player open`, `play`, `pause`, `seek 0:10`, `comment add` | the fixture is open and paused; one queued comment at 10 s with its text |
+| 3 | `comment add --at 0:12.5 --region 0.47,0.27,0.29,0.15` | two queued comments; the second at 12.5 s with a region |
+| 4 | `batch send` | both comments are `sent` |
+| 5 | `wait --timeout 20`, as the listener | `batch.id` and `sentAt`; `video` (the fixture's path, a content hash, 21.233 s, a title); `context` is the text of `sample.context.md`; two comments in time order with their texts, the region as sent and `null` for the first; both keyframes are PNG files of 1920 by 1080; the crop is a PNG of the region's size in the frame (557 by 162, within a pixel); the paths are absolute; each transcript line lies inside 15 s before to 15 s after its comment, and the line spoken at the comment's time holds "Press command enter" |
+| 6 | `ack`, `ask --wait 60` held in the background, `thread answer`, then `status working`, `reply` and `status done` on each comment, and `reply` on the batch | `acknowledged` after the `ack`; the question is in the thread before the answer is sent; `ask` exits 0 and prints the answer's text; both comments `done`; the second thread is question, answer (by the person), reply, in that order; the batch has the acknowledgement and its reply |
+| 7 | `app quit`, `app status --json`, `app open --demo` (the same folder), `state --json` | not running after the quit; `"demo": true` again; `comments`, `queue`, `batches` and `video` of `state --json` are the same bytes as before the quit (`jq -S`); both comments `done`, threads of 1 and 3 messages |
+| 8 | `screenshot --appearance light`, `--appearance dark`, `control release` | two PNG files with a size, not the same picture; the lease is free |
+
+What the script reads beyond the spec's contract is the shape of this build's `state --json` and `app status --json` (`demo`, `comments[].state`, `thread`, `batches[].messages`, `lease`), which the contract leaves to each build (D29). The commands, their arguments, the exit codes and the payload are the contract's.
+
+`scripts/screenshots.sh [<folder>]` builds a fuller scene the same way and writes the pictures of `assets/screenshots/v1-acceptance/`: two batches with comments that are done, failed, working and acknowledged, a question with its answer, an open question, a queued comment and two region comments. It makes three views, each in light and dark: `review` (a selected region comment with its rectangle on the frame and its thread open), `queue-and-question` (a queued region comment, an open question with its notice and its answer box) and `lease-banner` (the second view with `--with-banner`). It has the same demo rule. The replies and the commit ids in it are scene text.
 
 ## 5. Extensibility
 
@@ -1040,6 +1072,26 @@ Decisions of the ticket "Mate: Ship the video-review-mate skill":
 | D170 | Comments are worked one at a time, in the payload's order. | One working tree and one commit per comment. |
 | D171 | When the app is not running, the skill tells the user and keeps the results; it does not wait in a loop of its own. | This build's `wait` connects again by itself. A build whose `wait` exits must not make the session spin. |
 
+Decisions of the ticket "Proto: Run the v1 acceptance scenario and open the draft pull request":
+
+| # | Decision | Reason |
+|---|---|---|
+| D180 | The acceptance scenario is a bash script with `jq`, `sips` and `xxd`, not a Swift test. | Its seam is the installed command, so it must run outside the package and against another build of the spec. Shipyard's `Harness` scenarios run inside `swift test`, which never drives the Mac. The three tools ship with macOS. |
+| D181 | The script names the command in one place: `VIDEO_REVIEW_CLI`, else the installed app of `AppIdentity.variant`. | The path is all that differs between the builds, and it is the variable the listener skill reads (D161). |
+| D182 | When `app status --json` does not say `"demo": true` after `app open --demo`, the script exits 3 and sends nothing more, not even `app quit`. | The script must never touch the person's data. A quit is a command to an app that may be on that data. |
+| D183 | Each run has a new folder under `.scratch/acceptance/`, with its demo data, payload, logs and screenshots. The fixture is opened where it is. | A run never sees another run's comments, and a failed run can be read afterwards. The fixture folder stays read-only (D26). |
+| D184 | The operator and the listener are two holder keys in one script. The batch is sent with no listener, then `wait` takes it. | The scenario's order: `batch send`, then `wait` in a second shell. A second key is a second agent to the app (D5), with no second terminal to start. |
+| D185 | `ask` is held in the background. The script sends `thread answer` once the question is in `state --json`. | The answer needs an open question (D124). A fixed sleep would be slow or flaky. |
+| D186 | The first failed step ends the run. Inside a step every check still runs and prints. | Each step builds on the one before, so later failures would be noise. One step's checks are independent, and all of them help to find the fault. |
+| D187 | The crop is checked by its size: the region's width and height in the frame's pixels, within a pixel. | The rounding to pixels is each build's choice (D56). That the crop's pixels are the keyframe's is tested in `ReviewAppTests`. |
+| D188 | Step 2 comments at the player's time, after `play`, `pause` and `seek 0:10`. Step 3 uses `--at`. | Both ways to give a comment its time are run, and each of the four player commands is run once. |
+| D189 | Step 7 compares `comments`, `queue`, `batches` and `video` of `state --json` before the quit and after the open, as sorted JSON. | "Comments, threads and statuses" are those keys. The lease, the listener's presence and the player's time belong to one run of the app. |
+| D190 | The script reads this build's `state --json` and `app status --json` shapes. | The contract names the commands and leaves their fields to each build (D29). A run against another build changes these filters and nothing else. |
+| D191 | The script releases the lease as its last check, then quits the demo app on exit. | A test leaves nothing running. `app quit` is an operator command, so the quit takes the lease once more and the lease ends with the app. |
+| D192 | `make acceptance` does not build or install. | The script tests what is installed. `make install` replaces the app and opens it, which the caller should choose. |
+| D193 | The pictures in `assets/screenshots/v1-acceptance/` come from a second script, `scripts/screenshots.sh`, and are kept as the app wrote them (2720 by 1460 pixels). | The acceptance scenario's two comments are a thin picture, and `--with-banner` is not in the contract (D28). A script makes the pictures repeatable after a UI change. |
+| D194 | In the scene, the comment that is selected is the last one added before its batch is sent. | No command selects a comment; `comment add` selects the new one (D52), and the selection stays when the comment is sent. So one picture cannot hold a selected sent comment and a queued comment, and the scene has two views. |
+
 ## 7. What is built so far
 
 The sections above describe the whole build. This list says what the code holds today. Each ticket moves its line.
@@ -1121,7 +1173,8 @@ Built (the ticket "Mate: Ship the video-review-mate skill"):
 
 - `.agents/skills/video-review-mate/SKILL.md`. No code changed.
 - Checked by reading: every command line in the skill against `ListenerCommands.swift`, the command table and the exit codes in `VideoReviewCLI`.
-- Not checked by this ticket's agent: a live session with the skill against the app. The installed app was in use by another ticket; the check runs at integration.
+- Checked live by the acceptance ticket (2026-10-05): a headless Claude Code session (`claude -p`, Opus 5.5, tools Bash, Read, Edit, Write and Skill) in a throwaway repo with the skill linked into its `.claude/skills`, against the installed app on demo data. A batch of two comments waited for it: "Add a line to NOTES.md: the intro goes too fast." and a question on a region. The first `wait` took the batch; both comments were `acknowledged` 4 s later; a new background `wait` was open 1 s after that; the first comment ended `done` with one commit and its short SHA in the reply; the question ended `done` with the narration in the reply and no commit; the batch got its closing message; the session stopped its `wait` and ended, 30 s after it started, and presence fell to `absent`. `SKILL.md` needed no change.
+- Not checked: a session that asks a question (`ask` in the background), a batch that arrives while another is worked, and a second listener session that gets a batch again.
 
 Built (the ticket "Comment: Keep comments and threads across restarts"):
 
@@ -1134,6 +1187,11 @@ Built (the ticket "Comment: Keep comments and threads across restarts"):
 - Checked in the installed app, in a demo folder, through the CLI: `state --json` before `app quit` and after `app open --demo` differs only in the lease, the listener's presence and the player's time; a batch sent with no listener is taken after the restart with its keyframes, crop, transcript and context; a new listener key gets the taken batches again; a renamed copy in another folder has the same comments and batches; the normal support folder holds only `demo.json` before and after.
 - Not checked by an agent: a kill of the app in the middle of a save, and a full disk, in the installed app. Both are tested at `Library` and `ReviewDesk`.
 
-Not built yet:
+Built (the ticket "Proto: Run the v1 acceptance scenario and open the draft pull request"):
 
-- The listener skill `.agents/skills/video-review-mate/` and `scripts/acceptance.sh`. Each has its own ticket.
+- `scripts/acceptance.sh` and the `acceptance` target of the `Makefile`. `scripts/screenshots.sh` and the six pictures in `assets/screenshots/v1-acceptance/`. No Swift code changed.
+- Checked in the installed app after `make install`: `make acceptance` passes all eight steps (62 checks). With a stand-in command that answers `"demo": false`, the script stops after `app open --demo` and `app status --json` with exit 3. A check that fails ends its step with `FAIL` and the run with exit 1.
+- Seen in the pictures and left as it is: the first batch of the scene is below the rail's fold in every view, so its replies are not in a picture (its markers are). The window is not the key window while an agent drives it, so its three title bar buttons are grey, the toolbar's two buttons have a grey disc in light, and the transcript chip is dim in dark. With the lease banner the stage is lower, so the video has bars at its sides, and the bars are a deeper black than the video's own background. The banner's tint runs on into the top of the rail.
+- Not checked by an agent, as before: every real key press, click and drag, the context popover, and whether macOS asks the bundled app for speech recognition permission.
+
+Not built yet: nothing of the v1 tickets.

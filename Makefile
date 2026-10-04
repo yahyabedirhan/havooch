@@ -6,6 +6,8 @@
 #   make bundle     build/<app name>.app with the video-review command in
 #                   Contents/Helpers, ad-hoc signed
 #   make install    bundle, then replace /Applications/<app name>.app and open it
+#   make acceptance run the v1 acceptance scenario through the installed app's
+#                   command, on demo data (scripts/acceptance.sh); after make install
 #   make clean
 
 # The executables' names never change with the variant.
@@ -43,7 +45,7 @@ MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install clean
+.PHONY: all build test bundle install acceptance clean
 
 all: build
 
@@ -88,6 +90,10 @@ install: bundle
 	@echo "installed $(INSTALLED)"
 	@# In the background: the terminal keeps the focus.
 	open -g "$(INSTALLED)"
+
+# Drives the installed app, in demo mode only. It is not part of `make test`.
+acceptance:
+	@scripts/acceptance.sh
 
 clean:
 	rm -rf $(BUILD_DIR) .build
