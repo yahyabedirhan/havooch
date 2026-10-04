@@ -27,14 +27,16 @@ public struct ControlMessage: Equatable, Sendable {
         switch request {
         case .appStatus: wire = Wire(command: "app.status")
         case .state: wire = Wire(command: "state")
+        case .controlTake(let waitSeconds): wire = Wire(command: "control.take", waitSeconds: waitSeconds)
+        case .controlRelease: wire = Wire(command: "control.release")
         case .appOpen: wire = Wire(command: "app.open")
         case .appQuit: wire = Wire(command: "app.quit")
         case .playerOpen(let path): wire = Wire(command: "player.open", path: path)
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
         case .playerSeek(let seconds): wire = Wire(command: "player.seek", seconds: seconds)
-        case .screenshot(let path, let appearance):
-            wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue)
+        case .screenshot(let path, let appearance, let withBanner):
+            wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue, withBanner: withBanner ? true : nil)
         }
         wire.holder = holder
         wire.json = json
@@ -68,6 +70,14 @@ public struct ControlMessage: Equatable, Sendable {
         switch wire.command {
         case "app.status": return .appStatus
         case "state": return .state
+        case "control.take":
+            if let seconds = wire.waitSeconds, !(0...ControlRequest.longestWait).contains(seconds) {
+                throw .unreadable(
+                    "the control command `control.take` needs a `waitSeconds` from 0 to \(ControlRequest.longestWait), not \(seconds)"
+                )
+            }
+            return .controlTake(waitSeconds: wire.waitSeconds)
+        case "control.release": return .controlRelease
         case "app.open": return .appOpen
         case "app.quit": return .appQuit
         case "player.open": return .playerOpen(path: try absolute(wire))
@@ -87,7 +97,7 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            return .screenshot(path: path, appearance: appearance)
+            return .screenshot(path: path, appearance: appearance, withBanner: wire.withBanner ?? false)
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -119,5 +129,7 @@ public struct ControlMessage: Equatable, Sendable {
         var path: String?
         var seconds: Double?
         var appearance: String?
+        var waitSeconds: Int?
+        var withBanner: Bool?
     }
 }

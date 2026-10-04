@@ -1,5 +1,6 @@
 import Foundation
 import ReviewCommand
+import ReviewLease
 import ReviewWire
 import Testing
 
@@ -7,6 +8,10 @@ import Testing
 struct CommandTests {
     @Test("each command sends its request", arguments: [
         (["state"], ControlRequest.state),
+        (["control", "take"], .controlTake(waitSeconds: nil)),
+        (["control", "take", "--wait", "30"], .controlTake(waitSeconds: 30)),
+        (["control", "release"], .controlRelease),
+        (["screenshot", "/tmp/shot.png", "--with-banner"], .screenshot(path: "/tmp/shot.png", appearance: nil, withBanner: true)),
         (["player", "open", "/videos/sample.mp4"], .playerOpen(path: "/videos/sample.mp4")),
         (["player", "open", "clips/../sample.mp4"], .playerOpen(path: "/Users/me/shop/sample.mp4")),
         (["player", "play"], .playerPlay),
@@ -44,12 +49,69 @@ struct CommandTests {
         #expect(run("player", "seek", "0:40") == CommandResult(error: "0:40 is outside the video (0:00 to 0:21.233)\n", exitCode: 1))
     }
 
+    @Test("a second holder exits 1 with the lease's refusal, which names the holder and the lease's end, on standard error")
+    func leaseRefused() throws {
+        // What the app answers a second holder: the lease's own words.
+        var lease = ControlLease()
+        let first = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
+        _ = lease.use(by: first, at: Date(timeIntervalSince1970: 0))
+        let refused = lease.use(by: Holder(key: "agent-2", name: "codex", place: "/work"), at: Date(timeIntervalSince1970: 12.5))
+        guard case .failure(let refusal) = refused.answer else { Issue.record("not refused"); return }
+        let line = refusal.message(at: Date(timeIntervalSince1970: 12.5), timeZone: try #require(TimeZone(identifier: "UTC")))
+        let run = Run { _, _ in .success(.refused(line)) }
+        defer { run.cleanUp() }
+
+        for arguments in [["player", "play"], ["control", "take"], ["screenshot", "/tmp/shot.png"]] {
+            let result = VideoReviewCLI.run(arguments, environment: run.environment)
+            #expect(result.exitCode == 1)
+            #expect(result.output.isEmpty)
+            #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
+                + "`video-review control take --wait <seconds>` to queue\n")
+        }
+    }
+
+    @Test("the holder key is VIDEO_REVIEW_CONTROL_KEY when set, else the Claude Code session, else the ancestor process")
+    func holderKey() {
+        struct Processes: ProcessTable {
+            var currentPID: Int32 { 300 }
+            func process(_ pid: Int32) -> ProcessRecord? {
+                let started = Date(timeIntervalSince1970: 1_700_000_000)
+                return [
+                    300: ProcessRecord(pid: 300, parent: 200, started: started, name: "video-review"),
+                    200: ProcessRecord(pid: 200, parent: 100, started: started, name: "zsh"),
+                    100: ProcessRecord(pid: 100, parent: 1, started: started, name: "codex"),
+                ][pid]
+            }
+        }
+        let run = Run { _, _ in .success(.done("done\n")) }
+        defer { run.cleanUp() }
+        for variables in [
+            ["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:],
+        ] {
+            var environment = run.environment
+            environment.variables = variables.merging([SupportFolder.overrideVariable: run.support.path]) { _, new in new }
+            environment.processes = Processes()
+            _ = VideoReviewCLI.run(["control", "take"], environment: environment)
+        }
+        #expect(run.transport.sent.map(\.message.holder.key) == ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"])
+    }
+
+    @Test("a take that waits in line gets its wait on top of the usual time to answer")
+    func takeWaits() {
+        let run = Run { _, _ in .failure(.timedOut) }
+        defer { run.cleanUp() }
+        #expect(run("control", "take", "--wait", "30")
+            == CommandResult(error: "\(AppIdentity.appName) didn't answer within 45 seconds\n", exitCode: 1))
+    }
+
     @Test("every command but app status and app open exits 1 when the app isn't running")
     func notRunning() {
         let run = Run()
         defer { run.cleanUp() }
         let line = "\(AppIdentity.appName) isn't running; run `video-review app open`\n"
         #expect(run("player", "play") == CommandResult(error: line, exitCode: 1))
+        #expect(run("control", "take", "--wait", "5") == CommandResult(error: line, exitCode: 1))
+        #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
         #expect(run("state", "--json") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "quit") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "status") == CommandResult(output: "not running\n"))
@@ -62,6 +124,9 @@ struct CommandTests {
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
+        ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
+        ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
+        ["control", "release", "--wait", "5"], ["player", "play", "--with-banner"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -102,13 +167,15 @@ struct AppCommandTests {
     final class FakeApps: @unchecked Sendable {
         /// The support folders' paths.
         var running: Set<String> = []
+        /// The lease the app's reply to a quit carries.
+        var lease: LeaseTerm?
 
         func answer(_ message: ControlMessage, _ socket: URL) -> Result<ControlReply, ControlTransportFailure> {
             let support = socket.deletingLastPathComponent().standardizedFileURL.path
             guard running.contains(support) else { return .failure(.notRunning) }
             if message.request == .appQuit {
                 running.remove(support)
-                return .success(.done("quit\n"))
+                return .success(ControlReply(ok: true, output: "quit\n", lease: lease))
             }
             return .success(.done(AppCommandTests.status))
         }
@@ -157,6 +224,29 @@ struct AppCommandTests {
         try Data().write(to: ControlSocket.url(in: demo))
         _ = run("player", "play")
         #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)
+    }
+
+    @Test("app open --demo on a running app hands the lease its quit renewed to the app it launches, and so does going back")
+    func relaunchKeepsTheLease() throws {
+        let (run, apps) = makeRun { [$0.support] }
+        defer { run.cleanUp() }
+        let term = LeaseTerm(
+            holder: Holder(key: "CLAUDE_CODE_SESSION_ID=abc", name: "Claude Code", place: "/Users/me/shop"),
+            taken: Date(timeIntervalSince1970: 0), ends: Date(timeIntervalSince1970: 80)
+        )
+        apps.lease = term
+        let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
+
+        #expect(run("app", "open", "--demo", demo.path) == CommandResult(output: Self.status))
+        #expect(run("app", "open") == CommandResult(output: Self.status))
+
+        let handover = try #require(ControlLease.handover(term).first)
+        #expect(run.launcher.launches == [
+            [SupportFolder.overrideVariable: demo.path, handover.key: handover.value],
+            [handover.key: handover.value],
+        ])
+        #expect(ControlLease(environment: run.launcher.launches[0], at: Date(timeIntervalSince1970: 30))
+            .current(at: Date(timeIntervalSince1970: 30)) == term)
     }
 
     @Test("app open --demo on the demo that already runs keeps it running")

@@ -27,14 +27,21 @@ struct UsageError: Error, Equatable {
 struct Arguments: Equatable {
     var words: [String] = []
     var options: [String: String] = [:]
+    /// The `--flags` written: options with no value.
+    var flags: Set<String> = []
 
     /// Reads `raw`; `valued` names the options the command takes, each
-    /// with a value after it. Any other `--option` is refused.
-    init(_ raw: [String], valued: Set<String>) throws(UsageError) {
+    /// with a value after it, and `flags` those with none. Any other
+    /// `--option` is refused.
+    init(_ raw: [String], valued: Set<String>, flags known: Set<String> = []) throws(UsageError) {
         var rest = raw[...]
         while let argument = rest.popFirst() {
             guard argument.hasPrefix("--") else {
                 words.append(argument)
+                continue
+            }
+            if known.contains(argument) {
+                flags.insert(argument)
                 continue
             }
             guard valued.contains(argument) else { throw UsageError("unknown option `\(argument)`") }
@@ -66,13 +73,16 @@ struct Command: Sendable {
     var summary: String
     /// The `--options` it takes, each with a value.
     var valuedOptions: Set<String> = []
+    /// The `--flags` it takes, each with no value.
+    var flags: Set<String> = []
     var parse: @Sendable (Arguments, CommandEnvironment) throws(UsageError) -> Invocation
 }
 
 /// The commands of `video-review`, by name. A new command is a `Command` in
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
-    static let commands: [Command] = AppCommands.commands + PlayerCommands.commands + [ScreenshotCommand.command]
+    static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
+        + [ScreenshotCommand.command]
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

@@ -243,10 +243,10 @@ Sources/
     CommandTable.swift             the commands by name, usage text, global --json
     VideoReviewCLI.swift           run(arguments, environment) → output, error, exit code; CommandResult and CommandEnvironment
     AppCommands.swift              app status | open [--demo] | quit, and state
-    ControlCommands.swift          control take [--wait] | release
+    ControlCommands.swift          control take [--wait <s>] | release
     PlayerCommands.swift           player open | play | pause | seek
     CommentCommands.swift          comment add | edit | delete, batch send, thread answer, context set
-    ScreenshotCommand.swift        screenshot <abs.png> [--appearance]
+    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--with-banner]
     ListenerCommands.swift         wait, ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services; the AppLaunching seam for tests
   ReviewCLI/
@@ -285,12 +285,13 @@ Sources/
       Shortcuts.swift              the player's keys, off while a text field has the focus
     Control/
       ControlServer.swift          the socket, the lease, held requests, dispatch
+      LeaseIndicator.swift         the lease as the banner draws it; hidden while a screenshot leaves it out
       StateReport.swift            `state` and `app status` as JSON and as lines
       Screenshotter.swift          the app window through ScreenCaptureKit, in an appearance
     UI/
       RootView.swift               banner, stage, timeline, rail
       Theme.swift                  one place for the status colours and glyphs
-      LeaseBanner.swift            who controls the app, and Stop
+      LeaseBanner.swift            who controls the app, and Stop: the banner's words (pure) and its view
       EmptyState.swift             no video open
       ContextPopover.swift         the sidecar text and the editable note
       Stage/StageView.swift        the video with the overlay, the composer and the notices
@@ -312,7 +313,7 @@ Tests/
   ReviewCoreTests/                 the state machine, batch assembly, the outbox
   ReviewTranscriptTests/           the window cut, the source order, voiceover timing, srt and vtt parsing (reads fixtures/sample)
   ReviewStoreTests/                round trips in a temp folder, the content hash of a renamed copy
-  ReviewAppTests/                  ControlServer with a fake app, VideoFrameGeometry
+  ReviewAppTests/                  ControlServer with a fake app, the lease gate and the line of takes over the real socket, VideoFrameGeometry
 ```
 
 A module and a type never share a name, so a type can always be qualified by its module.
@@ -324,10 +325,10 @@ A module and a type never share a name, so a type can always be qualified by its
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease` | none |
-| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?)`, `commentEdit(id, text)`, `commentDelete(id)`, `batchSend`, `threadAnswer(commentID, text)`, `contextSet(text)`, `screenshot(path, appearance?)` | takes or renews |
+| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?)`, `commentEdit(id, text)`, `commentDelete(id)`, `batchSend`, `threadAnswer(commentID, text)`, `contextSet(text)`, `screenshot(path, appearance?, withBanner)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(batchID, text?)`, `status(commentID, state)`, `reply(id, text)`, `ask(commentID, question, waitSeconds?)` | none |
 
-- `role` and `holdSeconds` (how long the app may keep the connection: a `take`'s wait, a `wait`'s timeout, an `ask`'s wait, or no limit) are computed properties on the request, so the server and the client agree without a table.
+- `role` and `holdSeconds` (how long the app may keep the connection: a `take`'s wait, a `wait`'s timeout, an `ask`'s wait, or no limit) are computed properties on the request, so the server and the client agree without a table. A `take` waits 3600 s at most (`ControlRequest.longestWait`); the command and `decode` both refuse more.
 - On the wire a message is one JSON object: `version`, `command` (`player.seek`), `holder` (`key`, `name`, `place`), `json` (the caller passed `--json`) and the command's own fields. Protocol version 1.
 - `ControlMessage.decode` refuses in this order: not JSON, another version (naming both), no holder, unknown command, a missing or invalid field.
 - `Holder.find(variables, workingDirectory, processes)`: the key is `VIDEO_REVIEW_CONTROL_KEY` when set, else `CLAUDE_CODE_SESSION_ID`, else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`. The name is `Claude Code` or the process name. The place is the Herdr pane when there is one, else the working folder. The process table is a protocol with the system's `sysctl` reader and a fake.
@@ -338,7 +339,7 @@ A module and a type never share a name, so a type can always be qualified by its
 
 ### ReviewLease
 
-`ControlLease` copies the rules of Shipyard's `ControlLease`: a struct with `renewal` 60 s, `cap` 5 min and `bar` 5 min, and the time passed into every call.
+`ControlLease` copies the rules of Shipyard's `ControlLease`: a struct with `renewal` 60 s, `cap` 5 min and `bar` 5 min, and the time passed into every call. A holder is the same across requests by its key; its name and place are as its latest request says. The lease it holds is a `LeaseTerm` (the data in `ReviewWire`), which this module extends with `capped`, `secondsLeft(at:)` and the line `control take` prints.
 
 | Call | Does | Returns |
 |---|---|---|
@@ -348,17 +349,20 @@ A module and a type never share a name, so a type can always be qualified by its
 | `stop(at:)` | the person's Stop: ends the lease, bars the holder for `bar` | transitions |
 | `settle(at:)` | ends a lease that ran out, lifts ended bars, hands a free lease to the first waiter | transitions |
 | `giveUp(by:waited:at:)` | a waiter's wait ran out | `Decision` |
-| `current(at:)`, `status(at:)`, `nextEnd(after:)` | read-only | the term, the status for `app status`, when to settle next |
+| `current(at:)`, `waiting(at:)`, `status(at:)`, `nextEnd(after:)` | read-only | the term, how many takes wait, the `Status` for `app status` and `state`, when to settle next (the lease's end or a bar's) |
 
-`Refusal` is `inUse(term)`, `queued(term)`, `waitedOut(seconds, term)` or `stopped`, and writes its own line, naming the holder, its place and the end time. `handover(term)` and `init(environment:at:)` carry a lease across `app quit` and a relaunch in `VIDEO_REVIEW_CONTROL_LEASE`, so `app open --demo` on a running app keeps the operator's lease.
+`Status` is the held lease as it is reported: `holder` (`key`, `name`, `place`), `taken`, `ends`, `secondsLeft` (whole, rounded up) and `waiting`. `Decision` is the answer (the `LeaseTerm` or a `Refusal`) plus the transitions (`started`, `renewed`, `ended` with why: `expired`, `capped`, `released`, `stopped`), which the tests read and the server ignores.
+
+`Refusal` is `inUse(term)`, `queued(term)`, `waitedOut(seconds, term)` or `stopped`, and writes its own line, naming the holder, its place and the end time. A stopped holder reads `the person took <app> back; ask them before using it again`. `handover(term)` and `init(environment:at:)` carry a lease across `app quit` and a relaunch in `VIDEO_REVIEW_CONTROL_LEASE`, so `app open --demo` on a running app keeps the operator's lease.
 
 ### ReviewCommand
 
 - `CommandTable` maps `app status`, `player seek` and the rest to a parser that returns a `ControlRequest` or a usage error. `--json` is accepted on every command.
 - `VideoReviewCLI.run(arguments, environment)` returns `CommandResult(output, error, exitCode)`. `environment` holds the variables, the working folder, the process table, the transport and the launcher, so tests replace all of them.
 - The CLI makes paths absolute against its own working folder before it sends them (`player open`, `app open --demo`); `screenshot` requires an absolute path, as the contract says.
+- `control take [--wait <seconds>]` prints `you hold <app> until <HH:mm:ss>`. Behind another holder it is refused at once, or with `--wait` (0 to 3600) waits in line; a wait that runs out is a refusal, exit 1, saying how long it waited and who still holds the app. `control release` prints `released <app>`, also when the caller holds nothing. The contract gives them no `--key`: a holder names itself with `VIDEO_REVIEW_CONTROL_KEY`.
 - `app status` answers without the app: `not running`, exit 0. Every other command but `app open` and `wait` exits 1 with `Video Review isn't running; run video-review app open` when nothing listens.
-- `app open [--demo <folder>]`: when the app does not run, it launches the bundle the command ships in without activating it, with `VIDEO_REVIEW_SUPPORT_DIR` for a demo, waits for the socket, then sends `app.open`. When the app already runs on the data asked for, it only sends `app.open`. When the app runs on other data, it sends `app.quit`, takes the lease from the reply and relaunches with the handover. `--demo` records the pointer; plain `app open` removes it. A demo that does not come to run leaves no pointer.
+- `app open [--demo <folder>]`: when the app does not run, it launches the bundle the command ships in without activating it, with `VIDEO_REVIEW_SUPPORT_DIR` for a demo, waits for the socket, then sends `app.open`. When the app already runs on the data asked for, it only sends `app.open`. When the app runs on other data, it sends `app.quit`, takes the lease from the reply and relaunches with the handover (`ControlLease.handover`, in the launch environment). Plain `app open` from a demo does the same. `--demo` records the pointer; plain `app open` removes it. A demo that does not come to run leaves no pointer.
 - The launcher waits for a quitting copy of the app to end. For a demo launch, a copy that is still there (one that `make install` has just opened and that does not answer yet) is asked to quit first: Launch Services would hand that copy back on its own data.
 - `--json` is taken from anywhere on the command line. An action then prints the parts of the state it changed (`player seek` prints `{"player": {…}}`, `player open` adds `video`, `screenshot` prints `{"path": …}`). `app status --json` prints `{"running": false}` when the app is not running.
 - `wait` connects again while the app is not running or quits, once a second, until its timeout. A listener can start before the app.
@@ -490,13 +494,15 @@ public protocol Transcriber: Sendable {
 - `Shortcuts` is one local key monitor. It maps a key to an action in a pure function and stands back while a text view has the focus. The Playback menu has the same actions with no key equivalents, since a menu key with no modifier would take the key from a text field.
 - `FrameGrabber` makes the keyframe with `AVAssetImageGenerator` at the exact time, from the asset and not from the window. The crop is the keyframe cut by the region. The UI and the CLI therefore produce the same pixels at any window size.
 - `ListenerQueue` holds the `Outbox`, the one open `wait` (a continuation) and the open `ask`s by comment id. It assembles the payload when a `wait` takes a batch. `ack`, `status`, `reply` and `ask` go through `ReviewDesk.change` and raise a notice.
-- `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests, and settles the lease on a timer at `nextEnd`. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake.
+- `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It owns the one `ControlLease`, takes the time from a closure the tests replace, and starts from the lease a relaunch handed over. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests, and settles the lease on a timer at `nextEnd`. Every change to the lease goes through one place (`leaseChanged`): it copies the lease to the `LeaseIndicator`, answers the waiting takes of the holder that got it, and sets the timer again. A `take`'s reply that grants the lease and cannot be written releases it (`undelivered`). `stopLease()` is the banner's Stop. `app status` and `state` get their `lease` from the server, not from `AppModel`. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake.
+- `LeaseIndicator` (`@Observable`) is the lease as the banner draws it. `shown(at:)` is the lease's `Status`, or nil while it is free or while a screenshot leaves the banner out. `LeaseBanner` makes the banner's words from that status in a pure struct, and `LeaseBannerView` draws them with Stop and redraws each second.
 - `StateReport` builds `state --json`:
 
 ```json
 {
   "app":      { "version": "0.1.0", "variant": "proto-2", "demo": true, "support": "/abs/demo" },
-  "lease":    null,
+  "lease":    { "holder": { "key": "CLAUDE_CODE_SESSION_ID=…", "name": "Claude Code", "place": "/abs/repo" },
+                "taken": "2026-10-04T19:00:00Z", "ends": "2026-10-04T19:01:00Z", "secondsLeft": 48, "waiting": 0 },
   "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingBatches": 0 },
   "video":    { "path": "/abs/sample.mp4", "contentHash": "<64 hex>", "duration": 21.233, "title": "sample", "contextNote": "" },
   "player":   { "time": 10.0, "playing": false },
@@ -510,8 +516,8 @@ public protocol Transcriber: Sendable {
 }
 ```
 
-  `comments` and `queue` are in time order. `video` is `null` with no video open.
-- `Screenshotter` captures the app's own window with ScreenCaptureKit, from this process's shareable content only, which needs no Screen Recording permission. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. Captures take turns, so two of them never mix their appearances. It makes the PNG's folder when it is missing. The lease banner is hidden for the capture, since the holder would be in every picture.
+  `comments` and `queue` are in time order. `video` is `null` with no video open. `lease` is `null` while the lease is free. `app status --json` has the same `lease`; as lines, both commands print `lease: held by Claude Code in /abs/repo, 48s left, 0 waiting` or `lease: free`.
+- `Screenshotter` captures the app's own window with ScreenCaptureKit, from this process's shareable content only, which needs no Screen Recording permission. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. Captures take turns, so two of them never mix their appearances. It makes the PNG's folder when it is missing. The lease banner is hidden for the capture, since the holder would be in every picture; `--with-banner` keeps it in, which is how an agent proves the banner shows. Every capture first gives the window 400 ms to redraw, since the banner has just gone, or has just come when the capture's own request took the lease.
 - The app has one `Window` scene. Closing the window quits the app. A second copy started on the same support folder finds the socket taken and quits.
 
 ### The UX of this prototype
@@ -536,7 +542,7 @@ The idea: **the video is the stage, the timeline carries the markers, and a rail
 | 14 | Edit and delete show on queued cards only. | Only a queued comment can change, so the controls do not appear where they would be refused. |
 | 15 | The send bar at the foot of the rail holds the presence pill ("Agent listening", "Agent working", "No agent: the batch will wait") and the Send button with the count and the shortcut. | The person sees before sending whether someone will receive the batch, and that sending is safe either way. |
 | 16 | An agent message shows as a notice in the top-right corner of the stage for 5 s. A question stays until it is clicked or answered. A click selects the comment. No system notifications. | Brief while watching; a question blocks the agent, so it does not fade. The app is in front when notices matter. |
-| 17 | The lease banner is a strip across the top of the window: who controls the app, when the lease ends, and Stop. | The person must see at once why things move, and one click takes the app back. |
+| 17 | The lease banner is a strip under the toolbar, across the top of the stage: who controls the app ("Claude Code controls Video Review"), where (the working folder's name or the Herdr pane), the time left, how many agents wait, and Stop. It shows with no video open too. Stop ends the lease and bars that agent for 5 min; nothing lifts the bar early. | The person must see at once why things move, and one click takes the app back. |
 | 18 | The window follows the system's light and dark appearance, with system colours and materials. The letterbox around the video is black in both. | It matches the Mac. Black bars are what a player shows. |
 | 19 | With no video: a drop target and "Open a video" (Cmd+O). On launch the app opens the last video again, paused at the start. | Coming back to a review should not need a file dialog. It also makes the history visible after a restart with no extra step. |
 | 20 | A Context button in the toolbar opens a popover with the sidecar's text (read-only, with its path) and the editable note. A small chip beside it names the transcript source and its progress. | The person can check what the agent will be told without leaving the player. |
@@ -759,7 +765,7 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D25 | A draft is in memory only and is not saved. | Sent and queued work persists; half a sentence does not need a file format. |
 | D26 | `--demo <folder>` is the demo run's support folder, as in Shipyard. | The fixture folder stays read-only, and demo and real data cannot mix. |
 | D27 | Exit codes: 0, 1 refused, 2 timed out, 64 usage. `app status` exits 0 when the app is not running. | Scripts can tell the cases apart. |
-| D28 | The lease banner is left out of screenshots. | The agent that takes the screenshot always holds the lease. |
+| D28 | The lease banner is left out of screenshots, unless the agent passes `--with-banner`. | The agent that takes the screenshot always holds the lease, so the banner would be in every picture. The flag is an addition to the contract's `screenshot`, after Shipyard's `--with-indicator`: the only way an agent can prove the banner's pixels. |
 | D29 | `state --json` has the shape shown under `StateReport`. | The contract names the command, not its fields. |
 | D30 | The lease keeps Shipyard's handover across a relaunch, and leaves out Allow. | `app open --demo` on a running app must keep the operator's lease. Nothing in v1 lifts a bar early. |
 | D31 | A socket path longer than an address holds is reached through a short symbolic link in the user's temporary folder. | A demo folder under `.scratch/` in a worktree is longer than 103 bytes. Shipyard refuses such a folder; here the tests need it. |
@@ -770,6 +776,13 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D36 | `video.duration` is the video track's length. | A comment points at a frame, and the last frame ends there. The sound track of the fixture runs 15 ms longer. |
 | D37 | Closing the window quits the app. | There is one window and nothing to do without it. `screenshot` and `state` always have a window to show. |
 | D38 | The app quits cleanly on `SIGTERM`. | `make install` ends the app with it, and a socket file left behind would hide a normal app from the CLI while a demo pointer exists. |
+| D39 | `state --json` and `app status --json` report the lease as `holder` (`key`, `name`, `place`), `taken`, `ends`, `secondsLeft` and `waiting`. | An agent sees who holds the app, tells two holders with one name apart by the key, and knows how long to wait. |
+| D40 | A `control take --wait` whose wait runs out exits 1, not 2. | It is a refusal with a reason (who still holds the app), as in Shipyard. Exit 2 stays for `wait` and `ask`, which time out with nothing to say. |
+| D41 | `control take` and `control release` have no `--key` option. | The contract names none. `VIDEO_REVIEW_CONTROL_KEY` names the holder for every command of a run. |
+| D42 | `control release` from an agent that holds nothing answers `released`, exit 0. | A script can always release at its end. Shipyard does the same. |
+| D43 | `app open` on a running app is an operator command, so it takes or renews the lease, and another holder's is refused. | The contract lists `app open` under the operator commands. |
+| D44 | After Stop the banner goes and nothing more shows for the barred agent. | There is no Allow (D30), so a line about the bar would have no action. The agent's refusal tells it to ask the person. |
+| D45 | The server ignores the lease's transitions. | They exist for notifications in Shipyard; this app has none (UX 16). The banner follows the lease itself. |
 
 ## 7. What is built so far
 
@@ -778,15 +791,22 @@ The sections above describe the whole build. This list says what the code holds 
 Built (the first build ticket, "Control: Play a video and drive the player through the CLI"):
 
 - `Package.swift`, `Makefile`, `Packaging/Info.plist`.
-- `ReviewWire`: every file in the tree. `ControlRequest` has the cases `appStatus`, `state`, `appOpen`, `appQuit`, `playerOpen`, `playerPlay`, `playerPause`, `playerSeek` and `screenshot`. `LeaseTerm` is data only.
+- `ReviewWire`: every file in the tree. `ControlRequest` has the cases `appStatus`, `state`, `appOpen`, `appQuit`, `playerOpen`, `playerPlay`, `playerPause`, `playerSeek` and `screenshot`.
 - `ReviewCommand`: `CommandTable`, `VideoReviewCLI`, `AppCommands`, `PlayerCommands`, `ScreenshotCommand`, `AppLauncher`. `ReviewCLI/main.swift`.
 - `ReviewApp`: `VideoReviewApp`, `AppModel` (open, play, pause, seek), `Player/PlayerEngine`, `Player/PlayerSurface`, `Player/Shortcuts` (play and pause, 5 s, one frame), `Control/ControlServer`, `Control/StateReport`, `Control/Screenshotter`, `UI/RootView`, `UI/Theme`, `UI/EmptyState`, `UI/Stage/StageView`, `UI/Timeline/TimelineLane`, `UI/Rail/RailView`, `UI/Rail/SendBar`.
 - Tests: `ReviewWireTests`, `ReviewCommandTests`, `ReviewAppTests` (the control server with a fake app and over the real socket, the player's keys).
 
+Built (the lease ticket, "Control: Lease app control to one agent at a time"):
+
+- `ReviewLease` with `ControlLease`, and `ReviewLeaseTests`.
+- `ReviewWire`: the cases `controlTake` and `controlRelease`, and `withBanner` on `screenshot`.
+- `ReviewCommand`: `ControlCommands`, `screenshot --with-banner`, the handover of the lease when `app open` relaunches the app.
+- `ReviewApp`: the lease in `ControlServer` (the gate before every operator request, the line of waiting takes, the timer, Stop), `Control/LeaseIndicator`, `UI/LeaseBanner`, the `lease` in `state` and `app status`.
+- Tests: the lease gate with the fake app and a clock, and the line of takes over the real socket, in `ReviewAppTests`; the commands and the handover in `ReviewCommandTests`.
+
 Not built yet, and what stands in its place:
 
-- The lease. `ControlServer.reply(to:)` admits every holder. Each request already carries its `holder` and has a `role`; the lease check goes before the dispatch. The reply's `lease` is always absent, and `state` reports `"lease": null`.
-- `ReviewLease`, `ReviewCore`, `ReviewTranscript`, `ReviewStore` and their test targets. `Package.swift` gets each target with its ticket.
+- `ReviewCore`, `ReviewTranscript`, `ReviewStore` and their test targets. `Package.swift` gets each target with its ticket.
 - `state --json` has the keys `app`, `lease`, `video` (`path`, `title`, `duration`) and `player`. The keys `listener`, `transcript`, `draft`, `comments`, `queue` and `batches`, and `video.contentHash` and `video.contextNote`, come with their tickets.
 - Comments, regions, markers, batches, threads, the listener commands, the context popover and the transcript chip. The rail shows an empty queue and a Send button that is off. The presence pill says "No agent listening". The timeline lane has no markers.
 - The last video does not open again on launch. That comes with the store.

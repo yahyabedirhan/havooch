@@ -8,8 +8,9 @@ import UniformTypeIdentifiers
 @MainActor
 protocol Screenshotting: AnyObject {
     /// The app's window written as a PNG at `file`, in `appearance` when
-    /// it's set (and back to the app's own afterwards).
-    func capture(to file: URL, appearance: ControlRequest.Appearance?) async throws(AppRefusal)
+    /// it's set (and back to the app's own afterwards). The lease banner is
+    /// left out unless `withBanner` asks for it.
+    func capture(to file: URL, appearance: ControlRequest.Appearance?, withBanner: Bool) async throws(AppRefusal)
 }
 
 /// Captures the app's own window through ScreenCaptureKit, limited to this
@@ -17,20 +18,28 @@ protocol Screenshotting: AnyObject {
 /// Screen Recording permission and never shows another app.
 @MainActor
 final class Screenshotter: Screenshotting {
-    /// How long the window gets to redraw in a new appearance before it's
-    /// captured.
+    /// How long the window gets to redraw before it's captured: in a new
+    /// appearance, and with the lease banner gone or just come (the
+    /// capture's own request may be the one that took the lease).
     private static let settle = Duration.milliseconds(400)
+
+    /// The banner, hidden for a capture that leaves it out.
+    private let indicator: LeaseIndicator
+
+    init(indicator: LeaseIndicator) {
+        self.indicator = indicator
+    }
 
     /// The capture before this one. Captures take turns: each one changes
     /// the app's appearance and puts it back.
     private var last: Task<Void, Never>?
 
-    func capture(to file: URL, appearance: ControlRequest.Appearance?) async throws(AppRefusal) {
+    func capture(to file: URL, appearance: ControlRequest.Appearance?, withBanner: Bool) async throws(AppRefusal) {
         let before = last
         let turn = Task { () -> AppRefusal? in
             await before?.value
             do throws(AppRefusal) {
-                try await self.captureNow(to: file, appearance: appearance)
+                try await self.captureNow(to: file, appearance: appearance, withBanner: withBanner)
                 return nil
             } catch {
                 return error
@@ -40,14 +49,18 @@ final class Screenshotter: Screenshotting {
         if let refusal = await turn.value { throw refusal }
     }
 
-    private func captureNow(to file: URL, appearance: ControlRequest.Appearance?) async throws(AppRefusal) {
+    private func captureNow(to file: URL, appearance: ControlRequest.Appearance?, withBanner: Bool) async throws(AppRefusal) {
         guard let window = Self.appWindow else { throw AppRefusal("the app's window isn't on screen") }
         let previous = NSApp.appearance
         if let appearance {
             NSApp.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
         }
         defer { NSApp.appearance = previous }
-        if appearance != nil { try? await Task.sleep(for: Self.settle) }
+        // The agent that takes the screenshot holds the lease, so its
+        // banner would be in every picture.
+        if !withBanner { indicator.hideForCapture() }
+        defer { if !withBanner { indicator.showAfterCapture() } }
+        try? await Task.sleep(for: Self.settle)
         let image = try await Self.captureOwnWindow(CGWindowID(window.windowNumber))
         try Self.write(image, to: file)
     }

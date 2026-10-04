@@ -1,4 +1,5 @@
 import Foundation
+import ReviewLease
 import ReviewWire
 
 /// `video-review app status | open [--demo <folder>] | quit`, and `state`.
@@ -80,10 +81,15 @@ enum AppCommands {
 
     /// The normal app's status when it runs. Otherwise it's launched and
     /// asked until it answers. A demo left running is quit first and its
-    /// pointer removed.
+    /// pointer removed; the lease its quit renewed is handed to the app
+    /// launched.
     private static func openNormal(_ context: Context) -> CommandResult {
+        var handover: [String: String] = [:]
         if let demo = DemoPointer.recorded(in: context.support) {
-            if let refused = quitIfRunning(context.client(in: demo), context) { return refused }
+            switch quitIfRunning(context.client(in: demo), context) {
+            case .stayed(let refused): return refused
+            case .gone(let reply): handover = Self.handover(reply)
+            }
             do {
                 try DemoPointer.remove(in: context.support)
             } catch {
@@ -92,7 +98,7 @@ enum AppCommands {
         }
         let normal = context.client(in: context.support)
         switch normal.send(.appOpen) {
-        case .failure(.notRunning): return launch(environment: [:], answeringAt: normal, context)
+        case .failure(.notRunning): return launch(environment: handover, answeringAt: normal, context)
         // It runs (or is there but failing): no second launch.
         case let answer: return VideoReviewCLI.result(of: answer)
         }
@@ -101,8 +107,9 @@ enum AppCommands {
     /// Runs the app on the demo's support folder `demo`, made when it's
     /// missing. A demo already running there just answers. Otherwise the
     /// pointer is written, whatever app answers (the normal one, or another
-    /// demo) is quit, and the app is launched on the demo. The pointer is
-    /// removed again when no demo comes to run.
+    /// demo) is quit, and the app is launched on the demo, with the lease
+    /// the quit renewed, so the operator keeps it across the relaunch. The
+    /// pointer is removed again when no demo comes to run.
     private static func openDemo(_ demo: URL, _ context: Context) -> CommandResult {
         do {
             try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
@@ -121,12 +128,14 @@ enum AppCommands {
         case let answer: return VideoReviewCLI.result(of: answer)
         }
         var outcome: CommandResult?
+        var environment = [SupportFolder.overrideVariable: demo.path]
         for other in [context.support, previous].compactMap(\.self) where outcome == nil {
-            outcome = quitIfRunning(context.client(in: other), context)
+            switch quitIfRunning(context.client(in: other), context) {
+            case .stayed(let refused): outcome = refused
+            case .gone(let reply): environment.merge(handover(reply)) { _, new in new }
+            }
         }
-        let result = outcome ?? launch(
-            environment: [SupportFolder.overrideVariable: demo.path], answeringAt: demoClient, context
-        )
+        let result = outcome ?? launch(environment: environment, answeringAt: demoClient, context)
         if result.exitCode != 0 {
             // No demo runs: later commands look for the normal app again.
             try? DemoPointer.remove(in: context.support)
@@ -162,24 +171,29 @@ enum AppCommands {
 
     static func quit(_ context: Context) -> CommandResult {
         switch quitAndWait(context.client, context) {
-        case .gone(let reply): CommandResult(output: reply.output, error: reply.error)
+        case .gone(let reply): CommandResult(output: reply?.output ?? "", error: reply?.error ?? "")
         case .stayed(let result): result
         }
     }
 
-    /// How a quit went: the app is gone, with its last reply, or what to
-    /// exit with.
+    /// How a quit went: the app is gone, with its last reply (none when it
+    /// never ran), or what to exit with.
     private enum Quit {
-        case gone(ControlReply)
+        case gone(ControlReply?)
         case stayed(CommandResult)
     }
 
-    /// Quits the app answering `client` and waits until it's gone; nil when
-    /// it's gone (or never ran), else what to exit with.
-    private static func quitIfRunning(_ client: ControlClient, _ context: Context) -> CommandResult? {
-        if case .failure(.notRunning) = client.send(.appStatus) { return nil }
-        if case .stayed(let result) = quitAndWait(client, context) { return result }
-        return nil
+    /// What a relaunch adds to the launched app's environment: the lease
+    /// the quit's `reply` carries, when it carries one.
+    private static func handover(_ reply: ControlReply?) -> [String: String] {
+        reply?.lease.map(ControlLease.handover) ?? [:]
+    }
+
+    /// Quits the app answering `client` and waits until it's gone. An app
+    /// that never ran is gone, with no reply.
+    private static func quitIfRunning(_ client: ControlClient, _ context: Context) -> Quit {
+        if case .failure(.notRunning) = client.send(.appStatus) { return .gone(nil) }
+        return quitAndWait(client, context)
     }
 
     /// Asks the app to quit; once it said it will, waits until nothing

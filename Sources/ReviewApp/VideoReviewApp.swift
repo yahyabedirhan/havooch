@@ -1,4 +1,5 @@
 import AppKit
+import ReviewLease
 import ReviewWire
 import SwiftUI
 
@@ -9,7 +10,7 @@ struct VideoReviewApp: App {
 
     var body: some Scene {
         Window(AppIdentity.appName, id: "main") {
-            RootView(model: delegate.model)
+            RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
         }
         // A 16:9 video fills the stage beside the rail with no letterbox.
         .defaultSize(width: 1360, height: 730)
@@ -48,6 +49,8 @@ private struct PlaybackCommands: Commands {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel(environment: ProcessInfo.processInfo.environment)
+    /// The lease as the banner draws it; the control server writes it.
+    let lease = LeaseIndicator()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
@@ -55,7 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitOnTermination()
         Shortcuts.install(for: model)
         let server = ControlServer(
-            socket: ControlSocket.url(in: model.support), app: model, screenshotter: Screenshotter(),
+            socket: ControlSocket.url(in: model.support), app: model, screenshotter: Screenshotter(indicator: lease),
+            // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
+            lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
+            indicator: lease,
             quit: { NSApp.terminate(nil) }
         )
         do throws(ControlServer.Failure) {
@@ -76,6 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         source.setEventHandler { NSApp.terminate(nil) }
         source.resume()
         termination = source
+    }
+
+    /// The banner's Stop: the person takes the app back from the agent.
+    func stopLease() {
+        server?.stopLease()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

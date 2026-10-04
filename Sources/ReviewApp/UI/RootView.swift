@@ -5,6 +5,9 @@ import SwiftUI
 /// the side. With no video, a place to open one.
 struct RootView: View {
     @Bindable var model: AppModel
+    /// The lease as the banner draws it, and the banner's Stop.
+    let lease: LeaseIndicator
+    let stopLease: () -> Void
 
     var body: some View {
         Group {
@@ -19,6 +22,9 @@ struct RootView: View {
         }
         .frame(minWidth: 760, minHeight: 480)
         .background(Color(nsColor: .windowBackgroundColor))
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LeaseBannerView(indicator: lease, stop: stopLease)
+        }
         .inspector(isPresented: railShown) {
             RailView()
                 .inspectorColumnWidth(

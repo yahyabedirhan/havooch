@@ -26,6 +26,8 @@ struct ControlMessageTests {
 
     @Test("every request reads back as it was sent", arguments: [
         ControlRequest.appStatus, .state, .appOpen, .appQuit,
+        .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
+        .screenshot(path: "/tmp/shot.png", appearance: .light, withBanner: true),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
     ])
@@ -89,6 +91,9 @@ struct ControlMessageTests {
             == .unreadable("the control command `screenshot` needs an absolute `path`, not `shot.png`"))
         #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "appearance": "sepia"]))
             == .unreadable("the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"))
+        #expect(refusal(fields("control.take", ["waitSeconds": -1]))
+            == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
+        #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)
         #expect(refusal(fields("player.seek", [:])) != nil)
         #expect(refusal(fields("player.seek", ["seconds": -1])) != nil)
     }
@@ -97,10 +102,19 @@ struct ControlMessageTests {
     func roles() {
         #expect(ControlRequest.appStatus.role == .free)
         #expect(ControlRequest.state.role == .free)
+        #expect(ControlRequest.controlTake(waitSeconds: 30).role == .free)
+        #expect(ControlRequest.controlRelease.role == .free)
         for request in [ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
                         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil)] {
             #expect(request.role == .operator)
         }
+    }
+
+    @Test("a take that waits in line may be held for its wait; no other request is held")
+    func holdSeconds() {
+        #expect(ControlRequest.controlTake(waitSeconds: 30).holdSeconds == 30)
+        #expect(ControlRequest.controlTake(waitSeconds: nil).holdSeconds == 0)
+        #expect(ControlRequest.playerPlay.holdSeconds == 0)
     }
 
     @Test("a reply reads back as it was sent")

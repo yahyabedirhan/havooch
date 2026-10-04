@@ -22,7 +22,6 @@ struct ControlServerTests {
         func state() -> StateReport {
             StateReport(
                 app: .init(version: "0.1.0", variant: "proto-2", demo: true, support: "/demo"),
-                lease: nil,
                 video: hasVideo ? .init(path: "/videos/sample.mp4", title: "sample", duration: 21.233) : nil,
                 player: .init(time: time, playing: playing)
             )
@@ -57,8 +56,8 @@ struct ControlServerTests {
     final class FakeScreenshotter: Screenshotting {
         var calls: [String] = []
 
-        func capture(to file: URL, appearance: ControlRequest.Appearance?) async throws(AppRefusal) {
-            calls.append("\(file.path) \(appearance?.rawValue ?? "as is")")
+        func capture(to file: URL, appearance: ControlRequest.Appearance?, withBanner: Bool) async throws(AppRefusal) {
+            calls.append("\(file.path) \(appearance?.rawValue ?? "as is")" + (withBanner ? " with banner" : ""))
         }
     }
 
@@ -145,6 +144,7 @@ struct ControlServerTests {
             \(AppIdentity.appName) 0.1.0, demo data in /demo
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
+            lease: free
 
             """)
         #expect(await answer(.appStatus).reply.output == """
@@ -176,7 +176,8 @@ struct ControlServerTests {
     @Test("app quit answers first, and says the app quits")
     func quit() async {
         let answer = await answer(.appQuit)
-        #expect(answer.reply == .done("\(AppIdentity.appName) quit\n"))
+        #expect(answer.reply.ok)
+        #expect(answer.reply.output == "\(AppIdentity.appName) quit\n")
         #expect(answer.quits)
     }
 

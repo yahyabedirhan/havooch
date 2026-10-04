@@ -9,6 +9,12 @@ public enum ControlRequest: Equatable, Sendable {
     case appStatus
     /// `video-review state`: everything the app shows.
     case state
+    /// `video-review control take [--wait <seconds>]`: hold the lease to
+    /// its cap; while another agent holds it, wait in line up to
+    /// `waitSeconds`, or be refused at once without them.
+    case controlTake(waitSeconds: Int?)
+    /// `video-review control release`: give the lease up.
+    case controlRelease
     /// `video-review app open` while the app runs: its status.
     case appOpen
     /// `video-review app quit`: the app replies, then quits.
@@ -23,10 +29,11 @@ public enum ControlRequest: Equatable, Sendable {
     /// `video-review player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
-    /// `video-review screenshot <abs.png> [--appearance light|dark]`: the
-    /// app's window written as a PNG at the absolute `path`, in `appearance`
-    /// when it's set, as the Mac shows it otherwise.
-    case screenshot(path: String, appearance: Appearance?)
+    /// `video-review screenshot <abs.png> [--appearance light|dark]
+    /// [--with-banner]`: the app's window written as a PNG at the absolute
+    /// `path`, in `appearance` when it's set, as the Mac shows it otherwise.
+    /// The lease banner is left out unless `withBanner` asks for it.
+    case screenshot(path: String, appearance: Appearance?, withBanner: Bool = false)
 
     /// The appearance `screenshot` draws in.
     public enum Appearance: String, Equatable, Sendable, CaseIterable {
@@ -47,14 +54,23 @@ public enum ControlRequest: Equatable, Sendable {
     /// requests take the lease without a table.
     public var role: Role {
         switch self {
-        case .appStatus, .state: .free
+        case .appStatus, .state, .controlTake, .controlRelease: .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         }
     }
 
     /// How long the app may keep the connection before it answers, past the
-    /// client's usual timeout; nil for no limit. No request waits yet.
-    public var holdSeconds: TimeInterval? { 0 }
+    /// client's usual timeout; nil for no limit. A `take` waits in line for
+    /// its `waitSeconds`.
+    public var holdSeconds: TimeInterval? {
+        switch self {
+        case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
+        default: 0
+        }
+    }
+
+    /// The longest a `control take --wait` may wait in line, in seconds.
+    public static let longestWait = 3600
 
     /// The most bytes the app reads of one request.
     public static let largestMessage = 1 << 20

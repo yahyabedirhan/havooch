@@ -1,4 +1,5 @@
 import Foundation
+import ReviewLease
 import ReviewWire
 
 /// What the app shows, for `state` and `app status`: as one JSON object
@@ -26,13 +27,14 @@ struct StateReport: Encodable, Equatable {
     }
 
     var app: App
-    /// Who drives the app; `null` while nobody does.
-    var lease: LeaseTerm?
+    /// Who drives the app; `null` while nobody does. The control server,
+    /// which owns the lease, fills it in.
+    var lease: ControlLease.Status?
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
 
-    init(app: App, lease: LeaseTerm?, video: Video?, player: Player) {
+    init(app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player) {
         self.app = app
         self.lease = lease
         self.video = video.map { Video(path: $0.path, title: $0.title, duration: Self.milliseconds($0.duration)) }
@@ -62,6 +64,7 @@ struct StateReport: Encodable, Equatable {
         \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
+        \(leaseLine)
 
         """
     }
@@ -82,9 +85,17 @@ struct StateReport: Encodable, Equatable {
         running: \(AppIdentity.appName) \(app.version)
         data: \(app.demo ? "demo" : "yours"), \(app.support)
         video: \(video?.path ?? "none")
-        lease: \(lease.map { "held by \($0.holder.name) in \($0.holder.place)" } ?? "free")
+        \(leaseLine)
 
         """
+    }
+
+    /// `lease: held by Claude Code in /work, 48s left, 0 waiting`, or
+    /// `lease: free`.
+    private var leaseLine: String {
+        "lease: " + (lease.map {
+            "held by \($0.holder.name) in \($0.holder.place), \($0.secondsLeft)s left, \($0.waiting) waiting"
+        } ?? "free")
     }
 
     private struct Status: Encodable {
@@ -94,7 +105,7 @@ struct StateReport: Encodable, Equatable {
         var demo: Bool
         var support: String
         var video: String?
-        var lease: LeaseTerm?
+        var lease: ControlLease.Status?
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)

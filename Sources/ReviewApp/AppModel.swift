@@ -71,7 +71,6 @@ final class AppModel: AppControlling {
     func state() -> StateReport {
         StateReport(
             app: .init(version: Version.app, variant: AppIdentity.variant, demo: isDemo, support: support.path),
-            lease: nil,
             video: video.map { .init(path: $0.url.path, title: $0.title, duration: engine.duration) },
             player: .init(time: engine.time, playing: engine.isPlaying)
         )

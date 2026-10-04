@@ -93,7 +93,7 @@ public enum VideoReviewCLI {
         }
         let invocation: Invocation
         do throws(UsageError) {
-            invocation = try command.parse(try Arguments(rest, valued: command.valuedOptions), environment)
+            invocation = try command.parse(try Arguments(rest, valued: command.valuedOptions, flags: command.flags), environment)
         } catch {
             return .usage("video-review \(command.name): \(error.message)\nusage: video-review \(command.synopsis)")
         }
