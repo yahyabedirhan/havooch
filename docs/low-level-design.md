@@ -16,6 +16,7 @@ Read `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md` first. Agent
 | change a comment's states or the batch payload | `Sources/VRReview/` |
 | change what is kept on disk | `Sources/VRStore/Library.swift` |
 | change where the transcript comes from | `Sources/VRTranscript/TranscriptSources.swift` |
+| change what a listening agent does with a batch | `.agents/skills/video-review-mate/SKILL.md` and [The listener skill](#the-listener-skill) |
 | change the look | `Sources/VRApp/UI/` and [UX choices](#ux-choices-of-this-prototype) |
 | rename the build (drop `proto-3`) | `Sources/VRWire/AppIdentity.swift`, one constant |
 
@@ -211,7 +212,8 @@ Packaging/
 scripts/
   acceptance.sh                     the v1 acceptance scenario through the installed CLI (ticket #13)
 .agents/skills/video-review-mate/
-  SKILL.md                          the listener skill (ticket #12)
+  SKILL.md                          the listener skill (ticket #12): the procedure
+  mate.sh                           the CLI under one listener key; `listen` is wait, then ack
 Sources/
   VRLease/
     Holder.swift                    who sends a request; Holder.find from the environment and process table
@@ -1099,6 +1101,32 @@ restoring = Task: for each video with a parcel, VideoFile.read(its last path) �
 - No video is open after a launch. A batch may go to a `wait` before its video is opened, so the model reads the transcripts of the videos with a parcel in a background task, and `ListenerDesk.wait` awaits it (`ReviewModel.restored()`) before it takes a batch. A video whose file moved or changed gets no transcript until it is opened again. The images are found by `findImages` and the context is read from the review's last path, as for any video that is not the open one.
 - What a restart keeps: comments, statuses, batches, threads, the note, an open question (its answer box shows again), an answer no `ask` heard (`unheard`, owed to the next `ask` on that comment), pending batches. What it does not keep: drafts, the listener and its presence, the context memory, notices, the lease (but for a relaunch's handover), the player's time and the open video.
 
+### The listener skill
+
+`.agents/skills/video-review-mate/` is what a Claude Code session in the target repo runs to be the listener. It is no Swift module and links nothing: it reaches the app through the CLI contract only (`wait`, `ack`, `status`, `reply`, `ask`, and `state --json` to read threads). `SKILL.md` is the procedure; `mate.sh` is the one way the skill runs the CLI.
+
+```text
+mate.sh <key> listen         wait (no timeout) → print the payload → ack <batch id>     one background command
+mate.sh <key> <arguments>    video-review <arguments>, output and exit code unchanged
+
+start:      key = mate-<8 hex>, one per run; `listen` in the background
+a batch:    `listen` again in the background, first                  presence stays, the next batch is caught
+            read context (when not null), each keyframe, crop and transcript
+            state --json → the comments' threads                     a thread with messages: redelivered
+            per comment: intent → status working → the work → one commit when files changed
+                         → reply (with the SHA) → status done | reply (the reason) → status failed
+            every comment final → reply <batch-id> (the summary)
+a question: ask --wait 60 → exit 3 → the same ask in the background, --wait 86400; on to other comments
+```
+
+- **The key.** `mate.sh` exports its first argument as `VIDEO_REVIEW_CONTROL_KEY` for every command, so a run is one listener session whatever shell each command runs in, and a new run is a new one: `Outbox.arrive` gives it the batches the last session left and the context again.
+- **The CLI's place.** `$VIDEO_REVIEW_CLI` when set, else `/Applications/Video Review.app/Contents/Helpers/video-review`; never `PATH`. This build's own CLI is in `Video Review (proto-3).app`, so here the variable (or a symlink it names) is set.
+- **The acknowledgement is in `listen`.** The session hears of a batch only when its background command ends, and reading the output and writing an `ack` takes it some seconds each time. `listen` acknowledges in the same process as the `wait`, so the comments turn `acknowledged` within a second of the send. `mate.sh` reads the batch's id with `/usr/bin/plutil`, which every Mac that runs the app has; no `jq`, no Python.
+- **`wait` without a timeout.** The background command ends only with a batch (exit 0) or with the app (exit 1), so exit 3 is an `ask`'s alone.
+- **Threads after a requeue.** The payload carries no thread history, so the skill reads `state --json` once per batch and goes on from each comment's thread. `state` lists the open video's comments only; a comment it doesn't list is taken as new.
+- **A redelivered comment the session finished** gets its status set again, which `setStatus` answers with no change, and no second piece of work.
+- **An unanswered question never fails a comment.** The long `ask` in the background ends with the answer, whenever it comes; the same words wait on the same question (`ReviewSession.ask`).
+
 ### Adding a CLI command
 
 1. Add the case to `ControlRequest`, its role, and its wire name and fields in `ControlMessage` (`VRWire`).
@@ -1194,7 +1222,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | #9 | `ContextSidecar`, the note, `ContextPopover`, `context set`, `Outbox.context` |
 | #10 | `ThreadMessage`, the threads and their rules in `ReviewSession`, `ack`, `status`, `reply`, `ask` (`ListenerCommand`), `thread answer` (`ThreadCommand`), the parked `ask` in `ListenerDesk`, a batch finishing (`Outbox.finish`), `thread` and `notices` in `state`, `Notice`, `ThreadView` and `AnswerBox` in `CommentCard`, `BatchCard`, `NoticeToast`, the question on a pin |
 | #11 | The rest of `Library`: `review.json`, `outbox.json`, the ids in `index.json`, `removeImages`; `ReviewSession.kept`, `Outbox.restart`; in `ReviewModel`: reviews read and saved through `Library`, the outbox saved on each change, reload on open and at launch (`restoreOutbox`, `restored`, `findImages`) |
-| #12 | `.agents/skills/video-review-mate/SKILL.md` |
+| #12 | `.agents/skills/video-review-mate/`: `SKILL.md` and `mate.sh` |
 | #13 | `scripts/acceptance.sh`, `assets/screenshots/` |
 
 Before #11, `Library` already existed (#5 needs image paths and ids): it kept the comment and batch counters and the keyframes on disk, and `ReviewModel` kept the sessions and the outbox in memory for the run. #11 moved the sessions and the outbox's parcels into `Library` and added reload on open and at launch. Tickets may move a file's first appearance earlier, never its owner.
