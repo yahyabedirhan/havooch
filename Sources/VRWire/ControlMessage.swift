@@ -47,6 +47,12 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "player.pause")
         case .playerSeek(let seconds):
             wire = Wire(command: "player.seek", time: seconds)
+        case .commentAdd(let text, let at):
+            wire = Wire(command: "comment.add", time: at, text: text)
+        case .commentEdit(let id, let text):
+            wire = Wire(command: "comment.edit", id: id, text: text)
+        case .commentDelete(let id):
+            wire = Wire(command: "comment.delete", id: id)
         case .screenshot(let path, let appearance):
             wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue)
         }
@@ -100,6 +106,15 @@ public struct ControlMessage: Equatable, Sendable {
                 throw .unreadable("the control command `player.seek` needs a `time` of 0 or more, not \(time)")
             }
             return .playerSeek(seconds: time)
+        case "comment.add":
+            if let time = wire.time, !time.isFinite || time < 0 {
+                throw .unreadable("the control command `comment.add` needs a `time` of 0 or more, not \(time)")
+            }
+            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.time)
+        case "comment.edit":
+            return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "comment.delete":
+            return .commentDelete(id: try field(wire.id, "id", of: wire))
         case "screenshot":
             let path = try absolute(wire)
             var appearance: ControlRequest.Appearance?
@@ -112,6 +127,14 @@ public struct ControlMessage: Equatable, Sendable {
             return .screenshot(path: path, appearance: appearance)
         default: throw .unknownCommand(wire.command)
         }
+    }
+
+    /// A field the command can't do without.
+    private static func field(_ value: String?, _ name: String, of wire: Wire) throws(ControlProtocolError) -> String {
+        guard let value else {
+            throw .unreadable("the control command `\(wire.command)` needs its `\(name)`")
+        }
+        return value
     }
 
     /// The command's `path`, which must be absolute: the app runs in another
@@ -138,6 +161,8 @@ public struct ControlMessage: Equatable, Sendable {
         var time: Double?
         var appearance: String?
         var waitSeconds: Int?
+        var id: String?
+        var text: String?
     }
 }
 

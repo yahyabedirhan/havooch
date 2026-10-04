@@ -32,6 +32,13 @@ public enum ControlRequest: Equatable, Sendable {
     case playerPause
     /// `player seek <time>`: the player at `seconds`, exactly.
     case playerSeek(seconds: Double)
+    /// `comment add <text> [--at <time>]`: a comment queued at `at`, or at
+    /// the player's time, with the frame there as its keyframe.
+    case commentAdd(text: String, at: Double?)
+    /// `comment edit <id> <text>`: a queued comment's text replaced.
+    case commentEdit(id: String, text: String)
+    /// `comment delete <id>`: a queued comment taken out.
+    case commentDelete(id: String)
     /// `screenshot <abs.png> [--appearance light|dark]`: the app's window
     /// written as a PNG at `path`, absolute since the app runs in another
     /// folder; in `appearance` when it's set, as the Mac shows it otherwise.
@@ -74,6 +81,8 @@ public enum ControlRequest: Equatable, Sendable {
         case .appStatus, .state, .controlTake, .controlRelease:
             .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot:
+            .operator
+        case .commentAdd, .commentEdit, .commentDelete:
             .operator
         }
     }

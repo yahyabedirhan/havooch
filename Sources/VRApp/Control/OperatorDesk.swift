@@ -43,6 +43,34 @@ struct OperatorDesk {
         }
     }
 
+    func addComment(text: String, at seconds: Double?, json: Bool) async -> ControlReply {
+        await answer { () async throws(ModelRefusal) in
+            let comment = try await model.addComment(text: text, at: seconds)
+            return json
+                ? JSONLine.string(CommentReport(comment, keyframe: model.keyframeURL(for: comment.id)))
+                : "\(comment.id) at \(TimeText.exact(comment.time))\n"
+        }
+    }
+
+    func editComment(_ id: String, text: String, json: Bool) async -> ControlReply {
+        await answer { () throws(ModelRefusal) in
+            try model.editComment(id, text: text)
+            return json ? JSONLine.string(Named(id: id)) : "edited \(id)\n"
+        }
+    }
+
+    func deleteComment(_ id: String, json: Bool) async -> ControlReply {
+        await answer { () throws(ModelRefusal) in
+            try model.deleteComment(id)
+            return json ? JSONLine.string(Named(id: id)) : "deleted \(id)\n"
+        }
+    }
+
+    /// `{id}`: what a change to one comment prints with `--json`.
+    private struct Named: Encodable {
+        var id: String
+    }
+
     func screenshot(to path: String, appearance: ControlRequest.Appearance?, json: Bool) async -> ControlReply {
         struct Saved: Encodable { var path: String }
         let output = json ? JSONLine.string(Saved(path: path)) : path + "\n"

@@ -6,7 +6,7 @@ import VRWire
 /// What the app shows, as `state` and `app status` report it: as lines for a
 /// person, or as one JSON object. Built from the model and the lease at the
 /// moment of asking. Each later ticket adds its own keys (the listener, the
-/// context, the transcript, the queue, the comments, the batches).
+/// context, the transcript, the batches).
 struct StateReport: Equatable {
     struct Player: Encodable, Equatable {
         /// Where the player is, in seconds, to the millisecond.
@@ -21,6 +21,13 @@ struct StateReport: Equatable {
     /// The open video, or nil when there's none.
     var video: VideoInfo?
     var player: Player
+    /// Every comment of the open video, drafts included, in time order.
+    var comments: [CommentReport]
+
+    /// The ids of the comments waiting to be sent, in time order.
+    var queue: [String] {
+        comments.filter { $0.state == .queued }.map(\.id)
+    }
 
     @MainActor
     init(model: ReviewModel, lease: LeaseStatus?) {
@@ -28,6 +35,7 @@ struct StateReport: Equatable {
         self.lease = lease
         video = model.video?.info
         player = Player(time: TimeText.rounded(model.time), playing: model.isPlaying)
+        comments = (model.session?.comments ?? []).map { CommentReport($0, keyframe: model.keyframeURL(for: $0.id)) }
     }
 
     // MARK: - state
@@ -39,10 +47,13 @@ struct StateReport: Equatable {
         JSONLine.string(State(report: self))
     }
 
-    /// `state` as lines:
+    /// `state` as lines; the comments only when there are some:
     ///
     ///     video: sample (0:21.248) /Users/me/sample.mp4
     ///     player: paused at 0:10.000
+    ///     comments: 2, 1 queued
+    ///       c1 queued at 0:10.000: too fast
+    ///       c2 draft at 0:12.000:
     ///     lease: free
     var stateText: String {
         var lines: [String] = []
@@ -51,6 +62,13 @@ struct StateReport: Equatable {
             lines.append("player: \(player.playing ? "playing" : "paused") at \(TimeText.exact(player.time))")
         } else {
             lines.append("video: none")
+        }
+        if !comments.isEmpty {
+            lines.append("comments: \(comments.count), \(queue.count) queued")
+            lines += comments.map { comment in
+                let text = comment.text.split(whereSeparator: \.isNewline).joined(separator: " ")
+                return "  \(comment.id) \(comment.state.rawValue) at \(TimeText.exact(comment.time)): \(text)"
+            }
         }
         lines.append(leaseLine)
         if let demo { lines.append("demo: \(demo)") }
@@ -93,7 +111,7 @@ struct StateReport: Equatable {
     private struct State: Encodable {
         var report: StateReport
 
-        enum Keys: String, CodingKey { case app, lease, video, player, time }
+        enum Keys: String, CodingKey { case app, lease, video, player, time, queue, comments }
         enum AppKeys: String, CodingKey { case version, variant, demo }
 
         func encode(to encoder: any Encoder) throws {
@@ -106,6 +124,8 @@ struct StateReport: Equatable {
             try container.encode(report.video, forKey: .video)
             try container.encode(report.player, forKey: .player)
             try container.encode(report.player.time, forKey: .time)
+            try container.encode(report.queue, forKey: .queue)
+            try container.encode(report.comments, forKey: .comments)
         }
     }
 
@@ -125,6 +145,37 @@ struct StateReport: Equatable {
             try container.encode(report.lease, forKey: .lease)
             try container.encode(report.video, forKey: .video)
         }
+    }
+}
+
+/// One comment as `state` and `comment add` report it: `{id, time, text,
+/// state, keyframePath}`. `keyframePath` is the keyframe's absolute path, or
+/// `null` while the file isn't on disk.
+struct CommentReport: Encodable, Equatable {
+    var id: String
+    var time: Double
+    var text: String
+    var state: CommentState
+    var keyframePath: String?
+
+    init(_ comment: Comment, keyframe: URL?) {
+        id = comment.id
+        time = comment.time
+        text = comment.text
+        state = comment.state
+        keyframePath = keyframe?.path
+    }
+
+    enum Keys: String, CodingKey { case id, time, text, state, keyframePath }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: Keys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(time, forKey: .time)
+        try container.encode(text, forKey: .text)
+        try container.encode(state, forKey: .state)
+        // Encoded also when nil: `null`, never left out.
+        try container.encode(keyframePath, forKey: .keyframePath)
     }
 }
 

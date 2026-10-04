@@ -133,6 +133,12 @@ final class ControlServer {
             return Answer(reply: await desk.pause(json: json))
         case .playerSeek(let seconds):
             return Answer(reply: await desk.seek(to: seconds, json: json))
+        case .commentAdd(let text, let seconds):
+            return Answer(reply: await desk.addComment(text: text, at: seconds, json: json))
+        case .commentEdit(let id, let text):
+            return Answer(reply: await desk.editComment(id, text: text, json: json))
+        case .commentDelete(let id):
+            return Answer(reply: await desk.deleteComment(id, json: json))
         case .screenshot(let path, let appearance):
             return Answer(reply: await desk.screenshot(to: path, appearance: appearance, json: json))
         }

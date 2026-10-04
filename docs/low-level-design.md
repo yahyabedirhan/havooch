@@ -184,7 +184,7 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
               VRApp ──▶ VRReview, VRTranscript
 ```
 
-`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the first build ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo` only), `VRStore` (`ContentHash` only, no dependencies yet) and `VRApp`; `VRTranscript` is not there yet.
+`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the comment ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `ReviewSession`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; no dependencies yet, since `Library` does not keep sessions before the persistence ticket) and `VRApp`; `VRTranscript` is not there yet.
 
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
@@ -198,7 +198,7 @@ Test targets, all run by `make test` without the app:
 | `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
 | `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, a parked `wait`; the command against the server over a real socket |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` against `fixtures/sample/sample.mp4`; the key routing |
 
 ### Folder tree
 
@@ -301,7 +301,7 @@ Sources/
       SendBar.swift                 queued count, Send, the presence chip
       LeaseBanner.swift             who controls the app, time left, Stop
       ContextPopover.swift          the sidecar's text and the editable note
-      Shortcuts.swift               the player's keys, given up in a panel, under a sheet and while a text view has focus
+      Shortcuts.swift               the player's keys (PlayerKey) and where the focus is (KeyFocus): given up in a panel, under a sheet and while a text view has focus
       Theme.swift                   state colours and glyphs, spacing, fonts
 Tests/
   VRLeaseTests/  VRWireTests/  VRCommandTests/  VRReviewTests/
@@ -402,7 +402,7 @@ public struct ControlClient { var socket: URL; var holder: Holder; var transport
     public func send(_ request: ControlRequest, json: Bool) -> Result<ControlReply, Failure> }
 ```
 
-Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `wait`; `isLongPoll` arrives with the listener's `wait`. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `wait`.
+Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `wait`; the comment ticket adds the three `comment` cases, `commentAdd` as `(text:at:)` until the region ticket gives it `region`; `isLongPoll` arrives with the listener's `wait`. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `wait`. On the wire, `comment.add` carries `text` and, for `--at`, `time`; `comment.edit` carries `id` and `text`; `comment.delete` carries `id`.
 
 `ControlMessage.decode` checks the version before it reads the holder or the command, so a request of another version is refused by its version whatever else it holds. A path on the wire (`player.open`, `screenshot`) must be absolute.
 
@@ -479,6 +479,8 @@ public struct Outbox: Codable, Equatable {
 public struct BatchPayload: Codable { … }     // exactly the spec's shape, see "The batch payload"
 ```
 
+Each ticket adds its own fields and methods. After the comment ticket, `Comment` is `id`, `time`, `text` and `state`, and `CommentState` has all seven states with `canMove(to:)`, the whole table of allowed moves. `ReviewSession` has `video`, `comments`, `queue`, `comment(_:)`, `draft(id:time:)`, `commit`, `discard`, `edit`, `delete` and `written(_:)`, the rule for a comment's text: trimmed, and not empty. `ReviewRefusal` is one line, `reason`. The region, the batches, the threads and the note arrive with their tickets.
+
 **VRTranscript**
 
 ```swift
@@ -513,6 +515,8 @@ public enum ContentHash { static func of(_ file: URL) throws -> String }
 public struct TranscriptCache { func load(_ hash: String) -> [TranscriptLine]?; func save(_ lines: [TranscriptLine], for hash: String) throws }
 ```
 
+After the comment ticket, `Library` has `init(root:)`, `nextCommentID()` and `keyframeURL(_:comment:)`, and `index.json` holds the next comment number only. An id that was given out is never given again, also when its draft was cancelled or its comment deleted, so ids may have gaps.
+
 **VRApp**
 
 ```swift
@@ -530,15 +534,19 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
     private(set) var session: ReviewSession?        // the open video's
     private(set) var outbox: Outbox
     private(set) var selection: String?             // the selected comment
+    private(set) var composing: String?             // the draft the comment box is open on
+    private(set) var keyframes: Set<String>         // the comments whose keyframe is on disk
     private(set) var notices: [Notice]
 
     // what a person and an operator can do
     func open(_ url: URL) async throws(ModelRefusal)
     func play() async throws(ModelRefusal); func pause() throws(ModelRefusal); func seek(to: Double) async throws(ModelRefusal)
-    func beginComment(at: Double?, region: Region?) async throws(ModelRefusal) -> String
+    func beginComment(at: Double?, region: Region?) throws(ModelRefusal) -> String
     func commitComment(_ id: String, text: String) throws(ModelRefusal)
+    func discardComment(_ id: String) throws(ModelRefusal)
     func addComment(text: String, at: Double?, region: Region?) async throws(ModelRefusal) -> Comment
     func editComment(_ id: String, text: String) throws(ModelRefusal); func deleteComment(_ id: String) throws(ModelRefusal)
+    func showComment(_ id: String) async throws(ModelRefusal)     // a click on a marker or a card: pause, seek, select
     func sendBatch() async throws(ModelRefusal) -> Batch
     func answer(_ commentID: String, text: String) throws(ModelRefusal)
     func setNote(_ text: String) throws(ModelRefusal)
@@ -554,7 +562,11 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
 
 `Playing` and `FrameGrabbing` are the only interfaces in the app with a second implementation (the test fakes). `Screenshotter` is concrete; tests do not capture windows, so `OperatorDesk` takes the capture as a closure and the tests pass their own. `OperatorDesk` and `ListenerDesk` are concrete and tested through `ControlServer.reply(to:)`.
 
-The video's length has one source, `VideoFile.info.duration` (the asset's, rounded to the millisecond), so `Playing` has no `duration`. `play` is `async` because playing at the end first seeks to the start. Beside the calls above, `ReviewModel` has a person's gestures (`openByPerson`, `togglePlay`, `scrub`, `skip`, `step`): the same calls with a time kept inside the video instead of refused, and a failed open kept in `openFailure` for the window's alert.
+The video's length has one source, `VideoFile.info.duration` (the asset's, rounded to the millisecond), so `Playing` has no `duration`. `play` is `async` because playing at the end first seeks to the start. Beside the calls above, `ReviewModel` has a person's gestures (`openByPerson`, `togglePlay`, `scrub`, `skip`, `step`, `compose`, `commitComposer`, `cancelComposer`, `showByPerson`): the same calls with a time kept inside the video instead of refused, and a failed open kept in `openFailure` for the window's alert.
+
+`beginComment` is not `async`: it makes the draft and starts the keyframe's write as a task, and `addComment` waits for that task. Until the region ticket, `beginComment` and `addComment` take no `region`, and `FrameGrabbing` has `writeKeyframe` only. `comments` is what the views show: the open video's comments without the drafts. `keyframeURL(for:)` is a comment's keyframe file, or nil while it is not on disk.
+
+Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over.
 
 ### The CLI contract as this build answers it
 
@@ -586,6 +598,8 @@ The commands are the spec's, unchanged. This table fixes what the spec left open
 Exit codes: 0 done; 1 refused, app not running, or no reply; 2 usage; 3 a `wait` or `ask` whose time ran out (nothing on standard output). The reply shape stays `{ok, output, error, lease?}`: a long poll that ran out comes back `ok: true` with empty `output` and a note in `error`, and `ListenerCommand` turns exactly that into exit 3.
 
 `control take --wait` takes whole seconds from 0 to 3600. A take refused or waited out exits 1, like every refusal. `control release` exits 0 whoever sends it. The holder key has no flag: `VIDEO_REVIEW_CONTROL_KEY` is the one way to name it (Shipyard's `--key` is not in the contract).
+
+The comment object of `comment add --json` is the one in `state --json`'s `comments`. A comment's text is one argument; a second word is refused with exit 2 and the advice to quote it. An option starts with two dashes, so a text may start with one (`"-3 dB would be better"`). Until the region ticket, `--region` is an unknown option.
 
 Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also `h:mm:ss`. A time outside the video is refused. `screenshot` needs an absolute `.png` path whose folder exists. `player open` takes a relative path against the folder the command runs in.
 
@@ -619,9 +633,9 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
 
 The player's time is in two places with the same value: `player.time`, and a top-level `time` for a script that reads one field. Both are rounded to the millisecond.
 
-Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`.
+Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; `region` and `cropPath`, `batchId` and `thread` arrive with their tickets.
 
-`lease`, `video`, `demo` and `region` are `null` when there is none, never left out. `comments` is in time order and holds every comment of the open video; `queue` holds the ids still `queued`, in time order. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
+`lease`, `video`, `demo`, `region` and `keyframePath` are `null` when there is none, never left out. `comments` is in time order and holds every comment of the open video, a draft included (state `draft`, empty text) while the comment box is open; `queue` holds the ids still `queued`, in time order. Both are `[]` with no video. `keyframePath` is `null` until the PNG is on disk. `state` as lines lists the comments only when there are some: `comments: 2, 1 queued`, then one line per comment, `  c1 queued at 0:10.000: <text>`. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
 
 ### The batch payload
 
@@ -777,8 +791,14 @@ acknowledge:   sent → acknowledged                 (every comment of the batch
 setStatus(s):  s ∈ {working, done, failed}; from sent, acknowledged or working; rank must not go down
                done and failed are final
 requeue:       acknowledged, working → sent        (the only move backward)
-edit, delete:  queued only                         refused: "c1 was sent in b1; it can't be edited"
+edit, delete:  queued only                         refused: "c1 was sent; it can't be edited"
+                                                   a draft: "c1 is still being written; it can't be edited"
+commit, edit:  the text is trimmed                 refused when empty: "a comment needs its text"
+discard:       a draft only                        removes it; its id is not used again
+any of them:   an id the video doesn't have        refused: "there's no comment c9"
 ```
+
+`CommentState.canMove(to:)` is the table of these moves, and `ReviewSession` asks it before it changes a comment's state.
 
 A status may skip forward (`acknowledged → done`), because the acceptance scenario sets comments to `done` straight after `ack`.
 
@@ -853,6 +873,11 @@ writeCrop(keyframe, region, to url): region.pixelRect(in: keyframe size), rounde
 
 Both come from the asset, never from the screen. So a comment from the UI and one from the CLI at the same time and region give the same pixels, at any window size. `beginComment` starts the grab when the composer opens; `sendBatch` and `comment add` wait for it.
 
+- A comment's time is the player's time (or `--at`) rounded to the millisecond, and the keyframe is the frame the video shows at that time: the last frame that starts at or before it.
+- At the video's very end no frame starts exactly there, and the zero-tolerance read fails. The grabber then reads again with one second of tolerance before the time, which gives the last frame.
+- A draft that is cancelled, and a comment that is deleted, lose their PNG. A write still running when its comment is dropped removes its file when it lands.
+- `comment add` whose keyframe cannot be written is refused and leaves no comment. A comment from the window whose keyframe cannot be written stays queued with `keyframePath: null`; the batch ticket decides what `sendBatch` does with it.
+
 **The region in the view** (`RegionOverlay.swift`): the overlay computes the video rectangle inside the stage (aspect fit) and converts between view points and normalized frame coordinates through it. A stored region is redrawn from its normalized values on every layout, so it stays correct when the window size changes. A drag that starts or ends outside the video rectangle is clamped to it. A rectangle under 8 points on a side is ignored as a click.
 
 **The transcript** (`TranscriptService.swift`, `VRTranscript`)
@@ -926,7 +951,11 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | In the comment box, Enter queues the comment, Shift+Enter adds a line, Escape cancels. | Fast for one-line notes. Escape also removes the rectangle. |
 | Cmd+Enter sends from anywhere, also from inside the comment box (it queues the open comment first). | One keystroke delivers the feedback, as the spec asks, with no need to leave the box. |
 | Player keys are ignored while a text view has focus. | Typing "k" in a comment must not pause the video. |
+| The transport bar has a comment button beside the video's length. | The same action as C, for the mouse. |
 | Markers are pins above the scrubber track. A click seeks, pauses and selects the comment's card. | Pins do not hide the played part of the track. The card and the frame show together. |
+| A click on a card does what a click on its marker does. | One way to see a comment's moment, from either place. |
+| A draft has no marker and no card; the open comment box stands for it. | A marker is feedback that exists. The draft still shows in `state --json`, so an operator sees the box is open. |
+| A queued card has an edit and a delete button. Edit turns the card's text into a text box with Save and Cancel. Delete asks nothing. | The fix happens where the mistake shows. A queued comment is cheap to write again. |
 | Each state has a colour and a glyph: queued (grey ring), sent (blue arrow), acknowledged (blue check), working (orange dots, pulsing), done (green check), failed (red cross). | Status reads at a glance and does not depend on colour alone. |
 | A region comment's rectangle shows on the frame only while its card is selected or the playhead is within 0.5 s of it. | The frame stays clean while watching. |
 | The sidebar lists comments in time order, with the keyframe (or crop) as a thumbnail. | Time order matches the timeline. The thumbnail shows what the comment is about. |
@@ -949,7 +978,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 |---|---|
 | #3 | `Package.swift`, `Makefile`, `Packaging/`, `VRWire`, `VRCommand` (app, state, player, screenshot), `VRLease/Holder` and `ProcessTable`, a pass-through `ControlLease` and `LeaseStatus`, `VRReview/VideoInfo`, `VRStore/ContentHash`, `VRApp` shell: `AppServices`, `ReviewModel` (the player's part), `ControlServer`, `SocketListener`, `OperatorDesk`, `StateReport`, `Screenshotter`, `Player/` without `FrameGrabber`, `TimeText`, `MainWindow`, `EmptyState`, `Stage`, `TransportBar`, `Timeline` (the scrubber), `Shortcuts` (the player's keys), `Theme` |
 | #4 | `ControlLease`, `control take` and `release` (`ControlCommand`), the gate with its timer and line of takes, the lease's handover on a relaunch, `LeaseIndicator`, `LeaseBanner` |
-| #5 | `VRReview` (comments, states, `ReviewSession`), `FrameGrabber`, `Composer`, `Timeline` markers, `Sidebar`, `comment` commands; `Library` paths for frames |
+| #5 | `VRReview` (`Comment`, `CommentState`, `ReviewSession`), `FrameGrabber` (keyframes), `Composer`, `Timeline` markers, `Sidebar`, `CommentCard`, the C key and `KeyFocus`, `comment` commands, `queue` and `comments` in `state`; `Library` (comment ids, frame paths) and `JSONFile` |
 | #6 | `Region`, `RegionOverlay`, crops, `--region` |
 | #7 | `Batch`, `Outbox`, `BatchPayload`, `ListenerDesk`, long polls, `wait`, `batch send`, `SendBar`, presence |
 | #8 | `VRTranscript`, `TranscriptService`, `SpeechSource`, `TranscriptCache` |
@@ -959,4 +988,4 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | #12 | `.agents/skills/video-review-mate/SKILL.md` |
 | #13 | `scripts/acceptance.sh`, `assets/screenshots/` |
 
-Before #11, `Library` already exists (#5 needs image paths and ids) and keeps sessions in its folder; #11 makes reload on launch and the content hash complete. Tickets may move a file's first appearance earlier, never its owner.
+Before #11, `Library` already exists (#5 needs image paths and ids): it keeps the comment counter and the keyframes on disk, and `ReviewModel` keeps the sessions in memory for the run. #11 moves the sessions into `Library` and adds reload on launch. Tickets may move a file's first appearance earlier, never its owner.

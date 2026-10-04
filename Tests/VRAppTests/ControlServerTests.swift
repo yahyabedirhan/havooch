@@ -57,7 +57,7 @@ struct Rig {
         demo: URL? = nil,
         lease: ControlLease = ControlLease()
     ) {
-        let model = ReviewModel(player: player, demoFolder: demo)
+        let model = ReviewModel(player: player, frames: FakeFrames(), library: scratchLibrary(), demoFolder: demo)
         self.model = model
         server = ControlServer(
             socket: socket,
@@ -126,7 +126,7 @@ struct Rig {
         let rig = Rig()
         let answer = await rig.send(.state, json: true)
         #expect(answer.reply.output ==
-            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"lease":null,"player":{"playing":false,"time":0},"time":0,"video":null}"# + "\n")
+            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"comments":[],"lease":null,"player":{"playing":false,"time":0},"queue":[],"time":0,"video":null}"# + "\n")
     }
 
     @Test func stateAsLinesNamesTheVideoAndThePlayer() async {

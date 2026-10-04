@@ -22,7 +22,8 @@ let package = Package(
         .testTarget(name: "VRLeaseTests", dependencies: ["VRLease"]),
         .testTarget(name: "VRWireTests", dependencies: ["VRWire", "VRLease"]),
         .testTarget(name: "VRCommandTests", dependencies: ["VRCommand", "VRWire", "VRLease"]),
+        .testTarget(name: "VRReviewTests", dependencies: ["VRReview"]),
         .testTarget(name: "VRStoreTests", dependencies: ["VRStore"]),
-        .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRCommand", "VRWire", "VRLease", "VRReview"]),
+        .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRCommand", "VRWire", "VRLease", "VRReview", "VRStore"]),
     ]
 )

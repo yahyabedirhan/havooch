@@ -4,7 +4,7 @@ import VRWire
 public enum StateCommand {
     public static let entry = CommandTable.Entry(
         name: "state",
-        summary: "what the app shows: the video, the player's time, the lease",
+        summary: "what the app shows: the video, the player's time, the comments, the lease",
         run: run
     )
 
@@ -12,8 +12,10 @@ public enum StateCommand {
         usage: video-review state [--json]
 
           Prints what the app shows: the open video, the player's time and
-          whether it plays, and the lease. With --json, one JSON object: the
-          player's time is at `player.time` and at the top-level `time`.
+          whether it plays, its comments, and the lease. With --json, one
+          JSON object: the player's time is at `player.time` and at the
+          top-level `time`, the comments in time order at `comments`, and
+          the ids of those waiting to be sent at `queue`.
 
         Exits 1 when the app isn't running.
 

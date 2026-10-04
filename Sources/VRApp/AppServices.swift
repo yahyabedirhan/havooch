@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import VRLease
+import VRStore
 import VRWire
 
 /// The composition root: reads the environment, builds every part of the app
@@ -24,7 +25,12 @@ final class AppServices {
             $0.hasPrefix("/") ? URL(fileURLWithPath: $0, isDirectory: true) : nil
         }
         let player = PlayerController()
-        let model = ReviewModel(player: player, demoFolder: demoFolder)
+        let model = ReviewModel(
+            player: player,
+            frames: FrameGrabber(),
+            library: Library(root: support),
+            demoFolder: demoFolder
+        )
         let screenshotter = Screenshotter { NSApp.windows.first { $0.isVisible && $0.canBecomeMain } }
         self.player = player
         self.model = model
