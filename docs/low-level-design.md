@@ -18,6 +18,7 @@ Read `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md` first. Agent
 | change where the transcript comes from | `Sources/VRTranscript/TranscriptSources.swift` |
 | change what a listening agent does with a batch | `.agents/skills/video-review-mate/SKILL.md` and [The listener skill](#the-listener-skill) |
 | change the look | `Sources/VRApp/UI/` and [UX choices](#ux-choices-of-this-prototype) |
+| prove the build end to end | `scripts/acceptance.sh` and [The acceptance scenario](#the-acceptance-scenario) |
 | rename the build (drop `proto-3`) | `Sources/VRWire/AppIdentity.swift`, one constant |
 
 The whole system in one picture:
@@ -206,11 +207,13 @@ Test targets, all run by `make test` without the app:
 
 ```text
 Package.swift                       targets above
-Makefile                            build, test, bundle, install, clean; reads the variant and version
+Makefile                            build, test, bundle, install, acceptance, clean; reads the variant and version
 Packaging/
   Info.plist                        template: __NAME__, __BUNDLE_ID__, __VERSION__; movie document types
 scripts/
   acceptance.sh                     the v1 acceptance scenario through the installed CLI (ticket #13)
+assets/screenshots/
+  v1-acceptance/                    light.png and dark.png: the window at the scenario's end
 .agents/skills/video-review-mate/
   SKILL.md                          the listener skill (ticket #12): the procedure
   mate.sh                           the CLI under one listener key; `listen` is wait, then ack
@@ -321,6 +324,7 @@ Copied from Shipyard's pattern.
 - `make test`: `swift test`, with the Command Line Tools' Testing framework flags and a shared module cache when no Xcode is installed (this Mac has the Command Line Tools only).
 - `make bundle`: release builds of `VideoReview` and `video-review`; `build/$(APP_NAME).app` with `Contents/MacOS/VideoReview`, `Contents/Helpers/video-review` and `Info.plist` filled from the template; ad-hoc `codesign`, the helper first.
 - `make install`: quits only this variant's running copy, replaces the bundle in `/Applications`, and does not open it. Agents open it with `app open`. The copy is found by this bundle's `Contents/MacOS/` path as a fixed string (`ps` piped to `grep -F`), never by process name, since the three prototypes share the name `VideoReview`, and not with `pkill -f`, whose pattern would read the name's parentheses as a group.
+- `make acceptance`: runs `scripts/acceptance.sh` against what is installed, so `make install` comes first. It does not depend on `install`: the script also runs against another build's CLI. See [The acceptance scenario](#the-acceptance-scenario).
 - `Info.plist`: `NSSpeechRecognitionUsageDescription`, `LSMinimumSystemVersion` 26.0, document types for `public.mpeg-4`, `com.apple.quicktime-movie` and `com.apple.m4v-video`. The app is a normal windowed app, not `LSUIElement`.
 
 ### Key types
@@ -1127,6 +1131,40 @@ a question: ask --wait 60 → exit 3 → the same ask in the background, --wait 
 - **A redelivered comment the session finished** gets its status set again, which `setStatus` answers with no change, and no second piece of work.
 - **An unanswered question never fails a comment.** The long `ask` in the background ends with the answer, whenever it comes; the same words wait on the same question (`ReviewSession.ask`).
 
+### The acceptance scenario
+
+`scripts/acceptance.sh` is the spec's v1 acceptance scenario, eight steps, through the CLI only against the installed app in demo mode. It is a shell script and links nothing, like the listener skill. Run it with `make acceptance` after `make install`; it drives the app's window, so it is not part of `make test`.
+
+```text
+make install
+make acceptance                                   this build
+VIDEO_REVIEW_CLI=<another build's CLI> scripts/acceptance.sh
+ACCEPTANCE_SHOTS=<folder> scripts/acceptance.sh   where light.png and dark.png go (default .scratch/acceptance/)
+```
+
+| Step | Commands | Checked |
+|---|---|---|
+| 1 | `app open --demo`, `control take`, `app status` | the app names the demo folder; `state --json` has no comment |
+| 2 | `player open`, `player seek 0:10`, `player pause`, `comment add` | the comment is `queued` at 10 s, the paused time |
+| 3 | `comment add --at 16 --region …` | the comment is `queued` at 16 s with its region |
+| 4 | `batch send` | it gives a batch id |
+| 5 | `wait --timeout 30` under the listener's key | the batch id and send time; the video; both comments by id, time and text; each keyframe a PNG on disk; no region and no crop on the first comment; the region and a crop PNG in the region's shape on the second; transcript lines inside 15 s around each comment, and the line spoken at 10 s; `context` holding every line of the sidecar |
+| 6 | `ack`, `ask` in the background, `thread answer`, then `reply` and `status … done` on both | `ask` exits 0 with the answer; `state --json` has both comments `done`, the question, the answer, the replies and the acknowledgement |
+| 7 | `app quit`, `app status`, `app open --demo`, `control take`, `player open` | the app is gone, then the same `state --json` checks pass again |
+| 8 | `player seek 16`, `screenshot --appearance light` and `dark` | two PNG files that differ |
+
+- **Failing.** Each check prints `  ok    <what it proves>`. The first one that fails prints `FAIL  step <n> (<title>): <why>` on standard error, with the command's own error or the JSON it judged, and the script exits 1. The last line of a good run is `PASS  all 8 steps of the v1 acceptance scenario`.
+- **The CLI's place.** `$VIDEO_REVIEW_CLI` when set, else the helper in this build's installed bundle. The script reads `AppIdentity.variant` with the `sed` line the `Makefile` uses, so dropping the variant renames both. The path is always quoted: it has spaces and parentheses.
+- **The demo folder** is a temporary copy of `fixtures/sample`, made with `mktemp`. A demo's support folder is named by its folder's path, so every run starts from an empty store, and the tracked fixture is never the demo folder. Paths the app gives back are compared by their end, since the app names `/var/…` what the shell may name `/private/var/…`.
+- **The two shells** are two holder keys: every operator command runs with `VIDEO_REVIEW_CONTROL_KEY=acceptance-operator` and every listener command with `acceptance-listener`. The operator takes the lease after each `app open`, since a quit app's lease is gone.
+- **Ids** come from `comment add --json` and `batch send --json` (`.id`), never from a count. In `state --json` a comment is found by its id wherever the state keeps it, and its state is read from `state` or `status`: the spec fixes the commands and the payload, not the state's shape, and the same script has to judge the other prototypes.
+- **The question.** `ask --wait 60` runs in the background; `thread answer` is sent every quarter second until the app takes it (10 s at most), since a comment has no question to answer until the `ask` arrived.
+- **The screenshots** are taken after the restart, with the player paused at the region comment's time: its rectangle shows on the frame (the playhead is on it), both pins are on the timeline, and its card holds the question, the answer and the reply. A `captured by rendering` line of the app is printed as a note.
+- **The end,** also after a failure or Ctrl+C (a trap on `EXIT`): a background `ask` is ended, the app is quit, the lease is released if the quit was refused, and the temporary folder is removed. The demo's support folder (`d-<8 hex>/`) stays, with the images the payload named.
+- **Tools.** `/bin/bash`, `/usr/bin/jq` (part of macOS since 15, and the app needs 26) and `/usr/bin/sips` for the images' sizes.
+
+The two files in `assets/screenshots/v1-acceptance/` are copies of a run's `light.png` and `dark.png`. A run does not write there, so a run never changes a tracked file.
+
 ### Adding a CLI command
 
 1. Add the case to `ControlRequest`, its role, and its wire name and fields in `ControlMessage` (`VRWire`).
@@ -1223,6 +1261,6 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | #10 | `ThreadMessage`, the threads and their rules in `ReviewSession`, `ack`, `status`, `reply`, `ask` (`ListenerCommand`), `thread answer` (`ThreadCommand`), the parked `ask` in `ListenerDesk`, a batch finishing (`Outbox.finish`), `thread` and `notices` in `state`, `Notice`, `ThreadView` and `AnswerBox` in `CommentCard`, `BatchCard`, `NoticeToast`, the question on a pin |
 | #11 | The rest of `Library`: `review.json`, `outbox.json`, the ids in `index.json`, `removeImages`; `ReviewSession.kept`, `Outbox.restart`; in `ReviewModel`: reviews read and saved through `Library`, the outbox saved on each change, reload on open and at launch (`restoreOutbox`, `restored`, `findImages`) |
 | #12 | `.agents/skills/video-review-mate/`: `SKILL.md` and `mate.sh` |
-| #13 | `scripts/acceptance.sh`, `assets/screenshots/` |
+| #13 | `scripts/acceptance.sh`, `make acceptance`, `assets/screenshots/v1-acceptance/` |
 
 Before #11, `Library` already existed (#5 needs image paths and ids): it kept the comment and batch counters and the keyframes on disk, and `ReviewModel` kept the sessions and the outbox in memory for the run. #11 moved the sessions and the outbox's parcels into `Library` and added reload on open and at launch. Tickets may move a file's first appearance earlier, never its owner.

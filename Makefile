@@ -5,6 +5,7 @@
 #   make test       run the tests (swift test); they never drive the Mac
 #   make bundle     build/<name>.app with the video-review CLI in Contents/Helpers, ad-hoc signed
 #   make install    bundle, then replace /Applications/<name>.app; it isn't opened (`video-review app open`)
+#   make acceptance the v1 acceptance scenario through the installed CLI, in demo mode; it drives the app
 #   make clean
 
 APP := VideoReview
@@ -47,7 +48,7 @@ MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install clean
+.PHONY: all build test bundle install acceptance clean
 
 all: build
 
@@ -92,6 +93,11 @@ install: bundle
 	rm -rf "$(INSTALLED)"
 	ditto "$(APP_BUNDLE)" "$(INSTALLED)"
 	@echo "installed $(INSTALLED)"
+
+# Against what is installed: run `make install` first. VIDEO_REVIEW_CLI names
+# another build's CLI.
+acceptance:
+	@scripts/acceptance.sh
 
 clean:
 	rm -rf $(BUILD_DIR) .build
