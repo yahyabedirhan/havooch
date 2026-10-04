@@ -62,6 +62,10 @@ Everything else is derived from it, in the same file and in the `Makefile` (whic
 
 The CLI's name and commands never change. Agents run it from this build's bundle, never from `PATH`. Because the constant is compiled into both binaries, the CLI finds its own app's socket wherever it is copied.
 
+`AppIdentity` also names the two variables a demo run's app is launched with, `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR`. `VIDEO_REVIEW_CONTROL_KEY` is named in `Holder` (`VRLease`), which reads it and cannot import `VRWire`.
+
+`app open` launches the bundle the CLI sits in (`<bundle>/Contents/Helpers/video-review` → `<bundle>`), and looks the app up by bundle id only when the CLI runs from somewhere else. So a second copy with the same bundle id on the disk (a `build/` folder) is never launched instead of the installed one.
+
 ## 1. Requirements
 
 ### Capabilities
@@ -179,6 +183,8 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
               VRApp ──▶ VRReview, VRTranscript
 ```
 
+`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the first build ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo` only), `VRStore` (`ContentHash` only, no dependencies yet) and `VRApp`; `VRTranscript` is not there yet.
+
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
 Test targets, all run by `make test` without the app:
@@ -219,9 +225,9 @@ Sources/
     UnixSocket.swift                POSIX calls: address, connect, bind, read to end, write all
     ControlClient.swift             ControlTransport protocol, UnixSocketTransport, send one request
   VRCommand/
-    CommandTable.swift              name → entry; run(arguments) → CommandResult; top-level help
+    CommandTable.swift              name → entry; the standard table; run(arguments) → CommandResult; top-level help
     CommandResult.swift             output, error, exit status (0, 1, 2, 3)
-    CommandContext.swift            support folder, client, launcher for one invocation
+    CommandContext.swift            CommandEnvironment (what the command reads from outside); support folder, client, launcher for one invocation
     Arguments.swift                 shared parsing: time (seconds or mm:ss), region, --json, options
     AppCommand.swift                app status | open [--demo] | quit; launch, relaunch, demo pointer
     ControlCommand.swift            control take [--wait] | release
@@ -235,7 +241,7 @@ Sources/
     ListenerCommand.swift           wait | ack | status | reply | ask
     AppLauncher.swift               AppLaunching protocol, WorkspaceLauncher (NSWorkspace)
   VRCLI/
-    main.swift                      builds the table, runs it, prints, exits
+    main.swift                      runs CommandTable.standard, prints, exits
   VRReview/
     Comment.swift                   Comment, CommentState and its allowed moves
     Region.swift                    normalized rectangle, validation, pixel rectangle for a frame size
@@ -261,6 +267,7 @@ Sources/
     AppServices.swift               composition root: reads the environment, builds and wires everything
     ReviewModel.swift               the orchestrator the views and the desks call
     Notice.swift                    a brief agent message shown over the stage
+    TimeText.swift                  a time as text (0:10.000, 0:10) and rounded to the millisecond
     Player/
       PlayerController.swift        Playing protocol and its AVPlayer implementation
       PlayerSurface.swift           AVPlayerView without controls, as a SwiftUI view
@@ -293,7 +300,7 @@ Sources/
       SendBar.swift                 queued count, Send, the presence chip
       LeaseBanner.swift             who controls the app, time left, Stop
       ContextPopover.swift          the sidecar's text and the editable note
-      Shortcuts.swift               the player's keys, given up while a text view has focus
+      Shortcuts.swift               the player's keys, given up in a panel, under a sheet and while a text view has focus
       Theme.swift                   state colours and glyphs, spacing, fonts
 Tests/
   VRLeaseTests/  VRWireTests/  VRCommandTests/  VRReviewTests/
@@ -307,7 +314,7 @@ Copied from Shipyard's pattern.
 - `VARIANT` and `VERSION` are read from `AppIdentity.swift` with `sed`. `APP_NAME` is `Video Review` plus ` ($(VARIANT))` when the variant is not empty. `BUNDLE_ID` is `com.yahyabedirhan.video-review` plus `.$(VARIANT)`.
 - `make test`: `swift test`, with the Command Line Tools' Testing framework flags and a shared module cache when no Xcode is installed (this Mac has the Command Line Tools only).
 - `make bundle`: release builds of `VideoReview` and `video-review`; `build/$(APP_NAME).app` with `Contents/MacOS/VideoReview`, `Contents/Helpers/video-review` and `Info.plist` filled from the template; ad-hoc `codesign`, the helper first.
-- `make install`: quits only this variant's running copy (`pkill -u "$USER" -f` on this bundle's `Contents/MacOS/` path, never by process name, since the three prototypes share the name `VideoReview`), replaces the bundle in `/Applications`, and does not open it. Agents open it with `app open`.
+- `make install`: quits only this variant's running copy, replaces the bundle in `/Applications`, and does not open it. Agents open it with `app open`. The copy is found by this bundle's `Contents/MacOS/` path as a fixed string (`ps` piped to `grep -F`), never by process name, since the three prototypes share the name `VideoReview`, and not with `pkill -f`, whose pattern would read the name's parentheses as a group.
 - `Info.plist`: `NSSpeechRecognitionUsageDescription`, `LSMinimumSystemVersion` 26.0, document types for `public.mpeg-4`, `com.apple.quicktime-movie` and `com.apple.m4v-video`. The app is a normal windowed app, not `LSUIElement`.
 
 ### Key types
@@ -315,6 +322,8 @@ Copied from Shipyard's pattern.
 Signatures are the contract between tickets. Bodies are sketched in section 4.
 
 **VRLease** (rules copied from Shipyard's `ControlLease`)
+
+The first build ticket ships `ControlLease` as a pass-through with only `Term`, `Refusal.inUse`, `Decision.answer`, `init()`, `use(by:at:)`, `current(at:)` and `status(at:)`: every holder is let through and the lease always reports free. `ControlServer` already asks `use(by:at:)` before every operator request, so the lease ticket fills in `VRLease` and adds the rest below without moving the gate.
 
 ```swift
 public struct Holder: Codable, Hashable, Sendable {
@@ -383,6 +392,10 @@ public struct ControlClient { var socket: URL; var holder: Holder; var transport
     public func send(_ request: ControlRequest, json: Bool) -> Result<ControlReply, Failure> }
 ```
 
+Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; `isLongPoll` arrives with the first long poll.
+
+`ControlMessage.decode` checks the version before it reads the holder or the command, so a request of another version is refused by its version whatever else it holds. A path on the wire (`player.open`, `screenshot`) must be absolute.
+
 On the socket a message is one flat JSON object, keys sorted: `{"command":"player.seek","holder":{…},"json":false,"time":10,"version":1}`. Command names are the CLI words joined by a dot (`comment.add`, `control.take`, `wait`).
 
 `output` is always the exact text the CLI prints. The app formats it, as lines or as JSON when the message's `json` is true. So the CLI never needs the app's types, and `VRCommand` links only `VRWire` and `VRLease`.
@@ -391,11 +404,12 @@ On the socket a message is one flat JSON object, keys sorted: `{"command":"playe
 
 ```swift
 public struct CommandResult { var output: String; var error: String; var status: Int32 }   // 0 ok, 1 refused, 2 usage, 3 timed out
-public struct CommandTable { public mutating func add(_ entries: [Entry]); public func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult }
+public struct CommandTable { public static var standard: CommandTable; public mutating func add(_ entries: [Entry]); public func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult }
+public struct CommandEnvironment { var variables; var workingDirectory; var transport; var launcher; var processes; var pause; public static func system() -> CommandEnvironment }
 public protocol AppLaunching: Sendable { func launch(bundleID: String, environment: [String: String]) throws(AppLaunchFailure) }
 ```
 
-Each `…Command.swift` has `parse(_ arguments:) -> Result<ControlRequest, CommandResult>` and its usage text. All but `AppCommand` then go through one function, `CommandContext.send(_:)`, which maps a reply to a `CommandResult`.
+Each `…Command.swift` has its `entry` for the table, `parse(_ arguments:) -> Result<ControlRequest, CommandResult>` and its usage text. All but `AppCommand` then go through one function, `CommandContext.send(_:)`, which maps a reply to a `CommandResult`. `CommandTable.run` takes `--json` out of the arguments wherever it stands, and answers `--help` and `--version` itself.
 
 **VRReview**
 
@@ -493,7 +507,7 @@ public struct TranscriptCache { func load(_ hash: String) -> [TranscriptLine]?; 
 
 ```swift
 @MainActor protocol Playing: AnyObject {            // AVPlayer in the app, a fake in VRAppTests
-    var time: Double { get }; var duration: Double { get }; var isPlaying: Bool { get }
+    var time: Double { get }; var isPlaying: Bool { get }
     func load(_ url: URL) async throws; func play(); func pause(); func seek(to: Double) async
 }
 protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in the app, a fake in VRAppTests
@@ -502,6 +516,7 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
 }
 
 @MainActor @Observable final class ReviewModel {
+    private(set) var video: VideoFile?              // the open video: its VideoInfo, frame rate and size
     private(set) var session: ReviewSession?        // the open video's
     private(set) var outbox: Outbox
     private(set) var selection: String?             // the selected comment
@@ -509,7 +524,7 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
 
     // what a person and an operator can do
     func open(_ url: URL) async throws(ModelRefusal)
-    func play() throws(ModelRefusal); func pause() throws(ModelRefusal); func seek(to: Double) async throws(ModelRefusal)
+    func play() async throws(ModelRefusal); func pause() throws(ModelRefusal); func seek(to: Double) async throws(ModelRefusal)
     func beginComment(at: Double?, region: Region?) async throws(ModelRefusal) -> String
     func commitComment(_ id: String, text: String) throws(ModelRefusal)
     func addComment(text: String, at: Double?, region: Region?) async throws(ModelRefusal) -> Comment
@@ -527,7 +542,9 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
 }
 ```
 
-`Playing` and `FrameGrabbing` are the only interfaces in the app with a second implementation (the test fakes). `Screenshotter` is concrete; tests do not capture windows. `OperatorDesk` and `ListenerDesk` are concrete and tested through `ControlServer.reply(to:)`.
+`Playing` and `FrameGrabbing` are the only interfaces in the app with a second implementation (the test fakes). `Screenshotter` is concrete; tests do not capture windows, so `OperatorDesk` takes the capture as a closure and the tests pass their own. `OperatorDesk` and `ListenerDesk` are concrete and tested through `ControlServer.reply(to:)`.
+
+The video's length has one source, `VideoFile.info.duration` (the asset's, rounded to the millisecond), so `Playing` has no `duration`. `play` is `async` because playing at the end first seeks to the start. Beside the calls above, `ReviewModel` has a person's gestures (`openByPerson`, `togglePlay`, `scrub`, `skip`, `step`): the same calls with a time kept inside the video instead of refused, and a failed open kept in `openFailure` for the window's alert.
 
 ### The CLI contract as this build answers it
 
@@ -558,7 +575,11 @@ The commands are the spec's, unchanged. This table fixes what the spec left open
 
 Exit codes: 0 done; 1 refused, app not running, or no reply; 2 usage; 3 a `wait` or `ask` whose time ran out (nothing on standard output). The reply shape stays `{ok, output, error, lease?}`: a long poll that ran out comes back `ok: true` with empty `output` and a note in `error`, and `ListenerCommand` turns exactly that into exit 3.
 
-Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also `h:mm:ss`. A time outside the video is refused. `screenshot` needs an absolute `.png` path.
+Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also `h:mm:ss`. A time outside the video is refused. `screenshot` needs an absolute `.png` path whose folder exists. `player open` takes a relative path against the folder the command runs in.
+
+`app status --json` gains its `listener` key with presence; until then it is `{running, version, variant, demo, lease, video}`.
+
+`screenshot` captures the window from this process's own shareable content, which needs no Screen Recording permission. When the capture fails, the app draws the window's views itself, writes that, and says `captured by rendering: <why>` on standard error with exit 0; the video's frame is missing from such a file. One screenshot runs at a time, since each sets the app's appearance.
 
 NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's contract has `status <comment-id> working|done|failed` instead. This build follows the spec.
 
@@ -571,6 +592,7 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
   "listener": {"presence": "listening", "name": "Claude Code"},
   "video": {"path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample"},
   "player": {"time": 10, "playing": false},
+  "time": 10,
   "context": {"sidecarPath": "/abs/sample.context.md", "note": ""},
   "transcript": {"source": "voiceover", "ready": true, "lines": 3},
   "queue": ["c3"],
@@ -582,6 +604,10 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
   "batches": [{"id": "b1", "sentAt": "…", "commentIds": ["c1", "c2"], "delivery": "taken", "finished": true, "thread": []}]
 }
 ```
+
+The player's time is in two places with the same value: `player.time`, and a top-level `time` for a script that reads one field. Both are rounded to the millisecond.
+
+Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`.
 
 `lease`, `video`, `demo` and `region` are `null` when there is none, never left out. `comments` is in time order and holds every comment of the open video; `queue` holds the ids still `queued`, in time order. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
 
@@ -625,7 +651,7 @@ A demo run's support folder is inside the normal one, named by a hash of the dem
 ### One CLI command, end to end: `video-review player seek 0:10`
 
 ```text
-VRCLI/main.swift                         table.run(["player","seek","0:10"])
+VRCLI/main.swift                         CommandTable.standard.run(["player","seek","0:10"])
 └ VRCommand/CommandTable.run             finds the entry "player"
   └ PlayerCommand.parse                  Arguments.time("0:10") → 10.0 → .playerSeek(seconds: 10)
   └ CommandContext                       support = AppIdentity.supportFolder()
@@ -657,7 +683,7 @@ State after each step:
 | after `PlayerController.seek` | the same | time 10 |
 | `state --json` from any holder | reports the lease | `"player": {"time": 10, "playing": false}` |
 
-`app open` is the one command that does not start at the socket: `AppCommand` launches the bundle `AppIdentity.bundleID` through `AppLaunching`, with `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR` set for a demo, writes or removes `demo.json`, and polls `app.status` until the app answers. When an app of the other mode runs, it quits it first and hands its lease over in `VIDEO_REVIEW_CONTROL_LEASE`, as Shipyard does.
+`app open` is the one command that does not start at the socket: `AppCommand` launches the bundle `AppIdentity.bundleID` through `AppLaunching`, with `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR` set for a demo, writes or removes `demo.json`, and polls `app.status` until the app answers. When an app of the other mode runs (the normal one, or a demo on another folder), it quits it first. `app open --demo` on the folder the running demo already uses sends `app.open` and launches nothing, so the open video stays. The lease ticket adds the handover of the quit app's lease in `VIDEO_REVIEW_CONTROL_LEASE`, as Shipyard does.
 
 ### One rejection: a second holder
 
@@ -834,7 +860,7 @@ TranscriptService.start      in the background
 ### Adding a CLI command
 
 1. Add the case to `ControlRequest`, its role, and its wire name and fields in `ControlMessage` (`VRWire`).
-2. Add its parsing and usage to the matching `…Command.swift` and, for a new first word, one entry in `main.swift` (`VRCommand`).
+2. Add its parsing and usage to the matching `…Command.swift` and, for a new first word, one entry in `CommandTable.standard` (`VRCommand`).
 3. Add the method to `ReviewModel` and call it from `OperatorDesk` or `ListenerDesk`, with one more `case` in `ControlServer`'s dispatch (`VRApp`).
 4. Call the same `ReviewModel` method from the view.
 
@@ -893,7 +919,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 
 | Ticket | Builds |
 |---|---|
-| #3 | `Package.swift`, `Makefile`, `Packaging/`, `VRWire`, `VRCommand` (app, state, player, screenshot), `VRLease/Holder`, a pass-through lease, `VRApp` shell: `ControlServer`, `SocketListener`, `OperatorDesk`, `StateReport`, `Screenshotter`, `Player/`, the stage and transport bar |
+| #3 | `Package.swift`, `Makefile`, `Packaging/`, `VRWire`, `VRCommand` (app, state, player, screenshot), `VRLease/Holder` and `ProcessTable`, a pass-through `ControlLease` and `LeaseStatus`, `VRReview/VideoInfo`, `VRStore/ContentHash`, `VRApp` shell: `AppServices`, `ReviewModel` (the player's part), `ControlServer`, `SocketListener`, `OperatorDesk`, `StateReport`, `Screenshotter`, `Player/` without `FrameGrabber`, `TimeText`, `MainWindow`, `EmptyState`, `Stage`, `TransportBar`, `Timeline` (the scrubber), `Shortcuts` (the player's keys), `Theme` |
 | #4 | `ControlLease`, `control take` and `release`, the gate, `LeaseIndicator`, `LeaseBanner` |
 | #5 | `VRReview` (comments, states, `ReviewSession`), `FrameGrabber`, `Composer`, `Timeline` markers, `Sidebar`, `comment` commands; `Library` paths for frames |
 | #6 | `Region`, `RegionOverlay`, crops, `--region` |
