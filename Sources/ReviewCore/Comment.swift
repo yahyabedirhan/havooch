@@ -13,6 +13,27 @@ public struct Comment: Codable, Equatable, Sendable, Identifiable {
     public let region: Region?
     /// The batch the comment was sent in; nil while it's queued.
     public internal(set) var batchID: ItemID?
+    /// What the agent said on the comment and what the person answered, in
+    /// the order written.
+    public internal(set) var thread: [ThreadMessage] = []
+
+    /// The agent's question that waits for the person's answer; nil when
+    /// there's none. A comment has one at most.
+    public var openQuestion: ThreadMessage? { thread.openQuestion }
+}
+
+extension Comment {
+    /// A comment written before it had a thread reads with an empty one.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(ItemID.self, forKey: .id)
+        time = try container.decode(TimeInterval.self, forKey: .time)
+        text = try container.decode(String.self, forKey: .text)
+        state = try container.decode(CommentState.self, forKey: .state)
+        region = try container.decodeIfPresent(Region.self, forKey: .region)
+        batchID = try container.decodeIfPresent(ItemID.self, forKey: .batchID)
+        thread = try container.decodeIfPresent([ThreadMessage].self, forKey: .thread) ?? []
+    }
 }
 
 /// A rectangle on the video's frame, in normalized coordinates: 0 to 1 from

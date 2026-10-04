@@ -17,6 +17,23 @@ enum Theme {
     /// player shows it.
     static let letterbox = Color.black
 
+    /// The agent's colour, on its messages and its notices.
+    static let agent = Color.indigo
+    /// An open question's colour: on the marker, the thread and the notice.
+    /// No state has it, so a question never reads as one.
+    static let question = Color.purple
+
+    /// The glyph on a marker's pin for a state the agent set; nil for a
+    /// state before the agent has the comment.
+    static func pinGlyph(_ state: CommentState) -> String? {
+        switch state {
+        case .draft, .queued, .sent: nil
+        case .acknowledged, .done: "checkmark"
+        case .working: "ellipsis"
+        case .failed: "xmark"
+        }
+    }
+
     /// The state's colour. A state is never told by colour alone: it has a
     /// glyph and a name too.
     static func tint(_ state: CommentState) -> Color {

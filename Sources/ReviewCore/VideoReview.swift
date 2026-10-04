@@ -131,6 +131,93 @@ public struct VideoReview: Codable, Equatable, Sendable {
         return unfinished.map { comments[$0].id }
     }
 
+    // MARK: - The listener's answers
+
+    /// The listener has the batch `id`: each of its comments still `sent`
+    /// moves to `acknowledged`, and one further on stays where it is. Words
+    /// that come with it are a message for the full batch. Returns the
+    /// batch as it is now.
+    @discardableResult
+    public mutating func acknowledge(
+        _ id: ItemID, text: String? = nil, messageID: ItemID, at now: Date
+    ) throws(ReviewRefusal) -> Batch {
+        let batch = try batchIndex(id)
+        for index in comments.indices where comments[index].batchID == id && comments[index].state == .sent {
+            comments[index].state = .acknowledged
+        }
+        if let words = text?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty {
+            batches[batch].messages.append(ThreadMessage(id: messageID, author: .agent, kind: .message, text: words, at: now))
+        }
+        return batches[batch]
+    }
+
+    /// The listener says how far it is with a comment: `working`, `done`
+    /// or `failed`. A state only moves forward and may skip one; `done` and
+    /// `failed` are final. Saying the state the comment already has changes
+    /// nothing and isn't refused.
+    @discardableResult
+    public mutating func setStatus(_ id: ItemID, _ state: CommentState) throws(ReviewRefusal) -> Comment {
+        let index = try sentIndex(id)
+        let from = comments[index].state
+        guard from != state else { return comments[index] }
+        guard state.isStatus, from.canMove(to: state) else { throw .illegalMove(id, from: from, to: state) }
+        comments[index].state = state
+        return comments[index]
+    }
+
+    /// The agent's message on a comment's thread, or for the full batch
+    /// when `id` names a batch.
+    @discardableResult
+    public mutating func reply(to id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
+        let message = ThreadMessage(id: messageID, author: .agent, kind: .message, text: try Self.message(text), at: now)
+        if id.kind == .batch {
+            batches[try batchIndex(id)].messages.append(message)
+        } else {
+            comments[try sentIndex(id)].thread.append(message)
+        }
+        return message
+    }
+
+    /// The agent's question on a comment's thread. Refused while the
+    /// comment has a question with no answer: an answer names a comment, so
+    /// it must have one question to go to.
+    @discardableResult
+    public mutating func ask(_ id: ItemID, question: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
+        let index = try sentIndex(id)
+        let message = ThreadMessage(id: messageID, author: .agent, kind: .question, text: try Self.message(question), at: now)
+        guard comments[index].openQuestion == nil else { throw .questionOpen(id) }
+        comments[index].thread.append(message)
+        return message
+    }
+
+    /// The person's answer to a comment's open question, which closes it.
+    @discardableResult
+    public mutating func answer(_ id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
+        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
+        let message = ThreadMessage(id: messageID, author: .person, kind: .answer, text: try Self.message(text), at: now)
+        guard comments[index].openQuestion != nil else { throw .noQuestion(id) }
+        comments[index].thread.append(message)
+        return message
+    }
+
+    private func batchIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
+        guard let index = batches.firstIndex(where: { $0.id == id }) else { throw .unknownBatch(id.text) }
+        return index
+    }
+
+    /// A comment the listener can answer: one that was sent.
+    private func sentIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
+        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
+        guard comments[index].batchID != nil else { throw .notSent(id) }
+        return index
+    }
+
+    private static func message(_ text: String) throws(ReviewRefusal) -> String {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { throw .emptyMessage }
+        return words
+    }
+
     private func queuedIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
         guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
         guard comments[index].state.isEditable else { throw .notQueued(id, comments[index].state) }

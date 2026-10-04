@@ -83,6 +83,11 @@ struct ControlServerTests {
             )
         }
 
+        func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment {
+            let index = try comment(commentID, "thread answer \(commentID) \(text)")
+            return comments[index]
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }
@@ -282,7 +287,7 @@ struct ControlServerTests {
         #expect(added["comment"] as? [String: AnyHashable] == [
             "id": "c-00000001", "time": 12.5, "text": "Later", "state": "queued",
             "keyframePath": "/demo/videos/abc/frames/c-00000001.png", "region": NSNull(), "cropPath": NSNull(),
-            "batchId": NSNull(),
+            "batchId": NSNull(), "thread": [] as [String],
         ])
         #expect(added.count == 1)
         _ = await answer(.commentAdd(text: "Earlier", at: 3))
@@ -331,7 +336,7 @@ struct ControlServerTests {
         _ = await answer(.commentAdd(text: "One more", at: 5))
         let sent = try object(await answer(.batchSend, json: true).reply.output)
         #expect(sent["batch"] as? [String: AnyHashable]
-            == ["id": "b-00000001", "sentAt": "2026-09-21T14:13:20Z", "commentIds": ["c-00000003"]])
+            == ["id": "b-00000001", "sentAt": "2026-09-21T14:13:20Z", "commentIds": ["c-00000003"], "messages": [] as [String]])
         #expect(sent.count == 1)
     }
 

@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The stage: the video on its black letterbox, the layer that takes the
-/// mouse and shows regions, and the comment box over it while a comment is
-/// written. A click on the frame plays or pauses; a drag draws a region.
+/// mouse and shows regions, the comment box over it while a comment is
+/// written, and the notices of what the agent says. A click on the frame plays or pauses; a drag draws a region.
 struct StageView: View {
     let model: AppModel
 
@@ -22,6 +22,8 @@ struct StageView: View {
                     composer(draft, geometry: geometry, stage: proxy.size)
                         .transition(.opacity)
                 }
+                // What the agent just said, over everything on the stage.
+                Toasts(model: model)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.stageCorner, style: .continuous))

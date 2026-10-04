@@ -3,7 +3,9 @@ import ReviewWire
 
 /// The listener's commands, which need no lease. `video-review wait
 /// [--timeout <seconds>]` is a long-poll: it exits 0 with the next batch as
-/// JSON, and the listener is present in the app while it's open.
+/// JSON, and the listener is present in the app while it's open. `ack`,
+/// `status`, `reply` and `ask` answer in the player; `ask` is held until
+/// the person answers, and exits 0 with the answer.
 enum ListenerCommands {
     static let commands: [Command] = [
         Command(
@@ -17,6 +19,46 @@ enum ListenerCommands {
                 throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
             }
             return .wait(timeout: whole)
+        },
+        Command(
+            name: "ack", synopsis: "ack <batch-id> [<text>]",
+            summary: "say you have the batch: its comments turn acknowledged, and the text is a message for the full batch"
+        ) { arguments, _ throws(UsageError) in
+            guard let id = arguments.words.first else { throw UsageError("missing <batch-id>") }
+            guard arguments.words.count <= 2 else { throw UsageError("unexpected `\(arguments.words[2])`") }
+            return .send(.ack(batchID: id, text: arguments.words.count == 2 ? arguments.words[1] : nil))
+        },
+        Command(
+            name: "status", synopsis: "status <comment-id> working|done|failed",
+            summary: "say how far you are with a comment; its marker shows it"
+        ) { arguments, _ throws(UsageError) in
+            let words = try arguments.exactly(["<comment-id>", "working|done|failed"])
+            guard let state = ControlRequest.Status(rawValue: words[1]) else {
+                throw UsageError("`\(words[1])` isn't a status; write `working`, `done` or `failed`")
+            }
+            return .send(.status(commentID: words[0], state: state))
+        },
+        Command(
+            name: "reply", synopsis: "reply <comment-id|batch-id> <text>",
+            summary: "send a message on a comment's thread, or for the full batch with a batch id"
+        ) { arguments, _ throws(UsageError) in
+            let words = try arguments.exactly(["<comment-id|batch-id>", "<text>"])
+            return .send(.reply(id: words[0], text: words[1]))
+        },
+        Command(
+            name: "ask", synopsis: "ask <comment-id> <question> [--wait <seconds>]",
+            summary: "ask a question on a comment and print the person's answer; exit 2 when --wait runs out with none",
+            valuedOptions: ["--wait"]
+        ) { arguments, _ throws(UsageError) in
+            let words = try arguments.exactly(["<comment-id>", "<question>"])
+            var wait: Int?
+            if let seconds = arguments.options["--wait"] {
+                guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
+                    throw UsageError("`--wait` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
+                }
+                wait = whole
+            }
+            return .send(.ask(commentID: words[0], question: words[1], waitSeconds: wait))
         },
     ]
 

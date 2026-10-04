@@ -34,6 +34,8 @@ protocol AppControlling: AnyObject {
     /// Sends every queued comment as one batch, and hands it to the
     /// listener queue.
     func sendBatch() async throws(AppRefusal) -> StateReport.Batch
+    /// Answers the open question of a comment, as the answer box does.
+    func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment
 }
 
 /// App control's server: while the app runs it listens on `control.sock`
@@ -44,9 +46,9 @@ protocol AppControlling: AnyObject {
 /// command always has a line to print. The server owns the one lease: an
 /// operator request asks it first, and a `take`'s reply granting it that
 /// can't be written (its client gone) gives it up at once. A listener's
-/// requests go to the `ListenerQueue`, with no lease: a `wait` is held like
-/// a `take` in line, and a batch whose reply can't be written goes back to
-/// the front of the listener's line.
+/// requests go to the `ListenerQueue`, with no lease: a `wait` and an `ask`
+/// are held like a `take` in line, and a batch whose reply can't be written
+/// goes back to the front of the listener's line.
 @MainActor
 final class ControlServer {
     /// A reply, whether the app quits once it's written, and what only the
@@ -236,6 +238,30 @@ final class ControlServer {
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
+            case .ack(let batchID, let text):
+                let batch = try listeners.ack(batchID, text: text)
+                let count = batch.commentIds.count
+                return done("\(batch.id) acknowledged, \(count) comment\(count == 1 ? "" : "s")", Output(batch: batch), json)
+            case .status(let commentID, let status):
+                // Every status is a comment state of the same name.
+                let state = CommentState(rawValue: status.rawValue) ?? .working
+                let comment = try listeners.status(commentID, state)
+                return done("\(comment.id) \(comment.state)", Output(comment: comment), json)
+            case .reply(let id, let text):
+                let message = try listeners.reply(to: id, text: text)
+                return done("\(message.id) on \(id)", Output(message: message), json)
+            case .ask(let commentID, let question, let waitSeconds):
+                switch try await listeners.ask(commentID, question: question, waitSeconds: waitSeconds, connection: connection) {
+                case .answered(let answer):
+                    return done(answer.text, Output(answer: answer), json)
+                case .ranOut:
+                    return Answer(reply: .ranOut)
+                case .gone:
+                    return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
+                }
+            case .threadAnswer(let commentID, let text):
+                let comment = try app.answer(commentID, text: text)
+                return done("\(comment.id) answered", Output(comment: comment), json)
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -253,6 +279,8 @@ final class ControlServer {
         var comment: StateReport.Comment?
         var deleted: String?
         var batch: StateReport.Batch?
+        var message: StateReport.Message?
+        var answer: StateReport.Message?
     }
 
     /// What the app shows, with the lease and the listener as they are now.
@@ -341,7 +369,7 @@ final class ControlServer {
     }
 
     /// The client of `connection` closed its socket while its request was
-    /// held: a `wait` on it is over, and the listener is no longer there.
+    /// held: a `wait` or an `ask` on it is over.
     func connectionClosed(_ connection: UUID) {
         listeners.connectionClosed(connection)
     }

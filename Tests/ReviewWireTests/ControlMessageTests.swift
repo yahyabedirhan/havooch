@@ -36,6 +36,14 @@ struct ControlMessageTests {
         .commentEdit(id: "c-7f3a9c2e", text: "Slower"), .commentDelete(id: "c-7f3a9c2e"),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .batchSend, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
+        .ack(batchID: "b-5d0c2a91", text: nil), .ack(batchID: "b-5d0c2a91", text: "On it"),
+        .status(commentID: "c-7f3a9c2e", state: .working), .status(commentID: "c-7f3a9c2e", state: .done),
+        .status(commentID: "c-7f3a9c2e", state: .failed),
+        .reply(id: "c-7f3a9c2e", text: "Slowed it down"), .reply(id: "b-5d0c2a91", text: "All done"),
+        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: nil),
+        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 0),
+        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 600),
+        .threadAnswer(commentID: "c-7f3a9c2e", text: "The intro"),
     ])
     func roundTrip(request: ControlRequest) throws {
         for json in [false, true] {
@@ -122,6 +130,31 @@ struct ControlMessageTests {
         #expect(refusal(fields("wait", ["timeoutSeconds": -1]))
             == .unreadable("the control command `wait` needs a `timeoutSeconds` from 0 to 86400, not -1"))
         #expect(refusal(fields("wait", ["timeoutSeconds": 86401])) != nil)
+        #expect(refusal(fields("ack", [:])) == .unreadable("the control command `ack` needs its `id`"))
+        #expect(refusal(fields("status", ["state": "done"])) == .unreadable("the control command `status` needs its `id`"))
+        #expect(refusal(fields("status", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `status` needs its `state`"))
+        #expect(refusal(fields("status", ["id": "c-7f3a9c2e", "state": "acknowledged"]))
+            == .unreadable("the control command `status` has no state `acknowledged`; it takes `working`, `done` or `failed`"))
+        #expect(refusal(fields("reply", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `reply` needs its `text`"))
+        #expect(refusal(fields("reply", ["text": "Done"])) == .unreadable("the control command `reply` needs its `id`"))
+        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `ask` needs its `text`"))
+        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e", "text": "Which?", "waitSeconds": -1]))
+            == .unreadable("the control command `ask` needs a `waitSeconds` from 0 to 86400, not -1"))
+        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e", "text": "Which?", "waitSeconds": 86401])) != nil)
+        #expect(refusal(fields("thread.answer", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `thread.answer` needs its `text`"))
+    }
+
+    @Test("the listener's answers take no lease; an ask may be held for its wait, or with no limit without one; thread answer is the operator's")
+    func answers() {
+        for request in [ControlRequest.ack(batchID: "b-1", text: nil), .status(commentID: "c-1", state: .done), .reply(id: "c-1", text: "a")] {
+            #expect(request.role == .listener)
+            #expect(request.holdSeconds == 0)
+        }
+        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).role == .listener)
+        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).holdSeconds == 30)
+        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: nil).holdSeconds == nil)
+        #expect(ControlRequest.threadAnswer(commentID: "c-1", text: "a").role == .operator)
+        #expect(ControlRequest.threadAnswer(commentID: "c-1", text: "a").holdSeconds == 0)
     }
 
     @Test("a listener's wait takes no lease, and may be held for its timeout, or with no limit without one")

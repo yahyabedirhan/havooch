@@ -4,8 +4,11 @@ import ReviewWire
 import SwiftUI
 
 /// One comment in the rail: its pin, time and state, a picture (the
-/// region's crop, else the keyframe) and the text. A click selects it and moves the player to its time. A queued card
-/// can be edited and deleted; no other card shows those controls.
+/// region's crop, else the keyframe) and the text, then its thread. A click
+/// selects it and moves the player to its time. A queued card can be edited
+/// and deleted; no other card shows those controls. The thread is open on
+/// the selected card and on any card with an open question; another card
+/// shows its last message on one line.
 struct CommentCard: View {
     let model: AppModel
     let comment: Comment
@@ -47,6 +50,14 @@ struct CommentCard: View {
                 }
                 .controlSize(.small)
             }
+            if !comment.thread.isEmpty {
+                Divider()
+                if isSelected || comment.openQuestion != nil {
+                    ThreadView(messages: comment.thread, agent: model.agentName) { model.answerQuestion(comment.id, text: $0) }
+                } else {
+                    threadSummary
+                }
+            }
         }
         .padding(10)
         .background(
@@ -59,13 +70,17 @@ struct CommentCard: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
         .onTapGesture { model.select(comment.id) }
-        .task(id: comment.id) { await loadThumbnail() }        .accessibilityElement(children: .contain)
+        .task(id: comment.id) { await loadThumbnail() }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Comment \(number) at \(TimeCode.text(comment.time))")
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            MarkerPin(number: number, state: comment.state, isSelected: isSelected)
+            MarkerPin(
+                number: number, state: comment.state, isSelected: isSelected,
+                badge: MarkerPin.Badge(comment, unread: model.unread)
+            )
             Text(TimeCode.text(comment.time))
                 .font(.callout.monospacedDigit().weight(.semibold))
             if comment.region != nil {
@@ -80,6 +95,36 @@ struct CommentCard: View {
             if comment.state.isEditable, edited == nil {
                 CardButton("Edit", symbol: "pencil") { edited = comment.text }
                 CardButton("Delete", symbol: "trash") { model.delete(comment.id) }
+            }
+        }
+    }
+
+    /// A closed thread on one line: its last message, and how many there
+    /// are. An unread one is picked out.
+    @ViewBuilder
+    private var threadSummary: some View {
+        if let last = comment.thread.last {
+            let isUnread = model.unread.contains(comment.id)
+            HStack(spacing: 6) {
+                Image(systemName: isUnread ? "bubble.left.fill" : "bubble.left")
+                    .font(.caption)
+                    .foregroundStyle(isUnread ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .accessibilityHidden(true)
+                Text("\(last.author == .agent ? model.agentName : "You"): \(last.text)")
+                    .font(.caption.weight(isUnread ? .semibold : .regular))
+                    .foregroundStyle(isUnread ? .primary : .secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                if comment.thread.count > 1 {
+                    Text("\(comment.thread.count)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                        .accessibilityLabel("\(comment.thread.count) messages")
+                }
             }
         }
     }

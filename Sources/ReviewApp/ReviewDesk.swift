@@ -31,6 +31,15 @@ final class ReviewDesk {
         reviews[contentHash]
     }
 
+    /// The content hash of the video whose review has the comment or the
+    /// batch `id`; nil when no review of this run has it. A listener's
+    /// command names an item and no video, so every review is looked at.
+    func contentHash(of id: ItemID) -> String? {
+        reviews.first { _, review in
+            id.kind == .batch ? review.batch(id) != nil : review.comment(id) != nil
+        }?.key
+    }
+
     /// Runs `change` on the open review and publishes the result.
     func change<Result>(_ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
         guard let review else {

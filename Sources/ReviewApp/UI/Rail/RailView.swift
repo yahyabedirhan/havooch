@@ -2,7 +2,8 @@ import ReviewCore
 import SwiftUI
 
 /// The rail beside the stage: the queue on top, then each batch, newest
-/// first, with its comments as cards in time order, then the send bar.
+/// first, with the agent's messages about it and its comments as cards in
+/// time order, then the send bar.
 struct RailView: View {
     let model: AppModel
 
@@ -67,6 +68,7 @@ struct RailView: View {
                         VStack(spacing: 8) {
                             if let batch = group.batch {
                                 batchHeader(batch, group.cards.map(\.comment))
+                                if !batch.messages.isEmpty { batchMessages(batch) }
                             } else {
                                 header("Queue", count: group.cards.count)
                                 if group.cards.isEmpty { nothingQueued }
@@ -131,6 +133,25 @@ struct RailView: View {
         .padding(.top, 14)
         .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
+    }
+
+    /// What the agent said about the batch as one, under its header.
+    private func batchMessages(_ batch: Batch) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("About the whole batch")
+                .font(.caption2.weight(.semibold))
+                .textCase(.uppercase)
+                .kerning(0.4)
+                .foregroundStyle(.secondary)
+            ThreadView(messages: batch.messages, agent: model.agentName)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.agent.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.agent.opacity(0.22), lineWidth: 1) }
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("The agent's messages about the whole batch")
     }
 
     private var nothingQueued: some View {

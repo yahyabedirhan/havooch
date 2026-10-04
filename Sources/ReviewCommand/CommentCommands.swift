@@ -1,7 +1,8 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | edit | delete`, `context set` and `batch send`.
+/// `video-review comment add | edit | delete`, `context set`, `batch send`
+/// and `thread answer`.
 enum CommentCommands {
     static let commands: [Command] = [
         Command(
@@ -47,6 +48,13 @@ enum CommentCommands {
             arguments, _ throws(UsageError) in
             try arguments.none()
             return .send(.batchSend)
+        },
+        Command(
+            name: "thread answer", synopsis: "thread answer <comment-id> <text>",
+            summary: "answer the agent's open question on a comment, as the person does in the answer box"
+        ) { arguments, _ throws(UsageError) in
+            let words = try arguments.exactly(["<comment-id>", "<text>"])
+            return .send(.threadAnswer(commentID: words[0], text: words[1]))
         },
     ]
 }

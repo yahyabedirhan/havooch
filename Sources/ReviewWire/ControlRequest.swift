@@ -49,6 +49,24 @@ public enum ControlRequest: Equatable, Sendable {
     /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
     /// listener, present while its `wait` is open.
     case wait(timeoutSeconds: Int?)
+    /// `video-review ack <batch-id> [<text>]`: the listener has the batch.
+    /// Its comments are acknowledged, and `text` is a message for the full
+    /// batch.
+    case ack(batchID: String, text: String?)
+    /// `video-review status <comment-id> working|done|failed`: how far the
+    /// listener is with a comment.
+    case status(commentID: String, state: Status)
+    /// `video-review reply <comment-id|batch-id> <text>`: the listener's
+    /// message on a comment's thread, or for the full batch.
+    case reply(id: String, text: String)
+    /// `video-review ask <comment-id> <question> [--wait <seconds>]`: the
+    /// listener's question on a comment's thread. The app holds the request
+    /// until the person answers, up to `waitSeconds`, or with no limit when
+    /// it's nil.
+    case ask(commentID: String, question: String, waitSeconds: Int?)
+    /// `video-review thread answer <comment-id> <text>`: the answer to a
+    /// comment's open question, as the person gives it in the answer box.
+    case threadAnswer(commentID: String, text: String)
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--with-banner]`: the app's window written as a PNG at the absolute
     /// `path`, in `appearance` when it's set, as the Mac shows it otherwise.
@@ -78,6 +96,11 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
+    /// What `status` can say of a comment.
+    public enum Status: String, Equatable, Sendable, CaseIterable {
+        case working, done, failed
+    }
+
     /// The appearance `screenshot` draws in.
     public enum Appearance: String, Equatable, Sendable, CaseIterable {
         case light, dark
@@ -101,17 +124,20 @@ public enum ControlRequest: Equatable, Sendable {
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentEdit, .commentDelete, .batchSend: .operator
-        case .wait: .listener
+        case .threadAnswer: .operator
+        case .wait, .ack, .status, .reply, .ask: .listener
         }
     }
 
     /// How long the app may keep the connection before it answers, past the
     /// client's usual timeout; nil for no limit. A `take` waits in line for
-    /// its `waitSeconds`, and a `wait` for a batch for its `timeoutSeconds`.
+    /// its `waitSeconds`, a `wait` for a batch for its `timeoutSeconds`,
+    /// and an `ask` for its answer for its `waitSeconds`.
     public var holdSeconds: TimeInterval? {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
         case .wait(let timeoutSeconds): timeoutSeconds.map(TimeInterval.init)
+        case .ask(_, _, let waitSeconds): waitSeconds.map(TimeInterval.init)
         default: 0
         }
     }
@@ -119,8 +145,8 @@ public enum ControlRequest: Equatable, Sendable {
     /// The longest a `control take --wait` may wait in line, in seconds.
     public static let longestWait = 3600
 
-    /// The longest `wait --timeout` a listener may ask for, in seconds: a
-    /// day. Without the option a `wait` has no limit.
+    /// The longest `wait --timeout` or `ask --wait` a listener may ask for,
+    /// in seconds: a day. Without the option neither has a limit.
     public static let longestListen = 86400
 
     /// The most bytes the app reads of one request.

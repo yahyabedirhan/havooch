@@ -46,6 +46,8 @@ public struct Outbox: Codable, Equatable, Sendable {
     public private(set) var session: ListenerSession?
     /// Whether a `wait` is open now.
     public private(set) var isWaitOpen = false
+    /// How many `ask`s are open now: the listener waits for an answer.
+    public private(set) var openAsks = 0
     /// When the listener last sent a command or closed its `wait`.
     public private(set) var lastHeard: Date?
     /// The context this listener session has, by the video's content hash:
@@ -169,14 +171,28 @@ public struct Outbox: Codable, Equatable, Sendable {
         lastHeard = now
     }
 
+    /// An `ask` is held open for the person's answer: the listener is
+    /// there for as long as it waits.
+    public mutating func askOpened(at now: Date) {
+        openAsks += 1
+        lastHeard = now
+    }
+
+    /// An open `ask` ended: answered, out of time, or its client gone.
+    public mutating func askClosed(at now: Date) {
+        guard openAsks > 0 else { return }
+        openAsks -= 1
+        lastHeard = now
+    }
+
     /// Whether an agent is there at `now`. `working` while the listener has
     /// a taken batch and is alive; `listening` while it's alive with
-    /// nothing taken; `absent` otherwise. Alive is an open `wait`, or a
-    /// last word less than `workingGrace` ago with a batch taken and less
-    /// than `listeningGrace` ago without.
+    /// nothing taken; `absent` otherwise. Alive is an open `wait` or
+    /// `ask`, or a last word less than `workingGrace` ago with a batch
+    /// taken and less than `listeningGrace` ago without.
     public func presence(at now: Date) -> Presence {
         let grace = taken.isEmpty ? Self.listeningGrace : Self.workingGrace
-        let alive = isWaitOpen || lastHeard.map { now.timeIntervalSince($0) < grace } ?? false
+        let alive = isWaitOpen || openAsks > 0 || lastHeard.map { now.timeIntervalSince($0) < grace } ?? false
         guard alive else { return .absent }
         return taken.isEmpty ? .listening : .working
     }

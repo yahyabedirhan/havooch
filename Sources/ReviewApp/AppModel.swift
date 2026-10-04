@@ -74,6 +74,10 @@ final class AppModel: AppControlling {
     private(set) var sidecar: ContextReader.Sidecar?
     /// Shown to the person until they dismiss it.
     var problem: Problem?
+    /// What the agent just said, shown on the stage: the newest last.
+    private(set) var notices: [Notice] = []
+    /// The comments with an agent message the person hasn't looked at.
+    private(set) var unread: Set<ItemID> = []
 
     @ObservationIgnored private let images: ImageFiles
     /// The comment the comment box is queueing: its keyframe is being
@@ -96,6 +100,7 @@ final class AppModel: AppControlling {
         listeners = ListenerQueue(desk: desk, images: images)
         transcripts = TranscriptDesk(support: support, speech: speech)
         listeners.transcripts = transcripts
+        listeners.announce = { [weak self] notice in self?.raise(notice) }
     }
 
     /// The open video's transcript as `state` and the toolbar's chip show
@@ -138,6 +143,9 @@ final class AppModel: AppControlling {
         draft = nil
         selection = nil
         isDrawingRegion = false
+        // They point at comments of the video that was open.
+        notices = []
+        unread = []
         isContextShown = false
         sidecar = ContextReader.sidecar(beside: url)
         desk.open(VideoInfo(contentHash: contentHash, title: title, duration: engine.duration, path: url.path))
@@ -225,6 +233,22 @@ final class AppModel: AppControlling {
         return report(batch)
     }
 
+    /// The answer box and `thread answer`: the person's answer to the open
+    /// question of a comment. The `ask` that waits for it exits with it.
+    func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment {
+        let id = try self.commentID(commentID)
+        guard let hash = desk.contentHash(of: id) else { throw AppRefusal(ReviewRefusal.unknownComment(commentID).line) }
+        let message = try desk.change(hash) { review throws(ReviewRefusal) in
+            try review.answer(id, text: text, messageID: ItemID.make(.message), at: Date())
+        }
+        listeners.answered(id, with: message)
+        // Whoever answers has read the thread.
+        unread.remove(id)
+        notices.removeAll { $0.subject == .comment(id) && $0.kind == .question }
+        guard let comment = desk.review(of: hash)?.comment(id) else { throw AppRefusal(ReviewRefusal.unknownComment(commentID).line) }
+        return StateReport.Comment(comment, contentHash: hash, images: images)
+    }
+
     func state() -> StateReport {
         var report = StateReport(
             app: .init(version: Version.app, variant: AppIdentity.variant, demo: isDemo, support: support.path),
@@ -244,7 +268,7 @@ final class AppModel: AppControlling {
     }
 
     private func report(_ batch: Batch) -> StateReport.Batch {
-        StateReport.Batch(id: batch.id.text, sentAt: batch.sentAt, commentIds: batch.commentIDs.map(\.text))
+        StateReport.Batch(batch)
     }
 
     // MARK: - Comments
@@ -292,11 +316,7 @@ final class AppModel: AppControlling {
     }
 
     private func report(_ comment: Comment) -> StateReport.Comment {
-        StateReport.Comment(
-            id: comment.id.text, time: comment.time, text: comment.text, state: comment.state.rawValue,
-            keyframePath: keyframe(of: comment)?.path ?? "", region: comment.region, cropPath: crop(of: comment)?.path,
-            batchId: comment.batchID?.text
-        )
+        StateReport.Comment(comment, contentHash: video?.contentHash ?? "", images: images)
     }
 
     /// The keyframe PNG of `comment` on the open video.
@@ -484,6 +504,8 @@ final class AppModel: AppControlling {
     func select(_ id: ItemID) {
         guard let comment = desk.review?.comment(id) else { return }
         selection = id
+        // Its thread opens with the card: the person sees what the agent said.
+        unread.remove(id)
         engine.pause()
         move(to: comment.time)
     }
@@ -496,6 +518,53 @@ final class AppModel: AppControlling {
             ? comments.first { $0.time > engine.time + slack }
             : comments.last { $0.time < engine.time - slack }
         if let next { select(next.id) }
+    }
+
+    // MARK: - What the agent says
+
+    /// The agent's name as the threads and the notices show it: the
+    /// listener's, or "Agent" before anyone listened.
+    var agentName: String { listeners.outbox.session?.name ?? "Agent" }
+
+    /// The agent said something: a notice goes up on the stage, and the
+    /// comment it's about is marked until the person looks at it. A notice
+    /// that isn't a question goes by itself.
+    func raise(_ notice: Notice) {
+        notices.append(notice)
+        if case .comment(let id) = notice.subject, id != selection || !isRailVisible { unread.insert(id) }
+        guard let expires = notice.expires else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(expires.timeIntervalSinceNow, 0)))
+            self?.dismiss(notice.id)
+        }
+    }
+
+    /// The notice `id` goes: its time is up.
+    func dismiss(_ id: UUID) {
+        notices.removeAll { $0.id == id }
+    }
+
+    /// A click on a notice: it goes, the rail shows, and the comment it's
+    /// about is selected, so its thread is open with the answer box under
+    /// a question.
+    func openNotice(_ id: UUID) {
+        guard let notice = notices.first(where: { $0.id == id }) else { return }
+        dismiss(id)
+        isRailVisible = true
+        if case .comment(let comment) = notice.subject { select(comment) }
+    }
+
+    /// Return in an answer box and its button: the person's answer to the
+    /// comment's open question. False when it wasn't taken.
+    @discardableResult
+    func answerQuestion(_ id: ItemID, text: String) -> Bool {
+        do throws(AppRefusal) {
+            _ = try answer(id.text, text: text)
+            return true
+        } catch {
+            problem = Problem(title: "The answer wasn't sent", reason: error.reason)
+            return false
+        }
     }
 
     /// Save on a card: the comment's new text.

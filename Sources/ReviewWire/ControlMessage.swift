@@ -44,6 +44,12 @@ public struct ControlMessage: Equatable, Sendable {
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
         case .batchSend: wire = Wire(command: "batch.send")
         case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
+        case .ack(let batchID, let text): wire = Wire(command: "ack", id: batchID, text: text)
+        case .status(let commentID, let state): wire = Wire(command: "status", id: commentID, state: state.rawValue)
+        case .reply(let id, let text): wire = Wire(command: "reply", id: id, text: text)
+        case .ask(let commentID, let question, let waitSeconds):
+            wire = Wire(command: "ask", waitSeconds: waitSeconds, id: commentID, text: question)
+        case .threadAnswer(let commentID, let text): wire = Wire(command: "thread.answer", id: commentID, text: text)
         }
         wire.holder = holder
         wire.json = json
@@ -124,6 +130,29 @@ public struct ControlMessage: Equatable, Sendable {
                 )
             }
             return .wait(timeoutSeconds: wire.timeoutSeconds)
+        case "ack":
+            return .ack(batchID: try field(wire.id, "id", of: wire), text: wire.text)
+        case "status":
+            let id = try field(wire.id, "id", of: wire)
+            let name = try field(wire.state, "state", of: wire)
+            guard let state = ControlRequest.Status(rawValue: name) else {
+                throw .unreadable("the control command `status` has no state `\(name)`; it takes `working`, `done` or `failed`")
+            }
+            return .status(commentID: id, state: state)
+        case "reply":
+            return .reply(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "ask":
+            if let seconds = wire.waitSeconds, !(0...ControlRequest.longestListen).contains(seconds) {
+                throw .unreadable(
+                    "the control command `ask` needs a `waitSeconds` from 0 to \(ControlRequest.longestListen), not \(seconds)"
+                )
+            }
+            return .ask(
+                commentID: try field(wire.id, "id", of: wire), question: try field(wire.text, "text", of: wire),
+                waitSeconds: wire.waitSeconds
+            )
+        case "thread.answer":
+            return .threadAnswer(commentID: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -168,5 +197,6 @@ public struct ControlMessage: Equatable, Sendable {
         var at: Double?
         var region: ControlRequest.Rectangle?
         var timeoutSeconds: Int?
+        var state: String?
     }
 }

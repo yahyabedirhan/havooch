@@ -1,6 +1,7 @@
 import Foundation
 import ReviewCore
 import ReviewLease
+import ReviewStore
 import ReviewWire
 
 /// What the app shows, for `state` and `app status`: as one JSON object
@@ -59,6 +60,9 @@ struct StateReport: Encodable, Equatable {
         var cropPath: String?
         /// The batch the comment was sent in; `null` while it's queued.
         var batchId: String?
+        /// What the agent said on the comment and what the person
+        /// answered, in the order written.
+        var thread: [Message] = []
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -70,10 +74,56 @@ struct StateReport: Encodable, Equatable {
             try container.encode(region, forKey: .region)
             try container.encode(cropPath, forKey: .cropPath)
             try container.encode(batchId, forKey: .batchId)
+            try container.encode(thread, forKey: .thread)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, time, text, state, keyframePath, region, cropPath, batchId
+            case id, time, text, state, keyframePath, region, cropPath, batchId, thread
+        }
+
+        init(
+            id: String, time: Double, text: String, state: String, keyframePath: String, region: Region? = nil,
+            cropPath: String? = nil, batchId: String? = nil, thread: [Message] = []
+        ) {
+            self.id = id
+            self.time = time
+            self.text = text
+            self.state = state
+            self.keyframePath = keyframePath
+            self.region = region
+            self.cropPath = cropPath
+            self.batchId = batchId
+            self.thread = thread
+        }
+
+        /// `comment` of the video with `contentHash`, whose pictures are
+        /// in `images`.
+        init(_ comment: ReviewCore.Comment, contentHash: String, images: ImageFiles) {
+            self.init(
+                id: comment.id.text, time: comment.time, text: comment.text, state: comment.state.rawValue,
+                keyframePath: images.keyframe(of: comment.id, contentHash: contentHash).path, region: comment.region,
+                cropPath: comment.region.map { _ in images.crop(of: comment.id, contentHash: contentHash).path },
+                batchId: comment.batchID?.text, thread: comment.thread.map(Message.init)
+            )
+        }
+    }
+
+    /// One message of a comment's thread, or of a batch: who wrote it
+    /// (`person` or `agent`) and what it is (`message`, `question` or
+    /// `answer`).
+    struct Message: Encodable, Equatable {
+        var id: String
+        var author: String
+        var kind: String
+        var text: String
+        var at: Date
+
+        init(_ message: ThreadMessage) {
+            id = message.id.text
+            author = message.author.rawValue
+            kind = message.kind.rawValue
+            text = message.text
+            at = message.at
         }
     }
 
@@ -83,6 +133,22 @@ struct StateReport: Encodable, Equatable {
         var sentAt: Date
         /// The batch's comments, in time order.
         var commentIds: [String]
+        /// What the agent said about the batch as one.
+        var messages: [Message] = []
+
+        init(id: String, sentAt: Date, commentIds: [String], messages: [Message] = []) {
+            self.id = id
+            self.sentAt = sentAt
+            self.commentIds = commentIds
+            self.messages = messages
+        }
+
+        init(_ batch: ReviewCore.Batch) {
+            self.init(
+                id: batch.id.text, sentAt: batch.sentAt, commentIds: batch.commentIDs.map(\.text),
+                messages: batch.messages.map(Message.init)
+            )
+        }
     }
 
     /// The agent that receives the batches.
@@ -245,9 +311,19 @@ struct StateReport: Encodable, Equatable {
         guard !comments.isEmpty else { return "none" }
         let lines = comments.map {
             let region = $0.region.map { " region \($0.text)" } ?? ""
-            return "  \($0.id) \(TimeCode.text($0.time))\(region) \($0.state): \($0.text.replacing("\n", with: " "))"
+            return "  \($0.id) \(TimeCode.text($0.time))\(region) \($0.state)\(Self.threadWords($0.thread)): \($0.text.replacing("\n", with: " "))"
         }
         return (["\(comments.count) (\(queue.count) queued)"] + lines).joined(separator: "\n")
+    }
+
+    /// A thread on a comment's line: ` (2 messages, question open)`, or
+    /// nothing for an empty one.
+    private static func threadWords(_ thread: [Message]) -> String {
+        guard !thread.isEmpty else { return "" }
+        let count = "\(thread.count) message\(thread.count == 1 ? "" : "s")"
+        let question = thread.lastIndex { $0.kind == "question" }
+        let isOpen = question.map { index in !thread[index...].contains { $0.kind == "answer" } } ?? false
+        return " (\(count)\(isOpen ? ", question open" : ""))"
     }
 
     // MARK: - app status

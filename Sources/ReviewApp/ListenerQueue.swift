@@ -5,9 +5,11 @@ import ReviewStore
 import ReviewWire
 
 /// The listener's side of the app: it holds the `Outbox` (the rules), the
-/// one open `wait` (a held connection, like a `take` waiting in line) and
-/// assembles the payload at the moment a `wait` takes a batch. The views
-/// read the presence from it.
+/// one open `wait` and the open `ask`s (held connections, like a `take`
+/// waiting in line) and assembles the payload at the moment a `wait` takes
+/// a batch. The listener's answers (`ack`, `status`, `reply`, `ask`) change
+/// a review through the `ReviewDesk` and are announced as a notice. The
+/// views read the presence from it.
 @MainActor
 @Observable
 final class ListenerQueue {
@@ -36,7 +38,30 @@ final class ListenerQueue {
         var timeout: Task<Void, Never>?
     }
 
+    /// How an `ask` ends.
+    enum Asked: Equatable {
+        /// The person's answer.
+        case answered(StateReport.Message)
+        /// Its time ran out with no answer; the question stays open.
+        case ranOut
+        /// Nobody reads the answer: its client went away, or the app quits.
+        case gone
+    }
+
+    /// An `ask` that's held open until the person answers.
+    private struct OpenAsk {
+        var ticket = UUID()
+        var connection: UUID?
+        var answer: CheckedContinuation<Asked, Never>
+        var timeout: Task<Void, Never>?
+    }
+
     @ObservationIgnored private var open: OpenWait?
+    /// The open `ask`s, by the comment each one asks about: a comment has
+    /// one open question at most.
+    @ObservationIgnored private var asks: [ItemID: OpenAsk] = [:]
+    /// Told each thing the agent says, to show it as a notice.
+    @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let images: ImageFiles
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -109,9 +134,11 @@ final class ListenerQueue {
     }
 
     /// The connection `connection` closed at its client's end: a `wait`
-    /// held on it is over, and the listener no longer waits.
+    /// held on it is over, and the listener no longer waits. An `ask` held
+    /// on it is over too; its question stays in the thread.
     func connectionClosed(_ connection: UUID) {
         close(.gone) { $0.connection == connection }
+        for (id, ask) in asks where ask.connection == connection { closeAsk(id, ask.ticket, .gone) }
     }
 
     /// The reply that carried `ref` couldn't be written: the batch is first
@@ -125,6 +152,112 @@ final class ListenerQueue {
     /// connects again once the app is back.
     func stop() {
         close(.gone) { _ in true }
+        for (id, ask) in asks { closeAsk(id, ask.ticket, .gone) }
+    }
+
+    // MARK: - The listener's answers
+
+    /// `video-review ack`: the listener has the batch. Its comments turn
+    /// `acknowledged`, and `text` is a message for the full batch.
+    func ack(_ batchID: String, text: String?) throws(AppRefusal) -> StateReport.Batch {
+        outbox.heard(at: now())
+        guard let id = ItemID(batchID), id.kind == .batch, let hash = desk.contentHash(of: id) else {
+            throw AppRefusal(ReviewRefusal.unknownBatch(batchID).line)
+        }
+        let messageID = ItemID.make(.message)
+        let batch = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
+            try review.acknowledge(id, text: text, messageID: messageID, at: time)
+        }
+        let count = batch.commentIDs.count
+        // The acknowledgement's own words, when it came with some.
+        let words = batch.messages.last.flatMap { $0.id == messageID ? $0.text : nil }
+        notify(.batch(id), .acknowledgement, words ?? "It got your \(count) comment\(count == 1 ? "" : "s").")
+        return StateReport.Batch(batch)
+    }
+
+    /// `video-review status`: how far the listener is with a comment. The
+    /// batch whose last comment finishes is no longer taken, so the
+    /// listener is back to listening.
+    func status(_ commentID: String, _ state: CommentState) throws(AppRefusal) -> StateReport.Comment {
+        outbox.heard(at: now())
+        let (id, hash) = try comment(commentID)
+        let comment = try desk.change(hash) { review throws(ReviewRefusal) in try review.setStatus(id, state) }
+        if let batchID = comment.batchID, desk.review(of: hash)?.isFinished(batchID) == true {
+            outbox.finished(BatchRef(batchID: batchID, contentHash: hash))
+        }
+        return StateReport.Comment(comment, contentHash: hash, images: images)
+    }
+
+    /// `video-review reply`: the agent's message on a comment's thread, or
+    /// for the full batch when `target` is a batch's id.
+    func reply(to target: String, text: String) throws(AppRefusal) -> StateReport.Message {
+        outbox.heard(at: now())
+        guard let id = ItemID(target), id.kind != .message, let hash = desk.contentHash(of: id) else {
+            throw AppRefusal("no comment or batch `\(target)`; the batch `video-review wait` printed names their ids")
+        }
+        let time = now()
+        let message = try desk.change(hash) { review throws(ReviewRefusal) in
+            try review.reply(to: id, text: text, messageID: ItemID.make(.message), at: time)
+        }
+        notify(id.kind == .batch ? .batch(id) : .comment(id), .message, message.text)
+        return StateReport.Message(message)
+    }
+
+    /// `video-review ask`: the agent's question on a comment's thread,
+    /// held until the person answers it, for up to `waitSeconds` (nil: with
+    /// no limit). When the time runs out the question stays open, and an
+    /// answer that comes later stays in the thread.
+    func ask(_ commentID: String, question: String, waitSeconds: Int?, connection: UUID? = nil) async throws(AppRefusal) -> Asked {
+        outbox.heard(at: now())
+        let (id, hash) = try comment(commentID)
+        let time = now()
+        let message = try desk.change(hash) { review throws(ReviewRefusal) in
+            try review.ask(id, question: question, messageID: ItemID.make(.message), at: time)
+        }
+        notify(.comment(id), .question, message.text)
+        if waitSeconds == 0 { return .ranOut }
+        outbox.askOpened(at: time)
+        return await withCheckedContinuation { continuation in
+            var asking = OpenAsk(connection: connection, answer: continuation)
+            if let waitSeconds {
+                let ticket = asking.ticket
+                asking.timeout = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(waitSeconds)) } catch { return }
+                    self?.closeAsk(id, ticket, .ranOut)
+                }
+            }
+            asks[id] = asking
+        }
+    }
+
+    /// The person answered the open question of the comment `id`: the
+    /// `ask` that waits for it, when one still does, exits with the answer.
+    func answered(_ id: ItemID, with message: ThreadMessage) {
+        guard let ask = asks[id] else { return }
+        closeAsk(id, ask.ticket, .answered(StateReport.Message(message)))
+    }
+
+    /// Ends the open `ask` on the comment `id` with `outcome`, when it's
+    /// still the one `ticket` names.
+    private func closeAsk(_ id: ItemID, _ ticket: UUID, _ outcome: Asked) {
+        guard let ask = asks[id], ask.ticket == ticket else { return }
+        asks[id] = nil
+        ask.timeout?.cancel()
+        outbox.askClosed(at: now())
+        ask.answer.resume(returning: outcome)
+    }
+
+    /// The comment a listener's command names, and its video. The command
+    /// names no video, so every review of this run is looked at.
+    private func comment(_ text: String) throws(AppRefusal) -> (ItemID, String) {
+        guard let id = ItemID(text), id.kind == .comment, let hash = desk.contentHash(of: id) else {
+            throw AppRefusal("no comment `\(text)`; the batch `video-review wait` printed names each comment's id")
+        }
+        return (id, hash)
+    }
+
+    private func notify(_ subject: Notice.Subject, _ kind: Notice.Kind, _ text: String) {
+        announce?(Notice(subject: subject, kind: kind, agent: outbox.session?.name ?? "The agent", text: text, at: now()))
     }
 
     // MARK: - Delivery

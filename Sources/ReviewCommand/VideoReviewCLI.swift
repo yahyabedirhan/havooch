@@ -134,6 +134,9 @@ public enum VideoReviewCLI {
         switch answer {
         case .success(let reply) where reply.ok:
             return CommandResult(output: reply.output, error: reply.error)
+        case .success(let reply) where reply.timedOut == true:
+            // A held request (an `ask`) waited its whole time: nothing to print.
+            return CommandResult(exitCode: CommandResult.timedOutCode)
         case .success(let reply):
             return .refused(reply.error.isEmpty ? "\(AppIdentity.appName) refused without saying why" : reply.error)
         case .failure(.notRunning):

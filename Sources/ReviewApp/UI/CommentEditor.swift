@@ -2,13 +2,16 @@ import AppKit
 import SwiftUI
 
 /// The text view a comment is written in: in the comment box and on a card
-/// that's being edited. It's a standard `NSTextView` that takes the focus
-/// when it appears, so the player's keys stand back while the person types
-/// and dictation has a normal text view to type into.
+/// that's being edited, and an answer under a question. It's a standard
+/// `NSTextView` that takes the focus when it appears, so the player's keys
+/// stand back while the person types and dictation has a normal text view
+/// to type into. An answer box waits for a click instead (`takesFocus`
+/// false): a question arrives while the person does something else.
 ///
 /// Return commits, Shift+Return makes a new line, Escape cancels.
 struct CommentEditor: NSViewRepresentable {
     @Binding var text: String
+    var takesFocus = true
     let commit: () -> Void
     let cancel: () -> Void
 
@@ -47,6 +50,7 @@ struct CommentEditor: NSViewRepresentable {
         view.textContainerInset = Self.inset
         view.string = text
         view.setAccessibilityLabel("Comment")
+        guard takesFocus else { return scroll }
         // Once the view is in its window: the person types at once.
         DispatchQueue.main.async { [weak view] in
             guard let view, let window = view.window else { return }
@@ -84,7 +88,10 @@ struct CommentEditor: NSViewRepresentable {
             switch CommentEditor.keyAction(for: selector, shift: shift) {
             case .commit: parent.commit()
             case .newLine: textView.insertNewlineIgnoringFieldEditor(nil)
-            case .cancel: parent.cancel()
+            case .cancel:
+                parent.cancel()
+                // A box that stays on screen gives the keys back to the player.
+                if !parent.takesFocus { textView.window?.makeFirstResponder(nil) }
             case nil: return false
             }
             return true
@@ -97,11 +104,12 @@ struct CommentEditor: NSViewRepresentable {
 struct CommentField: View {
     @Binding var text: String
     var placeholder = "Add a comment…"
+    var takesFocus = true
     let commit: () -> Void
     let cancel: () -> Void
 
     var body: some View {
-        CommentEditor(text: $text, commit: commit, cancel: cancel)
+        CommentEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)

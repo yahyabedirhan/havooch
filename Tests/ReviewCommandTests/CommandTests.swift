@@ -35,6 +35,17 @@ struct CommandTests {
         (["batch", "send"], .batchSend),
         (["wait"], .wait(timeoutSeconds: nil)),
         (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
+        (["ack", "b-5d0c2a91"], .ack(batchID: "b-5d0c2a91", text: nil)),
+        (["ack", "b-5d0c2a91", "On it"], .ack(batchID: "b-5d0c2a91", text: "On it")),
+        (["status", "c-7f3a9c2e", "working"], .status(commentID: "c-7f3a9c2e", state: .working)),
+        (["status", "c-7f3a9c2e", "done"], .status(commentID: "c-7f3a9c2e", state: .done)),
+        (["status", "c-7f3a9c2e", "failed"], .status(commentID: "c-7f3a9c2e", state: .failed)),
+        (["reply", "c-7f3a9c2e", "Slowed it down"], .reply(id: "c-7f3a9c2e", text: "Slowed it down")),
+        (["reply", "b-5d0c2a91", "All done"], .reply(id: "b-5d0c2a91", text: "All done")),
+        (["ask", "c-7f3a9c2e", "Which part?"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: nil)),
+        (["ask", "c-7f3a9c2e", "Which part?", "--wait", "30"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 30)),
+        (["ask", "--wait", "0", "c-7f3a9c2e", "Which part?"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 0)),
+        (["thread", "answer", "c-7f3a9c2e", "The intro"], .threadAnswer(commentID: "c-7f3a9c2e", text: "The intro")),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -150,6 +161,14 @@ struct CommandTests {
         ["batch"], ["batch", "send", "now"], ["batch", "send", "--timeout", "5"],
         ["wait", "now"], ["wait", "--timeout"], ["wait", "--timeout", "soon"], ["wait", "--timeout", "-1"],
         ["wait", "--timeout", "86401"], ["wait", "--wait", "5"],
+        ["ack"], ["ack", "b-5d0c2a91", "On", "it"], ["ack", "b-5d0c2a91", "--wait", "5"],
+        ["status"], ["status", "c-7f3a9c2e"], ["status", "c-7f3a9c2e", "acknowledged"], ["status", "c-7f3a9c2e", "sent"],
+        ["status", "c-7f3a9c2e", "done", "now"],
+        ["reply"], ["reply", "c-7f3a9c2e"], ["reply", "c-7f3a9c2e", "Slowed", "it"],
+        ["ask"], ["ask", "c-7f3a9c2e"], ["ask", "c-7f3a9c2e", "Which part?", "--wait"],
+        ["ask", "c-7f3a9c2e", "Which part?", "--wait", "soon"], ["ask", "c-7f3a9c2e", "Which part?", "--wait", "-1"],
+        ["ask", "c-7f3a9c2e", "Which part?", "--wait", "86401"], ["ask", "c-7f3a9c2e", "Which part?", "--timeout", "5"],
+        ["thread"], ["thread", "answer"], ["thread", "answer", "c-7f3a9c2e"], ["thread", "answer", "c-7f3a9c2e", "The", "intro"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -248,6 +267,31 @@ struct CommandTests {
         }
         #expect(VideoReviewCLI.run(["wait"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
         #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)
+    }
+
+    // MARK: - ask
+
+    @Test("ask prints the person's answer, exit 0, and may be held for its whole wait, or with no limit without one")
+    func askPrintsTheAnswer() {
+        let run = Run { _, _ in .success(.done("The intro\n")) }
+        defer { run.cleanUp() }
+        #expect(run("ask", "c-7f3a9c2e", "Which part?", "--wait", "600") == CommandResult(output: "The intro\n"))
+        #expect(run("ask", "c-7f3a9c2e", "Which part?") == CommandResult(output: "The intro\n"))
+        #expect(run.transport.sent.map(\.message.request.holdSeconds) == [600, nil])
+    }
+
+    @Test("an ask whose wait runs out exits 2 with nothing printed; a refused one exits 1 with the reason")
+    func askRunsOutOrIsRefused() {
+        let ranOut = Run { _, _ in .success(.ranOut) }
+        defer { ranOut.cleanUp() }
+        #expect(ranOut("ask", "c-7f3a9c2e", "Which part?", "--wait", "5") == CommandResult(exitCode: 2))
+        #expect(ranOut("ask", "c-7f3a9c2e", "Which part?", "--wait", "5", "--json") == CommandResult(exitCode: 2))
+
+        let line = "c-7f3a9c2e already has an open question"
+        let refused = Run { _, _ in .success(.refused(line)) }
+        defer { refused.cleanUp() }
+        #expect(refused("ask", "c-7f3a9c2e", "And how?") == CommandResult(error: line + "\n", exitCode: 1))
+        #expect(refused("status", "c-7f3a9c2e", "working") == CommandResult(error: line + "\n", exitCode: 1))
     }
 
     @Test("--help prints the usage on standard output")
