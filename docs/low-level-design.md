@@ -608,6 +608,28 @@ The idea: **the video is the stage, the timeline carries the markers, and a rail
 | 20 | A Context button in the toolbar opens a popover with the sidecar's text (read-only, in a box that scrolls, under the file's name; its path is the tooltip) and the editable note under it. With no sidecar the popover names the two files it looked for. Return or Save keeps the note and closes the popover, Shift+Return makes a new line, Escape or Cancel closes it with no change. The popover's foot says when the agent gets the context: "Goes to the agent with your next batch", "The agent has this. It goes again when it changes" or "Nothing to tell the agent yet". The button's glyph is filled while the video has a context. A small chip beside it names the transcript source and its progress. A small chip beside it names the transcript source and its progress: "Voiceover transcript", "Subtitle transcript", "Transcribing… 2 lines" with a moving waveform, "Speech transcript", "No speech", or "No transcript" with a warning sign when the transcription gave up. Its tooltip says where the lines come from, or why there are none. The chip's words are a pure struct, `TranscriptChip`. It is drawn again each second. | The person can check what the agent will be told without leaving the player, and sees that a change will reach the agent. The keys are the comment box's keys. |
 | 21 | A "Demo data" chip shows in the toolbar during a demo run. | The person can tell a demo from their own data. |
 
+### The listener skill
+
+`.agents/skills/video-review-mate/SKILL.md` is the whole skill: one file, no code. A Claude Code session in the repo the feedback is about reads it and becomes the listener. It uses only the listener commands, `state --json` and `app status` of the spec's contract, so the same file drives each prototype.
+
+```text
+start        find the CLI once: $VIDEO_REVIEW_CLI, else /Applications/Video Review.app/Contents/Helpers/video-review,
+             else the one /Applications/Video Review*.app/Contents/Helpers/video-review
+listen       `wait` as a background command; exit 0 wakes the session with the payload, exit 2 → `wait` again
+on a batch   `ack <batch-id> "<line>"`, then a new background `wait`, both before the batch is studied
+per comment  open the crop and the keyframe, read the text, the transcript and the context
+             `status working` → decide the intent (research, design change, issues, spec, implementation) → the work
+             → one commit when files changed → `reply <comment-id>` with the short SHA → `status done`
+             cannot be done: `reply <comment-id>` with the reason → `status failed`
+unclear      `ask` as a background command; the next comment goes on; exit 0 wakes the session with the answer
+             exit 2: the late answer is read from `state --json` (the comment's thread), else `failed` with a reply
+close        `reply <batch-id>` with one line for the whole batch
+```
+
+- The skill's facts about the app come from the contract, and its advice holds in a build that behaves otherwise: it runs `wait` again on exit 2 although this build's `wait` has no limit, and it tells the user when `wait` says the app is not running although this build's `wait` connects again by itself.
+- The session is the listener session of D5: every `video-review` command runs in the session itself, so the holder key stays the same. A batch that comes again after a new session started (D6) is checked against `git log` before its work is done twice.
+- The skill is found by a session through its harness, not through this repo: it is linked or copied into the target repo's skills folder, or into the user's own. This repo has no `.claude/skills` link (D163).
+
 ## 4. Implementation
 
 ### The methods that carry the logic
@@ -963,6 +985,23 @@ Decisions of the ticket "Mate: Show agent answers and questions in the player":
 | D138 | An open question and the agent each have a colour no state has (purple, indigo). | A question must not read as a state. |
 | D139 | A notice for a comment whose video is not open says "a comment", and a click on it only takes it down. | The comment has no marker to number it by or to select. |
 
+Decisions of the ticket "Mate: Ship the video-review-mate skill":
+
+| # | Decision | Reason |
+|---|---|---|
+| D160 | The skill is one `SKILL.md` with no reference file and no script. | Every branch of the loop needs nearly all of it, and it is short. A script would be a second thing to keep in step with the CLI. |
+| D161 | The skill finds the CLI in one place: `$VIDEO_REVIEW_CLI`, else the real product's path, else the one `/Applications/Video Review*.app`. With several, it asks the user. | The path is all that differs between the builds. The glob finds a prototype's app without the skill naming one. |
+| D162 | The skill has a description, so a session can start it from the user's words as well as by its name. | It costs context only in a repo where it is installed, and a headless session is started with a plain sentence. |
+| D163 | This repo has no `.claude/skills` link to the skill. | `AGENTS.md` names no such folder. The skill is for sessions in other repos; a session working on this repo is not a listener. |
+| D164 | On a batch the skill sends `ack` first, then starts the new `wait`. | The acknowledgement is what the person waits for. Both are one command each, so the new `wait` is open a moment later. |
+| D165 | The skill never runs an operator command, `app open` included. | An operator command takes the lease and shows the banner. The person opens the app and the video. |
+| D166 | The reason for a `failed` comment is a `reply` sent before `status failed`. | `status` carries no text in the contract. |
+| D167 | `ask` runs as a background command with no `--wait`, and the other comments go on. | A foreground command of a harness ends after minutes, and a cut-off `ask` leaves an open question that refuses the next `ask`. |
+| D168 | A question with no answer (exit 2, or the app quit) is looked up once in `state --json` when the rest of the batch is finished. With no answer there, the comment is `failed` with a reply. | Every comment must end, and D11 gives the late answer no other way out. |
+| D169 | The batch-level `reply` comes last, after every comment is `done` or `failed`. | It reports the result of all of them. This build takes a message on a finished batch. |
+| D170 | Comments are worked one at a time, in the payload's order. | One working tree and one commit per comment. |
+| D171 | When the app is not running, the skill tells the user and keeps the results; it does not wait in a loop of its own. | This build's `wait` connects again by itself. A build whose `wait` exits must not make the session spin. |
+
 ## 7. What is built so far
 
 The sections above describe the whole build. This list says what the code holds today. Each ticket moves its line.
@@ -1039,6 +1078,12 @@ Built (the ticket "Mate: Show agent answers and questions in the player"):
 - `state --json` has `thread` on a comment and `messages` on a batch.
 - Tests: threads, statuses and the outbox's asks in `ReviewCoreTests`; the requests in `ReviewWireTests`; the commands, their usage and `ask`'s exit codes in `ReviewCommandTests`; in `ReviewAppTests` the listener's answers through `AppModel` and `ControlServer` on the fixture video (`ack` with and without text, each status and the return to listening, replies to a comment and to a batch, notices and unread marks, `ask` answered by `thread answer` and by the answer box's call, an `ask` that runs out and its late answer, the refusals, a video that is no longer open, and over the real socket an `ask` held until its answer and one whose client goes away), and the words of a thread heading and a notice.
 - Not checked by an agent: typing in the answer box, its Return, Escape and Answer button, and a click on a notice. The answer box calls `AppModel.answerQuestion`, which calls the same `AppModel.answer` as `thread answer`; a click on a notice calls `AppModel.openNotice`. Both are tested at `AppModel`.
+
+Built (the ticket "Mate: Ship the video-review-mate skill"):
+
+- `.agents/skills/video-review-mate/SKILL.md`. No code changed.
+- Checked by reading: every command line in the skill against `ListenerCommands.swift`, the command table and the exit codes in `VideoReviewCLI`.
+- Not checked by this ticket's agent: a live session with the skill against the app. The installed app was in use by another ticket; the check runs at integration.
 
 Not built yet, and what stands in its place:
 
