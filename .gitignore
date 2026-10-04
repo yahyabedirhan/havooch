@@ -1,0 +1,6 @@
+.scratch/
+.build/
+*.app
+.DS_Store
+build/
+.claude/worktrees/
