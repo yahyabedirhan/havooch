@@ -104,6 +104,10 @@ final class ControlServer {
         var timeout: Task<Void, Never>?
     }
 
+    /// What the app does at launch before it answers its first request:
+    /// opening the last video again. Nil when there's nothing to wait for.
+    var ready: Task<Void, Never>?
+
     init(
         socket: URL,
         app: any AppControlling,
@@ -141,6 +145,9 @@ final class ControlServer {
     /// is sent. `connection` names the connection the request came over,
     /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
+        // The app is still opening its last video: a command sees the app
+        // with it open, not the moment before.
+        await ready?.value
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)

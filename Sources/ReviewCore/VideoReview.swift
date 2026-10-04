@@ -10,12 +10,18 @@ public struct VideoInfo: Codable, Equatable, Sendable {
     public var duration: TimeInterval
     /// Where the file was when it was last opened.
     public var path: String
+    /// Frames a second, as the player read it when the video was last
+    /// opened; nil in a review kept before this was. A `voiceover.json`'s
+    /// scene times need it, also for a batch that's delivered in a run
+    /// that didn't open the video.
+    public var frameRate: Double?
 
-    public init(contentHash: String, title: String, duration: TimeInterval, path: String) {
+    public init(contentHash: String, title: String, duration: TimeInterval, path: String, frameRate: Double? = nil) {
         self.contentHash = contentHash
         self.title = title
         self.duration = duration
         self.path = path
+        self.frameRate = frameRate
     }
 }
 
@@ -108,7 +114,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
             comments[index].state = .sent
             comments[index].batchID = batchID
         }
-        let batch = Batch(id: batchID, sentAt: now, commentIDs: queued.map { comments[$0].id })
+        let batch = Batch(id: batchID, sentAt: Self.kept(now), commentIDs: queued.map { comments[$0].id })
         batches.append(batch)
         return batch
     }
@@ -146,7 +152,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
             comments[index].state = .acknowledged
         }
         if let words = text?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty {
-            batches[batch].messages.append(ThreadMessage(id: messageID, author: .agent, kind: .message, text: words, at: now))
+            batches[batch].messages.append(ThreadMessage(id: messageID, author: .agent, kind: .message, text: words, at: Self.kept(now)))
         }
         return batches[batch]
     }
@@ -169,7 +175,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     /// when `id` names a batch.
     @discardableResult
     public mutating func reply(to id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
-        let message = ThreadMessage(id: messageID, author: .agent, kind: .message, text: try Self.message(text), at: now)
+        let message = ThreadMessage(id: messageID, author: .agent, kind: .message, text: try Self.message(text), at: Self.kept(now))
         if id.kind == .batch {
             batches[try batchIndex(id)].messages.append(message)
         } else {
@@ -184,7 +190,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func ask(_ id: ItemID, question: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
         let index = try sentIndex(id)
-        let message = ThreadMessage(id: messageID, author: .agent, kind: .question, text: try Self.message(question), at: now)
+        let message = ThreadMessage(id: messageID, author: .agent, kind: .question, text: try Self.message(question), at: Self.kept(now))
         guard comments[index].openQuestion == nil else { throw .questionOpen(id) }
         comments[index].thread.append(message)
         return message
@@ -194,10 +200,16 @@ public struct VideoReview: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func answer(_ id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
         guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
-        let message = ThreadMessage(id: messageID, author: .person, kind: .answer, text: try Self.message(text), at: now)
+        let message = ThreadMessage(id: messageID, author: .person, kind: .answer, text: try Self.message(text), at: Self.kept(now))
         guard comments[index].openQuestion != nil else { throw .noQuestion(id) }
         comments[index].thread.append(message)
         return message
+    }
+
+    /// A time as the review keeps it: to the millisecond, which is what
+    /// its file holds, so a review reads back as it was.
+    private static func kept(_ time: Date) -> Date {
+        Date(timeIntervalSince1970: (time.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
     }
 
     private func batchIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {

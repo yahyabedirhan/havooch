@@ -49,7 +49,7 @@ final class AppModel: AppControlling {
 
     let engine = PlayerEngine()
     /// The open video's review, and the one path for changing it.
-    let desk = ReviewDesk()
+    let desk: ReviewDesk
     /// The listener's side: the batches in line and whether an agent is
     /// there for them.
     let listeners: ListenerQueue
@@ -97,6 +97,7 @@ final class AppModel: AppControlling {
         support = SupportFolder.app(environment: environment)
         isDemo = SupportFolder.moved(environment: environment) != nil
         images = ImageFiles(support: support)
+        desk = ReviewDesk(library: Library(support: support))
         listeners = ListenerQueue(desk: desk, images: images)
         transcripts = TranscriptDesk(support: support, speech: speech)
         listeners.transcripts = transcripts
@@ -137,8 +138,11 @@ final class AppModel: AppControlling {
         guard let contentHash = await Task.detached(operation: { ContentHash.of(url) }).value else {
             throw AppRefusal("can't read \(url.path)")
         }
-        try await engine.load(url)
+        // Before the player changes: a history that doesn't read keeps the
+        // video shut, and the one that was open stays open.
         let title = url.deletingPathExtension().lastPathComponent
+        var review = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
+        try await engine.load(url)
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         draft = nil
         selection = nil
@@ -148,10 +152,27 @@ final class AppModel: AppControlling {
         unread = []
         isContextShown = false
         sidecar = ContextReader.sidecar(beside: url)
-        desk.open(VideoInfo(contentHash: contentHash, title: title, duration: engine.duration, path: url.path))
-        transcripts.opened(VideoFile(
-            url: url, contentHash: contentHash, frameRate: 1 / engine.frameDuration, duration: engine.duration
-        ))
+        let frameRate = 1 / engine.frameDuration
+        // The same content, where and as it is now: a renamed or moved copy
+        // has its history, and the review records the new path.
+        review.video = VideoInfo(
+            contentHash: contentHash, title: title, duration: engine.duration, path: url.path, frameRate: frameRate
+        )
+        desk.open(review)
+        desk.library.saveRecent(url)
+        transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
+    }
+
+    /// At launch: the video that was open last opens again, paused at its
+    /// start, with its history. One whose file is gone, or that doesn't
+    /// open any more, leaves the app with no video.
+    func openRecent() async {
+        guard video == nil, let url = desk.library.recent(), FileManager.default.fileExists(atPath: url.path) else { return }
+        do throws(AppRefusal) {
+            try await open(url)
+        } catch {
+            problem = Problem(title: "The last video didn't open", reason: error.reason)
+        }
     }
 
     func play() throws(AppRefusal) {

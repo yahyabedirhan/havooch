@@ -274,7 +274,7 @@ Sources/
     SpeechSource.swift             speech in the background: the lines so far, once per video, kept in a cache; the SpeechRecognizing seam
     AppleSpeechRecognizer.swift    Apple SpeechAnalyzer on the video file's sound, one line per finalized result
   ReviewStore/
-    Library.swift                  the support folder's layout; load and save reviews, the outbox, transcripts; the id index
+    Library.swift                  reviews, the outbox and the last video on disk: load, save, the schema version; the id index
     ContentHash.swift              SHA-256 of the file, streamed
     ImageFiles.swift               where keyframes and crops are, writing and removing a PNG, a small copy for a card
     TranscriptFiles.swift          where a video's finished speech transcript is kept: load and save
@@ -322,8 +322,8 @@ Tests/
   ReviewCommandTests/              parsing, the request sent, output and exit codes, with a fake transport and launcher
   ReviewCoreTests/                 the state machine, batch assembly, the outbox
   ReviewTranscriptTests/           the window cut, the source order, voiceover timing, srt and vtt parsing (reads fixtures/sample), speech with a recognizer the test drives
-  ReviewStoreTests/                round trips in a temp folder, the content hash of a renamed copy, the kept transcript
-  ReviewAppTests/                  ControlServer with a fake app, the lease gate and the line of takes over the real socket, the keys, comments and batches through AppModel on the fixture video, the listener queue behind the server, VideoFrameGeometry, the transcript window in the payload (voiceover, srt only, slow speech)
+  ReviewStoreTests/                round trips in a temp folder, the content hash of a renamed copy, the kept transcript, the library (the id index, files that do not read, a newer schema, a save that fails, the outbox rebuilt)
+  ReviewAppTests/                  ControlServer with a fake app, the lease gate and the line of takes over the real socket, the keys, comments and batches through AppModel on the fixture video, the listener queue behind the server, VideoFrameGeometry, the transcript window in the payload (voiceover, srt only, slow speech), restarts (a second model on the same support folder)
 ```
 
 A module and a type never share a name, so a type can always be qualified by its module.
@@ -388,7 +388,7 @@ A module and a type never share a name, so a type can always be qualified by its
 
 ```swift
 public struct VideoReview: Codable, Equatable {       // one video's review
-    public var video: VideoInfo                        // contentHash, title, duration, path (last seen)
+    public var video: VideoInfo                        // contentHash, title, duration, path and frameRate (as last opened)
     public var note: String                            // the in-app context note
     public private(set) var comments: [Comment]        // kept in time order
     public private(set) var batches: [Batch]           // in the order sent
@@ -418,7 +418,7 @@ public struct VideoReview: Codable, Equatable {       // one video's review
 - A `Comment` holds `id`, `time`, `text`, `state`, `region` (nil for the whole frame) and `batchID` (nil while it is queued). It holds no image path: the keyframe and the crop are files named after the id (`ImageFiles`).
 - Comments at the same time stay in the order they were added. `CommentState.isEditable` is true for `queued` only.
 - A `Batch` is `id`, `sentAt` and `commentIDs` in time order. `send(batchID:at:)` moves every queued comment to `sent` and gives it the batch's id. `comments(of:)` gives a batch's comments. `isFinished` is true when each of them is `done` or `failed`. `requeue` returns the unfinished ones to `sent`, which is the one move back, and leaves the finished ones.
-- A `ThreadMessage` is `id`, `author` (`person` or `agent`), `kind` (`message`, `question` or `answer`), `text` and `at`. A comment's `thread` and a batch's `messages` are arrays of them, in the order written. A review file written before threads existed reads with empty ones. `[ThreadMessage].openQuestion` is the last question while no answer follows it; `Comment.openQuestion` is its thread's.
+- A `ThreadMessage` is `id`, `author` (`person` or `agent`), `kind` (`message`, `question` or `answer`), `text` and `at`. A comment's `thread` and a batch's `messages` are arrays of them, in the order written. A review file written before threads existed reads with empty ones. A time that enters a review (`sentAt`, a message's `at`) is cut to the millisecond, which is what the file holds, so a review reads back equal to the one that was saved. `[ThreadMessage].openQuestion` is the last question while no answer follows it; `Comment.openQuestion` is its thread's.
 - `acknowledge` moves each comment of the batch that is still `sent` to `acknowledged`, and leaves one further on where it is. Words that come with it are an agent `message` on the batch.
 - `setStatus` takes `working`, `done` or `failed` (`CommentState.isStatus`), and moves forward only (`canMove`). The state the comment already has is accepted and changes nothing. Any other move is `illegalMove`.
 - `reply` adds an agent `message` to a comment's thread, or to a batch's messages when the id is a batch's. `ask` adds an agent `question`, refused while one is open (`questionOpen`). `answer` adds a person's `answer`, refused with no open question (`noQuestion`). A reply does not close a question.
@@ -450,10 +450,12 @@ public struct Outbox: Codable, Equatable {
     mutating func askOpened(at now:)                                 // an ask is held for its answer
     mutating func askClosed(at now:)                                 // answered, out of time, or its client gone
     func presence(at now:) -> Presence                               // listening | working | absent
+    mutating func reconcile(unfinished: [BatchRef])                  // at launch: agree with the reviews on disk
+    func isKeptAs(_ other:) -> Bool                                  // the same on disk: pending, taken, session, contextSent
 }
 ```
 
-`ListenerSession` is the holder's `key`, `name` and `place` as `ReviewCore`'s own type, since `ReviewCore` does not link `ReviewWire`. `Codable` keeps `pending`, `taken`, `session` and `contextSent`; an outbox read from disk has no open `wait`.
+`ListenerSession` is the holder's `key`, `name` and `place` as `ReviewCore`'s own type, since `ReviewCore` does not link `ReviewWire`. `Codable` keeps `pending`, `taken`, `session` and `contextSent`; an outbox read from disk has no open `wait`, and a key that is missing reads as empty. `reconcile(unfinished:)` is given every batch on disk with an unfinished comment, in the order sent: a batch that is no longer one of them leaves `pending` and `taken`, and one that is in neither joins the end of the line. So a run that ended between the save of a review and the save of the outbox, and an outbox file that was lost, cost no feedback.
 
 The context rule: `context(for:text:)` gives the text on a session's first batch of a video and whenever the text's digest differs from the one the session last got, and `nil` otherwise. With no text it gives `nil` and keeps the digest, so a sidecar that goes and comes back unchanged is not sent again. The digest (`Outbox.digest`) is the text's length in bytes and its 64-bit FNV-1a hash, the same in every run of the app. `VideoReview` reads a review with no `note` key as an empty note.
 
@@ -487,13 +489,14 @@ public protocol Transcriber: Sendable {
 }
 ```
 
+- `VideoInfo.frameRate` is the frame rate the player read when the video was last opened; a review kept before it existed has none. It lets a `voiceover.json` be read for a batch that is delivered in a run that did not open the video.
 - `VideoFile` is the file URL, the content hash (the key a source keeps its work under), the frame rate and the duration. `Transcript` is what is known of a video's transcript now: `source` (`voiceover`, `subtitles` or `speech`), `lines` in time order, `complete`, and `problem` (why the source gave up, else nil). `TranscriptLine` is `start`, `end`, `text`, with the times to the millisecond in every source.
 - A source answers at once with what it has and never makes its caller wait. This is how a comment sent before the transcript is ready gets the lines that exist then.
 - `TranscriptSources` holds the sources in order and is a `Transcriber` itself: `pick(for:)` is the first source whose `transcript(of:)` is not nil, and `prepare` starts only that one. `TranscriptSources.standard(speech:)` is the spec's order: `VoiceoverSource`, `SubtitleSource`, then the speech source, which serves every video. The interface has three implementations today, which is why it is an interface; the transcription research replaces or adds a source behind it.
 - `VoiceoverSource`: `<base>.voiceover.json`, else `voiceover.json`, in the video's folder. A scene lasts `ceil((durationSeconds + paddingSeconds) × fps)` frames and starts where the previous one ends. One line per scene; a scene with no text takes its time and gives no line. The file is read each time it is asked. A file that does not read as a voiceover leaves the video to the next source.
 - `SubtitleSource`: `<base>.srt`, else `<base>.vtt`. `parse` reads both formats the same way: blocks with a blank line between them, and a cue is the block with a `start --> end` line; what is above that line is dropped, the rows under it are joined with a space, and markup (`<i>`, `<v Name>`, `{\an8}`) is removed. Times are `HH:MM:SS,mmm`, `HH:MM:SS.mmm` or `MM:SS.mmm`. A file with no cue leaves the video to the next source.
 - `TranscriptWindow.range(around: time, duration:)` is `time − 15 … time + 15`, kept inside the video. `cut(lines, to: window)` keeps every line that overlaps the window, whole; a line that only touches the window's edge is out.
-- `SpeechSource` holds each video's speech transcript by content hash, behind a lock. `prepare` starts a background task once per video: it takes the finished transcript from its `Cache` when there is one, else it reads lines from its `SpeechRecognizing` one at a time, appends each, then marks the transcript complete and saves it to the cache. A recognizer that throws leaves the lines it gave and sets `problem`; the video's next opening starts over. Its `Cache` is two closures, load and save, so `ReviewTranscript` does not link `ReviewStore`.
+- `SpeechSource` holds each video's speech transcript by content hash, behind a lock. `transcript(of:)` for a video that was not prepared in this run gives the finished transcript in the `Cache`, when there is one. `prepare` starts a background task once per video: it takes the finished transcript from its `Cache` when there is one, else it reads lines from its `SpeechRecognizing` one at a time, appends each, then marks the transcript complete and saves it to the cache. A recognizer that throws leaves the lines it gave and sets `problem`; the video's next opening starts over. Its `Cache` is two closures, load and save, so `ReviewTranscript` does not link `ReviewStore`.
 - `SpeechRecognizing` is the seam under the speech source: `lines(of: file)` is a stream of lines that ends when the file is done. `AppleSpeechRecognizer` is the real one: a `SpeechTranscriber` for the Mac's language (the nearest supported locale, else `en-US`) with audio time ranges, its model installed through `AssetInventory` when it is missing, and a `SpeechAnalyzer` that reads the video file with `AVAudioFile`. Each finalized result is one line with that result's time range. A video with no sound track is done with no lines. The tests give a recognizer they drive.
 
 ### ReviewStore
@@ -502,20 +505,26 @@ public protocol Transcriber: Sendable {
 <support>/                               ~/Library/Application Support/Video Review (proto-2)/, or the demo folder
   control.sock                           while the app runs
   demo.json                              the demo pointer; only in the normal folder
-  outbox.json                            the Outbox
-  recent.json                            the path of the last open video
+  outbox.json                            the Outbox: schemaVersion, pending, taken, session, contextSent
+  recent.json                            schemaVersion and the path of the last open video
   videos/<contentHash>/
-    review.json                          one VideoReview, with schemaVersion
+    review.json                          one VideoReview (video, note, comments, batches), with schemaVersion
     transcript.json                      the finished speech transcript: source, lines, complete
     frames/<comment-id>.png              the keyframe, at the video's own size
     crops/<comment-id>.png               the region's crop
 ```
 
-- `Library(support:)` reads every `review.json` once at launch into an index from comment and batch ids to content hashes, so `status c-…` finds its video without the video being open.
-- `load(hash)`, `save(review)`, `loadOutbox()`, `save(outbox)`. Every save writes the whole file atomically. The files are small.
-- `TranscriptFiles(support:)` keeps a video's speech transcript: `file(of: hash)`, `load(hash)` and `save(transcript, contentHash:)`, written atomically. Only a complete transcript is written, so a video is transcribed once. A file that does not read is no transcript.
+- `Library(support:)` is one object per support folder, used on the main actor. Its `init` reads every `review.json` once into an index from comment and batch ids to content hashes, so `status c-…` finds its video without the video being open, and into the list of unfinished batches for `loadOutbox`. It writes nothing: a launch that changes nothing leaves the folder as it was, and a folder that does not exist is not made.
+- Reviews: `load(hash)` gives the review, or nil when the video has none yet; `save(review)` writes it and brings the index up to date (a deleted comment's id leaves it). `contentHash(of: id)` reads the index. `reviewFile(of:)`, `outboxFile` and `recentFile` are the files' places.
+- The outbox: `loadOutbox()` reads `outbox.json` and passes it through `Outbox.reconcile` with the unfinished batches of the reviews; with no file, or one that does not read, that puts every unfinished batch in line again. `save(outbox)` writes it.
+- The last video: `recent()` and `saveRecent(url)`. A file that does not read is no video, and one that cannot be written is not an error.
+- Every save encodes the whole file, writes it to a temporary file and renames that over the old one (`Data.write(options: .atomic)`). A reader, a quit and a crash during a save see the old file or the new one, never a part. Saves happen on the main actor, one after the other, so two never race. Files are pretty-printed JSON with sorted keys, and times are ISO 8601 with milliseconds.
+- Each file carries `schemaVersion` (1) beside its own keys; a file without it reads as version 1. A file from a higher version is not read and never written over: `load` throws `Library.Failure` with a line that names the file and both versions, `save(outbox)` throws, and `saveRecent` does nothing.
+- A `review.json` that does not read (half a file, not JSON, a missing key, the review of another content hash) is treated the same way: `load` throws with the file's path and why, and nothing writes over it. `Library.init` leaves such a review out of the index.
+- `Library.Failure` is one line, `reason`, for the person or the CLI.
+- `TranscriptFiles(support:)` stays beside the library, as `ImageFiles` does: the speech source reads and writes it from a background task, and `Library` is for the main actor. It keeps a video's speech transcript: `file(of: hash)`, `load(hash)` and `save(transcript, contentHash:)`, written atomically. Only a complete transcript is written, so a video is transcribed once. A file that does not read is no transcript.
 - `ContentHash.of(url)` is the SHA-256 of the whole file, read in 4 MiB chunks off the main actor. A renamed or moved copy has the same hash, so it opens the same folder; `review.json` then records the new path.
-- Demo and real data never mix: the `Library` only ever sees the support folder it was given.
+- Demo and real data never mix: the `Library`, `ImageFiles` and `TranscriptFiles` only ever see the support folder they were given, and the only file a demo run has outside its folder is the pointer `demo.json`, which the command writes.
 
 ### ReviewApp
 
@@ -523,7 +532,7 @@ public protocol Transcriber: Sendable {
 
 | Method | Rules it owns | Refuses |
 |---|---|---|
-| `open(url)` | hash, load the review, pick the transcript source, read the context, remember as recent | a file AVPlayer cannot play |
+| `open(url)` | hash, load the review (before the player changes), load the video, record where the video is now and its frame rate, pick the transcript source, read the context, remember as recent. `openRecent()` is the launch's call: it opens `Library.recent()` when that file is still there, and shows why when it does not open | a file AVPlayer cannot play; a review that does not read or is from a newer version (the video that was open stays open) |
 | `play()`, `pause()`, `seek(seconds)` | seek is exact and keeps play or pause | no video; a time outside the video |
 | `startDraft(region?)`, `commitDraft()`, `cancelDraft()` | starting a draft pauses and fixes the comment's time; commit writes the keyframe and crop, then queues the comment and selects it. A commit that fails opens the box again with its words. With a region while the box is open, the box takes the new region and the time of the frame on screen, and keeps its words | empty text (the box stays open) |
 | `clickFrame()`, `beginRegion()`, `endRegion(region?)`, `escape()` | the mouse on the frame. A click plays or pauses, and does nothing while the box is open. A drag's start pauses and sets `isDrawingRegion`. Its end opens the box on the region; a nil region (too small) and a drag that Escape cancelled open nothing. Escape drops the rectangle being drawn, else the open box with its region | |
@@ -538,8 +547,8 @@ public protocol Transcriber: Sendable {
 
 - `AppModel.unread` is the set of comments with an agent message the person has not looked at. Selecting a comment, or answering its question, reads it. It lives in memory only. `AppModel.agentName` is the listener session's name, or "Agent" before anyone listened.
 - `Notice` is a value: `subject` (a comment or a batch), `kind` (`acknowledgement`, `message` or `question`), the agent's name, the words and `expires` (5 s after it was raised, `Notice.life`; nil for a question). `title(number:)` and `hint` are its words, pure.
-- `ReviewDesk.contentHash(of: id)` finds the video whose review has a comment or a batch, by looking at every review of this run. The store ticket replaces it with the `Library`'s index.
-- `ReviewDesk.change(hash) { review in … }` is the one path for every change to a `VideoReview`: it takes the open review from memory or loads another video's from the `Library`, runs the change, saves, and publishes when the review is the open one. A thrown `ReviewRefusal` changes nothing. `change { … }` with no hash changes the open review. `review(of: hash)` reads a review, open or not.
+- `ReviewDesk(library:)` owns the `Library`. `contentHash(of: id)` finds the video whose review has a comment or a batch, from the library's index.
+- `ReviewDesk.change(hash) { review in … }` is the one path for every change to a `VideoReview`: it takes the review from memory, or loads it from the `Library` the first time and keeps it, runs the change, saves, and publishes when the review is the open one. A thrown `ReviewRefusal` changes nothing. A save that fails is refused too (`nothing changed: couldn't write …`), and memory keeps the review as it is on disk, so the person and the listener see the failure when it happens. A change that leaves the review equal writes nothing. `change { … }` with no hash changes the open review. `review(of: hash)` reads a review, open or not; `review(for: video)` is the review a video opens on (the kept one or a new one), refused when the kept one does not read; `open(review)` makes it the open one and saves it only when it is on disk already and its video moved, was renamed or got its frame rate. A new review is first written with its first change.
 - `PlayerEngine` wraps `AVPlayer`. `seek` uses zero tolerance and returns when the seek has finished, so `state` reports the time that was asked for. The duration is the video track's own length (21.233 s for the fixture), not the container's, whose sound track can run a few milliseconds longer. A file that does not play is refused, and the video that was open stays open.
 - `PlayerSurface` is an `AVPlayerView` with no controls that takes no click and no key (`hitTest` gives nil). The stage's own layer above it takes the mouse.
 - `Shortcuts` is one local key monitor. It maps a key to an action in a pure function, `action(keyCode:modifiers:isTyping:)`, which gives no action while a text view has the focus (`isTyping`), but for Cmd+Return (and Cmd+Enter on the keypad), which is `send` from anywhere. The Playback menu has the same actions with no key equivalents, since a menu key with no modifier would take the key from a text field; its Send Comments item shows Cmd+Return. The monitor sees the key first, and both call `AppModel.send`.
@@ -549,11 +558,11 @@ public protocol Transcriber: Sendable {
 - `VideoFrameGeometry(stage:video:)` is the pure way between the stage's points and a region: `frame` is the picture fitted whole and centred in the stage (the size comes from `PlayerEngine.videoSize`, the track's size after its transform), `rect(of: region)` is where a region is on the stage, and `region(from:to:)` is the region a drag draws, in any direction, clamped to the picture, with four decimals, or nil under 8 pt either way. `isDrag(from:to:)` tells a drag from a click at 4 pt. A region is kept as fractions of the frame, so nothing is stored that depends on the window's size.
 - `RegionOverlay` is the layer above the picture that takes the mouse: one drag gesture with no minimum distance, which calls `clickFrame`, `beginRegion` and `endRegion`. It draws the rectangle being drawn, the draft's region, and the selected comment's region with the comment's pin on its corner: the rest of the picture is dimmed and the rectangle is outlined in the accent colour.
 - `Composer.placement(beside:box:stage:)` is where the comment box sits for a region, as a pure function: right of the rectangle, else left, else below, else above, else the stage's lower right corner, always 12 pt inside the stage. `StageView` measures the box and passes its size.
-- `ListenerQueue` (`@Observable`, owned by `AppModel`) holds the `Outbox`, the one open `wait` (a continuation, with its timeout and the id of its connection) and the open `ask`s by comment id. `wait(by:timeout:connection:)` ends as an `Outcome`: `batch(ref, payload)`, `ranOut`, `replaced` or `gone`. It assembles the payload when a `wait` takes a batch; a batch in line with nothing left to deliver (no review in this run, or every comment finished) is discarded. `connectionClosed(id)` ends the `wait` held on that connection, `undelivered(ref)` puts a batch back, `stop()` ends the open `wait` with no reply. `report(at:)` is the `listener` of `state`. `ack`, `status`, `reply` and `ask` find their video with `ReviewDesk.contentHash(of:)`, change the review through `ReviewDesk.change`, and call `Outbox.heard` first, refused or not. `ack`, `reply` and `ask` hand a `Notice` to `announce`, a closure `AppModel` sets to `raise`; `status` raises none, since the marker shows it. `status` calls `Outbox.finished` when `VideoReview.isFinished` turns true for the comment's batch. `ask` ends as an `Asked`: `answered(message)`, `ranOut` or `gone`. The open `ask`s are held by comment id, each with its continuation, its timeout and its connection; `answered(id, with:)` resumes one, `connectionClosed` and `stop` end them as `gone`.
+- `ListenerQueue` (`@Observable`, owned by `AppModel`) holds the `Outbox`, the one open `wait` (a continuation, with its timeout and the id of its connection) and the open `ask`s by comment id. `wait(by:timeout:connection:)` ends as an `Outcome`: `batch(ref, payload)`, `ranOut`, `replaced` or `gone`. It assembles the payload when a `wait` takes a batch; a batch in line with nothing left to deliver (no review that reads, or every comment finished) is discarded. It starts from `Library.loadOutbox()` and saves the outbox in its `didSet` whenever what is kept of it changed (`Outbox.isKeptAs`), so `enqueue`, a `wait` from a new listener, a delivery, `undelivered`, `finished` and a context that was sent are each on disk at once. An outbox that cannot be written is a line on standard error, and is written again with the next change. `connectionClosed(id)` ends the `wait` held on that connection, `undelivered(ref)` puts a batch back, `stop()` ends the open `wait` with no reply. `report(at:)` is the `listener` of `state`. `ack`, `status`, `reply` and `ask` find their video with `ReviewDesk.contentHash(of:)`, change the review through `ReviewDesk.change`, and call `Outbox.heard` first, refused or not. `ack`, `reply` and `ask` hand a `Notice` to `announce`, a closure `AppModel` sets to `raise`; `status` raises none, since the marker shows it. `status` calls `Outbox.finished` when `VideoReview.isFinished` turns true for the comment's batch. `ask` ends as an `Asked`: `answered(message)`, `ranOut` or `gone`. The open `ask`s are held by comment id, each with its continuation, its timeout and its connection; `answered(id, with:)` resumes one, `connectionClosed` and `stop` end them as `gone`.
 - `ContextReader` is the context as the listener is told it. `sidecar(beside: video)` is the first of `<video base name>.context.md` and `context.md` in the video's folder that is a file and reads as UTF-8, with its text trimmed; a blank file of the video's own name still serves, so a video can opt out of its folder's `context.md`. `text(sidecar:note:)` joins the sidecar's text and the note under the heading `## Note from the reviewer` (pure), and is `nil` when both are empty. `text(for: review)` reads the sidecar beside the path the video was last opened at. `ListenerQueue.payload` calls it when a `wait` takes a batch and passes the result through `Outbox.context(for:text:)`, so nothing watches the file. `AppModel` keeps the open video's `sidecar` for the popover (read when the video opens and when the popover opens), and `contextText` and `isContextDue` for its words.
 - `ContextPopover` (`UI/ContextPopover.swift`) holds the toolbar's `ContextButton`, the popover and its words as a pure struct, `ContextWords` (where the sidecar's text comes from, and when the agent gets the context). The note is written in `CommentField`, the comment box's text view. While the popover is open (`AppModel.isContextShown`) the player's keys are off, Cmd+Return too.
-- `TranscriptDesk` (owned by `AppModel`, given to the `ListenerQueue`) is the app's way to the transcripts. `opened(video)` remembers the `VideoFile` by content hash (the frame rate comes from the player) and calls `prepare` on the sources. `lines(around: time, of: hash)` is the window's lines as `BatchPayload.Line`, read when it is asked. `report(of: hash)` is the `transcript` of `state`. A video that was not opened in this run has no lines. `AppModel.init(environment:speech:)` takes the recognizer, so the tests give a slow one.
-- `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It owns the one `ControlLease`, takes the time from a closure the tests replace, and starts from the lease a relaunch handed over. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests (an `ask` that is `gone` gets a `silent` answer, as a `wait`), and settles the lease on a timer at `nextEnd`. Every change to the lease goes through one place (`leaseChanged`): it copies the lease to the `LeaseIndicator`, answers the waiting takes of the holder that got it, and sets the timer again. A `take`'s reply that grants the lease and cannot be written releases it (`undelivered`). `stopLease()` is the banner's Stop. `app status` and `state` get their `lease` from the server, not from `AppModel`, and `state` gets its `listener` from the `ListenerQueue` the server is given. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake. An `Answer` is the reply plus what only the client would know: the lease a `take` granted (`granted`) and the batch a `wait` carried (`delivered`). When the reply cannot be written, `undelivered` releases the one and puts the other back in line. A `silent` answer writes nothing and closes the connection, which is how an open `wait` ends when the app quits. Each connection has an id. While its answer is awaited, the socket's side looks at it every 0.5 s (`HangUpWatch`, `UnixSocket.peerClosed`) and tells the server once when the client closed its socket (`connectionClosed`), so a `wait` whose command was stopped is no listener.
+- `TranscriptDesk` (owned by `AppModel`, given to the `ListenerQueue`) is the app's way to the transcripts. `opened(video)` remembers the `VideoFile` by content hash (the frame rate comes from the player) and calls `prepare` on the sources. `lines(around: time, of: info)` is the window's lines as `BatchPayload.Line`, read when it is asked: for a video that was not opened in this run it makes the `VideoFile` from the review's `VideoInfo` (the last path and the kept frame rate), so the voiceover or subtitles beside that path, or the speech transcript kept on disk, serve it. `report(of: hash)` is the `transcript` of `state`. `AppModel.init(environment:speech:)` takes the recognizer, so the tests give a slow one.
+- `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It owns the one `ControlLease`, takes the time from a closure the tests replace, and starts from the lease a relaunch handed over. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests (an `ask` that is `gone` gets a `silent` answer, as a `wait`), and settles the lease on a timer at `nextEnd`. `ready` is a task the app sets at launch (opening the last video again); every request waits for it, so `app open` and the `state` after it see the app with its video open. Every change to the lease goes through one place (`leaseChanged`): it copies the lease to the `LeaseIndicator`, answers the waiting takes of the holder that got it, and sets the timer again. A `take`'s reply that grants the lease and cannot be written releases it (`undelivered`). `stopLease()` is the banner's Stop. `app status` and `state` get their `lease` from the server, not from `AppModel`, and `state` gets its `listener` from the `ListenerQueue` the server is given. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake. An `Answer` is the reply plus what only the client would know: the lease a `take` granted (`granted`) and the batch a `wait` carried (`delivered`). When the reply cannot be written, `undelivered` releases the one and puts the other back in line. A `silent` answer writes nothing and closes the connection, which is how an open `wait` ends when the app quits. Each connection has an id. While its answer is awaited, the socket's side looks at it every 0.5 s (`HangUpWatch`, `UnixSocket.peerClosed`) and tells the server once when the client closed its socket (`connectionClosed`), so a `wait` whose command was stopped is no listener.
 - `LeaseIndicator` (`@Observable`) is the lease as the banner draws it. `shown(at:)` is the lease's `Status`, or nil while it is free or while a screenshot leaves the banner out. `LeaseBanner` makes the banner's words from that status in a pure struct, and `LeaseBannerView` draws them with Stop and redraws each second.
 - `StateReport` builds `state --json`:
 
@@ -578,7 +587,7 @@ public protocol Transcriber: Sendable {
   `comments` and `queue` are in time order. `video` is `null` with no video open. `lease` is `null` while the lease is free. `app status --json` has the same `lease`; as lines, both commands print `lease: held by Claude Code in /abs/repo, 48s left, 0 waiting` or `lease: free`. A thread message and a batch message are `{ "id", "author", "kind", "text", "at" }`; `thread` and `messages` are `[]` when there are none. `StateReport.Comment(comment, contentHash:, images:)` makes a comment's report for any video, so a listener's command answers for a video that is not open. As a line, a comment with a thread reads `c-… 0:10 working (2 messages, question open): …`. An open comment box is `"draft": { "time": 8.0, "text": "…", "region": null }`, with the region when the person drew one. A comment's `region` is `{ "x", "y", "w", "h" }` or `null`, and its `cropPath` is the crop's absolute path or `null`. `listener.session` is the name of the agent of the last `wait`, or `null` before the first one; `pendingBatches` counts the batches no `wait` took yet and `takenBatches` those a `wait` took that are not finished. As a line, `state` prints `listener: working (Claude Code), 0 batches waiting, 1 taken`. `transcript` is `null` with no video open. Its `source` is `voiceover`, `subtitles` or `speech`; `lines` counts the lines there are now; `complete` is false while speech is being transcribed and when that gave up, and `problem` then says why. As a line, `state` prints `transcript: voiceover, 3 lines, complete`, `transcript: speech, 2 lines, transcribing`, `transcript: speech, 0 lines, stopped: <why>` or `transcript: none`.
 - What the comment commands print: `comment add` prints `c-7f3a9c2e queued at 0:10`, and with a region `c-1b44e0d7 queued at 0:12.5 on the region 0.25,0.2,0.3,0.25`, `comment edit` prints `c-7f3a9c2e edited`, `comment delete` prints `c-7f3a9c2e deleted`. With `--json`, add and edit print `{"comment": {…}}` in the shape above, and delete prints `{"deleted": "c-7f3a9c2e"}`. `state` without `--json` lists each comment on a line: id, time, `region x,y,w,h` when it has one, state, text.
 - `Screenshotter` captures the app's own window with ScreenCaptureKit, from this process's shareable content only, which needs no Screen Recording permission. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. Captures take turns, so two of them never mix their appearances. It makes the PNG's folder when it is missing. The lease banner is hidden for the capture, since the holder would be in every picture; `--with-banner` keeps it in, which is how an agent proves the banner shows. Every capture first gives the window 400 ms to redraw, since the banner has just gone, or has just come when the capture's own request took the lease.
-- The app has one `Window` scene. Closing the window quits the app. A second copy started on the same support folder finds the socket taken and quits.
+- The app has one `Window` scene. Closing the window quits the app. A second copy started on the same support folder finds the socket taken and quits; only the copy that has the socket opens the last video, so a second copy writes nothing.
 
 ### The UX of this prototype
 
@@ -659,7 +668,7 @@ AppModel.sendBatch()
   batch = desk.change { try $0.send(batchID: ItemID.make(.batch), at: now) }             // queued → sent
   listeners.enqueue(BatchRef(batch.id, openHash))
 
-ListenerQueue.enqueue(ref)        outbox.enqueue(ref); deliver()                          // save, once the outbox is on disk
+ListenerQueue.enqueue(ref)        outbox.enqueue(ref); deliver()                          // outbox.json is written as the outbox changes
 
 ListenerQueue.wait(holder, timeout, connection) async -> Outcome
   requeued = outbox.waitOpened(by: holder, at: now)
@@ -673,7 +682,7 @@ ListenerQueue.deliver()           when a wait is suspended and takeNext() gives 
 
 ListenerQueue.takeNext()
   while a wait is open and a batch is first in line
-    no review of it in this run, or nothing unfinished in it: outbox.discard; next
+    no review of it that reads, or nothing unfinished in it: outbox.discard; next
     ref     = outbox.deliverNext(at: now)                                                 // pending → taken; the wait is answered
     context = outbox.context(for: ref.hash, text: ContextReader.text(for: review))        // nil when already sent unchanged, and with no text
     payload = BatchPayload.assemble(review, batch, context,
@@ -716,7 +725,7 @@ Edge cases:
 
 - `comment add --at 0:40` on a 21 s video: `AppModel` refuses before any change.
 - `status c-… working` on a `done` comment: `CommentState.canMove` is false; `ReviewRefusal.illegalMove(from: done, to: working)`.
-- `ack` with an unknown batch id: no review of this run has it (the `Library` index, once the store is built); refused.
+- `ack` with an unknown batch id: the `Library` index has no such id; refused.
 - `status c-… done` twice: the second changes nothing and answers as the first.
 - `ask` on a comment whose question is open (its first `ask` ran out): refused. The listener reads the answer from `state --json`.
 - `thread answer` after the `ask` ran out: the answer is added, no `ask` waits, the command answers `answered`.
@@ -730,6 +739,13 @@ Edge cases:
 - The person presses Stop while a `take` waits in line: the holder is barred and the first waiter gets the lease.
 - A batch is sent while speech is still being transcribed: each comment gets the lines of its window that exist when a `wait` takes the batch. Nothing waits for the transcript.
 - The Mac has no speech model for the language, or the transcription fails: the transcript stays incomplete with its `problem` in `state`, the chip says "No transcript", and comments go out with the lines that arrived, or none.
+- The app quits, or is killed, in the middle of a change: each file is replaced whole, so `review.json` is the review before the change or after it. When the review was saved and the outbox was not, the next launch's `Outbox.reconcile` puts the batch in line.
+- `review.json` does not read, or a newer version wrote it: `player open` is refused with the file's path and the reason, the open video stays open, and the file is left as it is. A listener's command on one of its comments is refused as an unknown id. At launch the person is shown "The last video didn't open".
+- The disk is full or the folder is read-only: the change is refused (`nothing changed: couldn't write …`), nothing changes in memory, and a new comment's keyframe and crop are removed again.
+- A keyframe or crop file was removed by hand: the card shows an empty thumbnail, and `state` and the payload still name the path. Nothing writes the picture again.
+- The last video's file is gone at launch: the app starts with no video and says nothing.
+- A `wait` after a restart, from the listener that had a batch: the batch is still its own (`taken`), and it gets the next one in line. From a new holder key: the taken batches are first in line again, their unfinished comments `sent`.
+- An `ask` that was open when the app quit: its question is open in the thread after the restart, with no `ask` waiting; the answer lands in the thread.
 - A comment is added before the hash of a large file is ready: `player open` answers only after the hash and the review are loaded, and the UI's comment key is off until then.
 
 ### Trace 1: a CLI command, `video-review player seek 0:10`
@@ -820,7 +836,8 @@ the listener restarts as session L2 while b-5d0c2a91 is taken and unfinished
 | CLI parsing, output, exit codes | `ReviewCommandTests`, fake transport and launcher |
 | the state machine, batch assembly, requeue, context once per session, presence | `ReviewCoreTests` |
 | the window cut, the source order | `ReviewTranscriptTests`, against `fixtures/sample` |
-| what is on disk, the hash of a renamed copy | `ReviewStoreTests` |
+| what is on disk, the hash of a renamed copy, files that do not read | `ReviewStoreTests` |
+| what a restart keeps | `ReviewAppTests` `PersistenceTests`: a second `AppModel` on the same support folder |
 | the server enforcing the lease, held requests | `ReviewAppTests`, fake `AppControlling` |
 | everything end to end | `scripts/acceptance.sh` against the installed app in demo mode |
 
@@ -852,7 +869,7 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D2 | Target names are `ReviewWire`, `ReviewLease`, `ReviewCommand`, `ReviewCLI`, `ReviewCore` (the spec's Review), `ReviewTranscript`, `ReviewStore`, `ReviewApp`. | Bare names such as `Transcript` can clash with system types. The command table is a library so it tests without a process. |
 | D3 | `ReviewWire` is the lowest module and holds `Holder` and `LeaseTerm`; `ReviewLease` builds on it. | The first build ticket ships the wire with no lease rules yet. |
 | D4 | The pure listener rules are a value, `Outbox`, in `ReviewCore`; the app's `ListenerQueue` holds only the connections. | The same split as `ControlLease` and `ControlServer`: the rules test without the app. |
-| D5 | A listener session is the holder key of its `wait`. A `wait` from another key is a new session: unfinished taken batches go back to the queue and the context is sent again. | Every request already carries the holder, so the listener passes nothing, and a test names a session with `VIDEO_REVIEW_CONTROL_KEY`. |
+| D5 | A listener session is the holder key of its `wait`. A `wait` from another key is a new session: unfinished taken batches go back to the queue and the context is sent again. This holds across an app restart, since the outbox is on disk. | Every request already carries the holder, so the listener passes nothing, and a test names a session with `VIDEO_REVIEW_CONTROL_KEY`. |
 | D6 | A redelivered batch keeps its id and carries only its unfinished comments, which return to `sent`. | Finished work is not done twice. |
 | D7 | One open `wait`. A newer `wait` replaces the older one. | A restarted listener must not wait behind a dead connection. |
 | D8 | `wait` and `ask` are held connections in the app, like a queued `take`. | One mechanism for every long wait, already proven in Shipyard. |
@@ -918,8 +935,8 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D68 | The app looks at each held connection every 0.5 s and closes a `wait` whose client closed its socket. | "Present while a `wait` is open" must end when the listener's command is stopped, not only when a reply fails to write, which may be hours later. |
 | D69 | After a `wait` closes with no batch the listener still counts as listening for 5 s, also when its client hung up. | One rule for every way a `wait` ends (D12). A harness that restarts a background `wait` does not make the pill flicker. |
 | D70 | A new listener session is told only by a new holder key. A `wait` from the same key keeps what it took and gets the next batch in line. | The listener skill runs `wait` again before it starts work on a batch; that must not hand it the same batch twice. |
-| D71 | A batch in line whose review is not in this run, or whose comments are all finished, is discarded when a `wait` reaches it. | A `wait` must never get stuck behind a batch that cannot be delivered. |
-| D72 | The outbox stays in memory until the persistence ticket. `Outbox` is `Codable` already, without its open `wait` and last-heard time. | The reviews are in memory too, so an outbox on disk would name batches that are gone after a restart. |
+| D71 | A batch in line whose review is not there or does not read, or whose comments are all finished, is discarded when a `wait` reaches it. | A `wait` must never get stuck behind a batch that cannot be delivered. |
+| D72 | Replaced by D143: the outbox is on disk. Before the persistence ticket the outbox stayed in memory. `Outbox` is `Codable` already, without its open `wait` and last-heard time. | The reviews are in memory too, so an outbox on disk would name batches that are gone after a restart. |
 | D73 | `batch send` answers `b-… sent with 2 comments, taken by the listener` or `…, waiting for a listener`. | The operator sees at once whether someone has the batch. |
 | D74 | `state --json` has `listener.takenBatches` beside `pendingBatches`. | An agent can tell "delivered and unfinished" from "still in line" without the payload. |
 | D75 | `wait` looks for the app's socket again on every try. | A listener started before `app open --demo` must find the demo's app. |
@@ -952,12 +969,12 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D102 | The context popover is not in a `screenshot`. | A popover is a window of its own, and `Screenshotter` captures the player's window only. The toolbar button, with its filled glyph, is in the picture. |
 | D110 | Speech is transcribed in the Mac's language (the nearest locale `SpeechTranscriber` supports), else in `en-US`. | The spec names no language setting. The research task can choose better. |
 | D111 | Only a complete speech transcript is kept on disk, in `videos/<hash>/transcript.json`. A transcription that stopped half way starts from the beginning the next time the video opens. | The fixture takes about a second. Resuming would need the recognizer to start at a time, for little gain. |
-| D112 | `TranscriptFiles` in `ReviewStore` keeps the transcript until `Library` exists. | The persistence ticket builds `Library`; the file's place and shape are already the ones the layout names. |
+| D112 | `TranscriptFiles` in `ReviewStore` keeps the transcript, beside `Library` (D148). | The speech source reads and writes it from a background task; `Library` is for the main actor. |
 | D113 | The speech engine is behind `SpeechRecognizing`, and `AppModel.init` takes one. | "A comment before the transcript is ready" is tested with a recognizer the test drives, with no real speech recognition in `make test`. |
 | D114 | `state --json` has `transcript`: `source`, `complete`, `lines` and `problem`. `state` as lines has a `transcript:` line. | An agent can wait for `complete`, and reads why there is no transcript. |
 | D115 | The chip is drawn again each second and observes nothing. | Speech lines arrive on a background task. The presence pill does the same. |
 | D116 | The app installs the language's speech model through `AssetInventory` without asking, and asks for no speech recognition authorization. `Info.plist` has `NSSpeechRecognitionUsageDescription`. | `SpeechAnalyzer` ran on this Mac from a command-line tool with no prompt. The usage text is there in case macOS asks for the bundled app. |
-| D117 | A batch of a video that was not opened in this run gets no transcript lines. | The frame rate a `voiceover.json` needs comes from the player. Until the persistence ticket, every batch in line belongs to a video opened in this run. |
+| D117 | Replaced by D146: a batch of a video that was not opened in this run gets its transcript lines from the frame rate and the path kept with the review. | |
 | D118 | A video with no sound track has a complete speech transcript with no lines; the chip says "No speech". | Nothing failed, and there is nothing to wait for. |
 
 Decisions of the ticket "Mate: Show agent answers and questions in the player":
@@ -976,7 +993,7 @@ Decisions of the ticket "Mate: Show agent answers and questions in the player":
 | D129 | An `ask` whose client goes away, or that is open when the app quits, ends with no reply, and its question stays open. | Nobody reads the reply. The question is a record in the thread, and the person can still answer it. |
 | D130 | An open `ask` counts as alive for presence (`Outbox.openAsks`). | The listener is there for as long as it waits for the person. |
 | D131 | The wire has its own `ControlRequest.Status` with three names. | `ReviewCommand` does not link `ReviewCore`, and `status acknowledged` must be wrong usage. |
-| D132 | A listener's command finds its video by looking at every review of this run. | Listener commands name no video. The store ticket's index replaces the scan. |
+| D132 | A listener's command finds its video in the `Library`'s index of comment and batch ids, read from every `review.json` at launch and kept current by each save. | Listener commands name no video, and the video need not be open or opened in this run. |
 | D133 | The refusals for an id that names nothing are the app's own lines for the listener (`no comment … ; the batch video-review wait printed names each comment's id`). | `state --json` lists only the open video's comments. |
 | D134 | Unread marks and notices are kept in memory only, and opening a video clears them. | They say what happened while the person watched; after a restart every thread is simply there. |
 | D135 | A status change raises no notice. `ack`, `reply` and `ask` do. | The marker shows a status at once; three notices for three statuses would cover the video. |
@@ -984,6 +1001,27 @@ Decisions of the ticket "Mate: Show agent answers and questions in the player":
 | D137 | The working marker does not pulse. | A pulse caught at its dim point made the glyph vanish in a screenshot; the three dots tell the state by shape. |
 | D138 | An open question and the agent each have a colour no state has (purple, indigo). | A question must not read as a state. |
 | D139 | A notice for a comment whose video is not open says "a comment", and a click on it only takes it down. | The comment has no marker to number it by or to select. |
+
+Decisions of the ticket "Comment: Keep comments and threads across restarts":
+
+| # | Decision | Reason |
+|---|---|---|
+| D140 | A `review.json` that does not read is treated like one from a newer schema: the video's history is not opened, the reason names the file, and the file is never written over. Nothing sets it aside and starts a new review. | Data loss is the risk. A file that half reads may still hold the person's comments, and a new review saved over it would end them. The maintainer can read and repair a JSON file. |
+| D141 | A change whose save fails is refused, and memory keeps what is on disk. | The person and the listener learn of a full disk when it happens, not after a restart that lost the work. Memory and disk never disagree. |
+| D142 | Each file carries `schemaVersion` beside its own keys, in one flat object. A file without it is version 1. | "One VideoReview, with schemaVersion" (D15), and files of earlier tickets' tests still read. |
+| D143 | `outbox.json` is written whenever the kept part of the outbox changes, from one place (`ListenerQueue.outbox`'s `didSet`). | No call site can forget the save. Presence, the open `wait` and the last word are not kept, so a `heard` writes nothing. |
+| D144 | At launch the outbox is reconciled with the reviews: every unfinished batch is in `pending` or `taken`. A missing or unreadable `outbox.json` is rebuilt the same way, in the order sent. | The review and the outbox are two files, so a crash can fall between their saves. "No feedback is lost" must not depend on that moment, or on one small file. |
+| D145 | A taken, unfinished batch stays with its listener across an app restart when the next `wait` has the same holder key, and goes back in line for another key. | The listener session is its key (D5), which outlives the app. A listener whose `wait` connects again after a restart (D10) is the same session and must not get its batch twice. |
+| D146 | The frame rate is kept on the review's `VideoInfo` with the last path. A batch delivered in a run that did not open its video reads its transcript and its context sidecar from there. | A pending batch can be taken after a restart with another video open, or none. Its payload must be as full as it would have been. |
+| D147 | Times in a review are cut to the millisecond when they enter it, and files hold ISO 8601 with milliseconds. | A person can read the file, and a review reads back equal to the one saved, so `state` is the same before and after a restart. |
+| D148 | `TranscriptFiles` and `ImageFiles` stay beside `Library`. | They are used off the main actor, and each is the one owner of its files. `Library` is the owner of the JSON records and the index. |
+| D149 | A video that was opened and has no comment, batch or note yet has no `review.json`. `recent.json` alone makes it open again. | Opening a video is not a change to keep, and the real support folder stays empty until the person writes something. |
+| D150 | `Library.init` writes nothing, and the folder is made by the first save. | A demo run, a test and a second copy of the app can look at a support folder without changing it. |
+| D151 | At launch the app opens the last video only after it has the socket, and every request waits for that opening. | A second copy must not write. `app open` followed by `state --json` must show the video and its history, with no sleep in a script. |
+| D152 | A last video whose file is gone is not an error at launch. One that does not open for another reason is shown to the person. | A moved file is ordinary. A history that does not read is something the person must know about. |
+| D153 | A missing keyframe or crop is not made again. | The picture is written before its comment exists (D47), so it is missing only when someone removed it. The path is still the one a comment has (D48). |
+| D154 | The listener's name is kept with the session, so threads keep "Claude Code" after a restart. Unread marks, notices, the draft and the open `ask`s are not kept. | The session is on disk for D145. The rest is by D25, D129 and D134. |
+| D155 | `recent.json` is written on every open, also when an operator opens the video. | The operator does what a person does, and the acceptance scenario needs the video back after `app quit` and `app open`. |
 
 Decisions of the ticket "Mate: Ship the video-review-mate skill":
 
@@ -1085,7 +1123,17 @@ Built (the ticket "Mate: Ship the video-review-mate skill"):
 - Checked by reading: every command line in the skill against `ListenerCommands.swift`, the command table and the exit codes in `VideoReviewCLI`.
 - Not checked by this ticket's agent: a live session with the skill against the app. The installed app was in use by another ticket; the check runs at integration.
 
-Not built yet, and what stands in its place:
+Built (the ticket "Comment: Keep comments and threads across restarts"):
 
-- The rest of `ReviewStore`: `Library`. Nothing but keyframes, crops and finished speech transcripts is written to disk. `ReviewDesk` keeps each review in memory for as long as the app runs, by content hash, so a video that opens again in the same run has its comments back; after a restart the comments and the outbox are gone and the keyframe files stay.
-- The last video does not open again on launch. That comes with the store.
+- `ReviewStore`: `Library` (reviews, the outbox, the last video, the id index, the schema version).
+- `ReviewCore`: `VideoInfo.frameRate`, `Outbox.reconcile(unfinished:)`, `Outbox.isKeptAs`, an `Outbox` that reads with keys missing, times cut to the millisecond in `VideoReview`.
+- `ReviewTranscript`: `SpeechSource.transcript(of:)` gives the kept transcript of a video that was not prepared in this run.
+- `ReviewApp`: `ReviewDesk` on the `Library` (load on first use, save with every change, a failed save refused, the index for `contentHash(of:)`), the outbox loaded and saved in `ListenerQueue`, `TranscriptDesk.lines(around:of:)` for a video of an earlier run, `AppModel.open` (the review loaded before the player changes, the frame rate, `recent.json`) and `openRecent`, `ControlServer.ready`, the launch's reopening in `AppDelegate`.
+- `state --json` and the payload are unchanged.
+- Tests: `LibraryTests` in `ReviewStoreTests`; the outbox's missing keys, a taken batch across a restart, `reconcile` and what is kept in `ReviewCoreTests`; `PersistenceTests` in `ReviewAppTests`, each with a second `AppModel` on the same support folder (the state before and after, nothing to reopen, a renamed copy in another folder, two support folders, a pending batch delivered with no video open, a kept speech transcript, a taken batch for the same and for a new listener, a lost outbox file, a review that does not read, a change that cannot be saved).
+- Checked in the installed app, in a demo folder, through the CLI: `state --json` before `app quit` and after `app open --demo` differs only in the lease, the listener's presence and the player's time; a batch sent with no listener is taken after the restart with its keyframes, crop, transcript and context; a new listener key gets the taken batches again; a renamed copy in another folder has the same comments and batches; the normal support folder holds only `demo.json` before and after.
+- Not checked by an agent: a kill of the app in the middle of a save, and a full disk, in the installed app. Both are tested at `Library` and `ReviewDesk`.
+
+Not built yet:
+
+- The listener skill `.agents/skills/video-review-mate/` and `scripts/acceptance.sh`. Each has its own ticket.

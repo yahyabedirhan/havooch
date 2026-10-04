@@ -133,7 +133,10 @@ struct ControlServerTests {
 
     /// A listener queue nobody sends a batch to: the fake app has no reviews.
     static func noListeners() -> ListenerQueue {
-        ListenerQueue(desk: ReviewDesk(), images: ImageFiles(support: URL(fileURLWithPath: "/demo", isDirectory: true)))
+        ListenerQueue(
+            desk: ReviewDesk(library: Library(support: URL(fileURLWithPath: "/demo", isDirectory: true))),
+            images: ImageFiles(support: URL(fileURLWithPath: "/demo", isDirectory: true))
+        )
     }
 
     private func answer(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {

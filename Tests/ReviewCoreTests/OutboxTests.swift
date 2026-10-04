@@ -184,4 +184,74 @@ struct OutboxTests {
         #expect(!read.isWaitOpen)
         #expect(read.presence(at: at(1)) == .absent)
     }
+
+    @Test("an outbox written with a key missing reads with that part empty")
+    func missingKeys() throws {
+        let read = try JSONDecoder().decode(Outbox.self, from: Data("""
+        { "pending": [ { "batchID": "b-00000001", "contentHash": "abc" } ], "taken": [] }
+        """.utf8))
+        #expect(read.pending == [Self.first])
+        #expect(read.session == nil)
+        #expect(read.contextSent.isEmpty)
+        #expect(try JSONDecoder().decode(Outbox.self, from: Data("{}".utf8)) == Outbox())
+    }
+
+    @Test("after a restart, a taken batch stays with the same listener and goes back in line for a new one")
+    func takenAcrossARestart() throws {
+        var outbox = Outbox()
+        outbox.enqueue(Self.first)
+        outbox.waitOpened(by: Self.one, at: at(0))
+        _ = outbox.deliverNext(at: at(0))
+
+        var same = try JSONDecoder().decode(Outbox.self, from: try JSONEncoder().encode(outbox))
+        #expect(same.waitOpened(by: Self.one, at: at(60)).isEmpty)
+        #expect(same.taken == [Self.first])
+        #expect(same.deliverNext(at: at(60)) == nil)
+
+        var new = try JSONDecoder().decode(Outbox.self, from: try JSONEncoder().encode(outbox))
+        #expect(new.waitOpened(by: Self.two, at: at(60)) == [Self.first])
+        #expect(new.deliverNext(at: at(60)) == Self.first)
+    }
+
+    @Test("at launch the outbox is made to agree with the reviews: a batch that's gone or finished leaves, an unfinished one that's missing joins the line")
+    func reconcile() {
+        var outbox = Outbox()
+        outbox.enqueue(Self.first)
+        outbox.enqueue(Self.second)
+        outbox.waitOpened(by: Self.one, at: at(0))
+        _ = outbox.deliverNext(at: at(0))
+        let before = outbox
+
+        // All is as the reviews say: nothing moves.
+        outbox.reconcile(unfinished: [Self.first, Self.second])
+        #expect(outbox == before)
+        #expect(outbox.isKeptAs(before))
+
+        // The taken batch was finished and the outbox wasn't saved after;
+        // a batch was sent and the outbox wasn't saved after.
+        outbox.reconcile(unfinished: [Self.second, Self.third])
+        #expect(outbox.taken.isEmpty)
+        #expect(outbox.pending == [Self.second, Self.third])
+        #expect(!outbox.isKeptAs(before))
+
+        outbox.reconcile(unfinished: [])
+        #expect(outbox.pending.isEmpty)
+        #expect(outbox.session == Self.one)
+    }
+
+    @Test("what's kept is the line, the taken batches, the session and the context sent; not the open wait or the last word")
+    func whatIsKept() {
+        var outbox = Outbox()
+        let empty = outbox
+        outbox.heard(at: at(5))
+        outbox.askOpened(at: at(6))
+        #expect(outbox.isKeptAs(empty))
+        outbox.waitOpened(by: Self.one, at: at(7))
+        #expect(!outbox.isKeptAs(empty))
+        let listening = outbox
+        outbox.waitClosed(at: at(8))
+        #expect(outbox.isKeptAs(listening))
+        _ = outbox.context(for: "abc", text: "About")
+        #expect(!outbox.isKeptAs(listening))
+    }
 }

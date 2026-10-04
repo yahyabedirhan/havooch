@@ -67,6 +67,36 @@ public struct Outbox: Codable, Equatable, Sendable {
         case pending, taken, session, contextSent
     }
 
+    /// Reads an outbox as it's kept on disk. No `wait` is open and nothing
+    /// was heard yet: those belong to the run that wrote it. A key that's
+    /// missing reads as empty.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pending = try container.decodeIfPresent([BatchRef].self, forKey: .pending) ?? []
+        taken = try container.decodeIfPresent([BatchRef].self, forKey: .taken) ?? []
+        session = try container.decodeIfPresent(ListenerSession.self, forKey: .session)
+        contextSent = try container.decodeIfPresent([String: String].self, forKey: .contextSent) ?? [:]
+    }
+
+    /// Makes the outbox agree with the reviews at launch. `unfinished` is
+    /// every batch on disk with a comment the listener hasn't finished, in
+    /// the order sent. A batch that's no longer one of them leaves
+    /// `pending` and `taken`; one that's in neither joins the end of the
+    /// line. So a run that ended between saving a review and saving the
+    /// outbox, or an outbox file that was lost, costs no feedback.
+    public mutating func reconcile(unfinished: [BatchRef]) {
+        let known = Set(unfinished)
+        pending.removeAll { !known.contains($0) }
+        taken.removeAll { !known.contains($0) }
+        for ref in unfinished where !pending.contains(ref) && !taken.contains(ref) { pending.append(ref) }
+    }
+
+    /// Whether `other` is the same on disk: the same line, taken batches,
+    /// session and context sent.
+    public func isKeptAs(_ other: Outbox) -> Bool {
+        pending == other.pending && taken == other.taken && session == other.session && contextSent == other.contextSent
+    }
+
     /// A batch the person sent joins the end of the line.
     public mutating func enqueue(_ ref: BatchRef) {
         guard !pending.contains(ref), !taken.contains(ref) else { return }

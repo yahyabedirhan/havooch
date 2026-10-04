@@ -26,7 +26,13 @@ final class ListenerQueue {
     }
 
     /// The pending and taken batches, the listener session and its presence.
-    private(set) var outbox = Outbox()
+    /// What of it outlives a run is saved whenever it changes.
+    private(set) var outbox: Outbox {
+        didSet {
+            guard !outbox.isKeptAs(oldValue) else { return }
+            keep(outbox)
+        }
+    }
 
     /// The `wait` that's held open until a batch is sent.
     private struct OpenWait {
@@ -69,10 +75,24 @@ final class ListenerQueue {
     /// gets no lines. The app's model sets it.
     @ObservationIgnored var transcripts: TranscriptDesk?
 
+    /// It starts from the outbox the last run left in the desk's library,
+    /// and keeps it there.
     init(desk: ReviewDesk, images: ImageFiles, now: @escaping @MainActor () -> Date = { Date() }) {
         self.desk = desk
         self.images = images
         self.now = now
+        outbox = desk.library.loadOutbox()
+    }
+
+    /// Saves `outbox`. One that can't be written is written with the next
+    /// change; the reviews hold every batch, and the next launch puts an
+    /// unfinished one that's missing back in line (`Outbox.reconcile`).
+    private func keep(_ outbox: Outbox) {
+        do throws(Library.Failure) {
+            try desk.library.save(outbox)
+        } catch {
+            FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.reason)\n".utf8))
+        }
     }
 
     // MARK: - The person's side
@@ -248,7 +268,7 @@ final class ListenerQueue {
     }
 
     /// The comment a listener's command names, and its video. The command
-    /// names no video, so every review of this run is looked at.
+    /// names no video, so the library's index of ids finds it.
     private func comment(_ text: String) throws(AppRefusal) -> (ItemID, String) {
         guard let id = ItemID(text), id.kind == .comment, let hash = desk.contentHash(of: id) else {
             throw AppRefusal("no comment `\(text)`; the batch `video-review wait` printed names each comment's id")
@@ -280,8 +300,8 @@ final class ListenerQueue {
     }
 
     /// Takes the first batch in line for the open `wait`, as its payload,
-    /// assembled now. A batch with nothing left to deliver (its review
-    /// isn't in this run, or every comment in it is finished) leaves the
+    /// assembled now. A batch with nothing left to deliver (it has no
+    /// review that reads, or every comment in it is finished) leaves the
     /// line instead.
     private func takeNext() -> Outcome? {
         while outbox.isWaitOpen, let first = outbox.pending.first {
@@ -305,7 +325,7 @@ final class ListenerQueue {
         let hash = review.video.contentHash
         return BatchPayload.assemble(
             review: review, batch: batch, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
-            transcript: { [transcripts] comment in transcripts?.lines(around: comment.time, of: hash) ?? [] },
+            transcript: { [transcripts] comment in transcripts?.lines(around: comment.time, of: review.video) ?? [] },
             images: { [images] comment in
                 BatchPayload.Images(
                     keyframe: images.keyframe(of: comment.id, contentHash: hash).path,

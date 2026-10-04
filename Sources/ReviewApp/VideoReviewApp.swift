@@ -78,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do throws(ControlServer.Failure) {
             try server.start()
             self.server = server
+            // Only the one copy that has the socket touches the data.
+            server.ready = Task { await model.openRecent() }
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))

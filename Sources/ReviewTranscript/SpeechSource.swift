@@ -39,9 +39,18 @@ public final class SpeechSource: Transcriber {
     }
 
     /// Speech serves every video: before any line has arrived it's an empty
-    /// transcript that isn't complete.
+    /// transcript that isn't complete. A video that wasn't opened in this
+    /// run has the finished transcript an earlier run kept, when there is
+    /// one.
     public func transcript(of video: VideoFile) -> Transcript? {
-        known.withLock { $0[video.contentHash] } ?? Self.empty
+        if let transcript = known.withLock({ $0[video.contentHash] }) { return transcript }
+        guard let kept = cache.load(video), kept.complete, kept.source == .speech else { return Self.empty }
+        return known.withLock { known in
+            // A transcription that started meanwhile has the say.
+            if let transcript = known[video.contentHash] { return transcript }
+            known[video.contentHash] = kept
+            return kept
+        }
     }
 
     private static let empty = Transcript(source: .speech, lines: [], complete: false)

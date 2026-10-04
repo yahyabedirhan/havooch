@@ -1,46 +1,64 @@
+import Foundation
 import Observation
 import ReviewCore
+import ReviewStore
 
 /// The one path for changing a review: take a video's review, run the
-/// change, publish it to the views. A refused change leaves the review as
-/// it was.
+/// change, save it, publish it to the views. A refused change, and one
+/// that can't be saved, leaves the review as it was, in memory and on disk.
 ///
-/// Reviews are kept in memory for as long as the app runs, by content hash,
-/// so a video that opens again in the same run has its comments back, and a
-/// batch of a video that's no longer open can still be delivered.
+/// A review is read from the `Library` the first time it's asked for and
+/// kept in memory from then on, by content hash, so a batch of a video
+/// that's not open, or wasn't opened in this run, can still be delivered
+/// and answered.
 @MainActor
 @Observable
 final class ReviewDesk {
     /// The open video's review; nil with no video.
     private(set) var review: VideoReview?
-    /// Every review of this run, by content hash.
+    /// The reviews this run has read or made, by content hash.
     @ObservationIgnored private var reviews: [String: VideoReview] = [:]
+    @ObservationIgnored let library: Library
 
-    /// Makes `video`'s review the open one: the one this run already has
-    /// for its content, or a new one.
-    func open(_ video: VideoInfo) {
-        var review = reviews[video.contentHash] ?? VideoReview(video: video)
-        // The same content at a new path or under a new name.
-        review.video = video
-        reviews[video.contentHash] = review
+    init(library: Library) {
+        self.library = library
+    }
+
+    /// The review `video` opens on: the one kept for its content, or a new
+    /// one. Refused when the kept one doesn't read; nothing changes, and
+    /// nothing is written over it.
+    func review(for video: VideoInfo) throws(AppRefusal) -> VideoReview {
+        try kept(video.contentHash) ?? VideoReview(video: video)
+    }
+
+    /// Makes `review` the open one, as `review(for:)` gave it. A review
+    /// that's on disk is saved when its video moved or was renamed; a new
+    /// one is first saved with its first change.
+    func open(_ review: VideoReview) {
+        let hash = review.video.contentHash
+        let isKept = FileManager.default.fileExists(atPath: library.reviewFile(of: hash).path)
+        if isKept, reviews[hash] != review {
+            // Not being able to record the new path doesn't keep the video shut.
+            try? library.save(review)
+        }
+        reviews[hash] = review
         self.review = review
     }
 
-    /// The review of the video with `contentHash`, open or not.
+    /// The review of the video with `contentHash`, open or not; nil when
+    /// there's none, or it doesn't read.
     func review(of contentHash: String) -> VideoReview? {
-        reviews[contentHash]
+        try? kept(contentHash)
     }
 
     /// The content hash of the video whose review has the comment or the
-    /// batch `id`; nil when no review of this run has it. A listener's
-    /// command names an item and no video, so every review is looked at.
+    /// batch `id`; nil when no review has it. A listener's command names
+    /// an item and no video.
     func contentHash(of id: ItemID) -> String? {
-        reviews.first { _, review in
-            id.kind == .batch ? review.batch(id) != nil : review.comment(id) != nil
-        }?.key
+        library.contentHash(of: id)
     }
 
-    /// Runs `change` on the open review and publishes the result.
+    /// Runs `change` on the open review, saves and publishes the result.
     func change<Result>(_ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
         guard let review else {
             throw AppRefusal("no video is open; open one with `video-review player open <path>`")
@@ -49,21 +67,41 @@ final class ReviewDesk {
     }
 
     /// Runs `change` on the review of the video with `contentHash`, open
-    /// or not, and publishes the result when it's the open one.
+    /// or not, saves it, and publishes the result when it's the open one.
     func change<Result>(
         _ contentHash: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result
     ) throws(AppRefusal) -> Result {
-        guard var changed = reviews[contentHash] else {
-            throw AppRefusal("this run has no review of the video \(contentHash)")
+        guard var changed = try kept(contentHash) else {
+            throw AppRefusal("there's no review of the video \(contentHash)")
         }
+        let before = changed
         let result: Result
         do throws(ReviewRefusal) {
             result = try change(&changed)
         } catch {
             throw AppRefusal(error.line)
         }
+        guard changed != before else { return result }
+        do throws(Library.Failure) {
+            try library.save(changed)
+        } catch {
+            throw AppRefusal("nothing changed: \(error.reason)")
+        }
         reviews[contentHash] = changed
         if review?.video.contentHash == contentHash { review = changed }
         return result
+    }
+
+    /// The review of the video with `contentHash`: this run's, else the
+    /// one on disk, which this run then has.
+    private func kept(_ contentHash: String) throws(AppRefusal) -> VideoReview? {
+        if let review = reviews[contentHash] { return review }
+        do throws(Library.Failure) {
+            let review = try library.load(contentHash)
+            reviews[contentHash] = review
+            return review
+        } catch {
+            throw AppRefusal(error.reason)
+        }
     }
 }
