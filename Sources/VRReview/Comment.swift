@@ -49,4 +49,21 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
         self.thread = thread
         self.createdAt = createdAt
     }
+
+    /// The agent's latest question in the thread, answered or not.
+    public var lastQuestion: ThreadMessage? {
+        thread.last { $0.kind == .question }
+    }
+
+    /// The person's answer to the latest question, once there is one.
+    public var lastAnswer: ThreadMessage? {
+        guard let asked = thread.lastIndex(where: { $0.kind == .question }) else { return nil }
+        return thread[asked...].first { $0.kind == .answer }
+    }
+
+    /// The question that waits for the person: the latest one, while
+    /// nothing answers it.
+    public var openQuestion: ThreadMessage? {
+        lastAnswer == nil ? lastQuestion : nil
+    }
 }

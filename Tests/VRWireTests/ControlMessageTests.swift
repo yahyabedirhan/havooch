@@ -86,6 +86,10 @@ import VRWire
         ),
         (#""command":"control.take","waitSeconds":4000"#, "the control command `control.take` needs a `waitSeconds` from 0 to 3600, not 4000"),
         (#""command":"wait","timeoutSeconds":-1"#, "the control command `wait` needs a `timeoutSeconds` from 0 to 3600, not -1"),
+        (
+            #""command":"ask","id":"7f3a9c21-c1","text":"why?","waitSeconds":3601"#,
+            "the control command `ask` needs a `waitSeconds` from 0 to 3600, not 3601"
+        ),
     ])
     func aRequestMissingWhatItsCommandNeedsIsRefused(fields: String, refusal: String) {
         let data = Data(#"{\#(fields),"holder":{"key":"k","name":"n","place":"p"},"version":1}"#.utf8)

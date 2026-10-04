@@ -135,6 +135,11 @@ public struct ControlMessage: Equatable, Sendable {
         case "status": return .status(id: try wire.field(\.id, "id"), state: try wire.field(\.state, "state"))
         case "reply": return .reply(id: try wire.field(\.id, "id"), text: try wire.field(\.text, "text"))
         case "ask":
+            if let seconds = wire.waitSeconds, !(0...ControlRequest.longestWait).contains(seconds) {
+                throw .unreadable(
+                    "the control command `ask` needs a `waitSeconds` from 0 to \(ControlRequest.longestWait), not \(seconds)"
+                )
+            }
             return .ask(id: try wire.field(\.id, "id"), text: try wire.field(\.text, "text"), waitSeconds: wire.waitSeconds)
         default: throw .unknownCommand(wire.command)
         }

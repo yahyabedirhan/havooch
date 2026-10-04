@@ -116,7 +116,7 @@ import VRReview
         let other = CommentID(rawValue: "0badf00d-c1")
         #expect(throws: ReviewError.unknownComment("0badf00d-c1")) { try review.editComment(other, text: "x") }
         #expect(throws: ReviewError.unknownComment("0badf00d-c1")) { try review.deleteComment(other) }
-        #expect(ReviewError.unknownComment("0badf00d-c1").message == "the open video has no comment `0badf00d-c1`")
+        #expect(ReviewError.unknownComment("0badf00d-c1").message == "there is no comment `0badf00d-c1`")
     }
 
     @Test(arguments: [CommentState.sent, .acknowledged, .working, .done, .failed])

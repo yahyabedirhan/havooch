@@ -3,7 +3,8 @@ import VRReview
 
 /// The window's trailing column: the queue on top, in time order, with its
 /// count and the Send button, then the sent comments, grouped by batch
-/// with the newest batch first.
+/// with the newest batch first. A batch's group starts with its head and
+/// the agent's messages for the whole batch.
 struct Sidebar: View {
     let model: AppModel
 
@@ -41,6 +42,7 @@ struct Sidebar: View {
             if queue.isEmpty, batches.isEmpty {
                 hint
             } else {
+                ScrollViewReader { scroller in
                 ScrollView {
                     // Not a lazy stack: a comment keeps its id as it moves from
                     // the queue into its batch, and a lazy stack went on
@@ -57,14 +59,25 @@ struct Sidebar: View {
                                 .padding(.vertical, 4)
                         }
                         ForEach(batches.reversed()) { batch in
-                            BatchHeader(batch: batch, standing: model.listener.standing(of: batch.id))
+                            let sent = review?.comments.filter { $0.batch == batch.id } ?? []
+                            BatchHeader(batch: batch, comments: sent, standing: model.listener.standing(of: batch.id))
                                 .padding(.top, 10)
-                            ForEach(review?.comments.filter { $0.batch == batch.id } ?? []) { comment in
+                            if !batch.thread.isEmpty {
+                                BatchCard(batch: batch)
+                            }
+                            ForEach(sent) { comment in
                                 card(comment)
                             }
                         }
                     }
                     .padding(8)
+                }
+                // The comment in focus is brought into sight: a click on its
+                // marker or on a notice may name a card far down the list.
+                .onChange(of: model.selection) { _, selected in
+                    guard let selected else { return }
+                    withAnimation(.easeOut(duration: 0.2)) { scroller.scrollTo(selected) }
+                }
                 }
             }
         }
@@ -73,6 +86,7 @@ struct Sidebar: View {
 
     private func card(_ comment: Comment) -> some View {
         CommentCard(model: model, comment: comment, keyframe: model.desk.keyframe(of: comment.id))
+            .id(comment.id)
     }
 
     /// What an empty sidebar says: how a comment is made.
@@ -92,47 +106,5 @@ struct Sidebar: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// The head of one batch's group: its number, when it was sent, and where
-/// it stands on its way to the listener.
-private struct BatchHeader: View {
-    let batch: Batch
-    let standing: ListenerLedger.Standing
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text("BATCH \(batch.id.number.map(String.init) ?? batch.id.rawValue)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(batch.sentAt, style: .time)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
-            Label(Self.words(standing), systemImage: Self.symbol(standing))
-                .font(.caption)
-                .foregroundStyle(standing == .pending ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-        }
-        .padding(.horizontal, 6)
-        .accessibilityElement(children: .combine)
-    }
-
-    static func words(_ standing: ListenerLedger.Standing) -> String {
-        switch standing {
-        case .pending: "Waiting for a listener"
-        case .taken: "Delivered to the listener"
-        case .finished: "Finished"
-        }
-    }
-
-    private static func symbol(_ standing: ListenerLedger.Standing) -> String {
-        switch standing {
-        case .pending: "hourglass"
-        case .taken: "checkmark.circle"
-        case .finished: "checkmark.circle.fill"
-        }
     }
 }

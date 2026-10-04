@@ -86,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// The window's content: the lease banner while an agent controls the app,
 /// then the frame above the transport bar, under the overlay that draws
-/// regions and holds the comment box, and the sidebar on the trailing edge.
+/// regions and holds the comment box, with the notice for an agent message
+/// at its bottom right, and the sidebar on the trailing edge.
 struct MainView: View {
     let model: AppModel
     let lease: LeaseIndicator
@@ -106,6 +107,16 @@ struct MainView: View {
                         .background(.background)
                 }
             }
+            // An agent message, briefly, away from the frame's centre.
+            .overlay(alignment: .bottomTrailing) {
+                if let notice = model.notice {
+                    NoticeToast(model: model, notice: notice)
+                        .padding(14)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .id(notice.id)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: model.notice?.id)
             Divider()
             TransportBar(model: model)
         }

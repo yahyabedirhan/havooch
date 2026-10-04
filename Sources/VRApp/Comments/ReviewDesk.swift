@@ -161,8 +161,17 @@ final class ReviewDesk {
     /// The content hash of the video `id` names by its first digits, or
     /// those digits alone when no video here has them.
     private func hash(named id: CommentID) -> String {
-        let prefix = id.rawValue.prefix(VideoPrefix.length)
-        return reviews.keys.first { $0.hasPrefix(prefix) } ?? String(prefix)
+        hash(naming: id.rawValue) ?? String(id.rawValue.prefix(VideoPrefix.length))
+    }
+
+    /// The content hash of the video a comment's or a batch's `id` names
+    /// by its first digits, open or not; nil when this run has seen no
+    /// such video. It is how a listener's command finds its review
+    /// whatever video is open.
+    func hash(naming id: String) -> String? {
+        let prefix = id.prefix(VideoPrefix.length)
+        guard prefix.count == VideoPrefix.length else { return nil }
+        return reviews.keys.first { $0.hasPrefix(prefix) }
     }
 
     private func publish(_ review: Review) {

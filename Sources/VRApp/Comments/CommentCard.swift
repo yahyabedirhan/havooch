@@ -3,9 +3,10 @@ import SwiftUI
 import VRReview
 
 /// One comment in the sidebar: its keyframe with its region outlined, its
-/// state, its time and its text. A click goes to its moment. A queued comment is edited in place
-/// (a double click or the pencil; Return keeps the new text, Escape the
-/// old) and deleted with the bin.
+/// state, its time and its text, and under them its thread. A click goes
+/// to its moment. A queued comment is edited in place (a double click or
+/// the pencil; Return keeps the new text, Escape the old) and deleted with
+/// the bin.
 struct CommentCard: View {
     let model: AppModel
     let comment: Comment
@@ -19,16 +20,17 @@ struct CommentCard: View {
     private var selected: Bool { model.selection == comment.id }
 
     var body: some View {
+        let style = StatusStyle.of(comment)
+        VStack(alignment: .leading, spacing: 8) {
         HStack(alignment: .top, spacing: 10) {
             Keyframe(file: keyframe, region: comment.region)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    StatusMark(state: comment.state, squared: comment.region != nil, size: 10)
+                    StatusMark(style: style, squared: comment.region != nil, size: 11)
                     Text(TimeText.short(comment.time))
                         .font(.callout.weight(.semibold).monospacedDigit())
                     if comment.state != .queued {
                         // A sent comment says where it stands in a word, beside its mark.
-                        let style = StatusStyle.of(comment.state)
                         Text(style.label)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(style.color)
@@ -68,13 +70,22 @@ struct CommentCard: View {
                 }
             }
         }
+        if !comment.thread.isEmpty {
+            ThreadView(model: model, comment: comment)
+        }
+        }
         .padding(8)
         .background(
             selected ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(hovering ? 1 : 0.5)),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay {
-            if selected { RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.6)) }
+            if selected {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.6))
+            } else if comment.openQuestion != nil {
+                // A question that waits is seen without the card in focus.
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.purple.opacity(0.5))
+            }
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }

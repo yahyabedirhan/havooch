@@ -181,8 +181,44 @@ final class ControlServer {
                 }
                 let note = try model.setNote(text)
                 return done(json ? JSONText.line(Noted(note: note)) : "context note set\n")
-            case .threadAnswer, .ack, .status, .reply, .ask:
-                return Answer(reply: .refused("this build of video-review doesn't answer `\(message.request.command)` yet"))
+            case .ack(let id, let text):
+                struct Acknowledged: Encodable {
+                    var batchId: String
+                    var commentIds: [String]
+                }
+                let batch = try model.listener.acknowledge(id, text: text, holder: message.holder)
+                return done(
+                    json ? JSONText.line(Acknowledged(batchId: batch.id.rawValue, commentIds: batch.comments.map(\.rawValue)))
+                        : "acknowledged \(batch.id.rawValue)\n"
+                )
+            case .status(let id, let state):
+                let changed = try model.listener.setStatus(id, state, holder: message.holder)
+                return done(json ? JSONText.line(model.shown(changed)) : "\(changed.id.rawValue) \(changed.state.rawValue)\n")
+            case .reply(let id, let text):
+                struct Replied: Encodable {
+                    var batchId: String
+                }
+                switch try model.listener.reply(id, text: text, holder: message.holder) {
+                case .comment(let comment):
+                    return done(json ? JSONText.line(model.shown(comment)) : "replied \(comment.id.rawValue)\n")
+                case .batch(let batch):
+                    return done(json ? JSONText.line(Replied(batchId: batch.id.rawValue)) : "replied \(batch.id.rawValue)\n")
+                }
+            case .ask(let id, let question, let wait):
+                struct Answered: Encodable {
+                    var commentId: String
+                    var answer: String
+                }
+                switch await model.listener.ask(id, question: question, wait: wait, holder: message.holder) {
+                case .answer(let answer): return done(json ? JSONText.line(Answered(commentId: id, answer: answer)) : answer + "\n")
+                // Nothing to print: the command, which knows it waited, exits 3.
+                case .timedOut: return done("")
+                case .refused(let why): return Answer(reply: .refused(why))
+                case .gone: return Answer(reply: .refused("the listener's connection closed"))
+                }
+            case .threadAnswer(let id, let text):
+                let answered = try model.answer(CommentID(rawValue: id), text: text)
+                return done(json ? JSONText.line(model.shown(answered)) : "answered \(answered.id.rawValue)\n")
             }
         } catch {
             return Answer(reply: .refused(error.message))

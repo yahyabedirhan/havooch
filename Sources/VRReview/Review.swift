@@ -127,6 +127,78 @@ public struct Review: Codable, Equatable, Sendable {
         return batch
     }
 
+    // MARK: - The listener's answers
+
+    /// The listener has the batch `id`: its comments that are `sent` are
+    /// now `acknowledged`, and `text`, when it says something, is a message
+    /// for the whole batch. A second acknowledgement moves nothing back.
+    @discardableResult
+    public mutating func acknowledge(_ id: BatchID, text: String? = nil, now: Date) throws(ReviewError) -> Batch {
+        let index = try batchIndex(id)
+        for comment in comments.indices where comments[comment].batch == id && comments[comment].state == .sent {
+            comments[comment].state = .acknowledged
+        }
+        if let said = text?.trimmingCharacters(in: .whitespacesAndNewlines), !said.isEmpty {
+            batches[index].thread.append(ThreadMessage(author: .agent, kind: .message, text: said, at: now))
+        }
+        return batches[index]
+    }
+
+    /// The listener says where the comment `id` stands: `working`, `done`
+    /// or `failed`. Forward only; a step may be skipped; `done` and
+    /// `failed` are final.
+    @discardableResult
+    public mutating func setStatus(_ id: CommentID, to next: CommentState) throws(ReviewError) -> Comment {
+        let index = try index(of: id)
+        let state = comments[index].state
+        guard [.working, .done, .failed].contains(next), state.canMove(to: next) else {
+            throw .illegalMove(id, from: state, to: next)
+        }
+        comments[index].state = next
+        return comments[index]
+    }
+
+    /// An agent's message in the thread of the comment `id`.
+    @discardableResult
+    public mutating func reply(toComment id: CommentID, text: String, now: Date) throws(ReviewError) -> Comment {
+        let index = try sentIndex(id)
+        comments[index].thread.append(ThreadMessage(author: .agent, kind: .message, text: try Self.keptMessage(text), at: now))
+        return comments[index]
+    }
+
+    /// An agent's message for the whole batch `id`.
+    @discardableResult
+    public mutating func reply(toBatch id: BatchID, text: String, now: Date) throws(ReviewError) -> Batch {
+        let index = try batchIndex(id)
+        batches[index].thread.append(ThreadMessage(author: .agent, kind: .message, text: try Self.keptMessage(text), at: now))
+        return batches[index]
+    }
+
+    /// An agent's question in the thread of the comment `id`. The same
+    /// text as the comment's latest question is that question asked
+    /// again, answered or not: nothing is posted twice.
+    @discardableResult
+    public mutating func ask(_ id: CommentID, question: String, now: Date) throws(ReviewError) -> Comment {
+        let index = try sentIndex(id)
+        let asked = try Self.keptMessage(question)
+        if comments[index].lastQuestion?.text != asked {
+            comments[index].thread.append(ThreadMessage(author: .agent, kind: .question, text: asked, at: now))
+        }
+        return comments[index]
+    }
+
+    /// The person's answer to the question that waits on the comment `id`.
+    /// Refused when no question waits.
+    @discardableResult
+    public mutating func answer(_ id: CommentID, text: String, now: Date) throws(ReviewError) -> Comment {
+        let index = try index(of: id)
+        guard comments[index].openQuestion != nil else { throw .noOpenQuestion(id) }
+        comments[index].thread.append(ThreadMessage(author: .person, kind: .answer, text: try Self.keptMessage(text), at: now))
+        return comments[index]
+    }
+
+    // MARK: - Delivery
+
     /// Whether every comment of the batch `id` is done or failed: nothing
     /// of it is left for a listener. A batch that isn't here isn't finished.
     public func isFinished(_ id: BatchID) -> Bool {
@@ -141,6 +213,32 @@ public struct Review: Codable, Equatable, Sendable {
         for index in comments.indices where comments[index].batch == id {
             if comments[index].state == .acknowledged || comments[index].state == .working { comments[index].state = .sent }
         }
+    }
+
+    private func index(of id: CommentID) throws(ReviewError) -> Int {
+        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.rawValue) }
+        return index
+    }
+
+    private func batchIndex(_ id: BatchID) throws(ReviewError) -> Int {
+        guard let index = batches.firstIndex(where: { $0.id == id }) else { throw .unknownBatch(id.rawValue) }
+        return index
+    }
+
+    /// Where the comment `id` names is, when a listener may have it: it
+    /// was sent in a batch.
+    private func sentIndex(_ id: CommentID) throws(ReviewError) -> Int {
+        let index = try index(of: id)
+        guard comments[index].batch != nil else { throw .notSent(id, comments[index].state) }
+        return index
+    }
+
+    /// A thread message's text without the blank space around it; refused
+    /// when nothing is left.
+    private static func keptMessage(_ text: String) throws(ReviewError) -> String {
+        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !kept.isEmpty else { throw .emptyMessage }
+        return kept
     }
 
     /// Where the comment `id` names is, when it may still be changed.

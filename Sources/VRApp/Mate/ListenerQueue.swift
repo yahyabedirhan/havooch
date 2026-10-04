@@ -39,11 +39,42 @@ final class ListenerQueue {
         var timeout: Task<Void, Never>?
     }
 
+    /// What a `reply` was posted on: a comment's thread, or a batch's.
+    enum ReplyTarget: Equatable, Sendable {
+        case comment(Comment)
+        case batch(Batch)
+    }
+
+    /// How an `ask` ends.
+    enum AskOutcome: Equatable, Sendable {
+        /// The person's answer.
+        case answer(String)
+        /// Its `--wait` ran out with no answer; the question stays open.
+        case timedOut
+        case refused(String)
+        /// Its connection closed: nobody reads the answer.
+        case gone
+    }
+
+    /// One open `ask`: the question it waits on, and how it gets its answer.
+    private struct Asker {
+        var ticket: UUID
+        var comment: CommentID
+        var question: String
+        var answer: CheckedContinuation<AskOutcome, Never>
+        /// Ends the ask when its `--wait` runs out; cancelled once it's answered.
+        var timeout: Task<Void, Never>?
+    }
+
     /// The listener session and the batches on their way. Kept in memory
     /// for this run.
     private(set) var ledger = ListenerLedger()
     /// The open `wait`s, oldest first.
     private var waiters: [Waiter] = []
+    /// The open `ask`s, oldest first.
+    private var askers: [Asker] = []
+    /// Told each agent message as it arrives, for the window's notice.
+    @ObservationIgnored var announce: @MainActor (Notice) -> Void = { _ in }
     /// The batches whose reply is being written: handed to a `wait`, not
     /// yet taken, and so not handed to a second one.
     private var inFlight: Set<BatchID> = []
@@ -66,15 +97,19 @@ final class ListenerQueue {
 
     /// Whether a listener is there at `time`.
     func presence(at time: Date) -> Presence {
-        ledger.presence(waitOpen: !waiters.isEmpty, now: time)
+        ledger.presence(waitOpen: connected, now: time)
     }
+
+    /// Whether the listener holds a connection open: a `wait`, or an `ask`
+    /// that waits for its answer. Either shows it is there.
+    private var connected: Bool { !waiters.isEmpty || !askers.isEmpty }
 
     /// Whether a listener is there now.
     var presence: Presence { presence(at: now()) }
 
     /// Whether presence can change by time alone: a listener with a batch
     /// and no `wait` open is `working` only for a while after its last command.
-    var presenceRunsOut: Bool { waiters.isEmpty && ledger.hasTaken }
+    var presenceRunsOut: Bool { !connected && ledger.hasTaken }
 
     /// Where `batch` stands on its way to the listener.
     func standing(of batch: BatchID) -> ListenerLedger.Standing {
@@ -100,13 +135,10 @@ final class ListenerQueue {
     /// When the caller's task is cancelled (its connection closed), the
     /// wait ends with nothing handed over.
     func wait(holder: Holder, timeout: Int?) async -> WaitOutcome {
-        guard !closed else { return .refused(Self.quittingRefusal) }
-        if let open = waiters.first(where: { $0.holder.key != holder.key }) {
-            return .refused("\(open.holder.name) in \(open.holder.place) is already listening; one listener at a time")
-        }
-        for delivery in ledger.attach((key: holder.key, name: holder.name, place: holder.place), now: now()) {
-            // A review this run doesn't have has nothing to put back.
-            _ = try? desk.change(delivery.video) { review in review.requeue(delivery.batch) }
+        do throws(ActionError) {
+            try admit(holder)
+        } catch {
+            return .refused(error.message)
         }
         let ticket = UUID()
         return await withTaskCancellationHandler {
@@ -123,6 +155,24 @@ final class ListenerQueue {
         } onCancel: {
             Task { @MainActor [weak self] in self?.end(ticket, with: .gone) }
         }
+    }
+
+    /// The first step of every listener command: `holder` is the listener
+    /// from now on. Refused while the app quits, and while another
+    /// listener's `wait` is open. A new listener (another key than the
+    /// session's) starts a new session: the batches the one before took and
+    /// didn't finish are pending again, their unfinished comments `sent`.
+    private func admit(_ holder: Holder) throws(ActionError) {
+        guard !closed else { throw .listener(Self.quittingRefusal) }
+        if let open = waiters.first(where: { $0.holder.key != holder.key }) {
+            throw .listener("\(open.holder.name) in \(open.holder.place) is already listening; one listener at a time")
+        }
+        let requeued = ledger.attach((key: holder.key, name: holder.name, place: holder.place), now: now())
+        for delivery in requeued {
+            // A review this run doesn't have has nothing to put back.
+            _ = try? desk.change(delivery.video) { review in review.requeue(delivery.batch) }
+        }
+        if !requeued.isEmpty { deliverIfPossible() }
     }
 
     /// Ends the open `wait` `ticket` with `outcome`, unless it was
@@ -178,10 +228,140 @@ final class ListenerQueue {
         deliverIfPossible()
     }
 
-    /// The app quits: every open `wait` hears why, instead of a dropped
-    /// connection, and a later one is refused.
+    // MARK: - Answering
+
+    /// `ack`: the listener has the batch `id`. Its sent comments are
+    /// acknowledged, and `text` is a message for the whole batch.
+    func acknowledge(_ id: String, text: String?, holder: Holder) throws(ActionError) -> Batch {
+        try admit(holder)
+        guard let hash = desk.hash(naming: id) else { throw .review(.unknownBatch(id)) }
+        let time = now()
+        let before = desk.review(hash)?.batches.first { $0.id.rawValue == id }?.thread.count
+        let batch = try desk.change(hash) { review throws(ReviewError) in
+            try review.acknowledge(BatchID(rawValue: id), text: text, now: time)
+        }
+        if let said = batch.thread.last, batch.thread.count != before {
+            announce(Notice(batch: batch.id, comment: nil, time: nil, kind: said.kind, text: said.text))
+        }
+        return batch
+    }
+
+    /// `status`: the comment `id` is `working`, `done` or `failed`. The
+    /// status that finishes its batch takes the batch out of the ledger.
+    func setStatus(_ id: String, _ state: String, holder: Holder) throws(ActionError) -> Comment {
+        try admit(holder)
+        guard let next = CommentState(rawValue: state), [.working, .done, .failed].contains(next) else {
+            throw .listener("no status `\(state)`; it takes `working`, `done` or `failed`")
+        }
+        guard let hash = desk.hash(naming: id) else { throw .review(.unknownComment(id)) }
+        let comment = try desk.change(hash) { review throws(ReviewError) in
+            try review.setStatus(CommentID(rawValue: id), to: next)
+        }
+        if let batch = comment.batch, desk.review(hash)?.isFinished(batch) == true { ledger.finish(batch) }
+        return comment
+    }
+
+    /// `reply`: a message in the thread of the comment `id`, or, for a
+    /// batch's id, a message for the whole batch.
+    func reply(_ id: String, text: String, holder: Holder) throws(ActionError) -> ReplyTarget {
+        try admit(holder)
+        let time = now()
+        if Self.namesBatch(id) {
+            guard let hash = desk.hash(naming: id) else { throw .review(.unknownBatch(id)) }
+            let batch = try desk.change(hash) { review throws(ReviewError) in
+                try review.reply(toBatch: BatchID(rawValue: id), text: text, now: time)
+            }
+            if let said = batch.thread.last {
+                announce(Notice(batch: batch.id, comment: nil, time: nil, kind: said.kind, text: said.text))
+            }
+            return .batch(batch)
+        }
+        guard let hash = desk.hash(naming: id) else { throw .review(.unknownComment(id)) }
+        let comment = try desk.change(hash) { review throws(ReviewError) in
+            try review.reply(toComment: CommentID(rawValue: id), text: text, now: time)
+        }
+        announce(comment)
+        return .comment(comment)
+    }
+
+    /// Whether `id` is written as a batch's (`7f3a9c21-b1`), not a comment's.
+    private static func namesBatch(_ id: String) -> Bool {
+        id.dropFirst(VideoPrefix.length).hasPrefix("-b")
+    }
+
+    /// The window's notice for the last message in `comment`'s thread.
+    private func announce(_ comment: Comment) {
+        guard let said = comment.thread.last, let batch = comment.batch else { return }
+        announce(Notice(batch: batch, comment: comment.id, time: comment.time, kind: said.kind, text: said.text))
+    }
+
+    /// `ask`: a question in the thread of the comment `id`, answered with
+    /// what the person answers. The caller stays suspended meanwhile.
+    /// Without `wait` it waits without limit. The same text as the
+    /// comment's latest question attaches to that question: nothing is
+    /// posted again, and an answer that is already there is returned at
+    /// once, so a listener whose wait ran out asks again and loses
+    /// nothing. Another question on the comment ends the asks that waited
+    /// on the one before.
+    func ask(_ id: String, question: String, wait: Int?, holder: Holder) async -> AskOutcome {
+        let comment: Comment
+        do throws(ActionError) {
+            try admit(holder)
+            guard let hash = desk.hash(naming: id) else { throw .review(.unknownComment(id)) }
+            let time = now()
+            let before = desk.review(hash)?.comments.first { $0.id.rawValue == id }?.thread.count
+            comment = try desk.change(hash) { review throws(ReviewError) in
+                try review.ask(CommentID(rawValue: id), question: question, now: time)
+            }
+            if comment.thread.count != before { announce(comment) }
+        } catch {
+            return .refused(error.message)
+        }
+        if let answer = comment.lastAnswer { return .answer(answer.text) }
+        guard let asked = comment.lastQuestion?.text else { return .refused(ReviewError.noOpenQuestion(comment.id).message) }
+        for asker in askers where asker.comment == comment.id && asker.question != asked {
+            endAsk(asker.ticket, with: .refused("another question was asked on \(id) since: `\(asked)`"))
+        }
+        if wait == 0 { return .timedOut }
+        let ticket = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let running = wait.map { seconds in
+                    Task { [weak self] in
+                        do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+                        self?.endAsk(ticket, with: .timedOut)
+                    }
+                }
+                askers.append(Asker(ticket: ticket, comment: comment.id, question: asked, answer: continuation, timeout: running))
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.endAsk(ticket, with: .gone) }
+        }
+    }
+
+    /// The person answered the question on `comment`, in the window or
+    /// through `thread answer`: every `ask` that waits on it gets the answer.
+    func answered(_ comment: Comment) {
+        guard let answer = comment.lastAnswer else { return }
+        for asker in askers where asker.comment == comment.id {
+            endAsk(asker.ticket, with: .answer(answer.text))
+        }
+    }
+
+    /// Ends the open `ask` `ticket` with `outcome`, unless it was answered
+    /// already.
+    private func endAsk(_ ticket: UUID, with outcome: AskOutcome) {
+        guard let index = askers.firstIndex(where: { $0.ticket == ticket }) else { return }
+        let asker = askers.remove(at: index)
+        asker.timeout?.cancel()
+        asker.answer.resume(returning: outcome)
+    }
+
+    /// The app quits: every open `wait` and `ask` hears why, instead of a
+    /// dropped connection, and a later one is refused.
     func quitting() {
         closed = true
         for waiter in waiters { end(waiter.ticket, with: .refused(Self.quittingRefusal)) }
+        for asker in askers { endAsk(asker.ticket, with: .refused(Self.quittingRefusal)) }
     }
 }

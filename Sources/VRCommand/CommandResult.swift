@@ -12,7 +12,7 @@ public struct CommandResult: Error, Equatable, Sendable {
     public static let refusal: Int32 = 1
     /// The command line doesn't parse.
     public static let usage: Int32 = 2
-    /// A `wait --timeout` ran out with nothing to return.
+    /// A `wait --timeout` or an `ask --wait` ran out with nothing to return.
     public static let ranOut: Int32 = 3
 
     public init(output: String = "", error: String = "", exitCode: Int32 = CommandResult.success) {

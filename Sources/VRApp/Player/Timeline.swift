@@ -3,7 +3,8 @@ import VRReview
 
 /// The scrubber: the played part of the video and the playhead, which a
 /// click or a drag moves, with a marker above the track for each comment:
-/// round for a comment at a time, a rounded square for one on a region.
+/// round for a comment at a time, a rounded square for one on a region,
+/// in the colour and with the symbol of where the comment stands.
 /// A click on a marker goes to its comment. The app's own, since AVKit's
 /// scrubber can't carry markers.
 struct Timeline: View {
@@ -29,16 +30,17 @@ struct Timeline: View {
             VStack(spacing: 0) {
                 ZStack {
                     ForEach(comments) { comment in
+                        let style = StatusStyle.of(comment)
                         Button {
                             select(comment.id)
                         } label: {
-                            StatusMark(state: comment.state, squared: comment.region != nil, selected: comment.id == selection, size: Self.marker)
+                            StatusMark(style: style, squared: comment.region != nil, selected: comment.id == selection, size: Self.marker)
                                 .frame(width: Self.markerRow, height: Self.markerRow)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("\(TimeText.short(comment.time))  \(comment.text)")
-                        .accessibilityLabel("Comment at \(TimeText.short(comment.time)): \(comment.text)")
+                        .help("\(TimeText.short(comment.time))  \(style.label)  ·  \(comment.text)")
+                        .accessibilityLabel("Comment at \(TimeText.short(comment.time)), \(style.label): \(comment.text)")
                         .position(x: Self.place(of: comment.time, in: duration, width: width), y: Self.markerRow / 2)
                         // The comment in focus stays on top of its neighbours.
                         .zIndex(comment.id == selection ? 1 : 0)

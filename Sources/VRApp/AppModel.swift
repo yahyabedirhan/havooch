@@ -17,6 +17,8 @@ enum ActionError: Error, Equatable {
     case keyframe(String)
     case crop(String)
     case review(ReviewError)
+    /// A listener's command the listener queue refuses, in its words.
+    case listener(String)
 
     var message: String {
         switch self {
@@ -34,6 +36,8 @@ enum ActionError: Error, Equatable {
             "can't keep the comment's crop: \(why)"
         case .review(let refusal):
             refusal.message
+        case .listener(let why):
+            why
         }
     }
 }
@@ -60,6 +64,10 @@ final class AppModel {
     private(set) var draw = RegionDraw()
     /// Whether the video was playing when that rectangle began.
     private var drawResumes = false
+    /// The agent message that just arrived, shown for `Notice.duration`.
+    private(set) var notice: Notice?
+    /// Takes the notice down when its time is up.
+    @ObservationIgnored private var noticeEnds: Task<Void, Never>?
     /// The last refusal of something the person did, shown until dismissed.
     var failure: String?
     /// The app's one window, for `Screenshotter`.
@@ -78,6 +86,7 @@ final class AppModel {
         self.transcriber = transcriber ?? OrderedTranscriber(cache: TranscriptCache(layout: layout))
         self.now = now
         listener = ListenerQueue(desk: desk, now: now)
+        listener.announce = { [weak self] notice in self?.show(notice) }
     }
 
     // MARK: - Actions
@@ -329,6 +338,44 @@ final class AppModel {
         player.video.flatMap { ContextSource.read(for: $0.url) }
     }
 
+    // MARK: - Threads
+
+    /// The person's answer to the question that waits on the comment `id`:
+    /// the answer box and `thread answer` both end here. It goes into the
+    /// thread, and to the `ask` that waits for it.
+    @discardableResult
+    func answer(_ id: CommentID, text: String) throws(ActionError) -> Comment {
+        guard let hash = desk.hash(naming: id.rawValue) else { throw .review(.unknownComment(id.rawValue)) }
+        let time = now()
+        let comment = try desk.change(hash) { review throws(ReviewError) in try review.answer(id, text: text, now: time) }
+        listener.answered(comment)
+        return comment
+    }
+
+    /// Return in a thread's answer box; whether the answer was taken.
+    func answerForPerson(_ id: CommentID, text: String) -> Bool {
+        attempt { () throws(ActionError) in try answer(id, text: text) } != nil
+    }
+
+    /// An agent message arrived: the window announces it for a few seconds.
+    /// A later one replaces it.
+    func show(_ notice: Notice) {
+        self.notice = notice
+        noticeEnds?.cancel()
+        noticeEnds = Task { [weak self] in
+            do { try await Task.sleep(for: Notice.duration) } catch { return }
+            if self?.notice?.id == notice.id { self?.notice = nil }
+        }
+    }
+
+    /// A click on the notice: goes to the comment it is about, and takes
+    /// the notice down.
+    func openNotice() {
+        if let comment = notice?.comment { select(comment) }
+        noticeEnds?.cancel()
+        notice = nil
+    }
+
     /// Sends the queue for the person: a refusal is shown, not thrown.
     func sendBatchForPerson() {
         Task {
@@ -456,7 +503,8 @@ final class AppModel {
                 problem: transcript?.problem
             ),
             listener: shownListener,
-            lease: lease
+            lease: lease,
+            notice: notice.map { .init(batchId: $0.batch.rawValue, commentId: $0.comment?.rawValue, kind: $0.kind.rawValue, text: $0.text) }
         )
     }
 

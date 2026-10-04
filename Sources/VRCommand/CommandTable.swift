@@ -193,6 +193,52 @@ enum CommandTable {
             return .send(.wait(timeoutSeconds: timeout))
         },
         Command(
+            words: ["ack"], usage: "ack <batch-id> [<text>]",
+            summary: "listen: acknowledge a batch, with a message for the whole batch when <text> is given"
+        ) { arguments throws(UsageError) in
+            let id = try arguments.positional("batch-id")
+            return .send(.ack(id: id, text: try? arguments.positional("text")))
+        },
+        Command(
+            words: ["status"], usage: "status <comment-id> working|done|failed",
+            summary: "listen: say where a comment stands"
+        ) { arguments throws(UsageError) in
+            let id = try arguments.positional("comment-id")
+            let state = try arguments.positional("working|done|failed")
+            guard ["working", "done", "failed"].contains(state) else {
+                throw UsageError("no status `\(state)`; it takes `working`, `done` or `failed`")
+            }
+            return .send(.status(id: id, state: state))
+        },
+        Command(
+            words: ["reply"], usage: "reply <comment-id|batch-id> <text>",
+            summary: "listen: send a message on a comment, or for a whole batch"
+        ) { arguments throws(UsageError) in
+            let id = try arguments.positional("comment-id|batch-id")
+            return .send(.reply(id: id, text: try arguments.positional("text")))
+        },
+        Command(
+            words: ["ask"], usage: "ask <comment-id> <question> [--wait <s>]",
+            summary: "listen: ask a question on a comment and print the person's answer; with --wait, exit 3 when none came in <s> seconds"
+        ) { arguments throws(UsageError) in
+            var wait: Int?
+            if let text = try arguments.option("wait") {
+                guard let seconds = Int(text), (0...ControlRequest.longestWait).contains(seconds) else {
+                    throw UsageError("--wait takes whole seconds from 0 to \(ControlRequest.longestWait), not `\(text)`")
+                }
+                wait = seconds
+            }
+            let id = try arguments.positional("comment-id")
+            return .send(.ask(id: id, text: try arguments.positional("question"), waitSeconds: wait))
+        },
+        Command(
+            words: ["thread", "answer"], usage: "thread answer <comment-id> <text>",
+            summary: "answer the question that waits on a comment, as the person does in the window"
+        ) { arguments throws(UsageError) in
+            let id = try arguments.positional("comment-id")
+            return .send(.threadAnswer(id: id, text: try arguments.positional("text")))
+        },
+        Command(
             words: ["screenshot"], usage: "screenshot <abs.png> [--appearance light|dark]",
             summary: "write the app's window as a PNG"
         ) { arguments throws(UsageError) in
@@ -229,10 +275,11 @@ enum CommandTable {
             One agent at a time drives the app. A command that drives it takes or renews
             the lease, which ends 60 s after its holder's last command and 5 min after it
             was taken at most. While another agent holds it, such a command exits 1 and
-            names the holder and the lease's end. `app status`, `state` and `wait` need no
-            lease. A listener is present while its `wait` is open.
+            names the holder and the lease's end. `app status`, `state` and the listener's
+            commands (`wait`, `ack`, `status`, `reply`, `ask`) need no lease. A listener is
+            present while its `wait` is open.
             Exit codes: 0 done, 1 refused or failed, 2 the command line doesn't parse,
-            3 a `wait --timeout` ran out with no batch.
+            3 a `wait --timeout` ran out with no batch, or an `ask --wait` with no answer.
 
             """
     }

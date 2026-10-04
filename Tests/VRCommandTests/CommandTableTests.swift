@@ -87,6 +87,53 @@ import VRWire
         #expect(refused == CommandResult(error: refusal + "\n", exitCode: 1))
     }
 
+    // MARK: - Answering
+
+    @Test func eachAnswerLineBecomesItsRequest() {
+        #expect(request("ack", "7f3a9c21-b1") == .ack(id: "7f3a9c21-b1", text: nil))
+        #expect(request("ack", "7f3a9c21-b1", "got it") == .ack(id: "7f3a9c21-b1", text: "got it"))
+        #expect(request("status", "7f3a9c21-c1", "working") == .status(id: "7f3a9c21-c1", state: "working"))
+        #expect(request("status", "7f3a9c21-c1", "done") == .status(id: "7f3a9c21-c1", state: "done"))
+        #expect(request("status", "7f3a9c21-c1", "failed") == .status(id: "7f3a9c21-c1", state: "failed"))
+        #expect(request("reply", "7f3a9c21-c1", "fixed in a1b2c3") == .reply(id: "7f3a9c21-c1", text: "fixed in a1b2c3"))
+        #expect(request("reply", "7f3a9c21-b1", "both are in") == .reply(id: "7f3a9c21-b1", text: "both are in"))
+        #expect(request("ask", "7f3a9c21-c1", "which one?") == .ask(id: "7f3a9c21-c1", text: "which one?", waitSeconds: nil))
+        #expect(request("ask", "7f3a9c21-c1", "which one?", "--wait", "60") == .ask(id: "7f3a9c21-c1", text: "which one?", waitSeconds: 60))
+        #expect(request("ask", "--wait", "0", "7f3a9c21-c1", "which one?") == .ask(id: "7f3a9c21-c1", text: "which one?", waitSeconds: 0))
+        #expect(request("thread", "answer", "7f3a9c21-c1", "the left one") == .threadAnswer(id: "7f3a9c21-c1", text: "the left one"))
+    }
+
+    @Test func anAskPrintsTheAnswerAndExitsZero() {
+        let result = harness.run("ask", "7f3a9c21-c1", "which one?", "--wait", "60", transport: FakeTransport(reply: .done("the left one\n")))
+
+        #expect(result == CommandResult(output: "the left one\n"))
+    }
+
+    @Test func anAskWhoseWaitRanOutExitsThreeAndPrintsNothingOnStandardOutput() {
+        // The app answers an ask that ran out with nothing to print.
+        let ranOut = FakeTransport(reply: .done(""))
+
+        #expect(harness.run("ask", "7f3a9c21-c1", "which one?", "--wait", "60", transport: ranOut)
+            == CommandResult(error: "no answer within 60 s\n", exitCode: 3))
+        #expect(harness.run("ask", "7f3a9c21-c1", "which one?", "--wait", "0", "--json", transport: ranOut)
+            == CommandResult(error: "no answer within 0 s\n", exitCode: 3))
+    }
+
+    @Test func anAskKeepsTheUsualIdleTimeoutSinceTheAppsHeartbeatBreaksTheSilence() {
+        let transport = FakeTransport(reply: .done("yes\n"))
+        _ = harness.run("ask", "7f3a9c21-c1", "which one?", transport: transport)
+        _ = harness.run("ask", "7f3a9c21-c1", "which one?", "--wait", "3600", transport: transport)
+        #expect(transport.exchanges.current.map(\.idleTimeout) == [15, 15])
+    }
+
+    @Test func anAnswerCommandThatIsRefusedExitsOneWithTheAppsLine() {
+        let refusal = "7f3a9c21-c1 has no question waiting for an answer"
+        for line in [["thread", "answer", "7f3a9c21-c1", "yes"], ["status", "7f3a9c21-c1", "done"], ["ask", "7f3a9c21-c1", "why?"]] {
+            let refused = harness.run(line: line, transport: FakeTransport(reply: .refused(refusal)))
+            #expect(refused == CommandResult(error: refusal + "\n", exitCode: 1))
+        }
+    }
+
     @Test func aCommandRefusedTheLeaseExitsOneWithTheHolderAndTheEndOfTheLease() {
         let refusal = "video-review is in use by Claude Code in /work until 12:01:00 (48s left); "
             + "`video-review control take --wait <seconds>` to queue"
@@ -177,6 +224,26 @@ import VRWire
         (["wait", "--timeout", "soon"], "wait: --timeout takes whole seconds from 0 to 3600, not `soon`", "wait [--timeout <s>]"),
         (["wait", "--timeout", "3601"], "wait: --timeout takes whole seconds from 0 to 3600, not `3601`", "wait [--timeout <s>]"),
         (["wait", "30"], "wait: unexpected `30`", "wait [--timeout <s>]"),
+        (["ack"], "ack: missing <batch-id>", "ack <batch-id> [<text>]"),
+        (["ack", "7f3a9c21-b1", "got", "it"], "ack: unexpected `it`", "ack <batch-id> [<text>]"),
+        (["status", "7f3a9c21-c1"], "status: missing <working|done|failed>", "status <comment-id> working|done|failed"),
+        (
+            ["status", "7f3a9c21-c1", "sent"],
+            "status: no status `sent`; it takes `working`, `done` or `failed`", "status <comment-id> working|done|failed"
+        ),
+        (["reply", "7f3a9c21-c1"], "reply: missing <text>", "reply <comment-id|batch-id> <text>"),
+        (["ask", "7f3a9c21-c1"], "ask: missing <question>", "ask <comment-id> <question> [--wait <s>]"),
+        (["ask", "7f3a9c21-c1", "why?", "--wait"], "ask: --wait needs a value", "ask <comment-id> <question> [--wait <s>]"),
+        (
+            ["ask", "7f3a9c21-c1", "why?", "--wait", "soon"],
+            "ask: --wait takes whole seconds from 0 to 3600, not `soon`", "ask <comment-id> <question> [--wait <s>]"
+        ),
+        (
+            ["ask", "7f3a9c21-c1", "why?", "--wait", "3601"],
+            "ask: --wait takes whole seconds from 0 to 3600, not `3601`", "ask <comment-id> <question> [--wait <s>]"
+        ),
+        (["thread", "answer", "7f3a9c21-c1"], "thread answer: missing <text>", "thread answer <comment-id> <text>"),
+        (["thread", "answer"], "thread answer: missing <comment-id>", "thread answer <comment-id> <text>"),
         (["control", "release", "--wait", "5"], "control release: unknown option `--wait`", "control release"),
         (["app", "quit", "now"], "app quit: unexpected `now`", "app quit"),
     ])

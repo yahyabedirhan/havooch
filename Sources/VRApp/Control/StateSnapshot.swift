@@ -90,8 +90,15 @@ struct StateSnapshot: Encodable {
         var thread: [ThreadMessage]
     }
 
-    /// A part that has no shape yet: its key is there, with nothing in it.
-    struct Unbuilt: Encodable {}
+    /// The agent message the window announces right now.
+    struct Notice: Encodable {
+        var batchId: String
+        /// The comment it is on; `null` for a message about the whole batch.
+        @Nulled var commentId: String?
+        /// `message` or `question`.
+        var kind: String
+        var text: String
+    }
 
     var app: App
     @Nulled var video: Video?
@@ -106,7 +113,7 @@ struct StateSnapshot: Encodable {
     var transcript = Transcript(source: nil, complete: false, lines: 0, problem: nil)
     var listener = Listener(presence: "absent", name: nil, place: nil)
     @Nulled var lease: ControlLease.Status?
-    @Nulled var notice: Unbuilt?
+    @Nulled var notice: Notice?
 
     /// The snapshot as one line of JSON.
     var json: String { JSONText.line(self) }

@@ -40,7 +40,8 @@ public enum ControlRequest: Equatable, Sendable {
     /// both numbers, never misread.
     public static let version = 1
 
-    /// The longest `take --wait` and `wait --timeout`, in seconds: an hour.
+    /// The longest `take --wait`, `wait --timeout` and `ask --wait`, in
+    /// seconds: an hour.
     public static let longestWait = 3600
 
     /// The request's name on the wire.
