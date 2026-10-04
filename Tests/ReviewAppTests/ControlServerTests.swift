@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 @testable import ReviewApp
 import ReviewCore
+import ReviewStore
 import ReviewWire
 import Testing
 
@@ -60,6 +61,19 @@ struct ControlServerTests {
             comments.remove(at: try comment(id, "comment delete \(id)"))
         }
 
+        func sendBatch() async throws(AppRefusal) -> StateReport.Batch {
+            try record("batch send")
+            let queued = comments.indices.filter { comments[$0].state == "queued" }
+            guard !queued.isEmpty else { throw AppRefusal("no comment is queued") }
+            for index in queued {
+                comments[index].state = "sent"
+                comments[index].batchId = "b-00000001"
+            }
+            return StateReport.Batch(
+                id: "b-00000001", sentAt: Date(timeIntervalSince1970: 1_790_000_000), commentIds: queued.map { comments[$0].id }
+            )
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }
@@ -100,7 +114,12 @@ struct ControlServerTests {
     let screenshotter = FakeScreenshotter()
 
     private func server(at socket: URL = URL(fileURLWithPath: "/nowhere/control.sock"), quit: @escaping @MainActor () -> Void = {}) -> ControlServer {
-        ControlServer(socket: socket, app: app, screenshotter: screenshotter, quit: quit)
+        ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
+    }
+
+    /// A listener queue nobody sends a batch to: the fake app has no reviews.
+    static func noListeners() -> ListenerQueue {
+        ListenerQueue(desk: ReviewDesk(), images: ImageFiles(support: URL(fileURLWithPath: "/demo", isDirectory: true)))
     }
 
     private func answer(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {
@@ -169,6 +188,10 @@ struct ControlServerTests {
         #expect(state["draft"] is NSNull)
         #expect(state["comments"] as? [AnyHashable] == [])
         #expect(state["queue"] as? [String] == [])
+        #expect(state["batches"] as? [AnyHashable] == [])
+        #expect(state["listener"] as? [String: AnyHashable] == [
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingBatches": 0, "takenBatches": 0,
+        ])
 
         app.hasVideo = false
         state = try object(await answer(.state, json: true).reply.output)
@@ -182,6 +205,7 @@ struct ControlServerTests {
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
             lease: free
+            listener: absent, 0 batches waiting, 0 taken
             comments: none
 
             """)
@@ -248,6 +272,7 @@ struct ControlServerTests {
         #expect(added["comment"] as? [String: AnyHashable] == [
             "id": "c-00000001", "time": 12.5, "text": "Later", "state": "queued",
             "keyframePath": "/demo/videos/abc/frames/c-00000001.png", "region": NSNull(), "cropPath": NSNull(),
+            "batchId": NSNull(),
         ])
         #expect(added.count == 1)
         _ = await answer(.commentAdd(text: "Earlier", at: 3))
@@ -266,6 +291,23 @@ struct ControlServerTests {
 
         let deleted = try object(await answer(.commentDelete(id: "c-00000001"), json: true).reply.output)
         #expect(deleted as? [String: String] == ["deleted": "c-00000001"])
+    }
+
+    @Test("batch send reaches the app and answers the batch's id and how many comments it carries")
+    func batchSend() async throws {
+        #expect(await answer(.batchSend).reply == .refused("no comment is queued"))
+        _ = await answer(.commentAdd(text: "Too fast", at: 10))
+        _ = await answer(.commentAdd(text: "Good", at: 3))
+
+        #expect(await answer(.batchSend).reply == .done("b-00000001 sent with 2 comments, waiting for a listener\n"))
+        #expect(app.calls.suffix(1) == ["batch send"])
+        #expect(await answer(.state).reply.output.contains("  c-00000001 0:10 sent: Too fast\n"))
+
+        _ = await answer(.commentAdd(text: "One more", at: 5))
+        let sent = try object(await answer(.batchSend, json: true).reply.output)
+        #expect(sent["batch"] as? [String: AnyHashable]
+            == ["id": "b-00000001", "sentAt": "2026-09-21T14:13:20Z", "commentIds": ["c-00000003"]])
+        #expect(sent.count == 1)
     }
 
     @Test("a screenshot is asked of the screenshotter, in the appearance named")

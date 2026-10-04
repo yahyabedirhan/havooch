@@ -13,7 +13,8 @@ struct VideoReviewTests {
     private func review(with state: CommentState) throws -> VideoReview {
         let json = """
             {"video": {"contentHash": "abc", "title": "sample", "duration": 21.233, "path": "/videos/sample.mp4"},
-             "comments": [{"id": "c-00000001", "time": 10, "text": "Too fast", "state": "\(state.rawValue)"}]}
+             "comments": [{"id": "c-00000001", "time": 10, "text": "Too fast", "state": "\(state.rawValue)"}],
+             "batches": []}
             """
         return try JSONDecoder().decode(VideoReview.self, from: Data(json.utf8))
     }

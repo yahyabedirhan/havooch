@@ -11,6 +11,8 @@ public struct Comment: Codable, Equatable, Sendable, Identifiable {
     public internal(set) var state: CommentState
     /// The part of the frame the comment points at; nil for the whole frame.
     public let region: Region?
+    /// The batch the comment was sent in; nil while it's queued.
+    public internal(set) var batchID: ItemID?
 }
 
 /// A rectangle on the video's frame, in normalized coordinates: 0 to 1 from

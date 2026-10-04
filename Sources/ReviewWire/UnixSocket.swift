@@ -150,6 +150,17 @@ package enum UnixSocket {
         shutdown(descriptor, SHUT_WR)
     }
 
+    /// Whether the peer of `descriptor` has closed its socket: its process
+    /// ended or gave up. A peer that only finished writing (as a client
+    /// does once its request is sent) hasn't: it still reads the reply.
+    package static func peerClosed(_ descriptor: Int32) -> Bool {
+        // Asked about writing: a hang-up shows there only once the peer is
+        // gone, while about reading it shows for a half-close too.
+        var look = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+        guard poll(&look, 1, 0) > 0 else { return false }
+        return look.revents & Int16(POLLHUP | POLLERR | POLLNVAL) != 0
+    }
+
     /// `errno` in words.
     package static func reason(_ code: Int32 = errno) -> String {
         String(cString: strerror(code))

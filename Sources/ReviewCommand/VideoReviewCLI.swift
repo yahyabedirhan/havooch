@@ -45,6 +45,8 @@ public struct CommandEnvironment: Sendable {
     public var launcher: any AppLaunching
     /// Waits between two looks at the app while it starts or quits.
     public var pause: @Sendable (TimeInterval) -> Void
+    /// The time, which `wait --timeout` counts its seconds by.
+    public var now: @Sendable () -> Date
 
     public init(
         variables: [String: String],
@@ -52,7 +54,8 @@ public struct CommandEnvironment: Sendable {
         processes: any ProcessTable,
         transport: any ControlTransport,
         launcher: any AppLaunching,
-        pause: @escaping @Sendable (TimeInterval) -> Void
+        pause: @escaping @Sendable (TimeInterval) -> Void,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.variables = variables
         self.workingDirectory = workingDirectory
@@ -60,6 +63,7 @@ public struct CommandEnvironment: Sendable {
         self.transport = transport
         self.launcher = launcher
         self.pause = pause
+        self.now = now
     }
 
     /// The real environment of the `video-review` executable at
@@ -119,6 +123,7 @@ public enum VideoReviewCLI {
         case .appStatus: return AppCommands.status(app)
         case .appOpen(let demo): return AppCommands.open(demo: demo, app)
         case .appQuit: return AppCommands.quit(app)
+        case .wait(let timeout): return ListenerCommands.wait(timeout: timeout, client: client, environment: environment)
         }
     }
 

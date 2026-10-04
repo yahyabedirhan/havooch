@@ -55,6 +55,8 @@ struct StateReport: Encodable, Equatable {
         /// The PNG of the region, cut from the keyframe; `null` with no
         /// region.
         var cropPath: String?
+        /// The batch the comment was sent in; `null` while it's queued.
+        var batchId: String?
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -65,10 +67,50 @@ struct StateReport: Encodable, Equatable {
             try container.encode(keyframePath, forKey: .keyframePath)
             try container.encode(region, forKey: .region)
             try container.encode(cropPath, forKey: .cropPath)
+            try container.encode(batchId, forKey: .batchId)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, time, text, state, keyframePath, region, cropPath
+            case id, time, text, state, keyframePath, region, cropPath, batchId
+        }
+    }
+
+    /// The comments one send delivered together.
+    struct Batch: Encodable, Equatable {
+        var id: String
+        var sentAt: Date
+        /// The batch's comments, in time order.
+        var commentIds: [String]
+    }
+
+    /// The agent that receives the batches.
+    struct Listener: Encodable, Equatable {
+        /// `listening`, `working` or `absent`.
+        var presence: String
+        /// Whether a `wait` is open now.
+        var waitOpen: Bool
+        /// The name of the agent of the last `wait`; `null` before the
+        /// first one.
+        var session: String?
+        /// The batches sent and not yet taken by a `wait`.
+        var pendingBatches: Int
+        /// The batches a `wait` took that aren't finished.
+        var takenBatches: Int
+
+        /// Nobody has listened yet.
+        static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingBatches: 0, takenBatches: 0)
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(presence, forKey: .presence)
+            try container.encode(waitOpen, forKey: .waitOpen)
+            try container.encode(session, forKey: .session)
+            try container.encode(pendingBatches, forKey: .pendingBatches)
+            try container.encode(takenBatches, forKey: .takenBatches)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case presence, waitOpen, session, pendingBatches, takenBatches
         }
     }
 
@@ -81,6 +123,9 @@ struct StateReport: Encodable, Equatable {
     /// Who drives the app; `null` while nobody does. The control server,
     /// which owns the lease, fills it in.
     var lease: ControlLease.Status?
+    /// Whether an agent listens for batches. The control server, which
+    /// answers the listener, fills it in.
+    var listener = Listener.absent
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
@@ -88,13 +133,18 @@ struct StateReport: Encodable, Equatable {
     var draft: Draft?
     /// The open video's comments, in time order.
     var comments: [Comment]
+    /// The open video's batches, in the order they were sent.
+    var batches: [Batch]
 
     /// The ids of the comments waiting to be sent, in time order.
     var queue: [String] {
         comments.filter { $0.state == "queued" }.map(\.id)
     }
 
-    init(app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, draft: Draft? = nil, comments: [Comment] = []) {
+    init(
+        app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, draft: Draft? = nil,
+        comments: [Comment] = [], batches: [Batch] = []
+    ) {
         self.app = app
         self.lease = lease
         self.video = video.map {
@@ -103,21 +153,24 @@ struct StateReport: Encodable, Equatable {
         self.player = Player(time: Self.milliseconds(player.time), playing: player.playing)
         self.draft = draft
         self.comments = comments
+        self.batches = batches
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, lease, video, player, draft, comments, queue
+        case app, lease, listener, video, player, draft, comments, queue, batches
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(app, forKey: .app)
         try container.encode(lease, forKey: .lease)
+        try container.encode(listener, forKey: .listener)
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
         try container.encode(draft, forKey: .draft)
         try container.encode(comments, forKey: .comments)
         try container.encode(queue, forKey: .queue)
+        try container.encode(batches, forKey: .batches)
     }
 
     // MARK: - state
@@ -132,9 +185,17 @@ struct StateReport: Encodable, Equatable {
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
         \(leaseLine)
+        \(listenerLine)
         comments: \(commentLines)
 
         """
+    }
+
+    /// `listener: listening (Claude Code), 0 batches waiting, 1 taken`.
+    private var listenerLine: String {
+        let who = listener.session.map { " (\($0))" } ?? ""
+        let waiting = "\(listener.pendingBatches) \(listener.pendingBatches == 1 ? "batch" : "batches") waiting"
+        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenBatches) taken"
     }
 
     /// The comments, one line each under their count.

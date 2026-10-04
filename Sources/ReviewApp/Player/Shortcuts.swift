@@ -4,7 +4,8 @@ import AppKit
 /// Right move 5 seconds, Shift+Left and Shift+Right move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a comment,
 /// Escape drops a rectangle that's being drawn. They're off while a text
-/// view has the focus, so typing never reaches the player.
+/// view has the focus, so typing never reaches the player. Cmd+Return sends
+/// the queue, also while the person types.
 @MainActor
 enum Shortcuts {
     /// The seconds Left and Right move.
@@ -21,13 +22,18 @@ enum Shortcuts {
         /// Escape: drops the rectangle being drawn, or the comment box
         /// when its text view lost the focus.
         case cancel
+        /// Cmd+Return: sends the queue, with the words in the comment box.
+        case send
     }
 
     /// The action of the key `keyCode` with `modifiers`, if it has one.
     /// While the person types (`isTyping`: a text view has the focus) no
-    /// key has one: every key is the text view's.
+    /// key has one but Cmd+Return, which sends from anywhere: every other
+    /// key is the text view's.
     static func action(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, isTyping: Bool = false) -> Action? {
-        guard !isTyping, modifiers.intersection([.command, .option, .control]).isEmpty else { return nil }
+        let held = modifiers.intersection([.command, .option, .control, .shift])
+        if held == .command, keyCode == 36 || keyCode == 76 { return .send } // Return, Enter
+        guard !isTyping, held.isDisjoint(with: [.command, .option, .control]) else { return nil }
         let shift = modifiers.contains(.shift)
         switch keyCode {
         case 49, 40: return shift ? nil : .togglePlay // Space, K
@@ -65,6 +71,7 @@ enum Shortcuts {
         case .startComment: model.startDraft()
         // With nothing to cancel, Escape stays the window's.
         case .cancel: return model.escape()
+        case .send: model.send()
         }
         return true
     }

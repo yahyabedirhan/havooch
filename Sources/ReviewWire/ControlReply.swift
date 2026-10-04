@@ -4,18 +4,23 @@ import Foundation
 /// output (`output`) and, rarely, a note for standard error (`error`), or a
 /// refusal (`ok` false) whose `error` says why. The reply to `app.quit` may
 /// carry the lease the quit renewed (`lease`), for a relaunch to hand over
-/// to the app it launches; every other reply leaves it out.
+/// to the app it launches. The reply to a `wait` whose time ran out with no
+/// batch says so (`timedOut`), which the command exits 2 on. Every other
+/// reply leaves both out.
 public struct ControlReply: Codable, Equatable, Sendable {
     public var ok: Bool
     public var output: String
     public var error: String
     public var lease: LeaseTerm?
+    /// True when the request waited its whole time and has nothing to say.
+    public var timedOut: Bool?
 
-    public init(ok: Bool, output: String = "", error: String = "", lease: LeaseTerm? = nil) {
+    public init(ok: Bool, output: String = "", error: String = "", lease: LeaseTerm? = nil, timedOut: Bool? = nil) {
         self.ok = ok
         self.output = output
         self.error = error
         self.lease = lease
+        self.timedOut = timedOut
     }
 
     /// Done: `output` printed as it is.
@@ -27,6 +32,9 @@ public struct ControlReply: Codable, Equatable, Sendable {
     public static func refused(_ why: String) -> ControlReply {
         ControlReply(ok: false, error: why)
     }
+
+    /// The wait ran out with no result: nothing printed, exit 2.
+    public static let ranOut = ControlReply(ok: false, timedOut: true)
 
     /// The reply as one JSON object.
     public func encoded() -> Data {

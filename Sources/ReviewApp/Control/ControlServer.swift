@@ -28,6 +28,9 @@ protocol AppControlling: AnyObject {
     func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment
     func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment
     func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment
+    /// Sends every queued comment as one batch, and hands it to the
+    /// listener queue.
+    func sendBatch() async throws(AppRefusal) -> StateReport.Batch
 }
 
 /// App control's server: while the app runs it listens on `control.sock`
@@ -37,16 +40,24 @@ protocol AppControlling: AnyObject {
 /// the connection closes. Every refusal is a reply, so the `video-review`
 /// command always has a line to print. The server owns the one lease: an
 /// operator request asks it first, and a `take`'s reply granting it that
-/// can't be written (its client gone) gives it up at once.
+/// can't be written (its client gone) gives it up at once. A listener's
+/// requests go to the `ListenerQueue`, with no lease: a `wait` is held like
+/// a `take` in line, and a batch whose reply can't be written goes back to
+/// the front of the listener's line.
 @MainActor
 final class ControlServer {
-    /// A reply, whether the app quits once it's written, and the lease a
-    /// `control take`'s reply grants, released when the reply can't be
-    /// written (`undelivered`).
+    /// A reply, whether the app quits once it's written, and what only the
+    /// client would know, undone when the reply can't be written
+    /// (`undelivered`): the lease a `control take`'s reply grants, and the
+    /// batch a `wait`'s reply carries.
     struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: LeaseTerm?
+        var delivered: BatchRef?
+        /// Nothing is written: the connection just closes, as it does when
+        /// the app isn't there, so a `wait` connects again.
+        var silent = false
     }
 
     /// Why the server couldn't start listening.
@@ -56,6 +67,8 @@ final class ControlServer {
 
     let socket: URL
     private let app: any AppControlling
+    /// The listener's side: the open `wait` and the batches in line.
+    private let listeners: ListenerQueue
     private let screenshotter: any Screenshotting
     private let quit: @MainActor () -> Void
     /// The time the lease is decided at, and the zone its refusals name it in.
@@ -89,6 +102,7 @@ final class ControlServer {
     init(
         socket: URL,
         app: any AppControlling,
+        listeners: ListenerQueue,
         screenshotter: any Screenshotting,
         lease: ControlLease = ControlLease(),
         indicator: LeaseIndicator = LeaseIndicator(),
@@ -98,6 +112,7 @@ final class ControlServer {
     ) {
         self.socket = socket
         self.app = app
+        self.listeners = listeners
         self.screenshotter = screenshotter
         self.lease = lease
         self.indicator = indicator
@@ -117,8 +132,10 @@ final class ControlServer {
     /// anyone but its holder, with nothing done. A quit hands the lease
     /// back in its reply, for a relaunch to pass on. A `take` that waits in
     /// line is answered once it gets the lease or its wait runs out, other
-    /// requests answered meanwhile.
-    func reply(to data: Data) async -> Answer {
+    /// requests answered meanwhile; so is a listener's `wait`, once a batch
+    /// is sent. `connection` names the connection the request came over,
+    /// so a held `wait` ends when its client goes away (`connectionClosed`).
+    func reply(to data: Data, connection: UUID? = nil) async -> Answer {
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)
@@ -192,6 +209,24 @@ final class ControlServer {
             case .commentDelete(let id):
                 let comment = try app.deleteComment(id)
                 return done("\(comment.id) deleted", Output(deleted: comment.id), json)
+            case .batchSend:
+                let batch = try await app.sendBatch()
+                let count = batch.commentIds.count
+                let taken = listeners.outbox.taken.contains { $0.batchID.text == batch.id }
+                let line = "\(batch.id) sent with \(count) comment\(count == 1 ? "" : "s"), "
+                    + (taken ? "taken by the listener" : "waiting for a listener")
+                return done(line, Output(batch: batch), json)
+            case .wait(let timeout):
+                switch await listeners.wait(by: message.holder, timeout: timeout, connection: connection) {
+                case .batch(let ref, let payload):
+                    return Answer(reply: .done(payload), delivered: ref)
+                case .ranOut:
+                    return Answer(reply: .ranOut)
+                case .replaced:
+                    return Answer(reply: .refused("a newer `video-review wait` took this one's place: one listener at a time"))
+                case .gone:
+                    return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
+                }
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -208,12 +243,14 @@ final class ControlServer {
         var released: Bool?
         var comment: StateReport.Comment?
         var deleted: String?
+        var batch: StateReport.Batch?
     }
 
-    /// What the app shows, with the lease as it is now.
+    /// What the app shows, with the lease and the listener as they are now.
     private func state() -> StateReport {
         var state = app.state()
         state.lease = lease.status(at: now())
+        state.listener = listeners.report(at: now())
         return state
     }
 
@@ -285,10 +322,19 @@ final class ControlServer {
     /// up for that holder at once, and the next waiter gets it as usual,
     /// rather than it sitting unused until it runs out. A lease that has
     /// moved on meanwhile (another holder's, or a new one) is left alone.
+    /// A `wait`'s reply that carried a batch and couldn't be written: the
+    /// listener never got the batch, so it's first in its line again.
     func undelivered(_ answer: Answer) {
+        if let ref = answer.delivered { listeners.undelivered(ref) }
         guard let granted = answer.granted, let term = lease.current(at: now()),
               term.holder.key == granted.holder.key, term.taken == granted.taken else { return }
         _ = lease.release(by: granted.holder, at: now())
+    }
+
+    /// The client of `connection` closed its socket while its request was
+    /// held: a `wait` on it is over, and the listener is no longer there.
+    func connectionClosed(_ connection: UUID) {
+        listeners.connectionClosed(connection)
     }
 
     // MARK: - The person taking the app back
@@ -345,10 +391,12 @@ final class ControlServer {
     /// doesn't listen.
     func start() throws(Failure) {
         guard listener == nil else { return }
-        listener = try Listener.open(at: socket) { [weak self] data in
-            await self?.reply(to: data) ?? Answer(reply: .refused("\(AppIdentity.appName) is quitting"))
+        listener = try Listener.open(at: socket) { [weak self] data, connection in
+            await self?.reply(to: data, connection: connection) ?? Answer(reply: .refused("\(AppIdentity.appName) is quitting"))
         } undelivered: { [weak self] answer in
             self?.undelivered(answer)
+        } hungUp: { [weak self] connection in
+            self?.connectionClosed(connection)
         } quit: { [weak self] in
             self?.quit()
         }
@@ -367,22 +415,29 @@ final class ControlServer {
             waiter.answer.resume(returning: Answer(reply: .refused("\(AppIdentity.appName) is quitting")))
         }
         waiters = [:]
+        // An open `wait` ends with no reply: its command connects again.
+        listeners.stop()
     }
 }
 
 /// The listening socket's POSIX side, off the main actor: accepts each
 /// connection on its own queue, reads the request to its end, has the
-/// server answer it, writes the reply and closes. A reply granting the
-/// lease that can't be written goes back to the server (`undelivered`).
+/// server answer it, writes the reply and closes. A reply that can't be
+/// written goes back to the server (`undelivered`), and so does the news
+/// that a client closed its socket while its request was held (`hungUp`).
 private final class Listener: @unchecked Sendable {
-    typealias Respond = @Sendable (Data) async -> ControlServer.Answer
+    typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
     typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
+    typealias HungUp = @MainActor @Sendable (UUID) -> Void
 
     private let path: String
     private let source: any DispatchSourceRead
     private let respond: Respond
     private let undelivered: Undelivered
+    private let hungUp: HungUp
     private let quit: @MainActor @Sendable () -> Void
+    /// How often a held connection is looked at for a client that left.
+    private static let hangUpLook: TimeInterval = 0.5
     private static let queue = DispatchQueue(label: "video-review.control", attributes: .concurrent)
     /// How long a connection may take to send its request or read the
     /// reply, so a client that stalls never holds a thread.
@@ -390,11 +445,12 @@ private final class Listener: @unchecked Sendable {
 
     private init(
         path: String, descriptor: Int32, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        quit: @escaping @MainActor @Sendable () -> Void
+        hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.path = path
         self.respond = respond
         self.undelivered = undelivered
+        self.hungUp = hungUp
         self.quit = quit
         source = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: Self.queue)
         source.setEventHandler { [weak self] in self?.acceptAll(descriptor) }
@@ -404,7 +460,7 @@ private final class Listener: @unchecked Sendable {
 
     static func open(
         at socket: URL, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        quit: @escaping @MainActor @Sendable () -> Void
+        hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) throws(ControlServer.Failure) -> Listener {
         let path = socket.path
         do {
@@ -427,7 +483,7 @@ private final class Listener: @unchecked Sendable {
             unlink(path)
             throw .init(description: "couldn't listen on \(path): \(why)")
         }
-        return Listener(path: path, descriptor: descriptor, respond: respond, undelivered: undelivered, quit: quit)
+        return Listener(path: path, descriptor: descriptor, respond: respond, undelivered: undelivered, hungUp: hungUp, quit: quit)
     }
 
     /// Whether something accepts a connection at `address`.
@@ -458,7 +514,10 @@ private final class Listener: @unchecked Sendable {
     /// Answers one connection. One that sends nothing, such as another
     /// app's look at whether this one listens, gets no reply. The client
     /// half-closes once it has sent, so its hanging up shows only when the
-    /// reply can't be written: a granted lease then goes back.
+    /// reply can't be written: a granted lease or a delivered batch then
+    /// goes back. While the answer is awaited the connection is looked at
+    /// for a client that closed its socket, so a held `wait` whose command
+    /// was stopped doesn't count as a listener.
     private func serve(_ connection: Int32) {
         guard case .data(let request) = UnixSocket.readToEnd(connection, limit: ControlRequest.largestMessage), !request.isEmpty else {
             Darwin.close(connection)
@@ -466,13 +525,43 @@ private final class Listener: @unchecked Sendable {
         }
         let respond = respond
         let undelivered = undelivered
+        let hungUp = hungUp
         let quit = quit
+        let id = UUID()
+        let watch = HangUpWatch(descriptor: connection, every: Self.hangUpLook, queue: Self.queue) {
+            Task { await hungUp(id) }
+        }
         Task {
-            let answer = await respond(request)
-            let delivered = UnixSocket.writeAll(connection, answer.reply.encoded())
+            let answer = await respond(request, id)
+            watch.cancel()
+            let delivered = !answer.silent && UnixSocket.writeAll(connection, answer.reply.encoded())
             Darwin.close(connection)
-            if !delivered, answer.granted != nil { await undelivered(answer) }
+            if !delivered { await undelivered(answer) }
             if answer.quits { await quit() }
         }
+    }
+}
+
+/// Looks at a connection whose answer is awaited, and says once when its
+/// client has closed its socket. A request answered at once is never
+/// looked at: the first look comes after one interval.
+private final class HangUpWatch: @unchecked Sendable {
+    private let timer: any DispatchSourceTimer
+
+    init(descriptor: Int32, every interval: TimeInterval, queue: DispatchQueue, hungUp: @escaping @Sendable () -> Void) {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        self.timer = timer
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak timer] in
+            guard let timer, !timer.isCancelled, UnixSocket.peerClosed(descriptor) else { return }
+            timer.cancel()
+            hungUp()
+        }
+        timer.resume()
+    }
+
+    /// Stops looking: the answer is here, and the descriptor is closed next.
+    func cancel() {
+        timer.cancel()
     }
 }

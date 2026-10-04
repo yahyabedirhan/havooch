@@ -21,8 +21,24 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 125, modifiers: []) == .marker(forward: true))
         #expect(Shortcuts.action(keyCode: 8, modifiers: []) == .startComment)
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
-        // Cmd+Return is not the player's key.
-        #expect(Shortcuts.action(keyCode: 36, modifiers: .command) == nil)
+    }
+
+    @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app")
+    func sendKey() {
+        // Return and the keypad's Enter.
+        for keyCode in [36, 76] as [UInt16] {
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command) == .send)
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isTyping: true) == .send)
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .numericPad, .capsLock], isTyping: true) == .send)
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .shift]) == nil)
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .option]) == nil)
+            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .control, isTyping: true) == nil)
+        }
+        // Return alone still starts a comment, and is the text view's while typing.
+        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
+        #expect(Shortcuts.action(keyCode: 36, modifiers: [], isTyping: true) == nil)
+        // Cmd with another key isn't a send.
+        #expect(Shortcuts.action(keyCode: 49, modifiers: .command, isTyping: true) == nil)
     }
 
     @Test("while the person types, no key reaches the player", arguments: [49, 40, 123, 124, 125, 126, 8, 36, 76] as [UInt16])

@@ -37,6 +37,14 @@ public enum ControlRequest: Equatable, Sendable {
     case commentEdit(id: String, text: String)
     /// `video-review comment delete <id>`: a queued comment removed.
     case commentDelete(id: String)
+    /// `video-review batch send`: every queued comment of the open video
+    /// sent as one batch, which the listener's `wait` gets.
+    case batchSend
+    /// `video-review wait [--timeout <seconds>]`: the next batch as its
+    /// JSON payload. The app holds the request until a batch is sent, up to
+    /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
+    /// listener, present while its `wait` is open.
+    case wait(timeoutSeconds: Int?)
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--with-banner]`: the app's window written as a PNG at the absolute
     /// `path`, in `appearance` when it's set, as the Mac shows it otherwise.
@@ -87,22 +95,28 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease: .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
-        case .commentAdd, .commentEdit, .commentDelete: .operator
+        case .commentAdd, .commentEdit, .commentDelete, .batchSend: .operator
+        case .wait: .listener
         }
     }
 
     /// How long the app may keep the connection before it answers, past the
     /// client's usual timeout; nil for no limit. A `take` waits in line for
-    /// its `waitSeconds`.
+    /// its `waitSeconds`, and a `wait` for a batch for its `timeoutSeconds`.
     public var holdSeconds: TimeInterval? {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
+        case .wait(let timeoutSeconds): timeoutSeconds.map(TimeInterval.init)
         default: 0
         }
     }
 
     /// The longest a `control take --wait` may wait in line, in seconds.
     public static let longestWait = 3600
+
+    /// The longest `wait --timeout` a listener may ask for, in seconds: a
+    /// day. Without the option a `wait` has no limit.
+    public static let longestListen = 86400
 
     /// The most bytes the app reads of one request.
     public static let largestMessage = 1 << 20

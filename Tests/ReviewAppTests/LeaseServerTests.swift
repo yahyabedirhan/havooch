@@ -42,7 +42,8 @@ struct LeaseServerTests {
     ) -> ControlServer {
         let clock = clock
         return ControlServer(
-            socket: socket, app: app, screenshotter: screenshotter, lease: lease, indicator: indicator,
+            socket: socket, app: app, listeners: ControlServerTests.noListeners(), screenshotter: screenshotter, lease: lease,
+            indicator: indicator,
             now: { clock.now }, timeZone: TimeZone(identifier: "UTC")!, quit: {}
         )
     }
@@ -417,7 +418,8 @@ struct LeaseServerTests {
         move(to: 25)
         let indicator = LeaseIndicator()
         let relaunched = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: app, screenshotter: screenshotter,
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: app, listeners: ControlServerTests.noListeners(),
+            screenshotter: screenshotter,
             lease: ControlLease(environment: ControlLease.handover(term), at: clock.now), indicator: indicator,
             now: { [clock] in clock.now }, timeZone: TimeZone(identifier: "UTC")!, quit: {}
         )

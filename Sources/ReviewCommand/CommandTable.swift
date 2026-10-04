@@ -12,6 +12,9 @@ enum Invocation: Equatable, Sendable {
     case appOpen(demo: URL?)
     /// `app quit`: ask the app to quit, then wait until it's gone.
     case appQuit
+    /// `wait`: hold a request until a batch is sent, for `timeout` seconds
+    /// or with no limit, connecting again while the app isn't running.
+    case wait(timeout: Int?)
 }
 
 /// Arguments that don't read, as one line.
@@ -87,7 +90,7 @@ struct Command: Sendable {
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
     static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
-        + CommentCommands.commands + [ScreenshotCommand.command]
+        + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

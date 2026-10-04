@@ -24,9 +24,10 @@ struct VideoReviewApp: App {
     }
 }
 
-/// The Playback menu. Its items carry no key equivalents: the player's keys
-/// (`Shortcuts`) have no modifier, and a menu would take them from a text
-/// field.
+/// The Playback menu. Its playback items carry no key equivalents: the
+/// player's keys (`Shortcuts`) have no modifier, and a menu would take them
+/// from a text field. Send Comments shows Cmd+Return, the key `Shortcuts`
+/// acts on first; both go through `AppModel.send`.
 private struct PlaybackCommands: Commands {
     let model: AppModel
 
@@ -46,6 +47,10 @@ private struct PlaybackCommands: Commands {
                 Button("Add Comment") { model.startDraft() }
             }
             .disabled(model.video == nil)
+            // The one item with a key: Cmd+Return is no key a text field takes.
+            Button("Send Comments") { model.send() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!model.canSend)
         }
     }
 }
@@ -63,7 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitOnTermination()
         Shortcuts.install(for: model)
         let server = ControlServer(
-            socket: ControlSocket.url(in: model.support), app: model, screenshotter: Screenshotter(indicator: lease),
+            socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,
+            screenshotter: Screenshotter(indicator: lease),
             // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
             lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
             indicator: lease,

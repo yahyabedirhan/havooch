@@ -30,6 +30,9 @@ struct CommandTests {
          .commentAdd(text: "This box", at: 10, region: .init(x: 0, y: 0, w: 1, h: 1))),
         (["comment", "edit", "c-7f3a9c2e", "Slower here"], .commentEdit(id: "c-7f3a9c2e", text: "Slower here")),
         (["comment", "delete", "c-7f3a9c2e"], .commentDelete(id: "c-7f3a9c2e")),
+        (["batch", "send"], .batchSend),
+        (["wait"], .wait(timeoutSeconds: nil)),
+        (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -141,6 +144,9 @@ struct CommandTests {
         ["comment", "add", "This box", "--region", "0.25,0.2,0.3"], ["comment", "add", "This box", "--region", "left,top,0.3,0.25"],
         ["comment", "edit"], ["comment", "edit", "c-7f3a9c2e"],
         ["comment", "edit", "c-7f3a9c2e", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "c-1", "c-2"],
+        ["batch"], ["batch", "send", "now"], ["batch", "send", "--timeout", "5"],
+        ["wait", "now"], ["wait", "--timeout"], ["wait", "--timeout", "soon"], ["wait", "--timeout", "-1"],
+        ["wait", "--timeout", "86401"], ["wait", "--wait", "5"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -151,6 +157,94 @@ struct CommandTests {
         #expect(result.error.contains("usage: video-review"))
         #expect(run.transport.sent.isEmpty)
         #expect(run.launcher.launches.isEmpty)
+    }
+
+    // MARK: - wait
+
+    /// The time `wait` counts by, moved on by each of its rests.
+    final class Clock: @unchecked Sendable {
+        var now = Date(timeIntervalSince1970: 0)
+    }
+
+    /// `run`'s environment with a clock that only the command's rests move.
+    private func timed(_ run: Run, _ clock: Clock) -> CommandEnvironment {
+        var environment = run.environment
+        environment.now = { clock.now }
+        environment.pause = { clock.now += $0 }
+        return environment
+    }
+
+    @Test("wait prints the batch the app answers with as it is, exit 0, and may be held for its whole timeout")
+    func waitPrints() {
+        let payload = "{\n  \"batch\" : {\n    \"id\" : \"b-5d0c2a91\"\n  }\n}\n"
+        let run = Run { _, _ in .success(.done(payload)) }
+        defer { run.cleanUp() }
+        #expect(run("wait", "--timeout", "600") == CommandResult(output: payload))
+        #expect(run.transport.requests == [.wait(timeoutSeconds: 600)])
+        #expect(run.transport.requests[0].holdSeconds == 600)
+    }
+
+    @Test("a wait whose timeout runs out exits 2 with nothing on standard output")
+    func waitRunsOut() {
+        let run = Run { _, _ in .success(.ranOut) }
+        defer { run.cleanUp() }
+        #expect(run("wait", "--timeout", "5") == CommandResult(exitCode: 2))
+        #expect(run("wait", "--timeout", "5", "--json") == CommandResult(exitCode: 2))
+    }
+
+    @Test("a wait the app refuses exits 1 with the reason")
+    func waitRefused() {
+        let run = Run { _, _ in .success(.refused("a newer `video-review wait` took this one's place: one listener at a time")) }
+        defer { run.cleanUp() }
+        #expect(run("wait") == CommandResult(
+            error: "a newer `video-review wait` took this one's place: one listener at a time\n", exitCode: 1
+        ))
+    }
+
+    @Test("wait connects again each second while the app isn't running, and asks only for the time it has left")
+    func waitBeforeTheApp() {
+        let clock = Clock()
+        let run = Run { _, _ in clock.now < Date(timeIntervalSince1970: 3) ? .failure(.notRunning) : .success(.done("{}\n")) }
+        defer { run.cleanUp() }
+        #expect(VideoReviewCLI.run(["wait", "--timeout", "10"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
+        #expect(run.transport.requests == [
+            .wait(timeoutSeconds: 10), .wait(timeoutSeconds: 9), .wait(timeoutSeconds: 8), .wait(timeoutSeconds: 7),
+        ])
+    }
+
+    @Test("a wait with a timeout gives up, exit 2, when the app never runs; one without keeps looking")
+    func waitWithoutTheApp() {
+        let clock = Clock()
+        let run = Run()
+        defer { run.cleanUp() }
+        #expect(VideoReviewCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 2))
+        #expect(clock.now == Date(timeIntervalSince1970: 3))
+
+        let later = Clock()
+        let patient = Run { _, _ in later.now < Date(timeIntervalSince1970: 120) ? .failure(.notRunning) : .success(.done("{}\n")) }
+        defer { patient.cleanUp() }
+        #expect(VideoReviewCLI.run(["wait"], environment: timed(patient, later)) == CommandResult(output: "{}\n"))
+        #expect(patient.transport.requests.last == .wait(timeoutSeconds: nil))
+    }
+
+    @Test("a wait started before a demo runs finds the demo's app once its pointer and socket are there")
+    func waitFollowsTheDemo() throws {
+        let clock = Clock()
+        let run = Run()
+        defer { run.cleanUp() }
+        let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
+        run.transport.answer = { _, socket in
+            if clock.now == Date(timeIntervalSince1970: 1), DemoPointer.recorded(in: run.support) == nil {
+                // The demo starts while the command rests.
+                try? FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
+                try? FileManager.default.createDirectory(at: run.support, withIntermediateDirectories: true)
+                try? DemoPointer.record(demo, in: run.support)
+                try? Data().write(to: ControlSocket.url(in: demo))
+            }
+            return socket.path == ControlSocket.url(in: demo).path ? .success(.done("{}\n")) : .failure(.notRunning)
+        }
+        #expect(VideoReviewCLI.run(["wait"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
+        #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)
     }
 
     @Test("--help prints the usage on standard output")

@@ -49,6 +49,9 @@ final class AppModel: AppControlling {
     let engine = PlayerEngine()
     /// The open video's review, and the one path for changing it.
     let desk = ReviewDesk()
+    /// The listener's side: the batches in line and whether an agent is
+    /// there for them.
+    let listeners: ListenerQueue
     /// Where this run keeps its data: the person's own, or a demo's.
     let support: URL
     /// Whether this run is on demo data (`app open --demo`).
@@ -66,6 +69,13 @@ final class AppModel: AppControlling {
     var problem: Problem?
 
     @ObservationIgnored private let images: ImageFiles
+    /// The comment the comment box is queueing: its keyframe is being
+    /// written. A send waits for it.
+    @ObservationIgnored private var committing: Task<Void, Never>?
+    /// How many comments from the comment box are on their way into the queue.
+    private var commitsUnderWay = 0
+    /// Whether a send the person asked for is on its way.
+    @ObservationIgnored private var isSending = false
 
     /// The files the Open panel offers: what the spec names.
     static let videoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, UTType("com.apple.m4v-video")].compactMap(\.self)
@@ -74,10 +84,25 @@ final class AppModel: AppControlling {
         support = SupportFolder.app(environment: environment)
         isDemo = SupportFolder.moved(environment: environment) != nil
         images = ImageFiles(support: support)
+        listeners = ListenerQueue(desk: desk, images: images)
     }
 
     /// The open video's comments, in time order.
     var comments: [Comment] { desk.review?.comments ?? [] }
+
+    /// The open video's batches, in the order they were sent.
+    var batches: [Batch] { desk.review?.batches ?? [] }
+
+    /// Whether Cmd+Return has something to send: a queued comment, one on
+    /// its way into the queue, or words in the comment box.
+    var canSend: Bool {
+        sendCount > 0
+    }
+
+    /// How many comments a send would deliver now.
+    var sendCount: Int {
+        comments.count { $0.state == .queued } + commitsUnderWay + (draft.map { Self.hasWords($0.text) } == true ? 1 : 0)
+    }
 
     // MARK: - Actions, for the person and the operator alike
 
@@ -142,6 +167,31 @@ final class AppModel: AppControlling {
         return report
     }
 
+    /// Cmd+Return and `batch send`: every queued comment of the open video
+    /// goes out as one batch, which the listener's `wait` gets, now or when
+    /// it next opens. Words still in the comment box are queued first, so
+    /// nothing is left behind. Refused when nothing is queued.
+    func sendBatch() async throws(AppRefusal) -> StateReport.Batch {
+        try needVideo()
+        // A comment whose keyframe is still being written joins the batch.
+        await committing?.value
+        if let draft, Self.hasWords(draft.text) {
+            self.draft = nil
+            do throws(AppRefusal) {
+                _ = try await queueComment(text: draft.text, time: draft.time, region: draft.region)
+            } catch {
+                // The words aren't lost: the box opens again with them.
+                if self.draft == nil { self.draft = draft }
+                throw error
+            }
+        }
+        let batch = try desk.change { review throws(ReviewRefusal) in
+            try review.send(batchID: ItemID.make(.batch), at: Date())
+        }
+        if let video { listeners.enqueue(BatchRef(batchID: batch.id, contentHash: video.contentHash)) }
+        return report(batch)
+    }
+
     func state() -> StateReport {
         StateReport(
             app: .init(version: Version.app, variant: AppIdentity.variant, demo: isDemo, support: support.path),
@@ -150,8 +200,13 @@ final class AppModel: AppControlling {
             },
             player: .init(time: engine.time, playing: engine.isPlaying),
             draft: draft.map { .init(time: $0.time, text: $0.text, region: $0.region) },
-            comments: comments.map(report)
+            comments: comments.map(report),
+            batches: batches.map(report)
         )
+    }
+
+    private func report(_ batch: Batch) -> StateReport.Batch {
+        StateReport.Batch(id: batch.id.text, sentAt: batch.sentAt, commentIds: batch.commentIDs.map(\.text))
     }
 
     // MARK: - Comments
@@ -201,7 +256,8 @@ final class AppModel: AppControlling {
     private func report(_ comment: Comment) -> StateReport.Comment {
         StateReport.Comment(
             id: comment.id.text, time: comment.time, text: comment.text, state: comment.state.rawValue,
-            keyframePath: keyframe(of: comment)?.path ?? "", region: comment.region, cropPath: crop(of: comment)?.path
+            keyframePath: keyframe(of: comment)?.path ?? "", region: comment.region, cropPath: crop(of: comment)?.path,
+            batchId: comment.batchID?.text
         )
     }
 
@@ -354,13 +410,33 @@ final class AppModel: AppControlling {
     func commitDraft() {
         guard let draft, Self.hasWords(draft.text) else { return }
         self.draft = nil
-        Task {
+        let before = committing
+        commitsUnderWay += 1
+        committing = Task {
+            defer { commitsUnderWay -= 1 }
+            await before?.value
             do throws(AppRefusal) {
                 _ = try await queueComment(text: draft.text, time: draft.time, region: draft.region)
             } catch {
                 // The words aren't lost: the box opens again with them.
                 if self.draft == nil { self.draft = draft }
                 problem = Problem(title: "The comment wasn't queued", reason: error.reason)
+            }
+        }
+    }
+
+    /// Cmd+Return and the Send button: sends the queue, with the words in
+    /// the comment box. With nothing to send it does nothing.
+    func send() {
+        // A second press while the first is on its way has nothing to add.
+        guard canSend, !isSending else { return }
+        isSending = true
+        Task {
+            defer { isSending = false }
+            do throws(AppRefusal) {
+                _ = try await sendBatch()
+            } catch {
+                problem = Problem(title: "The comments weren't sent", reason: error.reason)
             }
         }
     }

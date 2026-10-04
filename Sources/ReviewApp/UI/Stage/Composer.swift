@@ -32,7 +32,9 @@ struct Composer: View {
                 .frame(height: 66)
             HStack(spacing: 10) {
                 KeyHint(key: "↩", does: "queue")
-                KeyHint(key: "⇧↩", does: "new line")
+                // Shift+Return, a new line, is the text view's habit and
+                // needs no hint; the row has room for three.
+                KeyHint(key: "⌘↩", does: "send")
                 KeyHint(key: "esc", does: "cancel")
                 Spacer()
                 Button("Queue") { model.commitDraft() }
