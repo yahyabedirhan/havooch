@@ -184,7 +184,7 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
               VRApp ──▶ VRReview, VRTranscript
 ```
 
-`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the batch ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `Region`, `ReviewSession`, `Batch`, `Outbox`, `BatchPayload`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; no dependencies yet, since `Library` does not keep sessions before the persistence ticket) and `VRApp`; `VRTranscript` is not there yet.
+`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the batch ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `Region`, `ReviewSession`, `Batch`, `Outbox`, `BatchPayload`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; `Library` does not keep sessions before the persistence ticket) and `VRApp`. The transcript ticket adds `VRTranscript`, and `TranscriptCache` to `VRStore`, which depends on `VRTranscript` from then on and on `VRReview` from the persistence ticket.
 
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
@@ -197,8 +197,8 @@ Test targets, all run by `make test` without the app:
 | `VRCommandTests` | parsing, output and exit codes through `CommandTable.run` with a fake transport and launcher |
 | `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
-| `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`) |
+| `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters, the transcript cache |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`); the transcript in the payload and in `state` with a recognizer the test holds back (`TranscriptTests`): the fixture's voiceover, a copy with only the `.srt`, a copy with no sidecar sent before and after speech is ready, the cache, a failure |
 
 ### Folder tree
 
@@ -254,8 +254,8 @@ Sources/
     BatchPayload.swift              the wait payload as a Codable contract, and how it is assembled
   VRTranscript/
     TranscriptLine.swift            start, end, text; the window cut
-    Transcriber.swift               the interface: video + window → lines
-    TranscriptSources.swift         the source order: which sidecar a video has
+    Transcriber.swift               the interface: video + window → lines; TranscriptFailure; a line as every source gives it (tidy)
+    TranscriptSources.swift         the source order: which sidecars a video has, and what reads each
     VoiceoverSource.swift           voiceover.json: scene times from scene lengths
     SubtitleSource.swift            .srt and .vtt parsing
   VRStore/
@@ -505,18 +505,27 @@ A region's parts are constants (`let`), so a `Region` that exists passed its rul
 **VRTranscript**
 
 ```swift
-public struct TranscriptLine: Codable, Equatable, Sendable { var start: Double; var end: Double; var text: String }
+public struct TranscriptLine: Codable, Equatable, Sendable { var start: Double; var end: Double; var text: String
+    public static func tidy(start: Double, end: Double, text: String) -> TranscriptLine? }   // times to the millisecond, text on one line; nil without text
 public protocol Transcriber: Sendable {
     func lines(for video: URL, in window: ClosedRange<Double>) async throws -> [TranscriptLine]
 }
-public enum TranscriptWindow { static func around(_ time: Double, duration: Double) -> ClosedRange<Double>
+public struct TranscriptFailure: LocalizedError { var reason: String }
+public enum TranscriptWindow { static let reach: Double = 15
+                               static func around(_ time: Double, duration: Double) -> ClosedRange<Double>
                                static func cut(_ lines: [TranscriptLine], to: ClosedRange<Double>) -> [TranscriptLine] }
 public enum TranscriptSources { case voiceover(URL), subtitles(URL), speech
-    static func best(for video: URL) -> TranscriptSources          // the spec's order
+    static func candidates(for video: URL) -> [TranscriptSources]  // the spec's order; speech is always last
+    static func best(for video: URL) -> TranscriptSources          // the first candidate
+    var name: String                                               // "voiceover", "subtitles", "speech"
     func transcriber(frameRate: Double, speech: any Transcriber) -> any Transcriber }
-public struct VoiceoverSource: Transcriber { … }   // one line per scene; a scene lasts ceil((duration + padding) × fps) frames
-public struct SubtitleSource: Transcriber { … }    // .srt and .vtt
+public struct VoiceoverSource: Transcriber { init(file: URL, frameRate: Double)     // one line per scene
+    static func lines(of data: Data, frameRate: Double) throws(TranscriptFailure) -> [TranscriptLine] }
+public struct SubtitleSource: Transcriber { init(file: URL)                         // .srt and .vtt
+    static func lines(of text: String) -> [TranscriptLine] }
 ```
+
+`Transcriber` is the one interface every source is behind, the recognizer too: `TranscriptSources.transcriber` hands back the sidecar's reader, or for `.speech` the `speech` it was given. `VRTranscript` is Foundation only; the recognizer over Apple's Speech framework (`SpeechSource`) lives in `VRApp` and is handed in by `AppServices`.
 
 **VRStore**
 
@@ -533,8 +542,10 @@ public struct Library: Sendable {
     public func cropURL(_ hash: String, comment: String) -> URL
 }
 public enum ContentHash { static func of(_ file: URL) throws -> String }
-public struct TranscriptCache { func load(_ hash: String) -> [TranscriptLine]?; func save(_ lines: [TranscriptLine], for hash: String) throws }
+public struct TranscriptCache { init(root: URL); func load(_ hash: String) -> [TranscriptLine]?; func save(_ lines: [TranscriptLine], for hash: String) throws }
 ```
+
+`TranscriptCache` is the part of the store the transcript ticket owns: `videos/<contentHash>/transcript.json`, the speech transcript's lines as a JSON array. It takes the support folder itself (`Library.root`), so it stands beside `Library` and the persistence ticket need not touch it. Only speech is kept; a sidecar is read again each time its video opens.
 
 After the batch ticket, `Library` has `init(root:)`, `nextCommentID()`, `nextBatchID()`, `keyframeURL(_:comment:)` and `cropURL(_:comment:)`, and `index.json` holds the next comment and batch numbers. An index written before batches were numbered reads with the batch number at 1. An id that was given out is never given again, also when its draft was cancelled or its comment deleted, so ids may have gaps.
 
@@ -599,7 +610,21 @@ The region's gestures are `beginDrawing()` (a drag started: pause; false while t
 
 Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over. The outbox is in memory for the run too (`ReviewModel.outbox`, changed only through the model's own methods); the persistence ticket keeps its parcels with `Outbox(parcels:)`.
 
-The model takes the time as a closure (`now`), so the tests set when a batch was sent and when a wait closed. `payload(for:)` is not `async`: everything it reads is in memory (the paths of images on disk, the transcript lines known at that moment, the context), so a batch goes to a parked `wait` in the same step it is sent in, with nothing running between. Two private functions are the seams the next tickets fill: `contextText(of:)` (`ContextSidecar.find` beside the review's video path, read from disk on each call, plus the review's note; `Outbox.context` sends the text once per listener session and when it changed) and `transcript(around:of:)` (`[]` now).
+The model takes the time as a closure (`now`), so the tests set when a batch was sent and when a wait closed. `payload(for:)` is not `async`: everything it reads is in memory (the paths of images on disk, the transcript lines known at that moment, the context), so a batch goes to a parked `wait` in the same step it is sent in, with nothing running between. Two private functions feed it: `contextText(of:)` (`ContextSidecar.find` beside the review's video path, read from disk on each call, plus the review's note; `Outbox.context` sends the text once per listener session and when it changed) and `transcript(around:of:)`, which asks `TranscriptService` for the lines it knows at that moment.
+
+The model makes its `TranscriptService` (`transcripts`) from the recognizer it is given (`init(… speech: any Transcriber = SpeechSource() …)`) and a `TranscriptCache` on the library's folder. `open` ends in `await transcripts.start(file)`, which returns once a sidecar is read or speech has started. The tests hand in a recognizer they hold back.
+
+```swift
+@MainActor @Observable final class TranscriptService {
+    struct Status { var source: String; var ready: Bool; var lines: Int; var failure: String? }
+    init(speech: any Transcriber, cache: TranscriptCache)
+    func start(_ video: VideoFile) async                          // find the source; read a sidecar, or start speech
+    func lines(of hash: String, around time: Double, duration: Double) -> [TranscriptLine]   // from memory, never waits
+    func status(of hash: String) -> Status?                       // what state reports
+    func settled(_ hash: String) async                            // the speech run of that video has ended
+}
+struct SpeechSource: Transcriber                                  // SpeechAnalyzer + SpeechTranscriber over the file's sound
+```
 
 `composerText` is what the comment box holds. The model keeps it, not the view, so that Cmd+Enter inside the box can queue it before sending. `sendByPerson()` is the person's send (Cmd+Enter and the send bar's button): it queues the box's text, then calls `sendBatch()`, the same call `batch send` ends in; a refusal lands in `sendFailure` for the send bar. A second press while a send is on its way does nothing. `posted` is the closure the model calls after a batch is in the outbox; `ControlServer` sets it to `ListenerDesk.outboxChanged`.
 
@@ -657,7 +682,7 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
   "player": {"time": 10, "playing": false},
   "time": 10,
   "context": {"sidecarPath": "/abs/sample.context.md", "note": ""},   // sidecarPath null with no file; context null with no video
-  "transcript": {"source": "voiceover", "ready": true, "lines": 3},
+  "transcript": {"source": "voiceover", "ready": true, "lines": 3, "failure": null},
   "queue": ["c3"],
   "comments": [
     {"id": "c1", "time": 10, "text": "…", "state": "done", "batchId": "b1",
@@ -671,6 +696,8 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
 The player's time is in two places with the same value: `player.time`, and a top-level `time` for a script that reads one field. Both are rounded to the millisecond.
 
 Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; the region ticket adds `region` and `cropPath`; the batch ticket adds `batchId` (`null` before the comment is sent), `listener` and `batches`, each batch as `{id, sentAt, commentIds, delivery, finished}`; `thread` arrives with its ticket. `listener.name` is the last listener session's name, `null` before any `wait`. A batch's `delivery` is `pending` until a `wait` took it, then `taken`; a batch that went back in the queue is `pending` again. `batches` holds the open video's batches, oldest first. As lines, `state` adds `batches: 1` and one line per batch (`  b1 pending: c2, c1`) when there are some.
+
+The transcript ticket gives `transcript`, the open video's: `source` is `voiceover`, `subtitles` or `speech`; `ready` is `false` only while speech is still being recognized; `lines` counts the lines known now, over the whole video; `failure` is why speech gave no transcript, else `null`. It is `null` with no video. As lines, `state` adds `transcript: voiceover, 3 lines`, `transcript: speech, transcribing` or `transcript: speech, failed: <why>` under the player's line.
 
 `lease`, `video`, `demo`, `region`, `keyframePath` and `cropPath` are `null` when there is none, never left out. `cropPath` is `null` for a comment without a region, and until the PNG is on disk. `comments` is in time order and holds every comment of the open video, a draft included (state `draft`, empty text) while the comment box is open; `queue` holds the ids still `queued`, in time order. Both are `[]` with no video. `keyframePath` is `null` until the PNG is on disk. `state` as lines lists the comments only when there are some: `comments: 2, 1 queued`, then one line per comment, `  c1 queued at 0:10.000: <text>`. `StateReport` builds it from `ReviewModel`, `ControlLease` and `Outbox`.
 
@@ -781,7 +808,7 @@ UI/Shortcuts (SendKey), UI/SendBar       ReviewModel.sendByPerson(): the comment
     ├ a wait is parked → outbox.take(at: now)      Parcel(b1, taken(by: listener key))
     ├ ReviewModel.payload(for: parcel)
     │ ├ Library paths                    keyframePath, cropPath (absolute); null for a file not on disk
-    │ ├ transcript(around:of:)           [] until the transcript ticket: TranscriptWindow.cut(known lines, to: time ± 15 s)
+    │ ├ transcript(around:of:)           TranscriptService.lines: TranscriptWindow.cut(known lines, to: time ± 15 s)
     │ ├ contextText(of:)                 ContextSidecar.find (read from disk now) + the review's note → ContextSidecar.text
     │ │ └ outbox.context(for: hash, text)          first batch of this listener → the text; later → nil
     │ └ BatchPayload(…)                  the spec's object
@@ -948,18 +975,39 @@ ComposerPlacement.centre(box, beside rect, in stage), with a 12 point gap:
 **The transcript** (`TranscriptService.swift`, `VRTranscript`)
 
 ```text
-on open:   source = TranscriptSources.best(for: video)
+on open:   TranscriptService.start(video), for each of TranscriptSources.candidates(for: video):
                1. voiceover.json in the video's folder
                2. <base>.srt, else <base>.vtt
                3. speech
-           sidecar → parse now, all lines known
-           speech  → TranscriptCache.load(hash), else SpeechSource in a background task,
-                     lines added as they come, saved to the cache at the end
+           sidecar → read now, all lines known; one that can't be read, or has no line, gives way to the next
+           speech  → the lines of this run, else TranscriptCache.load(hash), else SpeechSource in a
+                     background task: ready is false until it ends, then the lines are known and
+                     saved to the cache; a failure is kept as one line and tried again on the next open
 window:    TranscriptWindow.around(t, duration) = max(0, t − 15) … min(duration, t + 15)
-           TranscriptWindow.cut = every known line that overlaps the window, whole, in order
+           TranscriptWindow.cut = every known line partly or wholly inside the window, whole, in time order;
+                                  a line that only touches the window's edge is outside
 ```
 
-A comment made before speech finished gets the lines that exist at send time. `VoiceoverSource` gives one line per scene: a scene lasts `ceil((durationSeconds + paddingSeconds) × fps)` frames and starts where the previous one ends; `fps` is the video track's nominal frame rate.
+`TranscriptService` keeps each video's lines in memory by content hash, so `payload(for:)` reads them without waiting, for a video that is open or was opened earlier in the run. A comment made before speech finished gets the lines that exist at send time: none, since the recognizer answers once, for the whole video. Speech is asked for the whole video in one call (`0…duration`), because the interface gives lines for a window and has no way to give them as they come; on the fixture that call takes under a second. A speech run goes on when another video is opened.
+
+`VoiceoverSource` gives one line per scene: a scene lasts `ceil((durationSeconds + paddingSeconds) × fps)` frames and starts where the previous one ends; `fps` is the video track's nominal frame rate. A scene without narration has no line and still takes its time. `voiceover.json` is looked for in the video's folder, which is also where its `context.md` is.
+
+`SubtitleSource` reads SubRip and WebVTT with one parser: a cue is a timing line (`hh:mm:ss,mmm --> hh:mm:ss,mmm`, a dot for the comma, hours optional) and the lines under it up to an empty one, joined by a space, with tags (`<i>`, `<v Name>`) taken out. Cue numbers and names, the `WEBVTT` header, notes and cue settings are skipped.
+
+`SpeechSource` (`VRApp/Transcript/`) is the recognizer:
+
+```text
+no audio track                        → [] (a silent video has an empty transcript, ready)
+locale = the first of the person's preferred languages that SpeechTranscriber.supportedLocale knows, else en-US
+SpeechTranscriber(locale, attributeOptions: [.audioTimeRange])
+locale not in SpeechTranscriber.installedLocales
+    → AssetInventory.assetInstallationRequest(supporting:)?.downloadAndInstall()
+SpeechAnalyzer(inputAudioFile: AVAudioFile(forReading: video), modules: [transcriber], finishAfterFile: true)
+for each result of transcriber.results → one line: result.range's start and end, result.text
+cut to the window
+```
+
+It reads the sound straight from the video file (`AVAudioFile` opens `mp4`, `mov` and `m4v`), and each result the recognizer ends is one line, a sentence or a phrase. On macOS 26.5 this needs no permission prompt: recognizing a file on the device with `SpeechAnalyzer` asks for no speech recognition authorization, and it ran from a command-line process with no `Info.plist`. The bundle still carries `NSSpeechRecognitionUsageDescription`, for a system that asks. The language's model is a system asset; when it isn't installed, the system downloads it on the first run, without a prompt.
 
 **The context** (`ContextSidecar.swift`): `<base>.context.md` beside the video, else `context.md` in the same folder. The first of the two that is a readable file wins, even an empty one; a folder of that name is passed over. The payload's text is the sidecar's text, then the note under the heading `## Reviewer's note` when the note is not empty, each without the white space around it, two newlines between them and one at the end. `null` when both are empty or `Outbox.context` says it was sent. The sidecar is not cached: `ReviewModel.contextText(of:)` reads it when a `wait` takes a batch, so an edit on disk reaches the next batch, and `state` and the toolbar button read it when asked. The file is small and local, so the read stays on the main actor and `payload(for:)` stays synchronous. The video's path is the review's (`ReviewSession.video.path`), so a batch of a video that is not the open one finds its sidecar too.
 
@@ -988,8 +1036,8 @@ TranscriptService.start      in the background
 | Change | What you touch |
 |---|---|
 | Drop the `proto-3` suffix | `AppIdentity.variant = ""`. Nothing else. |
-| A better transcriber (the transcription research) | A new `Transcriber` in `VRApp/Transcript/` or `VRTranscript`, chosen in `TranscriptSources.transcriber`. |
-| A new transcript sidecar format | A new source file in `VRTranscript` and one line in `TranscriptSources.best`. |
+| A better transcriber (the transcription research) | A new `Transcriber` in `VRApp/Transcript/` or `VRTranscript`, handed to `ReviewModel` as `speech` in `AppServices`. A cached `transcript.json` of the old one stays until it is removed. |
+| A new transcript sidecar format | A new source file in `VRTranscript`, and a case in `TranscriptSources` with its place in `candidates`. |
 | A new CLI command | The four steps above. |
 | A new comment state | `CommentState` and its rank; `Theme` for its colour and glyph. |
 | A new field in the payload | `BatchPayload` and its assembly in `ReviewModel.payload`. |

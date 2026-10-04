@@ -126,7 +126,7 @@ struct Rig {
         let rig = Rig()
         let answer = await rig.send(.state, json: true)
         #expect(answer.reply.output ==
-            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"batches":[],"comments":[],"context":null,"lease":null,"listener":{"name":null,"presence":"absent"},"player":{"playing":false,"time":0},"queue":[],"time":0,"video":null}"# + "\n")
+            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"batches":[],"comments":[],"context":null,"lease":null,"listener":{"name":null,"presence":"absent"},"player":{"playing":false,"time":0},"queue":[],"time":0,"transcript":null,"video":null}"# + "\n")
     }
 
     @Test func stateAsLinesNamesTheVideoAndThePlayer() async {
@@ -138,6 +138,7 @@ struct Rig {
         #expect(await rig.send(.state).reply.output == """
             video: sample (0:21.233) \(fixtureVideo.path)
             player: paused at 0:10.000
+            transcript: voiceover, 3 lines
             listener: absent
             lease: Claude Code in /Users/me/repo, 60s left, 0 waiting
 

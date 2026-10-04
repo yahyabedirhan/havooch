@@ -29,6 +29,7 @@ final class AppServices {
             player: player,
             frames: FrameGrabber(),
             library: Library(root: support),
+            speech: SpeechSource(),
             demoFolder: demoFolder
         )
         let screenshotter = Screenshotter { NSApp.windows.first { $0.isVisible && $0.canBecomeMain } }

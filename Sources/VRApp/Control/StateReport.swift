@@ -62,6 +62,33 @@ struct StateReport: Equatable {
         }
     }
 
+    /// The open video's transcript: `{source, ready, lines, failure}`.
+    /// `source` is `voiceover`, `subtitles` or `speech`; `ready` is false
+    /// while speech is still being recognized; `lines` counts the lines
+    /// known now; `failure` says why speech gave none, else `null`.
+    struct Transcript: Encodable, Equatable {
+        var source: String
+        var ready: Bool
+        var lines: Int
+        var failure: String?
+
+        enum Keys: String, CodingKey { case source, ready, lines, failure }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: Keys.self)
+            try container.encode(source, forKey: .source)
+            try container.encode(ready, forKey: .ready)
+            try container.encode(lines, forKey: .lines)
+            try container.encode(failure, forKey: .failure)
+        }
+
+        /// `voiceover, 3 lines`, `speech, transcribing` or `speech, failed: …`.
+        var text: String {
+            if let failure { return "\(source), failed: \(failure)" }
+            return ready ? "\(source), \(lines) line\(lines == 1 ? "" : "s")" : "\(source), transcribing"
+        }
+    }
+
     /// The folder a demo run reads, or nil for the person's own app.
     var demo: String?
     /// The lease, or nil when it's free.
@@ -71,6 +98,8 @@ struct StateReport: Equatable {
     var player: Player
     /// The open video's context, or nil when there's no video.
     var context: Context?
+    /// The open video's transcript, or nil when there's no video.
+    var transcript: Transcript?
     /// Every comment of the open video, drafts included, in time order.
     var comments: [CommentReport]
     var listener: Listener
@@ -89,6 +118,9 @@ struct StateReport: Equatable {
         video = model.video?.info
         player = Player(time: TimeText.rounded(model.time), playing: model.isPlaying)
         context = model.video.map { _ in Context(sidecarPath: model.sidecar?.url.path, note: model.note) }
+        transcript = (model.video?.info.contentHash).flatMap(model.transcripts.status(of:)).map {
+            Transcript(source: $0.source, ready: $0.ready, lines: $0.lines, failure: $0.failure)
+        }
         comments = (model.session?.comments ?? []).map { CommentReport($0, keyframe: model.keyframeURL(for: $0.id), crop: model.cropURL(for: $0.id)) }
         listener = Listener(presence: model.presence, name: model.outbox.listener?.name)
         batches = (model.session?.batches ?? []).map { batch in
@@ -117,6 +149,7 @@ struct StateReport: Equatable {
     ///
     ///     video: sample (0:21.248) /Users/me/sample.mp4
     ///     player: paused at 0:10.000
+    ///     transcript: voiceover, 3 lines
     ///     comments: 2, 1 queued
     ///       c1 queued at 0:10.000: too fast
     ///       c2 draft at 0:12.000:
@@ -129,6 +162,7 @@ struct StateReport: Equatable {
         if let video {
             lines.append("video: \(video.title) (\(TimeText.exact(video.duration))) \(video.path)")
             lines.append("player: \(player.playing ? "playing" : "paused") at \(TimeText.exact(player.time))")
+            if let transcript { lines.append("transcript: \(transcript.text)") }
         } else {
             lines.append("video: none")
         }
@@ -188,7 +222,7 @@ struct StateReport: Equatable {
     private struct State: Encodable {
         var report: StateReport
 
-        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, context, queue, comments, batches }
+        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, context, transcript, queue, comments, batches }
         enum AppKeys: String, CodingKey { case version, variant, demo }
 
         func encode(to encoder: any Encoder) throws {
@@ -202,6 +236,7 @@ struct StateReport: Equatable {
             try container.encode(report.player, forKey: .player)
             try container.encode(report.player.time, forKey: .time)
             try container.encode(report.context, forKey: .context)
+            try container.encode(report.transcript, forKey: .transcript)
             try container.encode(report.queue, forKey: .queue)
             try container.encode(report.comments, forKey: .comments)
             try container.encode(report.listener, forKey: .listener)

@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import VRReview
 import VRStore
+import VRTranscript
 
 /// Why the model won't do what was asked, as one line.
 struct ModelRefusal: Error, Equatable {
@@ -52,6 +53,8 @@ final class ReviewModel {
     @ObservationIgnored private let player: any Playing
     @ObservationIgnored private let frames: any FrameGrabbing
     @ObservationIgnored private let library: Library
+    /// What the videos opened in this run say.
+    let transcripts: TranscriptService
     @ObservationIgnored private let now: @MainActor () -> Date
     /// Whether a send a person asked for is on its way.
     @ObservationIgnored private var isSending = false
@@ -67,12 +70,14 @@ final class ReviewModel {
         player: any Playing,
         frames: any FrameGrabbing,
         library: Library,
+        speech: any Transcriber = SpeechSource(),
         demoFolder: URL? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.player = player
         self.frames = frames
         self.library = library
+        transcripts = TranscriptService(speech: speech, cache: TranscriptCache(root: library.root))
         self.demoFolder = demoFolder
         self.now = now
     }
@@ -132,6 +137,9 @@ final class ReviewModel {
         session = opened
         selection = nil
         video = file
+        // A sidecar's lines are known when this returns; speech goes on in
+        // the background.
+        await transcripts.start(file)
     }
 
     /// Plays from where the player is; from the start when it's at the end.
@@ -368,7 +376,7 @@ final class ReviewModel {
             context: outbox.context(for: hash, text: contextText(of: hash)),
             keyframePath: { self.keyframes.contains($0.id) ? self.library.keyframeURL(hash, comment: $0.id).path : nil },
             cropPath: { self.crops.contains($0.id) ? self.library.cropURL(hash, comment: $0.id).path : nil },
-            transcript: { self.transcript(around: $0, of: hash) }
+            transcript: { self.transcript(around: $0, of: review.video) }
         )
     }
 
@@ -382,10 +390,11 @@ final class ReviewModel {
         return ContextSidecar.text(sidecar: sidecar?.text, note: review.note)
     }
 
-    /// The transcript lines around a comment's time. Empty until the
-    /// transcript is built.
-    private func transcript(around comment: Comment, of hash: String) -> [BatchPayload.Line] {
-        []
+    /// The transcript lines from 15 s before a comment's time to 15 s after,
+    /// as they're known now: none while speech is still being recognized.
+    private func transcript(around comment: Comment, of video: VideoInfo) -> [BatchPayload.Line] {
+        transcripts.lines(of: video.contentHash, around: comment.time, duration: video.duration)
+            .map { BatchPayload.Line(start: $0.start, end: $0.end, text: $0.text) }
     }
 
     /// How close to the end counts as at the end, in seconds.

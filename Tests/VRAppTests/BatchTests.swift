@@ -278,7 +278,8 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         #expect(batch.video == rig.model.video?.info)
         // The fixture video has a context file beside it.
         #expect(batch.context?.hasPrefix("# Context: sample\n") == true)
-        #expect(batch.comments == [
+        // The transcript lines have their own tests.
+        #expect(batch.comments.map { var item = $0; item.transcript = []; return item } == [
             BatchPayload.Item(
                 id: "c2", time: 4.5, text: "this button",
                 keyframePath: rig.library.keyframeURL(hash, comment: "c2").path,

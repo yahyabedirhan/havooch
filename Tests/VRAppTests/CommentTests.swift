@@ -170,6 +170,7 @@ private func exists(_ file: URL) -> Bool {
         #expect(await rig.send(.state).output == """
             video: sample (0:21.233) \(fixtureVideo.path)
             player: paused at 0:10.000
+            transcript: voiceover, 3 lines
             comments: 3, 3 queued
               c2 queued at 0:03.000: at 3.0
               c3 queued at 0:10.000: at 10.0
