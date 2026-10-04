@@ -25,8 +25,10 @@ let package = Package(
         // ── the app: the only UI code ──
         .executableTarget(name: "VRApp", dependencies: ["VRWire", "VRLease"]),
 
+        .testTarget(name: "VRLeaseTests", dependencies: ["VRLease"]),
         .testTarget(name: "VRWireTests", dependencies: ["VRWire", "VRLease"]),
         .testTarget(name: "VRCommandTests", dependencies: ["VRCommand", "VRWire", "VRLease"]),
+        .testTarget(name: "VRAppTests", dependencies: ["VRApp", "VRWire", "VRLease"]),
     ],
     swiftLanguageModes: [.v6]
 )

@@ -12,7 +12,7 @@ Agents are users of Video Review from the first build, not only testers. Every a
 ## Two roles
 
 - An **operator** drives the UI: open a video, play, pause, seek, draw a region, write a comment, send a batch, answer a question, take a screenshot. Every operator command needs the lease.
-- A **listener** receives sent batches and answers them (`wait`, `ack`, `reply`, `ask`, `done`, `fail`). It needs no lease: a person watches and comments while a listener works, and the two must not fight. One listener at a time is enough for v1.
+- A **listener** receives sent batches and answers them (`wait`, `ack`, `status`, `reply`, `ask`). It needs no lease: a person watches and comments while a listener works, and the two must not fight. One listener at a time is enough for v1.
 - Free commands: `app status`, `state --json`, `control take`, `control release`, and the listener commands.
 
 ## The lease

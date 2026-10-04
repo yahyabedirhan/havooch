@@ -71,6 +71,14 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
+    /// How long the app may leave the request unanswered on purpose, in
+    /// seconds: a `take`'s wait in line. The client adds it to the silence
+    /// it accepts.
+    public var silence: Double {
+        if case .controlTake(let waitSeconds) = self { return Double(waitSeconds ?? 0) }
+        return 0
+    }
+
     /// Whether the request needs the lease before it's answered: true for
     /// the operator's commands, false for the free ones and the listener's.
     public var isLeased: Bool {

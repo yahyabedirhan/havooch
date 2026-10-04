@@ -97,6 +97,25 @@ enum CommandTable {
         Command(words: ["state"], usage: "state --json", summary: "what the app shows, as one JSON object") { _ in
             .send(.state)
         },
+        Command(
+            words: ["control", "take"], usage: "control take [--wait <s>]",
+            summary: "hold app control for 5 minutes; with --wait, queue behind its holder for up to <s> seconds"
+        ) { arguments throws(UsageError) in
+            var wait: Int?
+            if let text = try arguments.option("wait") {
+                guard let seconds = Int(text), (0...ControlRequest.longestWait).contains(seconds) else {
+                    throw UsageError("--wait takes whole seconds from 0 to \(ControlRequest.longestWait), not `\(text)`")
+                }
+                wait = seconds
+            }
+            return .send(.controlTake(waitSeconds: wait))
+        },
+        Command(
+            words: ["control", "release"], usage: "control release",
+            summary: "give app control up, so the next agent in line gets it"
+        ) { _ in
+            .send(.controlRelease)
+        },
         Command(words: ["player", "open"], usage: "player open <path>", summary: "open a video") { arguments throws(UsageError) in
             let path = try arguments.positional("path")
             return .send(.playerOpen(path: arguments.absolute(path, isDirectory: false).path))
@@ -150,6 +169,10 @@ enum CommandTable {
             \(rows.joined(separator: "\n"))
 
             --json, anywhere on the line, gives the output as one JSON object.
+            One agent at a time drives the app. A command that drives it takes or renews
+            the lease, which ends 60 s after its holder's last command and 5 min after it
+            was taken at most. While another agent holds it, such a command exits 1 and
+            names the holder and the lease's end. `app status` and `state` need no lease.
             Exit codes: 0 done, 1 refused or failed, 2 the command line doesn't parse.
 
             """

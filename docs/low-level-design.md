@@ -298,7 +298,7 @@ Sources/
       SocketListener.swift            the listening socket off the main actor; heartbeat on a waiting connection
       StateSnapshot.swift             what `state --json` and `app status` print
       Screenshotter.swift             the app's own window as a PNG, in an appearance
-      LeaseBanner.swift               who controls the app, time left, Stop
+      LeaseBanner.swift               who controls the app, time left, Stop; LeaseIndicator, the lease as the window shows it
 
 Tests/
   VRLeaseTests/                       ControlLeaseTests (time-driven tables), HolderTests
@@ -307,7 +307,7 @@ Tests/
   VRReviewTests/                      ReviewTests (state machine), BatchPayloadTests, ListenerLedgerTests, RegionTests
   VRTranscriptTests/                  WindowTests, SourceOrderTests, VoiceoverSourceTests, SubtitleSourceTests
   VRStoreTests/                       ContentHashTests, ReviewStoreTests (round trip, renamed copy, demo apart)
-  VRAppTests/                         FrameGeometryTests, ControlServerTests (a fake AppModel behind the server)
+  VRAppTests/                         FrameGeometryTests, ControlServerTests (the server's leasing at a clock of the test's, and over the real socket)
 
 scripts/
   acceptance.sh                       the v1 acceptance scenario through the CLI, against the installed app in demo mode
@@ -335,7 +335,10 @@ public struct ControlLease: Equatable, Sendable {
     public static let cap: TimeInterval = 5 * 60
     public static let bar: TimeInterval = 5 * 60
 
-    public struct Term: Codable, Equatable, Sendable { public var holder: Holder; public var taken, ends: Date }
+    public struct Term: Codable, Equatable, Sendable { public var holder: Holder; public var taken, ends: Date
+                                                       public var capped: Date                       // taken + cap
+                                                       public func secondsLeft(at: Date) -> Int
+                                                       public func held(timeZone: TimeZone) -> String }   // what `control take` prints
     public enum Transition { case started(Holder), renewed(Holder), ended(Holder, Ending) }
     public enum Ending { case expired, capped, released, stopped }
     public enum Refusal: Error { case inUse(Term), queued(Term), waitedOut(seconds: Int, Term), stopped
@@ -349,8 +352,9 @@ public struct ControlLease: Equatable, Sendable {
 
     public func current(at now: Date) -> Term?
     public func status(at now: Date) -> Status?
-    public func nextEnd(after now: Date) -> Date?
-    public mutating func settle(at now: Date) -> [Transition]
+    public func waiting(at now: Date) -> Int                          // the takes in line, their waits not run out
+    public func nextEnd(after now: Date) -> Date?                     // when the app settles next
+    public mutating func settle(at now: Date) -> [Transition]         // ends a lease that ran out, hands it to the first waiter
     public mutating func use(by: Holder, at: Date) -> Decision                         // every operator command
     public mutating func take(by: Holder, at: Date, waitingUntil: Date?) -> Decision   // control take [--wait]
     public mutating func giveUp(by: Holder, waited: Int, at: Date) -> Decision         // a wait in line ran out
@@ -361,7 +365,16 @@ public struct ControlLease: Equatable, Sendable {
 
 The key order is `VIDEO_REVIEW_CONTROL_KEY`, then `CLAUDE_CODE_SESSION_ID`, then the nearest ancestor process that isn't a shell. A refusal names the holder, its place and the lease's end as `HH:mm:ss`.
 
-Until the lease ticket lands, `ControlLease` is the seam only: `Term`, `Status`, `Refusal.inUse`, `Decision`, `use`, `current`, `status` and the handover (`init(environment:at:)`, `handover`, in the variable `VIDEO_REVIEW_CONTROL_LEASE`). `use` grants every request: its holder's term is renewed, and another holder's command takes the lease over. So `state` already names who drove the app last, and `ControlServer` and `app open` already call the lease as they will when it refuses.
+The rules, each a row of the time-driven tables in `VRLeaseTests`:
+
+- **Use.** An operator command takes a free lease for `renewal` (60 s), or renews its holder's to 60 s from now. A renewal never shortens the lease and never passes `taken + cap` (5 min). Another holder is refused (`inUse`), and the refusal renews nothing.
+- **Take.** `control take` holds the lease to its cap at once: a new lease for 5 min, or the holder's own to 5 min after it was first taken. From another holder it is refused at once without `--wait`. With a wait it joins the line (`queued`): one place per holder key, first come, first served; a second waiting take keeps the place and the later deadline.
+- **The line.** Every change settles first: a lease that ran out ends (`capped` at its cap, else `expired`), waiters whose waits ran out leave, and the first waiter left gets a new lease held to its cap. A wait that runs out is refused with `waitedOut`, or takes the lease if it is free at that moment (`giveUp`).
+- **Release.** The holder's lease ends and the first waiter gets it. From anyone else it changes nothing.
+- **Stop.** The lease ends, its holder is barred for `bar` (5 min from the Stop), and the first waiter gets the lease. A barred holder's commands and takes are refused with `stopped`, and it never joins the line. Stop on a free lease changes nothing. The bars are private to the lease: nothing lifts one early.
+- **Handover.** `init(environment:at:)` reads the term `handover` wrote into `VIDEO_REVIEW_CONTROL_LEASE`, cuts its end to its cap, and starts free when it has ended or doesn't read.
+
+The words: `video-review is in use by <name> in <place> until <HH:mm:ss> (<n>s left); `video-review control take --wait <seconds>` to queue`, `waited <n>s; video-review is still in use by …`, `the person took video-review back; ask them before using it again`, and for a take that holds, `you hold video-review until <HH:mm:ss>`. The clock is written with a fixed `HH:mm:ss` format in the app's time zone, whatever the Mac's own formats are.
 
 ### Wire: `VRWire`
 
@@ -434,6 +447,7 @@ public enum ControlRequest: Equatable, Sendable {
 
     public static let version = 1
     public static let longestWait = 3600        // the longest `take --wait`, in seconds
+    public var silence: Double                  // how long the app may leave it unanswered on purpose: a take's wait
     public var command: String                  // the wire name of the table above: "player.seek"
     public var isLeased: Bool                   // true for the operator rows above, false for the others
 }
@@ -514,6 +528,8 @@ The timeout is an idle timeout: the longest silence the client accepts, not the 
    - A heartbeat that can't be written (the listener was killed, the shell closed) cancels the task. The cancellation handler removes the waiter and resumes it, so presence drops within about 2 s and no batch is handed to a dead connection.
 4. When the handler resumes (a batch arrived, an answer arrived, the timeout ran out, the app is quitting), the reply is written and the connection closed.
 5. If the reply itself can't be written, the server undoes the grant: a batch stays `pending` (it is marked `taken` only after a successful write), and a lease a `take` just got is released, as in Shipyard.
+
+The take's part is built: a `take` in line suspends on a continuation in `ControlServer`, the app answers it when the lease changes hands or its wait runs out, and a grant whose reply can't be written is released (`undelivered`), which a test proves over the real socket. The heartbeat comes with `wait`. Until then the client accepts a longer silence for a waiting take: `ControlClient.send` adds `ControlRequest.silence` (the take's `waitSeconds`) to its idle timeout, so `control take --wait 120` waits up to 135 s for its answer. A take whose client has gone keeps its place until it is granted the lease, and gives it back then.
 
 A `wait` without `--timeout` waits without limit. The app answers every open wait with a refusal (`the app is quitting`) when it quits, so the listener's loop sees exit 1, not a hang.
 
@@ -902,13 +918,25 @@ Shipyard's server, with this app's routes.
 ```swift
 @MainActor final class ControlServer {
     struct Answer { var reply: ControlReply; var quits = false; var granted: ControlLease.Term?; var delivery: Delivery? }
-    private(set) var lease: ControlLease
+    private(set) var lease: ControlLease                // every change runs leaseChanged()
+    let indicator: LeaseIndicator                       // what the banner reads
     func start() throws;  func stop()
     func reply(to data: Data) async -> Answer
     func written(_ answer: Answer);  func undelivered(_ answer: Answer)
     func stopLease()                                    // the banner's Stop
+    func settleLease()                                  // the timer at the lease's end
 }
 ```
+
+The server owns the one `ControlLease`. Every change to it runs `leaseChanged`, the one place a change is applied:
+
+1. The lease is copied to `LeaseIndicator`, so the banner follows it.
+2. Each waiting `take` of the holder that now has the lease is answered, and its timeout cancelled.
+3. A timer is set for `lease.nextEnd(after:)` and replaces the last one. When it fires, `settleLease` ends the lease and hands it to the first waiter, with no request.
+
+A `take` in line is a `Waiter` in the server: its holder, its wait, whether it wants JSON, its continuation and its timeout task. The timeout calls `lease.giveUp`, never before the deadline the take was given. `stop()` answers every waiter with `video-review is quitting`. The server takes its time from a `now` closure and its zone from `timeZone`, so `VRAppTests` drives it with a clock of its own.
+
+The person's Stop is `stopLease()`, which only calls `lease.stop(at:)`. The server puts it in `LeaseIndicator.stop`, and the banner's button calls that closure. So the Stop path is the pure rule plus one call, and tests reach it without a click.
 
 ```text
 reply(to data):
@@ -920,7 +948,8 @@ reply(to data):
         .playerSeek(s)      → model.seek(to: s)                → done(time)
         .commentAdd(…)      → model.addComment(…)              → done(id | comment JSON)
         .wait(t)            → listener.wait(holder, t)         → done(payload) with delivery | done("") | refused
-        .controlTake(w)     → lease.take(…), waiting in line if queued
+        .controlTake(w)     → lease.take(…), waiting in line if queued → done(held | status JSON) with granted
+        .controlRelease     → lease.release(…)                 → done("released")
         .appQuit            → done("quit"), lease in the reply, quits = true
         …
     an ActionError → refused(error.message)
@@ -928,7 +957,7 @@ reply(to data):
 
 `SocketListener` owns the POSIX side off the main actor: bind (0600), listen, accept, read one request to its end (8 MB at most), await `reply(to:)` with the heartbeat running, write, close, then tell the server `written` or `undelivered`.
 
-The server grows with its tickets. Today `Answer` is `{reply, quits}` and the listener only reads, answers, writes and quits: `granted`, the take's wait and `stopLease` come with the lease, the heartbeat, `delivery`, `written` and `undelivered` with `wait`. A request whose route isn't built yet is refused in words: ``this build of video-review doesn't answer `wait` yet``.
+The server grows with its tickets. Today `Answer` is `{reply, quits, granted}`, and the listener reads, answers, writes, tells the server `undelivered` when a reply that grants the lease can't be written, and quits. The heartbeat, `delivery` and `written` come with `wait`. A request whose route isn't built yet is refused in words: ``this build of video-review doesn't answer `wait` yet``.
 
 The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo run, else on `control.sock`, both in the real support folder. A socket file nothing answers on (left by an app that was killed) is replaced.
 
@@ -981,7 +1010,9 @@ The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo r
 └──────────────────────────────────────────────────┴──────────────────────────┘
 ```
 
-One `Window` scene. The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter` and `ControlServer`, starts the server at launch and stops it at quit) and `MainView`, the window's content.
+One `Window` scene. The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator` and `ControlServer`, starts the server at launch and stops it at quit) and `MainView`, the window's content.
+
+The lease banner is the one view that doesn't read `AppModel`: the lease belongs to `ControlServer`, not to the model. `Control/LeaseBanner.swift` holds three small things. `LeaseIndicator` is the observable copy of the lease that the server keeps current, with the `stop` closure. `LeaseBannerText` makes the words from a `ControlLease.Status` (`Claude Code controls Video Review (proto-1)`, `/repo · 42 s left · 1 waiting`) and is tested. `LeaseBanner` is the view: the first row of `MainView`, drawn only while a lease is in force, with a `TimelineView` that ticks the seconds and a Stop button. It is part of the window, so `screenshot` shows it.
 
 ### Build and test
 
@@ -999,7 +1030,7 @@ One `Window` scene. The frame and the transport bar are the content; the sidebar
 
 `APP_NAME` contains spaces and parentheses, so every recipe quotes it and no target is named after a file that contains it.
 
-- `make test` never drives the Mac. The pure modules are tested directly (lease tables with a clock value, the review's state machine, the payload, the ledger, the window cut, the source order, the version refusal, the content hash of a renamed copy). `VRCommandTests` runs `CLI.run` with a fake transport and launcher. `VRAppTests` covers `FrameGeometry` and the server's routing and leasing with a fake behind it; it tests no view.
+- `make test` never drives the Mac. The pure modules are tested directly (lease tables with a clock value, the review's state machine, the payload, the ledger, the window cut, the source order, the version refusal, the content hash of a renamed copy). `VRCommandTests` runs `CLI.run` with a fake transport and launcher. `VRAppTests` covers `FrameGeometry` and the server's routing and leasing: it runs `ControlServer` on a real `AppModel` with no video and no window, at times the test sets, in memory and over the real socket in a temporary folder. It tests no view.
 - The highest seam is `scripts/acceptance.sh`: the eight steps of the spec's scenario through the installed CLI in demo mode, checked with `jq` on `state --json` and the payload.
 
 ---
@@ -1186,7 +1217,7 @@ The spec fixes the CLI, the payload and the states. Everything below is this pro
 | 18 | An agent message shows as a notice at the bottom right of the frame for 5 s, with the comment's time. A click selects the comment. | Story 19: seen while watching, away from the centre of the frame, and gone by itself. |
 | 19 | Presence is a pill in the toolbar: green Listening, orange Working, grey No listener. Hovering names the listener and its folder. | Story 14: the answer to "will my batch reach someone" is always in sight. |
 | 20 | Sending with no listener works. The batch's card says "Waiting for a listener". | Story 15: the person isn't blocked, and knows why nothing answers yet. |
-| 21 | While an agent holds the lease, a banner under the toolbar names it, its folder and the seconds left, with a Stop button. The person's own clicks and keys always work. | Stories 29 and 30. The person never needs the lease. |
+| 21 | While an agent holds the lease, a banner under the toolbar names it, its folder, the seconds left and how many agents wait, with a Stop button. Stop ends the lease and refuses that agent for 5 minutes; an agent in line gets the lease at once. The person's own clicks and keys always work. A screenshot shows the banner, since it is in the window. | Stories 29 and 30. The person never needs the lease. A screenshot is what the window shows, and the contract has no option to hide a part of it. |
 | 22 | The context note is a popover from a toolbar button. It also names the sidecar file that was found. | Story 26: rarely used, so out of the way, and it shows what the agent will get. |
 | 23 | The app follows the Mac's appearance with system colours and materials. The frame's surround is black in both. | Story 31. Black around a video is what players do, and it keeps the frame's colours honest. |
 | 24 | The app reopens the last video, paused where it was, when it starts. | Stories 22 and 23, and the acceptance scenario's restart step: the history is there without a click. |
@@ -1226,7 +1257,7 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | Ticket | Creates or fills |
 |---|---|
 | #3 Control: play and drive | `Package.swift`, `Makefile`, `Packaging/`; `VRWire` whole; `VRLease/Holder.swift`, `ProcessTable.swift` and a `ControlLease` that grants every request; `VRCommand` (without `RegionArgument`) and `VRCLI` with the `app`, `player`, `state` and `screenshot` rows; `VRApp`: `VideoReviewApp`, `AppModel` (player actions), `Player/` without markers and without `Shortcuts`, `Control/` without the banner; `VRWireTests`, `VRCommandTests` |
-| #4 Control: lease | `VRLease/ControlLease.swift` in full; `control take` and `release`; the take's wait in `ControlServer`; `LeaseBanner`; `VRLeaseTests` |
+| #4 Control: lease | `VRLease/ControlLease.swift` in full; `control take` and `release`; the take's wait, the settle timer, `stopLease` and `undelivered` in `ControlServer`; `ControlRequest.silence`; `LeaseBanner` with `LeaseIndicator`; `VRLeaseTests`, and `VRAppTests` with `ControlServerTests` |
 | #5 Comment: timestamped | `VRReview`: `Identifiers`, `Comment`, `ThreadMessage`, `Review` (add, edit, delete), `ReviewError`; `VRStore`: `SupportLayout`, `ContentHash`; `Comments/ReviewDesk` (in memory), `FrameGrabber` (keyframe), `Sidebar`, `CommentCard`, `StatusStyle`; `Overlay/Composer`; markers in `Timeline`; `Shortcuts`; the `comment` rows |
 | #6 Comment: region | `VRReview/Region.swift`; `Overlay/FrameGeometry`, `RegionOverlay`; the crop in `FrameGrabber`; `--region` |
 | #7 Mate: send and wait | `Batch`, `Review.sendBatch`, `BatchPayload`, `ListenerLedger`, `Presence`; `Mate/ListenerQueue`, `PresencePill`; the heartbeat in `SocketListener`; `batch send`, `wait`; Cmd+Return |

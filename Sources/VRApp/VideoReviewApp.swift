@@ -10,7 +10,7 @@ struct VideoReviewApp: App {
 
     var body: some Scene {
         Window(Identity.appName, id: "main") {
-            MainView(model: delegate.model)
+            MainView(model: delegate.model, lease: delegate.lease)
         }
         .defaultSize(width: 1100, height: 720)
         .commands {
@@ -28,6 +28,8 @@ struct VideoReviewApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model: AppModel
+    /// The lease as the window shows it; the server keeps it current.
+    let lease = LeaseIndicator()
     private let server: ControlServer
 
     override init() {
@@ -41,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model: model,
             screenshotter: Screenshotter(model: model),
             lease: ControlLease(environment: environment, at: Date()),
+            indicator: lease,
             quit: { NSApp.terminate(nil) }
         )
         super.init()
@@ -71,12 +74,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The window's content: the frame above the transport bar.
+/// The window's content: the lease banner while an agent controls the app,
+/// then the frame above the transport bar.
 struct MainView: View {
     let model: AppModel
+    let lease: LeaseIndicator
 
     var body: some View {
         VStack(spacing: 0) {
+            LeaseBanner(indicator: lease)
             ZStack {
                 // Black around a video in both appearances, as players do.
                 Color.black

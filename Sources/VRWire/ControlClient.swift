@@ -81,6 +81,9 @@ public struct ControlClient: Sendable {
     }
 
     public func send(_ request: ControlRequest, json: Bool = false) -> Result<ControlReply, Failure> {
+        // A take waiting in line is answered when it gets the lease or its
+        // wait runs out: the app may stay silent for that long as well.
+        let idleTimeout = idleTimeout + request.silence
         let data: Data
         do throws(ControlTransportFailure) {
             data = try transport.exchange(

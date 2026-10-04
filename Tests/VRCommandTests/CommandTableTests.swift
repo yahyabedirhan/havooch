@@ -28,6 +28,31 @@ import VRWire
         #expect(request("screenshot", "--appearance", "light", "/tmp/window.png") == .screenshot(path: "/tmp/window.png", appearance: .light))
     }
 
+    @Test func takeAndReleaseBecomeTheirRequests() {
+        #expect(request("control", "take") == .controlTake(waitSeconds: nil))
+        #expect(request("control", "take", "--wait", "30") == .controlTake(waitSeconds: 30))
+        #expect(request("control", "take", "--wait", "0") == .controlTake(waitSeconds: 0))
+        #expect(request("control", "take", "--wait", "3600") == .controlTake(waitSeconds: 3600))
+        #expect(request("control", "release") == .controlRelease)
+    }
+
+    @Test func aTakeThatWaitsInLineIsGivenItsWaitOnTopOfTheUsualSilence() {
+        let transport = FakeTransport(reply: .done("you hold video-review until 12:05:00\n"))
+        _ = harness.run("control", "take", transport: transport)
+        _ = harness.run("control", "take", "--wait", "120", transport: transport)
+        _ = harness.run("control", "release", transport: transport)
+        #expect(transport.exchanges.current.map(\.idleTimeout) == [15, 135, 15])
+    }
+
+    @Test func aCommandRefusedTheLeaseExitsOneWithTheHolderAndTheEndOfTheLease() {
+        let refusal = "video-review is in use by Claude Code in /work until 12:01:00 (48s left); "
+            + "`video-review control take --wait <seconds>` to queue"
+        for line in [["player", "play"], ["control", "take"], ["screenshot", "/tmp/w.png"]] {
+            let refused = harness.run(line: line, transport: FakeTransport(reply: .refused(refusal)))
+            #expect(refused == CommandResult(error: refusal + "\n", exitCode: 1))
+        }
+    }
+
     @Test func aRelativeVideoPathIsTakenAgainstTheWorkingFolder() {
         #expect(request("player", "open", "fixtures/sample.mp4") == .playerOpen(path: "/work/fixtures/sample.mp4"))
         #expect(request("player", "open", "../sample.mp4") == .playerOpen(path: "/sample.mp4"))
@@ -70,6 +95,12 @@ import VRWire
         ),
         (["screenshot", "/tmp/w.png", "--appearance"], "screenshot: --appearance needs a value", "screenshot <abs.png> [--appearance light|dark]"),
         (["app", "open", "--demo"], "app open: --demo needs a value", "app open [--demo <folder>]"),
+        (["control", "take", "--wait"], "control take: --wait needs a value", "control take [--wait <s>]"),
+        (["control", "take", "--wait", "soon"], "control take: --wait takes whole seconds from 0 to 3600, not `soon`", "control take [--wait <s>]"),
+        (["control", "take", "--wait", "3601"], "control take: --wait takes whole seconds from 0 to 3600, not `3601`", "control take [--wait <s>]"),
+        (["control", "take", "--wait", "-1"], "control take: --wait takes whole seconds from 0 to 3600, not `-1`", "control take [--wait <s>]"),
+        (["control", "take", "30"], "control take: unexpected `30`", "control take [--wait <s>]"),
+        (["control", "release", "--wait", "5"], "control release: unknown option `--wait`", "control release"),
         (["app", "quit", "now"], "app quit: unexpected `now`", "app quit"),
     ])
     func aLineThatDoesNotParseExitsTwoWithItsUsageAndSendsNothing(line: [String], error: String, usage: String) {
