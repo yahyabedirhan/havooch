@@ -40,6 +40,9 @@ final class ListenerQueue {
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let images: ImageFiles
     @ObservationIgnored private let now: @MainActor () -> Date
+    /// Where a comment's transcript lines come from; with none, a comment
+    /// gets no lines. The app's model sets it.
+    @ObservationIgnored var transcripts: TranscriptDesk?
 
     init(desk: ReviewDesk, images: ImageFiles, now: @escaping @MainActor () -> Date = { Date() }) {
         self.desk = desk
@@ -163,13 +166,13 @@ final class ListenerQueue {
 
     /// The payload of `batch`, read at the moment the `wait` takes it. The
     /// context is in it when this listener session hasn't had it for the
-    /// video, or it changed. The transcript window isn't built yet: no
-    /// lines.
+    /// video, or it changed. Each comment gets the transcript lines that
+    /// exist then.
     private func payload(of batch: Batch, in review: VideoReview) -> BatchPayload {
         let hash = review.video.contentHash
         return BatchPayload.assemble(
             review: review, batch: batch, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
-            transcript: { _ in [] },
+            transcript: { [transcripts] comment in transcripts?.lines(around: comment.time, of: hash) ?? [] },
             images: { [images] comment in
                 BatchPayload.Images(
                     keyframe: images.keyframe(of: comment.id, contentHash: hash).path,

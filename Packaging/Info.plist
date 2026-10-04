@@ -22,6 +22,8 @@
 	<string>26.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.video</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>__APP_NAME__ transcribes the speech of a video on this Mac, so the agent that gets your comments knows what was said around each one.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import ReviewCore
 import ReviewStore
+import ReviewTranscript
 import ReviewWire
 import UniformTypeIdentifiers
 
@@ -52,6 +53,8 @@ final class AppModel: AppControlling {
     /// The listener's side: the batches in line and whether an agent is
     /// there for them.
     let listeners: ListenerQueue
+    /// The transcripts of the videos opened in this run.
+    let transcripts: TranscriptDesk
     /// Where this run keeps its data: the person's own, or a demo's.
     let support: URL
     /// Whether this run is on demo data (`app open --demo`).
@@ -84,11 +87,21 @@ final class AppModel: AppControlling {
     /// The files the Open panel offers: what the spec names.
     static let videoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, UTType("com.apple.m4v-video")].compactMap(\.self)
 
-    init(environment: [String: String]) {
+    /// `speech` turns a video's sound into lines when it has no sidecar;
+    /// tests give their own.
+    init(environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer()) {
         support = SupportFolder.app(environment: environment)
         isDemo = SupportFolder.moved(environment: environment) != nil
         images = ImageFiles(support: support)
         listeners = ListenerQueue(desk: desk, images: images)
+        transcripts = TranscriptDesk(support: support, speech: speech)
+        listeners.transcripts = transcripts
+    }
+
+    /// The open video's transcript as `state` and the toolbar's chip show
+    /// it: its source, and how far it is.
+    var transcript: StateReport.Transcript? {
+        video.flatMap { transcripts.report(of: $0.contentHash) }
     }
 
     /// The open video's comments, in time order.
@@ -128,6 +141,9 @@ final class AppModel: AppControlling {
         isContextShown = false
         sidecar = ContextReader.sidecar(beside: url)
         desk.open(VideoInfo(contentHash: contentHash, title: title, duration: engine.duration, path: url.path))
+        transcripts.opened(VideoFile(
+            url: url, contentHash: contentHash, frameRate: 1 / engine.frameDuration, duration: engine.duration
+        ))
     }
 
     func play() throws(AppRefusal) {
@@ -210,7 +226,7 @@ final class AppModel: AppControlling {
     }
 
     func state() -> StateReport {
-        StateReport(
+        var report = StateReport(
             app: .init(version: Version.app, variant: AppIdentity.variant, demo: isDemo, support: support.path),
             video: video.map {
                 .init(
@@ -223,6 +239,8 @@ final class AppModel: AppControlling {
             comments: comments.map(report),
             batches: batches.map(report)
         )
+        report.transcript = transcript
+        return report
     }
 
     private func report(_ batch: Batch) -> StateReport.Batch {

@@ -86,15 +86,17 @@ struct BatchDeliveryTests {
             "duration": 21.233, "title": "sample",
         ])
         #expect((model.video?.contentHash.count ?? 0) == 64)
-        // The fixture's sidecar, on this session's first batch. The transcript window isn't built yet.
+        // The fixture's sidecar, on this session's first batch.
         #expect(payload["context"] as? String == ContextReader.sidecar(beside: CommentTests.fixture)?.text)
         #expect((payload["context"] as? String)?.hasPrefix("# Context: sample\n") == true)
         let comments = try #require(payload["comments"] as? [[String: Any]])
         #expect(comments.count == 2)
-        #expect(comments[0] as? [String: AnyHashable] == [
+        #expect(comments[0].filter { $0.key != "transcript" } as? [String: AnyHashable] == [
             "id": first.id, "time": 10, "text": "Too fast here", "keyframePath": first.keyframePath,
-            "region": NSNull(), "cropPath": NSNull(), "transcript": [] as [String],
+            "region": NSNull(), "cropPath": NSNull(),
         ])
+        // The fixture's narration, from its voiceover.json.
+        #expect((comments[0]["transcript"] as? [[String: Any]])?.count == 3)
         #expect(comments[1]["id"] as? String == second.id)
         #expect(comments[1]["time"] as? Double == 12.5)
         #expect(comments[1]["text"] as? String == "This box")

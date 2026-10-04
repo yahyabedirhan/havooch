@@ -213,6 +213,7 @@ struct ControlServerTests {
             \(AppIdentity.appName) 0.1.0, demo data in /demo
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
+            transcript: none
             lease: free
             listener: absent, 0 batches waiting, 0 taken
             comments: none

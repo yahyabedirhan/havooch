@@ -121,6 +121,37 @@ struct StateReport: Encodable, Equatable {
         var playing: Bool
     }
 
+    /// The open video's transcript: where it comes from and how far it is.
+    struct Transcript: Encodable, Equatable {
+        /// `voiceover`, `subtitles` or `speech`.
+        var source: String
+        /// Whether every line is there. False while speech is still being
+        /// transcribed, and when that gave up.
+        var complete: Bool
+        /// How many lines there are now.
+        var lines: Int
+        /// Why the transcription gave up; `null` otherwise.
+        var problem: String?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(source, forKey: .source)
+            try container.encode(complete, forKey: .complete)
+            try container.encode(lines, forKey: .lines)
+            try container.encode(problem, forKey: .problem)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case source, complete, lines, problem
+        }
+
+        /// `voiceover, 3 lines, complete`.
+        var line: String {
+            let progress = problem.map { "stopped: \($0)" } ?? (complete ? "complete" : "transcribing")
+            return "\(source), \(lines) \(lines == 1 ? "line" : "lines"), \(progress)"
+        }
+    }
+
     var app: App
     /// Who drives the app; `null` while nobody does. The control server,
     /// which owns the lease, fills it in.
@@ -131,6 +162,9 @@ struct StateReport: Encodable, Equatable {
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
+    /// The open video's transcript; `null` with no video. The app's model
+    /// fills it in.
+    var transcript: Transcript?
     /// The comment being written; `null` while the comment box is closed.
     var draft: Draft?
     /// The open video's comments, in time order.
@@ -163,6 +197,7 @@ struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, lease, listener, video, player, draft, comments, queue, batches
+        case transcript
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -172,6 +207,7 @@ struct StateReport: Encodable, Equatable {
         try container.encode(listener, forKey: .listener)
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
+        try container.encode(transcript, forKey: .transcript)
         try container.encode(draft, forKey: .draft)
         try container.encode(comments, forKey: .comments)
         try container.encode(queue, forKey: .queue)
@@ -189,6 +225,7 @@ struct StateReport: Encodable, Equatable {
         \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
+        transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
         comments: \(commentLines)

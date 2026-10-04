@@ -40,6 +40,8 @@ struct RootView: View {
             }
             if model.video != nil {
                 ToolbarItem(placement: .primaryAction) { ContextButton(model: model) }
+                ToolbarItem(placement: .primaryAction) { TranscriptChipView(model: model) }
+                    .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         model.isRailVisible.toggle()

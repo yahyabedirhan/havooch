@@ -26,13 +26,20 @@ let package = Package(
         // The spec's "Review" module: comments, the queue and the comment
         // states. Pure logic.
         .target(name: "ReviewCore", path: "Sources/ReviewCore"),
+        // The `Transcriber` interface, its three sources and the window cut.
+        .target(name: "ReviewTranscript", path: "Sources/ReviewTranscript"),
         // What's kept on disk, by the content hash of the video.
-        .target(name: "ReviewStore", dependencies: ["ReviewCore"], path: "Sources/ReviewStore"),
+        .target(name: "ReviewStore", dependencies: ["ReviewCore", "ReviewTranscript"], path: "Sources/ReviewStore"),
         .executableTarget(
-            name: "ReviewApp", dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewStore"], path: "Sources/ReviewApp"
+            name: "ReviewApp",
+            dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
+            path: "Sources/ReviewApp"
         ),
+        .testTarget(name: "ReviewTranscriptTests", dependencies: ["ReviewTranscript"], path: "Tests/ReviewTranscriptTests"),
         .testTarget(name: "ReviewCoreTests", dependencies: ["ReviewCore"], path: "Tests/ReviewCoreTests"),
-        .testTarget(name: "ReviewStoreTests", dependencies: ["ReviewCore", "ReviewStore"], path: "Tests/ReviewStoreTests"),
+        .testTarget(
+            name: "ReviewStoreTests", dependencies: ["ReviewCore", "ReviewTranscript", "ReviewStore"], path: "Tests/ReviewStoreTests"
+        ),
         .testTarget(name: "ReviewWireTests", dependencies: ["ReviewWire"], path: "Tests/ReviewWireTests"),
         .testTarget(name: "ReviewLeaseTests", dependencies: ["ReviewWire", "ReviewLease"], path: "Tests/ReviewLeaseTests"),
         .testTarget(
@@ -42,7 +49,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ReviewAppTests",
-            dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewStore"],
+            dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
             path: "Tests/ReviewAppTests"
         ),
     ]
