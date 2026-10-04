@@ -175,7 +175,13 @@ final class ControlServer {
                 case .refused(let why): return Answer(reply: .refused(why))
                 case .gone: return Answer(reply: .refused("the listener's connection closed"))
                 }
-            case .threadAnswer, .contextSet, .ack, .status, .reply, .ask:
+            case .contextSet(let text):
+                struct Noted: Encodable {
+                    var note: String
+                }
+                let note = try model.setNote(text)
+                return done(json ? JSONText.line(Noted(note: note)) : "context note set\n")
+            case .threadAnswer, .ack, .status, .reply, .ask:
                 return Answer(reply: .refused("this build of video-review doesn't answer `\(message.request.command)` yet"))
             }
         } catch {

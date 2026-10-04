@@ -119,6 +119,9 @@ struct MainView: View {
                 PresencePill(listener: model.listener)
             }
             ToolbarItem(placement: .primaryAction) {
+                ContextNote(model: model)
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     sidebar.toggle()
                 } label: {

@@ -145,10 +145,10 @@ final class ListenerQueue {
                 ledger.finish(delivery.batch)
                 continue
             }
-            // The context's text goes here once there is one to send;
-            // `null` until then. The session remembers what it got in `delivered`.
-            let context: String? = nil
+            // Read now, not at the send: what goes out depends on who
+            // gets it. The session remembers what it got in `delivered`.
             let hash = review.video.contentHash
+            let context = ledger.contextToSend(ContextSource.text(for: review), video: hash)
             let payload = BatchPayload.make(
                 batch: batch, review: review, context: context,
                 keyframe: { [layout = desk.layout] in layout.keyframe($0, of: hash).path },

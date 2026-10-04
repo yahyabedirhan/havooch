@@ -174,6 +174,12 @@ enum CommandTable {
             .send(.batchSend)
         },
         Command(
+            words: ["context", "set"], usage: "context set <text>",
+            summary: "set the open video's context note, which the listener gets with the sidecar's text; an empty text clears it"
+        ) { arguments throws(UsageError) in
+            .send(.contextSet(text: try arguments.positional("text")))
+        },
+        Command(
             words: ["wait"], usage: "wait [--timeout <s>]",
             summary: "listen: wait for the next batch and print it as JSON; with --timeout, exit 3 when none came in <s> seconds"
         ) { arguments throws(UsageError) in

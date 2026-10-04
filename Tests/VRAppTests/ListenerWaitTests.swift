@@ -164,7 +164,11 @@ import VRWire
         #expect(answer.reply.output.hasSuffix("}\n"))
         #expect(payload.batch == .init(id: "\(prefix)-b1", sentAt: "2026-10-04T12:00:00Z"))
         #expect(payload.video == .init(path: RegionCommentTests.fixture.path, contentHash: hash, duration: 21.233, title: "sample"))
-        #expect(payload.context == nil)
+        // The fixture's sidecar: this listener's first batch of the video.
+        let context = try String(contentsOf: ContextText.candidates(for: RegionCommentTests.fixture)[0], encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(context.hasPrefix("# Context: sample"))
+        #expect(payload.context == context)
         #expect(payload.comments == [
             .init(
                 id: "\(prefix)-c2", time: 4, text: "this box", keyframePath: "\(frames)/\(prefix)-c2.png",
@@ -176,7 +180,7 @@ import VRWire
             #expect(path.hasPrefix("/"))
             #expect(FileManager.default.fileExists(atPath: path))
         }
-        #expect(answer.delivery == .init(batch: BatchID(rawValue: "\(prefix)-b1"), listener: "L1", context: nil))
+        #expect(answer.delivery == .init(batch: BatchID(rawValue: "\(prefix)-b1"), listener: "L1", context: context))
     }
 
     @Test func aBatchIsTakenOnlyOnceItsReplyWasWrittenAndIsNotHandedOutTwice() async throws {

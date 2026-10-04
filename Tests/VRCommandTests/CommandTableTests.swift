@@ -55,6 +55,12 @@ import VRWire
         #expect(request("wait", "--json") == .wait(timeoutSeconds: nil))
     }
 
+    @Test func contextSetBecomesItsRequestWithTheTextAsItWasTyped() {
+        #expect(request("context", "set", "the lease walk, from shipyard") == .contextSet(text: "the lease walk, from shipyard"))
+        // An empty text clears the note.
+        #expect(request("context", "set", "") == .contextSet(text: ""))
+    }
+
     @Test func aWaitPrintsTheBatchAsTheAppBuiltItAndExitsZero() {
         let payload = #"{"batch":{"id":"7f3a9c21-b1","sentAt":"2026-10-04T12:00:00Z"},"comments":[],"context":null}"# + "\n"
 
@@ -165,6 +171,8 @@ import VRWire
         (["control", "take", "--wait", "-1"], "control take: --wait takes whole seconds from 0 to 3600, not `-1`", "control take [--wait <s>]"),
         (["control", "take", "30"], "control take: unexpected `30`", "control take [--wait <s>]"),
         (["batch", "send", "now"], "batch send: unexpected `now`", "batch send"),
+        (["context", "set"], "context set: missing <text>", "context set <text>"),
+        (["context", "set", "a note", "more"], "context set: unexpected `more`", "context set <text>"),
         (["wait", "--timeout"], "wait: --timeout needs a value", "wait [--timeout <s>]"),
         (["wait", "--timeout", "soon"], "wait: --timeout takes whole seconds from 0 to 3600, not `soon`", "wait [--timeout <s>]"),
         (["wait", "--timeout", "3601"], "wait: --timeout takes whole seconds from 0 to 3600, not `3601`", "wait [--timeout <s>]"),

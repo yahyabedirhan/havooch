@@ -30,6 +30,9 @@ public struct Review: Codable, Equatable, Sendable {
     public private(set) var batches: [Batch]
     /// The number the next batch gets.
     private var nextBatch: Int
+    /// The reviewer's note about the video: context a listener gets with
+    /// the sidecar's text. Empty when there is none.
+    public private(set) var note: String
 
     public init(video: VideoInfo) {
         self.video = video
@@ -37,6 +40,7 @@ public struct Review: Codable, Equatable, Sendable {
         nextComment = 1
         batches = []
         nextBatch = 1
+        note = ""
     }
 
     /// The comments waiting to be sent, in time order.
@@ -87,6 +91,12 @@ public struct Review: Codable, Equatable, Sendable {
     /// Takes a comment that is still queued out of the review.
     public mutating func deleteComment(_ id: CommentID) throws(ReviewError) {
         comments.remove(at: try queuedIndex(id))
+    }
+
+    /// The reviewer's note is now `text`, without the blank space around
+    /// it. An empty text takes the note away.
+    public mutating func setNote(_ text: String) {
+        note = text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Batches

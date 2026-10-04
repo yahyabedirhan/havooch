@@ -81,6 +81,15 @@ public struct ListenerLedger: Codable, Equatable, Sendable {
         deliveries.first { $0.isPending && !except.contains($0.batch) }
     }
 
+    /// What of the context `text` of the video `video` goes with the next
+    /// batch to the session: the text when the session got none for that
+    /// video yet, or another one; nil when it has this very text, when the
+    /// text is empty, or when there is no session.
+    public func contextToSend(_ text: String, video: String) -> String? {
+        guard let session, !text.isEmpty, session.contextSent[video] != text else { return nil }
+        return text
+    }
+
     /// The reply carrying `batch` reached the listener `key`: the batch is
     /// taken, and the `context` that went with it is remembered for its
     /// video. A listener that is no longer the session (another one

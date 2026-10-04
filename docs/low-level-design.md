@@ -641,7 +641,7 @@ public struct Review: Codable, Equatable, Sendable {
     public mutating func deleteComment(_ id: CommentID) throws(ReviewError)                             // queued only
     public mutating func sendBatch(transcripts: [CommentID: [BatchPayload.Line]], now: Date) throws(ReviewError) -> Batch
     public mutating func answer(_ id: CommentID, text: String, now: Date) throws(ReviewError) -> Comment   // needs an open question
-    public mutating func setNote(_ text: String)
+    public mutating func setNote(_ text: String)                                                        // kept without the blank space around it; empty clears it
 
     // the listener
     public mutating func acknowledge(_ id: BatchID, text: String?, now: Date) throws(ReviewError) -> Batch // its sent comments → acknowledged
@@ -716,7 +716,7 @@ public struct BatchPayload: Codable, Equatable, Sendable {
 
 `make` lists the batch's comments that aren't `done` or `failed`, in time order: all of them on the first delivery, the unfinished ones on a redelivery. `region` is `{x, y, w, h}`, normalized. Times are seconds. `crop` is asked only for a comment with a region; the others get `null`. `sentAt` is written as `2026-10-04T12:00:00Z`. Each part has a public initializer, so a test states the payload it expects.
 
-Two parts are empty until their tickets: `transcript` is `[]` for every comment (the seam is the `lines` dictionary in `AppModel.sendBatch`, which `Review.sendBatch` keeps on the batch), and `context` is `null` (the seam is the `context` constant in `ListenerQueue.deliverIfPossible`, which travels with the batch to `ledger.delivered`).
+One part is empty until its ticket: `transcript` is `[]` for every comment (the seam is the `lines` dictionary in `AppModel.sendBatch`, which `Review.sendBatch` keeps on the batch). `context` is what `ledger.contextToSend` gives in `ListenerQueue.deliverIfPossible`; it travels with the batch to `ledger.delivered`.
 
 #### The ledger: listener session, deliveries, context once per session
 
@@ -737,7 +737,7 @@ public struct ListenerLedger: Codable, Equatable, Sendable {
     /// returns the deliveries the old one took and didn't finish, now pending again.
     public mutating func attach(_ holder: (key: String, name: String, place: String), now: Date) -> [Delivery]
     public func next(except: Set<BatchID> = []) -> Delivery?                 // the oldest pending one that isn't in flight
-    public func contextToSend(_ text: String, video: String) -> String?      // nil when empty, or the same as the session last got (with the context)
+    public func contextToSend(_ text: String, video: String) -> String?      // nil when empty, when the same as the session last got, or with no session
     public mutating func delivered(_ batch: BatchID, to key: String, context: String?, now: Date)   // taken; context remembered
     public mutating func finish(_ batch: BatchID)
     public func standing(of batch: BatchID) -> Standing                      // a batch that isn't here is finished
@@ -751,7 +751,7 @@ public enum Presence: String, Codable, Sendable { case listening, working, absen
 - **Requeue.** When a listener command arrives from a key other than the session's, the old session is over: its taken, unfinished batches become pending again and their unfinished comments go back to `sent`. The same key calling `wait` again (the skill does, before it starts work) gets nothing twice. `attach` returns the deliveries, not their ids alone, since the queue needs each one's video to requeue its comments.
 - **Taken by its listener only.** `delivered` names the key the reply went to. When that key is no longer the session (another listener started while the reply was written), nothing is taken and the batch stays pending for the session there is.
 - **In flight.** `next(except:)` leaves out the batches whose reply is being written. The set is the queue's, not the ledger's: it lives for one write and is never saved.
-- **Context once per session.** The session remembers, per video, the context text it last got. `contextToSend` returns the text for the first batch of that video, `nil` while it is unchanged, and the text again after the sidecar or the note changed. A new session remembers nothing, so it gets the context again. The memory is written only in `delivered`, after the reply reached the listener.
+- **Context once per session.** The session remembers, per video, the context text it last got. `contextToSend` returns the text for the first batch of that video, `nil` while it is unchanged, and the text again after the sidecar or the note changed. A new session remembers nothing, so it gets the context again. The memory is written only in `delivered`, after the reply reached the listener, so a context whose reply was never written goes out again. A context that became empty goes out as `null` and leaves the memory as it was. Each video has its own memory, by content hash.
 - **The ledger is saved** in `listener.json`, so an app restart neither sends the context twice to a session that goes on, nor loses a pending batch. Until the store is built, `ListenerQueue` keeps it in memory; it is `Codable` and reads back as it was written.
 - **Presence is derived**, never stored:
 
@@ -762,7 +762,9 @@ public enum Presence: String, Codable, Sendable { case listening, working, absen
 | no | yes | under 120 s ago | `working` |
 | no | otherwise | | `absent` |
 
-`ContextText` is two pure functions: `candidates(for video: URL) -> [URL]` (`<base>.context.md`, then `context.md`, in the video's folder) and `compose(sidecar: String?, note: String) -> String` (the sidecar's text, then the note under the heading `## Note from the reviewer`; empty when both are).
+`ContextText` is two pure functions: `candidates(for video: URL) -> [URL]` (`<base>.context.md`, then `context.md`, in the video's folder) and `compose(sidecar: String?, note: String) -> String` (the sidecar's text, a blank line, then the note under the heading `## Note from the reviewer`, each without the blank space around it; a note alone still has its heading; empty when both are).
+
+The file is read on the app side, by `ContextSource` (`Mate/ContextSource.swift`): `read(for video: URL) -> Sidecar?` gives the first candidate that is there and reads as UTF-8 text, as `Sidecar { url, text }`, and `text(for review: Review) -> String` composes that sidecar's text with the review's note. Nothing is cached: each delivery, each `state` and the context popover read the file again, so an edit of the sidecar is in the next batch. The sidecar is looked for beside the file the video was last opened from (`review.video.path`).
 
 ### Transcript: `VRTranscript`
 
@@ -893,7 +895,8 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
     func sendBatch() async throws(ActionError) -> Batch                  // Cmd+Enter, the Send button and `batch send`
     func sendBatchForPerson();  var canSend: Bool                        // the person's way in; whether a comment is queued or text is in the comment box
     func answer(_ id: CommentID, text: String) throws(ActionError) -> Comment
-    func setNote(_ text: String) throws(ActionError)
+    func setNote(_ text: String) throws(ActionError) -> String           // the context popover and `context set`; the note as the review keeps it
+    var sidecar: ContextSource.Sidecar? { get }                          // the open video's context sidecar, as it is on disk now
 
     func snapshot(lease: ControlLease.Status?) -> StateSnapshot
 }
@@ -1103,7 +1106,7 @@ The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo r
 }
 ```
 
-`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. `draft` is `{"time": 10, "region": null}` while the comment box is open, with its region as `{"x": 0.48, "y": 0.3, "w": 0.28, "h": 0.12}` once one is drawn. A comment's `region` is the same four numbers and its `cropPath` the crop's absolute path; both are `null` for a comment on the whole frame. `batches` are the open video's, in the order they were sent; a batch's `delivery` is `pending`, `taken` or `finished`. `listener` names the listener and its place only while it is `listening` or `working`. With no video open, `comments`, `queue` and `batches` are empty. The object is one line. Every key is there from the first build: a part whose ticket hasn't landed carries its empty value (`[]`, `null`, `""`, presence `absent`), and `transcript` is `{"source": null, "complete": false, "lines": 0}` until a source has lines. `player.time` and `video.duration` are to the millisecond; `player.rate` is the speed playback runs at while it plays.
+`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. `draft` is `{"time": 10, "region": null}` while the comment box is open, with its region as `{"x": 0.48, "y": 0.3, "w": 0.28, "h": 0.12}` once one is drawn. A comment's `region` is the same four numbers and its `cropPath` the crop's absolute path; both are `null` for a comment on the whole frame. `batches` are the open video's, in the order they were sent; a batch's `delivery` is `pending`, `taken` or `finished`. `listener` names the listener and its place only while it is `listening` or `working`. `context` is the open video's: `sidecarPath` is the absolute path of the sidecar found beside it now (`null` when there is none, or no video), `note` the reviewer's note (`""` when there is none). With no video open, `comments`, `queue` and `batches` are empty. The object is one line. Every key is there from the first build: a part whose ticket hasn't landed carries its empty value (`[]`, `null`, `""`, presence `absent`), and `transcript` is `{"source": null, "complete": false, "lines": 0}` until a source has lines. `player.time` and `video.duration` are to the millisecond; `player.rate` is the speed playback runs at while it plays.
 
 `Screenshotter` captures the app's own window through ScreenCaptureKit limited to this process (`SCShareableContent.currentProcess`), which needs no Screen Recording permission. With `--appearance` it sets the app's appearance, waits 350 ms for the redraw, captures, and puts the appearance back. If the capture fails, it draws the window's content view itself and then the frame at the playhead, read from the file, where the player's layer shows it (`AVPlayerLayer.videoRect`), since a player layer doesn't draw into a bitmap; the title bar's place stays blank, and the reply says on standard error that the PNG was rendered. A window that isn't on screen (closed, minimized, hidden) is refused.
 
@@ -1134,6 +1137,8 @@ One `Window` scene. `RegionOverlay` lies over the player's surface and is the on
 The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator`, `ControlServer` and `ShortcutMonitor`, starts the server and the monitor at launch and stops the server at quit) and `MainView`, the window's content.
 
 The lease banner is the one view that doesn't read `AppModel`: the lease belongs to `ControlServer`, not to the model. `Control/LeaseBanner.swift` holds three small things. `LeaseIndicator` is the observable copy of the lease that the server keeps current, with the `stop` closure. `LeaseBannerText` makes the words from a `ControlLease.Status` (`Claude Code controls Video Review (proto-1)`, `/repo · 42 s left · 1 waiting`) and is tested. `LeaseBanner` is the view: the first row of `MainView`, drawn only while a lease is in force, with a `TimelineView` that ticks the seconds and a Stop button. It is part of the window, so `screenshot` shows it.
+
+`Comments/ContextNote.swift` is the toolbar's Context button, between the presence pill and the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.setNote`, the call `context set` makes, so there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
 
 ### Build and test
 
@@ -1189,8 +1194,8 @@ ListenerQueue.wait(holder, timeout):
 ListenerQueue.deliverIfPossible():
     while let waiter = oldest waiter, let delivery = ledger.next(except: inFlight):
         review   = desk.review(delivery.video)       finished or missing: ledger.finish, and on to the next
-        text     = ContextText.compose(sidecar: ContextSource.read(review.video.path), note: review.note)   with the context;
-        context  = ledger.contextToSend(text, video)                                                         nil until then
+        text     = ContextSource.text(for: review)         the sidecar beside review.video.path, read now, and review.note, composed
+        context  = ledger.contextToSend(text, video)       nil when the session has this text, or there is none
         payload  = BatchPayload.make(batch, review, context, keyframe: layout.keyframe, crop: layout.crop)
         inFlight.insert(batch)
         end waiter with .batch(Handed(batch, waiter's key, context), payload.encoded())
@@ -1345,7 +1350,7 @@ The spec fixes the CLI, the payload and the states. Everything below is this pro
 | 20 | Sending with no listener works. The batch's head says "Waiting for a listener" in orange, then "Delivered to the listener" once a `wait` took it. | Story 15: the person isn't blocked, and knows why nothing answers yet. |
 | 20a | The Send button and the menu item are off while nothing is queued and nothing is typed in the comment box. | Cmd+Return with nothing to send does nothing, in place of an alert. |
 | 21 | While an agent holds the lease, a banner under the toolbar names it, its folder, the seconds left and how many agents wait, with a Stop button. Stop ends the lease and refuses that agent for 5 minutes; an agent in line gets the lease at once. The person's own clicks and keys always work. A screenshot shows the banner, since it is in the window. | Stories 29 and 30. The person never needs the lease. A screenshot is what the window shows, and the contract has no option to hide a part of it. |
-| 22 | The context note is a popover from a toolbar button. It also names the sidecar file that was found. | Story 26: rarely used, so out of the way, and it shows what the agent will get. |
+| 22 | The context note is a popover from a toolbar button. It also names the sidecar file that was found, or says that there is none. The button's icon is filled while there is a context to send. The note is kept as it is typed. | Story 26: rarely used, so out of the way, and it shows what the agent will get. |
 | 23 | The app follows the Mac's appearance with system colours and materials. The frame's surround is black in both. | Story 31. Black around a video is what players do, and it keeps the frame's colours honest. |
 | 24 | The app reopens the last video, paused where it was, when it starts. | Stories 22 and 23, and the acceptance scenario's restart step: the history is there without a click. |
 | 25 | With no video open, the window shows "Open a video", a button and a drop target. Cmd+O opens too. | Story 1, by the three usual ways. |
@@ -1389,7 +1394,7 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | #6 Comment: region | `VRReview/Region.swift`, `regionOutsideFrame`, `region` on `Comment` and `addComment`; `SupportLayout.crop`; `VRCommand/RegionArgument.swift` and `--region`; `Overlay/FrameGeometry`, `RegionDraw`, `RegionOverlay`, the composer placed next to the region; the region methods of `AppModel` and Escape in `ShortcutMonitor`; the crop in `FrameGrabber` and `ReviewDesk`; `region` and `cropPath` in `StateSnapshot`; the square marker; `RegionTests`, `RegionArgumentTests`, `FrameGeometryTests`, `RegionDrawTests`, `RegionCommentTests` |
 | #7 Mate: send and wait | `Batch`, `Review.sendBatch`, `batch`, `isFinished`, `requeue`, `BatchPayload`, `ListenerLedger` (without `contextToSend`), `Presence`; `Mate/ListenerQueue` (the `wait` side, in memory), `PresencePill`; the heartbeat, `written` and a batch's `undelivered` in `SocketListener` and `ControlServer`; `batch send`, `wait`, exit 3; Cmd+Return, the Send button, the draft's text on `ReviewDesk`, the sent comments in `Sidebar`; `batches` and `listener` in `StateSnapshot`; `BatchPayloadTests`, `ListenerLedgerTests`, `ListenerWaitTests` |
 | #8 Transcript | `VRTranscript` whole; `VRStore/TranscriptCache`; the lines captured in `AppModel.sendBatch` |
-| #9 Mate: context | `ContextText`; `Mate/ContextSource`; `ledger.contextToSend`; `Comments/ContextNote`; `context set` |
+| #9 Mate: context | `ContextText`; `Review.note` and `setNote` (in memory until #11); `Mate/ContextSource`; `ledger.contextToSend`, called in `ListenerQueue.deliverIfPossible`; `AppModel.setNote` and `sidecar`; `Comments/ContextNote`; `context set`; `context` in `StateSnapshot`; `ContextTextTests`, `ContextTests`, the context table in `ListenerLedgerTests` |
 | #10 Mate: answers | `acknowledge`, `setStatus`, `reply`, `ask`, `answer` in `Review`; the `ask` side of `ListenerQueue`; `ThreadView`, `BatchCard`, `NoticeToast`; `ack`, `status`, `reply`, `ask`, `thread answer` |
 | #11 Comment: persist | `VRStore/ReviewStore`; saving in `ReviewDesk.change`; the ledger saved; `app.json` and reopening the last video; `ReviewStoreTests` |
 | #12 Mate: the skill | `.agents/skills/video-review-mate/SKILL.md` |

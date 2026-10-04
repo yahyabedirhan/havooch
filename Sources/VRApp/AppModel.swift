@@ -292,6 +292,25 @@ final class AppModel {
         return batch
     }
 
+    // MARK: - Context
+
+    /// The context popover and `context set`: the open video's note is now
+    /// `text`, as the review keeps it. It goes to the listener with the
+    /// next batch.
+    @discardableResult
+    func setNote(_ text: String) throws(ActionError) -> String {
+        guard let review = desk.open else { throw .noVideo }
+        return try desk.change(review.video.contentHash) { review in
+            review.setNote(text)
+            return review.note
+        }
+    }
+
+    /// The open video's context sidecar, as it is on disk now.
+    var sidecar: ContextSource.Sidecar? {
+        player.video.flatMap { ContextSource.read(for: $0.url) }
+    }
+
     /// Sends the queue for the person: a refusal is shown, not thrown.
     func sendBatchForPerson() {
         Task {
@@ -406,6 +425,7 @@ final class AppModel {
                     delivery: listener.standing(of: batch.id).rawValue, thread: batch.thread
                 )
             } ?? [],
+            context: .init(sidecarPath: sidecar?.url.path, note: desk.open?.note ?? ""),
             listener: shownListener,
             lease: lease
         )
