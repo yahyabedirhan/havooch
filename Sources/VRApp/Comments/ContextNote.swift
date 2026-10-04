@@ -4,7 +4,8 @@ import VRReview
 /// The toolbar's Context button and its popover: what the listener is told
 /// about the open video. The popover names the sidecar file that was found
 /// beside the video, or says that there is none, and holds the reviewer's
-/// note, which is kept as it is typed. The button's icon is filled while
+/// note, which counts as it is typed and is saved once the typing rests or
+/// the popover closes. The button's icon is filled while
 /// there is a context to send.
 struct ContextNote: View {
     let model: AppModel
@@ -33,7 +34,10 @@ struct ContextNote: View {
             popover
         }
         .onChange(of: video?.url, initial: true) { read() }
-        .onChange(of: shown) { read() }
+        .onChange(of: shown) {
+            read()
+            if !shown { model.endNote() }
+        }
         // A note set from the command line shows in an open popover too.
         .onChange(of: note) { read() }
     }
@@ -74,7 +78,7 @@ struct ContextNote: View {
                     }
                 }
                 .focused($focused)
-                .onChange(of: typed) { model.attempt { () throws(ActionError) in try model.setNote(typed) } }
+                .onChange(of: typed) { model.attempt { () throws(ActionError) in try model.typeNote(typed) } }
                 .accessibilityLabel("Context note")
             Text("The agent gets the file's text and your note with the next batch, and again only after either changes.")
                 .font(.caption)

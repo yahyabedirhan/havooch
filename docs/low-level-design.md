@@ -141,7 +141,7 @@ Agent ─▶ video-review (CLI)    │      │
 - `AppModel` **has** one `PlayerEngine`, one `ReviewDesk`, one `ListenerQueue` and one `Transcriber`.
 - `ControlServer` **has** the one `ControlLease` and **uses** `AppModel`. The views use `AppModel` too. Neither reaches past it, so the UI and the CLI can't drift apart: a new action is a new `AppModel` method with two callers.
 - `ReviewDesk` **has** the reviews and **uses** `ReviewStore` and `FrameGrabber`. A `Review` is a value: the desk changes a copy through the review's own methods, saves it, then publishes it.
-- `ListenerQueue` **has** the `ListenerLedger` and **uses** `ReviewDesk` (to read a batch and to change comment states) and, once the ledger is saved, `ReviewStore`.
+- `ListenerQueue` **has** the `ListenerLedger` and **uses** `ReviewDesk` (to read a batch and to change comment states) and the desk's `ReviewStore`, which keeps the ledger.
 - Rules live with the state they guard: comment and batch rules in `Review`, delivery and context rules in `ListenerLedger`, lease rules in `ControlLease`. All three are pure values given the time on each call, so they test without the app.
 
 ---
@@ -263,7 +263,8 @@ Sources/
   VRStore/
     SupportLayout.swift               every path under a support folder, in one place
     ContentHash.swift                 the hash that names a video
-    ReviewStore.swift                 load and save review.json, listener.json, app.json; atomic; versioned
+    ReviewStore.swift                 load and save review.json, listener.json, app.json; `AppState`
+    StoredFile.swift                  one versioned JSON file: read or moved aside, written whole
     TranscriptCache.swift             transcript.json; implements SpeechSource's cache
 
   VRApp/                              ── the app ──
@@ -283,7 +284,7 @@ Sources/
       RegionOverlay.swift             drag to draw; the draft's and the selected comment's region; places the comment box
       Composer.swift                  the comment box, over the frame's foot or next to the region
     Comments/
-      ReviewDesk.swift                the reviews in memory; each change saved and its images written
+      ReviewDesk.swift                the reviews, read at launch; each change saved and its images written
       FrameGrabber.swift              the keyframe and the crop as PNG files
       Sidebar.swift                   the queue with the Send button, the sent comments grouped by batch
       CommentCard.swift               one comment: keyframe, time, text, status, thread, edit, delete
@@ -309,8 +310,8 @@ Tests/
   VRCommandTests/                     CommandTableTests, TimeArgumentTests, RegionArgumentTests, AppCommandTests, Doubles (fake transport, launcher)
   VRReviewTests/                      ReviewTests (state machine), ReviewAnswerTests (statuses as a table, threads, questions), BatchPayloadTests, ListenerLedgerTests, RegionTests
   VRTranscriptTests/                  WindowTests (the cut on the fixture's scenes), SourceOrderTests (sidecars in a temporary folder), VoiceoverSourceTests (the fixture's scene times), SubtitleSourceTests (SRT and WebVTT), SpeechSourceTests (a recognition run by hand), Doubles (the fixture's scenes, a fixed source, a cache in memory, that recognition)
-  VRStoreTests/                       ContentHashTests (renamed copy, samples, the keyframe's path), TranscriptCacheTests (round trip, renamed copy, a file moved aside), ReviewStoreTests (round trip, demo apart)
-  VRAppTests/                         ShortcutsTests (each key, and none while typing), FrameGeometryTests (letterboxed and pillarboxed, at several window sizes), RegionDrawTests (press, drag, Escape, release), RegionCommentTests (the drawn and the `--region` comment on the fixture: same crop), ControlServerTests (the server's leasing at a clock of the test's, and over the real socket), ListenerWaitTests (a batch from `batch send` to `wait` on the fixture: in memory at a clock of the test's, and over the real socket with a short heartbeat), TranscriptBatchTests (the transcript in the payload and in `state`: from the fixture's voiceover, and from a speech recognition run by hand that is still running at the send), ListenerAnswerTests (`ack`, `status`, `reply`, `ask` and `thread answer` on the fixture: in memory at a clock of the test's, and `ask` over the real socket)
+  VRStoreTests/                       ContentHashTests (renamed copy, samples, the keyframe's path), TranscriptCacheTests (round trip, renamed copy, a file moved aside), ReviewStoreTests (a full review, the ledger and the last video read back; a renamed copy; two folders apart; a file moved aside; a save that fails)
+  VRAppTests/                         ShortcutsTests (each key, and none while typing), FrameGeometryTests (letterboxed and pillarboxed, at several window sizes), RegionDrawTests (press, drag, Escape, release), RegionCommentTests (the drawn and the `--region` comment on the fixture: same crop), ControlServerTests (the server's leasing at a clock of the test's, and over the real socket), ListenerWaitTests (a batch from `batch send` to `wait` on the fixture: in memory at a clock of the test's, and over the real socket with a short heartbeat), TranscriptBatchTests (the transcript in the payload and in `state`: from the fixture's voiceover, and from a speech recognition run by hand that is still running at the send), ListenerAnswerTests (`ack`, `status`, `reply`, `ask` and `thread answer` on the fixture: in memory at a clock of the test's, and `ask` over the real socket), RestartTests (a model let go and another made on the same support folder: the same `state`, the listener's batches, the next ids, a renamed copy, another folder, a file that doesn't read, a typed note)
 
 scripts/
   acceptance.sh                       the v1 acceptance scenario through the CLI, against the installed app in demo mode
@@ -754,6 +755,7 @@ public struct ListenerLedger: Codable, Equatable, Sendable {
     public func contextToSend(_ text: String, video: String) -> String?      // nil when empty, when the same as the session last got, or with no session
     public mutating func delivered(_ batch: BatchID, to key: String, context: String?, now: Date)   // taken; context remembered
     public mutating func finish(_ batch: BatchID)
+    public mutating func reconcile(with reviews: [Review])                   // at launch: see "The reviews win"
     public func standing(of batch: BatchID) -> Standing                      // a batch that isn't here is finished
     public var hasTaken: Bool                                                // the session has a taken, unfinished batch
     public func presence(waitOpen: Bool, now: Date) -> Presence
@@ -766,7 +768,8 @@ public enum Presence: String, Codable, Sendable { case listening, working, absen
 - **Taken by its listener only.** `delivered` names the key the reply went to. When that key is no longer the session (another listener started while the reply was written), nothing is taken and the batch stays pending for the session there is.
 - **In flight.** `next(except:)` leaves out the batches whose reply is being written. The set is the queue's, not the ledger's: it lives for one write and is never saved.
 - **Context once per session.** The session remembers, per video, the context text it last got. `contextToSend` returns the text for the first batch of that video, `nil` while it is unchanged, and the text again after the sidecar or the note changed. A new session remembers nothing, so it gets the context again. The memory is written only in `delivered`, after the reply reached the listener, so a context whose reply was never written goes out again. A context that became empty goes out as `null` and leaves the memory as it was. Each video has its own memory, by content hash.
-- **The ledger is saved** in `listener.json`, so an app restart neither sends the context twice to a session that goes on, nor loses a pending batch. Until the store is built, `ListenerQueue` keeps it in memory; it is `Codable` and reads back as it was written.
+- **The ledger is saved** in `listener.json`, so an app restart neither sends the context twice to a session that goes on, nor loses a pending batch. `ListenerQueue` reads it as it is made and writes it at each change.
+- **The reviews win.** `reconcile(with:)` runs once, at launch, on every review there is. The reviews say which batches exist; the ledger says only who has them. An unfinished batch that isn't in the ledger becomes pending, and a delivery whose batch is finished, or is in no review, is removed. So a quit between the two writes of one action (the review, then the ledger), or a ledger file that was lost, loses no batch.
 - **Presence is derived**, never stored:
 
 | An open `wait`? | The session has a taken, unfinished batch? | The session's last command | Presence |
@@ -853,19 +856,38 @@ public struct SupportLayout: Sendable {
     public func folder(_ hash: String) -> URL; public func reviewFile(_ hash: String) -> URL
     public func keyframe(_ id: CommentID, of hash: String) -> URL; public func crop(_ id: CommentID, of hash: String) -> URL
     public func transcriptFile(_ hash: String) -> URL
-    public func hash(forPrefix prefix: String) -> String?      // the video an id's first eight digits name
+}
+public struct AppState: Codable, Equatable, Sendable {
+    public struct LastVideo { public var path, contentHash: String; public var time: Double }
+    public var lastVideo: LastVideo?
 }
 public struct ReviewStore: Sendable {
+    public let layout: SupportLayout
     public init(layout: SupportLayout)
-    public func loadReview(_ hash: String) throws -> Review?
+    public func loadReview(_ hash: String) -> Review?           // nil when there is none, or it doesn't read
+    public func loadReviews() -> [Review]                       // every review under the folder, in the order of their hashes
     public func save(_ review: Review) throws
     public func loadLedger() -> ListenerLedger; public func save(_ ledger: ListenerLedger) throws
-    public func loadAppState() -> AppState; public func save(_ state: AppState) throws    // the last video: path, hash, time
+    public func loadAppState() -> AppState; public func save(_ state: AppState) throws
 }
 public struct TranscriptCache: TranscriptCaching { public init(layout: SupportLayout) }
+
+protocol StoredFile: Codable { static var current: Int { get }; var version: Int { get } }   // internal: one JSON file of the store
+extension StoredFile {
+    static func read(at url: URL, valid: (Self) -> Bool = { _ in true }) -> Self?
+    func write(to url: URL) throws
+}
 ```
 
-A path takes the video's whole hash beside the id, so `SupportLayout` is pure: it never reads the disk to turn an id's eight digits into a folder. Whoever holds the review has the hash. Built so far: `ContentHash`, `SupportLayout` with `videosFolder`, `folder`, `keyframe`, `crop` and `transcriptFile`, and `TranscriptCache`; each other path comes with the ticket that writes its file. `ContentHash` hashes the file's size as eight big-endian bytes, then the bytes.
+A path takes the video's whole hash beside the id, so `SupportLayout` is pure: it never reads the disk to turn an id's eight digits into a folder. Whoever holds the review has the hash; a listener's command, which has only an id, asks `ReviewDesk.hash(naming:)`, which looks among the reviews it read at launch. `ContentHash` hashes the file's size as eight big-endian bytes, then the bytes.
+
+`StoredFile` is the one way a JSON file of the store is read and written; `ReviewStore`'s three files and `TranscriptCache`'s are each a private struct that conforms to it.
+
+- **Read.** A file that isn't there is none. A file that doesn't decode, whose `version` isn't the one this build writes, or that `valid` turns down (a `review.json` that names another video than its folder) is moved aside, as `review.unreadable.json` beside it, and counts as none. So nothing is ever written over a file this build can't read, and a launch never fails on one. A second unreadable file replaces the one moved aside before.
+- **Write.** The whole file, sorted keys, to a temporary file that then replaces the old one (`Data.write(options: .atomic)`), after the folders above it are made. A reader finds the old file or the new one.
+- **The forms.** `review.json` is `{"review": {…}, "version": 1}`, with the `Review` as `Codable` writes it: `video`, `comments`, `batches`, `note` and the two counters `nextComment` and `nextBatch`, so an id is never given twice across runs. A batch's `transcripts` are one object, each comment's id naming its lines (`Batch` encodes itself for that; a dictionary keyed by `CommentID` would otherwise be written as a list of pairs). `listener.json` is `{"ledger": {"session", "deliveries"}, "version": 1}`. `app.json` is `{"lastVideo": {"path", "contentHash", "time"}, "version": 1}`. Times are written as `Date` encodes them by default (seconds, as a number), so a time reads back to the same instant and a review read back equals the one written.
+- **What isn't kept.** The comment being typed, the notice, the lease, the open `wait`s and `ask`s, the batches in flight and presence: each is rebuilt or gone after a restart. A keyframe's and a crop's path isn't kept either: `SupportLayout` gives it from the id.
+- **A review that was moved aside** leaves its keyframes and crops in the folder. The video then starts a new review whose counters start at 1, so those images are written over as the ids come again.
 
 `TranscriptCache` is `VRTranscript`'s `TranscriptCaching`: it hashes the video it is given and reads or writes `transcript.json` in that video's folder, as `{"lines": [{"start", "end", "text"}], "version": 1}`. A file that doesn't read, or that a newer build wrote, is moved aside as `transcript.unreadable.json` and counts as none, so the video is recognised again. A transcript that can't be written is only recognised again at the next open.
 
@@ -893,7 +915,9 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
 
 - **Keyed by content.** `ContentHash.of` reads at most 3 MiB, so a large video opens at once. A renamed or moved copy gives the same hash and so the same folder. `review.json` keeps the last path it was opened from, for the payload's `video.path`.
 - **Demo apart from real.** The app's root is `SupportFolder.current(environment)`: the demo folder when `VIDEO_REVIEW_SUPPORT_DIR` is set, else the real folder. Everything is under that root, so the two can't mix. The only things a demo run puts in the real folder are `demo.json` and `demo.sock`.
-- **Writes** are whole-file and atomic. Every JSON file has a `version`; a newer or unreadable file is moved aside, never overwritten.
+- **Writes** are whole-file and atomic. Every JSON file has a `version`; a newer or unreadable file is moved aside, never overwritten (`StoredFile`).
+- **Read once.** Every `review.json`, `listener.json` and `app.json` are read at launch and never again: from then on memory is what counts and the files follow it, so a file can't win over a newer change. Reading every review at launch is what lets a listener's command find a video that isn't open; it costs one small file per video ever commented on.
+- **Written with the action.** A review is saved inside the action that changes it, on the main actor, before the action is answered: what a command printed is on disk. A write is one small file at the rate of a person's or a listener's actions. The two things that change faster aren't written at their rate: the note is saved when the typing rests (`ReviewDesk.changeTyped`), and the playhead's place only at the quit.
 - **Paths in the payload** are these files' absolute paths.
 
 ### App: `VRApp`
@@ -938,7 +962,10 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
     func answer(_ id: CommentID, text: String) throws(ActionError) -> Comment   // the answer box and `thread answer`: into the thread, then to the open `ask`
     func answerForPerson(_ id: CommentID, text: String) -> Bool          // Return in the answer box: a refusal is shown, not thrown
     func show(_ notice: Notice);  func openNotice()                      // an agent message arrived; a click on the notice: select its comment, take it down
-    func setNote(_ text: String) throws(ActionError) -> String           // the context popover and `context set`; the note as the review keeps it
+    func setNote(_ text: String) throws(ActionError) -> String           // `context set`; saved at once; the note as the review keeps it
+    func typeNote(_ text: String) throws(ActionError);  func endNote()   // the context popover: each key counts at once and is saved when the typing rests; the popover closed
+    func reopenLastVideo() async                                         // at launch: the video `app.json` names, at its playhead's place
+    func leaving()                                                       // at the quit: saves what was typed, and the playhead's place
     var sidecar: ContextSource.Sidecar? { get }                          // the open video's context sidecar, as it is on disk now
 
     func transcriptStatus() async -> TranscriptStatus?                   // the open video's; ControlServer asks it, then takes the snapshot
@@ -946,7 +973,7 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
 }
 ```
 
-`ActionError` wraps a `ReviewError`, or says `no video is open`, `can't open <path>: <why>`, `<time> is outside the video, which ends at <duration>`, `no comment is being written`, `can't keep the comment's keyframe: <why>`, `can't keep the comment's crop: <why>`, or carries a line of the listener queue's own (`listener(String)`: one listener at a time, an unknown status, the app quitting). A review's `timeOutsideVideo` is worded as the seek's, so both read `0:30.000 is outside the video, which ends at 0:21.233`. Its `message` is the refusal line. What the person does can't throw to anyone, so `AppModel.failure` keeps the line and the window shows it in an alert.
+`ActionError` wraps a `ReviewError`, or says `no video is open`, `can't open <path>: <why>`, `<time> is outside the video, which ends at <duration>`, `no comment is being written`, `can't keep the comment's keyframe: <why>`, `can't keep the comment's crop: <why>`, `can't keep the change: <why>` (`store(String)`: the review couldn't be written to the support folder, so the change wasn't made), or carries a line of the listener queue's own (`listener(String)`: one listener at a time, an unknown status, the app quitting). A review's `timeOutsideVideo` is worded as the seek's, so both read `0:30.000 is outside the video, which ends at 0:21.233`. Its `message` is the refusal line. What the person does can't throw to anyone, so `AppModel.failure` keeps the line and the window shows it in an alert.
 
 The comment box and `comment add` meet in one private method, `queueComment(text:time:region:frame:)`: `commitDraft` gives it the draft's time, the draft's region and the frame the draft is already reading, `addComment` the `--at` time (or the playhead), the `--region` and no frame. It asks `review.checkedText` first, so an empty text or a time outside the video is refused before any frame is read; then it awaits the frame and calls `desk.add`, which writes the keyframe and the crop. So a drawn region and a `--region` are the same `Region` handed to the same call, and their crops can't differ. The new comment becomes the selection, from either way in.
 
@@ -963,6 +990,8 @@ cancelRegion()        Escape while drawing → the rectangle is given up; a vide
 ```
 
 `RegionDraw` (in `Overlay/`) is the pure value behind them: `idle`, `pressed`, `drawing`, `cancelled`. A cancelled draw stays cancelled until the button is let go, so the rest of that drag draws nothing. `startDraft(region:)` and `endRegion` open the composer through one private `openDraft`: with the composer already open at the same frame, a new rectangle only replaces that draft's region, so what was typed stays; with the playhead moved since, the draft starts over at the frame on screen.
+
+Across runs, `AppModel` keeps one thing of its own, in `app.json`: the last video. `open` writes the video's path and hash with the time 0, and `leaving` (from `applicationWillTerminate`) writes the playhead's place, so the place is written once per run and not as the video plays. `reopenLastVideo` opens the file at that path when it is still there and, when its hash is the one kept, seeks to the place. The path names the file and the hash the history: a file that was moved or renamed isn't looked for, so the app starts with no video, and the file gets its history back when it is opened; another video at the old path opens as itself. A file that can't be opened is passed over without an alert.
 
 `AppModel` also knows the run's data folder (`support`, `isDemo`, from `SupportFolder`) and the app's one window, which `Screenshotter` captures.
 
@@ -1028,7 +1057,9 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
                    var text = "" }                      // what is typed so far: here, not in the comment box, so a send can queue it
     private(set) var open: Review?                      // the playing video's review
     private(set) var draft: Draft?                      // its time, its region, whether to play on afterwards, the frame being read
-    let layout: SupportLayout
+    let layout: SupportLayout;  let store: ReviewStore
+    init(layout: SupportLayout)                         // reads every review under the folder
+    var all: [Review]                                   // every review there is, open or not, in the order of their hashes
     func load(_ video: VideoInfo) -> Review             // the one kept under the hash, with the file it was opened from now, or a new one
     func close()                                        // no video is open any more
     func startDraft(time: Double, region: Region?, resumes: Bool, video: URL);  func pointDraft(at region: Region?);  func endDraft()
@@ -1039,17 +1070,23 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
     func keyframe(of id: CommentID) -> URL;  func crop(of id: CommentID) -> URL   // in the folder of the video its id names
     func hash(naming id: String) -> String?                                  // the video a comment's or a batch's id names by its first eight digits, open or not
     func change<T>(_ hash: String, _ body: (inout Review) throws(ReviewError) -> T) throws(ActionError) -> T
+    func changeTyped(_ hash: String, _ body: (inout Review) -> Void) throws(ActionError)   // published at once, saved when the typing rests
+    func settle()                                                            // saves what was typed and isn't saved yet
 }
 ```
 
-`change` is the only way a review changes: copy, apply the review's own method, save through `ReviewStore`, publish. A refused change saves nothing. `add` and `delete` are a change with a file beside it: `add` writes the keyframe and, for a comment with a region, the crop before it publishes, so a file that can't be written refuses the comment and takes no id; `delete` removes the files after the comment is gone. Until #11 lands the desk keeps reviews in memory only, by content hash, so a video opened again in the same run finds its comments; `change` and `add` are where saving is added. Keyframe files of an earlier run stay in the folder and are written over as ids come again.
+`change` is the only way a review changes: copy, apply the review's own method, save through `ReviewStore`, publish. A refused change saves nothing. `add` and `delete` are a change with a file beside it: `add` writes the keyframe and, for a comment with a region, the crop before it publishes, so a file that can't be written refuses the comment and takes no id; `delete` removes the files after the comment is gone. A review that can't be saved is a refusal too (`ActionError.store`), so nothing is shown that isn't on disk. A change that changed nothing (a second acknowledgement, the same question asked again) writes nothing.
+
+The desk reads every review once, as it is made, and keeps them by content hash; no file is read after that. `load` gives the review kept under the video's hash the file it was opened from this time, and saves it when that path is a new one (a renamed or moved copy); a video with no review gets a new one, which is in no file until its first change.
+
+`changeTyped` is for the one change that comes a key at a time, the note typed in the context popover. The review is published at once, so a batch delivered meanwhile carries the note as typed, and it is saved when no key came for `rest` (600 ms), at the review's next `change`, or at `settle`, which the popover's close and the quit call. A save that fails there is logged and tried again at the next `settle`.
 
 #### ListenerQueue
 
 ```swift
 @MainActor @Observable final class ListenerQueue {
     struct Handed { var batch: BatchID; var listener: String; var context: String? }   // a batch handed to a wait, until its reply is written or not
-    init(desk: ReviewDesk, now: @escaping @MainActor () -> Date)
+    init(desk: ReviewDesk, now: @escaping @MainActor () -> Date)                       // reads the ledger, reconciles it with the desk's reviews
     private(set) var ledger: ListenerLedger
     var session: ListenerLedger.Session?
     var presence: Presence;  func presence(at: Date) -> Presence;  var presenceRunsOut: Bool
@@ -1080,7 +1117,8 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
 - A `wait` ends in one place, `end(ticket, with:)`, whoever ends it: the delivery, its timeout, its cancelled connection (`.gone`), or the quit. The waiter is removed first, so only the first of them answers it.
 - Presence is not stored: `presence(at:)` asks the ledger with whether a `wait` or an `ask` is open, since either is a connection the listener holds. Both are observed, so the pill follows them. Only the 120 s rule changes by time alone; while `presenceRunsOut` says it can, the pill redraws every second, and `state` asks at the request's time.
 - `ask` without `--wait` waits without limit, as the spec says the command exits with the answer. An `ask` with the same text as the comment's last question attaches to that question: when it is already answered, it returns the answer at once, so a listener that timed out can ask again and lose nothing.
-- Every listener command calls `ledger.attach` (in `admit`) and, once the store is built, saves the ledger.
+- The ledger changes in one place, `record`: the change is applied to a copy, and a ledger that differs is saved to `listener.json` through the desk's store. A ledger that can't be saved is logged and goes on in memory. `delivered` records only after the reply was written, so a batch whose reply never reached its listener is still pending on disk.
+- `init` takes up where the last run stopped: it reads the ledger, runs `ledger.reconcile(with: desk.all)`, and gives every pending delivery's unfinished comments the state `sent` again (`review.requeue`), which covers a quit between a new listener's `attach` and the requeue of its comments. A batch a listener had taken stays taken by that session: the same key goes on with it after the restart, and gets no context twice; another key starts a new session, and `admit` requeues the batch, as in one run.
 
 #### ControlServer
 
@@ -1186,7 +1224,9 @@ The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo r
 
 One `Window` scene. `RegionOverlay` lies over the player's surface and is the only thing the pointer meets there. Its surface takes the press anywhere in the view, with a crosshair pointer over the frame (`pointerStyle(.rectSelection)`), and hands the drag to `AppModel`'s four region methods. It draws one rectangle at most: the one being drawn (white edge, the rest of the frame dimmed, its size in the frame's pixels under it), else the draft's region (the same, without the size), else the selected comment's region (an accent edge, nothing dimmed), which shows only while the video is paused within half a frame of that comment's time, since on any other frame it would point at something else. It also holds the one `Composer` and places it: centred over the frame's foot for a comment without a region, and at `FrameGeometry.origin(ofBox:beside:)` for one with a region, measured again whenever the box grows. One composer for both places keeps what was typed when a region is drawn while the box is open.
 
-The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator`, `ControlServer` and `ShortcutMonitor`, starts the server and the monitor at launch and stops the server at quit) and `MainView`, the window's content.
+The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator`, `ControlServer` and `ShortcutMonitor`, starts the monitor at launch, then reopens the last run's video and only then starts the server, and at quit stops the server and calls `model.leaving()`) and `MainView`, the window's content.
+
+The server starts after `reopenLastVideo` so that `app open`, which answers once the socket does, is followed by a `state` that already shows the video and its history. A video that takes longer than 4 s to open doesn't hold the server back. A video the person opened the app with (`application(_:open:)`) is opened instead of the last one.
 
 A comment's card (`CommentCard`) is its keyframe, its mark, its time, its state in a word and its text, and under them its thread (`ThreadView`). A thread is one `MessageRow` per message: the agent's on the leading side under `Agent` or, for a question, a purple `Agent asks`, in a grey bubble (purple-tinted for a question); the person's answer on the trailing side under `You`, in a filled accent bubble. The question that waits has a stronger purple edge and the line `Waiting for your answer` under it, and right below it the answer box: a text field and a send button, Return sends. The box is there only while a question waits. A message's clock time is in its tooltip, not in the row, where it would read as a time in the video. A card whose question waits has a purple edge while it isn't the one in focus. `StatusStyle.of(comment)` is what a card's mark and a marker both draw: the question's style while one waits, else the state's.
 
@@ -1196,7 +1236,7 @@ A batch's group in the sidebar is its head (`BatchHeader`: number, time sent, an
 
 The lease banner is the one view that doesn't read `AppModel`: the lease belongs to `ControlServer`, not to the model. `Control/LeaseBanner.swift` holds three small things. `LeaseIndicator` is the observable copy of the lease that the server keeps current, with the `stop` closure. `LeaseBannerText` makes the words from a `ControlLease.Status` (`Claude Code controls Video Review (proto-1)`, `/repo · 42 s left · 1 waiting`) and is tested. `LeaseBanner` is the view: the first row of `MainView`, drawn only while a lease is in force, with a `TimelineView` that ticks the seconds and a Stop button. It is part of the window, so `screenshot` shows it.
 
-`Comments/ContextNote.swift` is the toolbar's Context button, between the presence pill and the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.setNote`, the call `context set` makes, so there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
+`Comments/ContextNote.swift` is the toolbar's Context button, between the presence pill and the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.typeNote`, which makes the review's `setNote` change as `context set` does and saves it once the typing rests; closing the popover calls `endNote`, which saves at once. So there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
 
 ### The listener skill
 
@@ -1532,7 +1572,7 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | #8 Transcript | `VRTranscript` whole; `VRStore/TranscriptCache` and `SupportLayout.transcriptFile`; the transcriber prepared in `AppModel.open` and the lines captured in `AppModel.sendBatch`; `transcript` in `StateSnapshot`, with `problem`; `VRTranscriptTests`, `TranscriptCacheTests`, `TranscriptBatchTests` |
 | #9 Mate: context | `ContextText`; `Review.note` and `setNote` (in memory until #11); `Mate/ContextSource`; `ledger.contextToSend`, called in `ListenerQueue.deliverIfPossible`; `AppModel.setNote` and `sidecar`; `Comments/ContextNote`; `context set`; `context` in `StateSnapshot`; `ContextTextTests`, `ContextTests`, the context table in `ListenerLedgerTests` |
 | #10 Mate: answers | `acknowledge`, `setStatus`, `reply`, `ask`, `answer` in `Review`, the question properties of `Comment`, the errors `emptyMessage`, `notSent`, `noOpenQuestion`, `illegalMove`; `ReviewDesk.hash(naming:)`; `admit`, `acknowledge`, `setStatus`, `reply`, `ask`, `answered` and `ledger.finish` in `ListenerQueue`; `AppModel.answer`, the notice; `ThreadView`, `BatchCard` (with `BatchHeader`, moved out of `Sidebar`), `NoticeToast`, the question's style in `StatusStyle`; `notice` in `StateSnapshot`; the rows and routes of `ack`, `status`, `reply`, `ask`, `thread answer`, exit 3 for `ask`; `ReviewAnswerTests`, `ListenerAnswerTests` |
-| #11 Comment: persist | `VRStore/ReviewStore`; saving in `ReviewDesk.change`; the ledger saved; `app.json` and reopening the last video; `ReviewStoreTests` |
+| #11 Comment: persist | `VRStore/ReviewStore`, `StoredFile`, `AppState`, the rest of `SupportLayout`; `TranscriptCache` on `StoredFile`; `Batch`'s stored form; `ListenerLedger.reconcile`; `ReviewDesk` reading at launch, saving in `change` and `add`, `changeTyped` and `settle`; `ListenerQueue.record` and its launch; `AppModel.reopenLastVideo`, `leaving`, `typeNote`, `endNote`, `ActionError.store`; the server started after the reopen; `ReviewStoreTests`, `RestartTests`, the reconcile cases of `ListenerLedgerTests` |
 | #12 Mate: the skill | `.agents/skills/video-review-mate/SKILL.md` and `scripts/vr.sh`; the link `.claude/skills/video-review-mate`; the skill's rows in `AGENTS.md` |
 | #13 Proto: acceptance | `scripts/acceptance.sh`, `make acceptance`, `assets/screenshots/` |
 

@@ -66,9 +66,10 @@ final class ListenerQueue {
         var timeout: Task<Void, Never>?
     }
 
-    /// The listener session and the batches on their way. Kept in memory
-    /// for this run.
-    private(set) var ledger = ListenerLedger()
+    /// The listener session and the batches on their way, as
+    /// `listener.json` keeps them: read as the queue is made, and written
+    /// at each change, through `record`.
+    private(set) var ledger: ListenerLedger
     /// The open `wait`s, oldest first.
     private var waiters: [Waiter] = []
     /// The open `ask`s, oldest first.
@@ -85,9 +86,34 @@ final class ListenerQueue {
 
     static let quittingRefusal = "video-review is quitting"
 
+    /// Takes up where the last run stopped: the ledger as it was kept,
+    /// brought in line with the reviews. A batch a listener had taken
+    /// stays taken by it; one that is pending has its comments `sent`.
     init(desk: ReviewDesk, now: @escaping @MainActor () -> Date) {
         self.desk = desk
         self.now = now
+        ledger = desk.store.loadLedger()
+        record { $0.reconcile(with: desk.all) }
+        for delivery in ledger.deliveries where delivery.isPending {
+            _ = try? desk.change(delivery.video) { review in review.requeue(delivery.batch) }
+        }
+    }
+
+    /// The one way the ledger changes: `change` is applied, and a ledger
+    /// that differs is saved. A ledger that can't be saved goes on in
+    /// memory, and is saved with its next change.
+    @discardableResult
+    private func record<T>(_ change: (inout ListenerLedger) -> T) -> T {
+        var changed = ledger
+        let result = change(&changed)
+        guard changed != ledger else { return result }
+        ledger = changed
+        do {
+            try desk.store.save(changed)
+        } catch {
+            NSLog("video-review: can't keep the listener ledger: %@", error.localizedDescription)
+        }
+        return result
     }
 
     // MARK: - What the window and `state` show
@@ -121,7 +147,7 @@ final class ListenerQueue {
     /// `batch` of `video` was sent: it goes to the oldest open `wait`, or
     /// waits for the next one.
     func enqueue(_ batch: Batch, video: VideoInfo) {
-        ledger.enqueue(batch.id, video: video.contentHash, sentAt: batch.sentAt)
+        record { $0.enqueue(batch.id, video: video.contentHash, sentAt: batch.sentAt) }
         deliverIfPossible()
     }
 
@@ -167,7 +193,8 @@ final class ListenerQueue {
         if let open = waiters.first(where: { $0.holder.key != holder.key }) {
             throw .listener("\(open.holder.name) in \(open.holder.place) is already listening; one listener at a time")
         }
-        let requeued = ledger.attach((key: holder.key, name: holder.name, place: holder.place), now: now())
+        let time = now()
+        let requeued = record { $0.attach((key: holder.key, name: holder.name, place: holder.place), now: time) }
         for delivery in requeued {
             // A review this run doesn't have has nothing to put back.
             _ = try? desk.change(delivery.video) { review in review.requeue(delivery.batch) }
@@ -192,7 +219,7 @@ final class ListenerQueue {
                   !review.isFinished(batch.id)
             else {
                 // Nothing of it is left to deliver.
-                ledger.finish(delivery.batch)
+                record { $0.finish(delivery.batch) }
                 continue
             }
             // Read now, not at the send: what goes out depends on who
@@ -216,7 +243,8 @@ final class ListenerQueue {
     /// is taken.
     func delivered(_ handed: Handed) {
         inFlight.remove(handed.batch)
-        ledger.delivered(handed.batch, to: handed.listener, context: handed.context, now: now())
+        let time = now()
+        record { $0.delivered(handed.batch, to: handed.listener, context: handed.context, now: time) }
         // Left pending when its listener is no longer the session: the next `wait` gets it.
         deliverIfPossible()
     }
@@ -257,7 +285,7 @@ final class ListenerQueue {
         let comment = try desk.change(hash) { review throws(ReviewError) in
             try review.setStatus(CommentID(rawValue: id), to: next)
         }
-        if let batch = comment.batch, desk.review(hash)?.isFinished(batch) == true { ledger.finish(batch) }
+        if let batch = comment.batch, desk.review(hash)?.isFinished(batch) == true { record { $0.finish(batch) } }
         return comment
     }
 

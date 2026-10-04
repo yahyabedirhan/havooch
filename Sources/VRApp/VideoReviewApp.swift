@@ -39,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = LeaseIndicator()
     private let server: ControlServer
     private let shortcuts: ShortcutMonitor
+    /// Whether app control was started.
+    private var serving = false
+    /// Whether the person gave the app a video to open, at launch or since.
+    private var openedByPerson = false
 
     override init() {
         let environment = ProcessInfo.processInfo.environment
@@ -62,6 +66,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Run from `.build` without a bundle, the app would otherwise have no window or menu.
         NSApp.setActivationPolicy(.regular)
         shortcuts.start()
+        // The last run's video first, so the first `state` an agent asks
+        // for already shows it: `app open` answers once the server does.
+        // A video the person opened this app with comes instead.
+        Task {
+            if !openedByPerson { await model.reopenLastVideo() }
+            serve()
+        }
+        // A video that is slow to open doesn't keep agents out.
+        Task {
+            try? await Task.sleep(for: Self.patience)
+            serve()
+        }
+    }
+
+    /// How long app control waits for the last run's video to open.
+    private static let patience = Duration.seconds(4)
+
+    /// Starts app control, once.
+    private func serve() {
+        guard !serving else { return }
+        serving = true
         do {
             try server.start()
         } catch {
@@ -72,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         server.stop()
+        model.leaving()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -80,7 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A video opened from the Finder, or dropped on the app's icon.
     func application(_ application: NSApplication, open urls: [URL]) {
-        if let video = urls.first { model.openForPerson(video) }
+        guard let video = urls.first else { return }
+        openedByPerson = true
+        model.openForPerson(video)
     }
 }
 

@@ -17,6 +17,8 @@ enum ActionError: Error, Equatable {
     case keyframe(String)
     case crop(String)
     case review(ReviewError)
+    /// The change couldn't be written to the support folder, so it wasn't made.
+    case store(String)
     /// A listener's command the listener queue refuses, in its words.
     case listener(String)
 
@@ -36,6 +38,8 @@ enum ActionError: Error, Equatable {
             "can't keep the comment's crop: \(why)"
         case .review(let refusal):
             refusal.message
+        case .store(let why):
+            "can't keep the change: \(why)"
         case .listener(let why):
             why
         }
@@ -113,7 +117,41 @@ final class AppModel {
         // Finds the video's transcript source. Speech recognition, when it
         // is the source, runs on in the background.
         await transcriber.prepare(opened.url)
-        return desk.load(VideoInfo(contentHash: hash, path: opened.url.path, title: opened.title, duration: opened.duration)).video
+        let video = desk.load(VideoInfo(contentHash: hash, path: opened.url.path, title: opened.title, duration: opened.duration)).video
+        remember(video, at: 0)
+        return video
+    }
+
+    // MARK: - Across runs
+
+    /// Opens the video that was open when the app last quit, where the
+    /// playhead stood, when its file is still where it was. The path names
+    /// the file and the hash its history: a file that was moved isn't
+    /// looked for, and gets its history back when it is opened; another
+    /// video at the old path opens as itself, from its start. Nothing is
+    /// shown when it can't be opened.
+    func reopenLastVideo() async {
+        guard player.video == nil, let last = desk.store.loadAppState().lastVideo,
+              FileManager.default.fileExists(atPath: last.path),
+              let video = try? await open(URL(fileURLWithPath: last.path))
+        else { return }
+        if video.contentHash == last.contentHash, last.time > 0 {
+            _ = try? await seek(to: min(last.time, video.duration))
+            remember(video, at: last.time)
+        }
+    }
+
+    /// The app quits: what was typed and isn't saved yet is saved, and
+    /// the playhead's place is kept for the next run.
+    func leaving() {
+        desk.settle()
+        if let review = desk.open, player.video != nil { remember(review.video, at: player.time) }
+    }
+
+    /// Keeps `video` as the one to open at the next launch, at `time`. A
+    /// place that can't be kept only costs the next launch its video.
+    private func remember(_ video: VideoInfo, at time: Double) {
+        try? desk.store.save(AppState(lastVideo: .init(path: video.path, contentHash: video.contentHash, time: time)))
     }
 
     func play() throws(ActionError) {
@@ -331,6 +369,19 @@ final class AppModel {
             review.setNote(text)
             return review.note
         }
+    }
+
+    /// The note as the person types it in the context popover: it counts
+    /// at once, as `setNote`'s does, and is saved once the typing rests,
+    /// not at every key.
+    func typeNote(_ text: String) throws(ActionError) {
+        guard let review = desk.open else { throw .noVideo }
+        try desk.changeTyped(review.video.contentHash) { review in review.setNote(text) }
+    }
+
+    /// The context popover closed: what was typed in it is saved now.
+    func endNote() {
+        desk.settle()
     }
 
     /// The open video's context sidecar, as it is on disk now.

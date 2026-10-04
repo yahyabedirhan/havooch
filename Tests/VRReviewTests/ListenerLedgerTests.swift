@@ -212,6 +212,60 @@ import VRReview
         #expect(ledger.presence(waitOpen: true, now: at(300)) == .listening)
     }
 
+    // MARK: - After a restart
+
+    /// A review of `video` with a comment sent in each of `b1` at 0 and
+    /// `b2` at 5; the comment of each batch in `finished` is done.
+    private func review(_ video: String = video, finished: Set<Int> = []) throws -> Review {
+        var review = Review(video: VideoInfo(contentHash: video, path: "/videos/sample.mp4", title: "sample", duration: 20))
+        for (number, sentAt) in [(1, 0.0), (2, 5)] {
+            let comment = try review.addComment(text: "comment \(number)", time: 1, now: at(sentAt))
+            try review.sendBatch(now: at(sentAt))
+            if finished.contains(number) { try review.setStatus(comment.id, to: .done) }
+        }
+        return review
+    }
+
+    @Test func aLedgerInLineWithTheReviewsStaysAsItIs() throws {
+        var ledger = ledger()
+        ledger.attach(Self.first, now: at(10))
+        ledger.delivered(b1, to: "L1", context: "# Context", now: at(11))
+        let before = ledger
+
+        ledger.reconcile(with: [try review()])
+
+        #expect(ledger == before)
+    }
+
+    @Test func anUnfinishedBatchTheLedgerLostIsPendingAgainOldestFirst() throws {
+        // The app ended after the review kept `b1` and before the ledger did.
+        var ledger = ListenerLedger()
+        ledger.enqueue(b2, video: Self.video, sentAt: at(5))
+        let other = "b2c4d6e8" + String(repeating: "1", count: 56)
+
+        ledger.reconcile(with: [try review(other, finished: [2]), try review()])
+
+        #expect(ledger.deliveries.map(\.batch) == [BatchID(rawValue: "b2c4d6e8-b1"), b1, b2])
+        #expect(ledger.deliveries.map(\.isPending) == [true, true, true])
+        #expect(ledger.deliveries.map(\.sentAt) == [at(0), at(0), at(5)])
+    }
+
+    @Test func aDeliveryWhoseBatchIsFinishedOrInNoReviewIsGone() throws {
+        // The app ended after the review kept the last status and before the ledger did.
+        var ledger = ledger()
+        ledger.enqueue(BatchID(rawValue: "0badc0de-b1"), video: "0badc0de" + String(repeating: "2", count: 56), sentAt: at(1))
+        ledger.enqueue(BatchID(rawValue: "7f3a9c21-b9"), video: Self.video, sentAt: at(2))
+        ledger.attach(Self.first, now: at(10))
+        ledger.delivered(b1, to: "L1", context: nil, now: at(11))
+
+        ledger.reconcile(with: [try review(finished: [1])])
+
+        #expect(ledger.deliveries.map(\.batch) == [b2])
+        #expect(ledger.standing(of: b1) == .finished)
+        #expect(!ledger.hasTaken)
+        #expect(ledger.session?.key == "L1")
+    }
+
     @Test func theLedgerReadsBackAsItWasWritten() throws {
         var ledger = ledger()
         ledger.attach(Self.first, now: at(10))

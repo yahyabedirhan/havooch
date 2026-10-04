@@ -108,6 +108,32 @@ public struct ListenerLedger: Codable, Equatable, Sendable {
         deliveries.removeAll { $0.batch == batch }
     }
 
+    /// Brings the ledger in line with `reviews`, every review there is, as
+    /// both were read at launch. The reviews say which batches exist and
+    /// the ledger only who has them. So when the app ended between the two
+    /// writes of one action, or the ledger's file was lost, no batch is:
+    /// an unfinished batch that isn't here is pending, and a delivery
+    /// whose batch is finished, or is in no review, is gone.
+    public mutating func reconcile(with reviews: [Review]) {
+        let known = Dictionary(reviews.map { ($0.video.contentHash, $0) }) { first, _ in first }
+        deliveries.removeAll { delivery in
+            guard let review = known[delivery.video], (try? review.batch(delivery.batch)) != nil else { return true }
+            return review.isFinished(delivery.batch)
+        }
+        let kept = deliveries.count
+        for review in reviews {
+            for batch in review.batches where !review.isFinished(batch.id) {
+                enqueue(batch.id, video: review.video.contentHash, sentAt: batch.sentAt)
+            }
+        }
+        // Oldest first, as `enqueue` alone keeps them.
+        if deliveries.count != kept {
+            deliveries = deliveries.enumerated()
+                .sorted { ($0.element.sentAt, $0.offset) < ($1.element.sentAt, $1.offset) }
+                .map(\.element)
+        }
+    }
+
     /// Where `batch` stands: a batch that isn't here any more is finished.
     public func standing(of batch: BatchID) -> Standing {
         guard let delivery = deliveries.first(where: { $0.batch == batch }) else { return .finished }

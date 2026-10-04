@@ -3,6 +3,9 @@ import VRReview
 
 /// Every path under a support folder, in one place:
 ///
+///     <root>/app.json
+///     <root>/listener.json
+///     <root>/videos/<content hash>/review.json
 ///     <root>/videos/<content hash>/frames/<comment id>.png
 ///     <root>/videos/<content hash>/crops/<comment id>.png
 ///     <root>/videos/<content hash>/transcript.json
@@ -15,6 +18,16 @@ public struct SupportLayout: Equatable, Sendable {
         self.root = root
     }
 
+    /// What the app remembers about itself: the last video.
+    public var appFile: URL {
+        root.appendingPathComponent("app.json")
+    }
+
+    /// The listener session and the batches on their way.
+    public var listenerFile: URL {
+        root.appendingPathComponent("listener.json")
+    }
+
     /// One folder per video, named by its content hash.
     public var videosFolder: URL {
         root.appendingPathComponent("videos", isDirectory: true)
@@ -23,6 +36,12 @@ public struct SupportLayout: Equatable, Sendable {
     /// Everything kept for the video `hash` names.
     public func folder(_ hash: String) -> URL {
         videosFolder.appendingPathComponent(hash, isDirectory: true)
+    }
+
+    /// The review of the video `hash` names: its comments with their
+    /// threads, its batches, its note and its id counters.
+    public func reviewFile(_ hash: String) -> URL {
+        folder(hash).appendingPathComponent("review.json")
     }
 
     /// The keyframe of the comment `id` on the video `hash` names.
