@@ -35,6 +35,8 @@ fixtures/                      tracked   the sample video and its sidecars for t
 
 Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and ADR 0007), adapted here in `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md`. Read it before touching the CLI, the socket or the lease.
 
+`docs/low-level-design.md` is the design of this build, written with the `low-level-design` skill before the first build ticket. It is documentation for the maintainer to read later, not a review gate. Read it before adding or moving a module, and update it in the same change whenever the code moves away from it.
+
 ## Testing
 
 Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `video-review` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
