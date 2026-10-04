@@ -9,7 +9,8 @@ public struct ReviewRefusal: Error, Equatable, Sendable {
     }
 }
 
-/// One video's review: its comments, and every change to them. The rules
+/// One video's review: its comments and the batches they were sent in, and
+/// every change to them. The rules
 /// about a comment's state live here, so the window and the command line
 /// are refused the same things in the same words.
 public struct ReviewSession: Codable, Equatable, Sendable {
@@ -17,9 +18,19 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// Every comment of the video, drafts included, in time order; comments
     /// at the same time keep the order they were made in.
     public private(set) var comments: [Comment] = []
+    /// The batches sent from this video, oldest first.
+    public private(set) var batches: [Batch] = []
 
     public init(video: VideoInfo) {
         self.video = video
+    }
+
+    /// A review kept before anything was sent has no batches.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        video = try container.decode(VideoInfo.self, forKey: .video)
+        comments = try container.decode([Comment].self, forKey: .comments)
+        batches = try container.decodeIfPresent([Batch].self, forKey: .batches) ?? []
     }
 
     /// The comments waiting to be sent, in time order.
@@ -29,6 +40,15 @@ public struct ReviewSession: Codable, Equatable, Sendable {
 
     public func comment(_ id: String) -> Comment? {
         comments.first { $0.id == id }
+    }
+
+    public func batch(_ id: String) -> Batch? {
+        batches.first { $0.id == id }
+    }
+
+    /// Whether every comment of the batch `batchID` is done or failed.
+    public func isFinished(_ batchID: String) -> Bool {
+        comments.filter { $0.batchID == batchID }.allSatisfy(\.state.isFinal)
     }
 
     // MARK: - Changes
@@ -72,6 +92,32 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// Takes a queued comment out of the review.
     public mutating func delete(_ id: String) throws(ReviewRefusal) {
         comments.remove(at: try queued(id, toBe: "deleted"))
+    }
+
+    /// Sends every queued comment as one batch: each is `sent`, and names
+    /// the batch. Refused with nothing queued.
+    public mutating func send(batchID: String, at now: Date) throws(ReviewRefusal) -> Batch {
+        let ids = queue.map(\.id)
+        guard !ids.isEmpty else {
+            throw ReviewRefusal("there's nothing to send: no comment is queued")
+        }
+        for index in comments.indices where comments[index].state == .queued {
+            comments[index].state = .sent
+            comments[index].batchID = batchID
+        }
+        let batch = Batch(id: batchID, sentAt: now, commentIDs: ids)
+        batches.append(batch)
+        return batch
+    }
+
+    /// The batch goes to another listener: its comments a listener had
+    /// acknowledged or started go back to `sent`, the one move backward.
+    /// Those done or failed stay.
+    public mutating func requeue(_ batchID: String) {
+        for index in comments.indices where comments[index].batchID == batchID {
+            let state = comments[index].state
+            if state != .sent, state.canMove(to: .sent) { comments[index].state = .sent }
+        }
     }
 
     // MARK: - Rules

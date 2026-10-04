@@ -30,6 +30,10 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         .screenshot(path: "/tmp/shot.png", appearance: nil),
         .screenshot(path: "/tmp/shot.png", appearance: .light),
         .screenshot(path: "/tmp/shot.png", appearance: .dark),
+        .batchSend,
+        .wait(timeoutSeconds: nil),
+        .wait(timeoutSeconds: 0),
+        .wait(timeoutSeconds: 30),
     ])
     func everyRequestReadsBackAsItWasSent(request: ControlRequest) throws {
         for json in [false, true] {
@@ -130,10 +134,38 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
     }
 
     @Test func onlyATakeThatWaitsHoldsItsConnectionLonger() {
-        #expect(ControlRequest.controlTake(waitSeconds: 30).wait == 30)
-        #expect(ControlRequest.controlTake(waitSeconds: nil).wait == 0)
-        #expect(ControlRequest.controlRelease.wait == 0)
-        #expect(ControlRequest.playerPlay.wait == 0)
+        #expect(ControlRequest.controlTake(waitSeconds: 30).hold == 30)
+        #expect(ControlRequest.controlTake(waitSeconds: nil).hold == 0)
+        #expect(ControlRequest.controlRelease.hold == 0)
+        #expect(ControlRequest.playerPlay.hold == 0)
+    }
+
+    @Test func onlyAListenersWaitIsALongPoll() {
+        #expect(ControlRequest.wait(timeoutSeconds: nil).isLongPoll)
+        #expect(ControlRequest.wait(timeoutSeconds: 5).isLongPoll)
+        #expect(!ControlRequest.controlTake(waitSeconds: 30).isLongPoll)
+        #expect(!ControlRequest.batchSend.isLongPoll)
+    }
+
+    @Test func aWaitNamesItsTimeoutOnlyWhenItHasOne() {
+        let timed = String(decoding: ControlMessage(.wait(timeoutSeconds: 30), holder: holder).encoded(), as: UTF8.self)
+        #expect(timed.hasPrefix(#"{"command":"wait","holder":"#))
+        #expect(timed.hasSuffix(#""json":false,"timeoutSeconds":30,"version":1}"#))
+        let open = String(decoding: ControlMessage(.wait(timeoutSeconds: nil), holder: holder).encoded(), as: UTF8.self)
+        #expect(!open.contains("timeoutSeconds"))
+    }
+
+    @Test(arguments: [-1, 86_401])
+    func aTimeoutOutsideZeroToADayIsRefused(seconds: Int) {
+        #expect(throws: ControlProtocolError.unreadable(
+            "the control command `wait` needs a `timeoutSeconds` from 0 to 86400, not \(seconds)"
+        )) {
+            try ControlMessage.decode(raw(#""command":"wait","timeoutSeconds":\#(seconds),"version":1,\#(holderJSON)"#))
+        }
+    }
+
+    @Test func aListenersRequestNeedsNoLease() {
+        #expect(ControlRequest.wait(timeoutSeconds: nil).role == .listener)
     }
 
     @Test func onlyRequestsThatDriveTheAppNeedTheLease() {
@@ -142,7 +174,7 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         }
         for request: ControlRequest in [
             .appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
-            .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
+            .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil), .batchSend,
         ] {
             #expect(request.role == .operator)
         }

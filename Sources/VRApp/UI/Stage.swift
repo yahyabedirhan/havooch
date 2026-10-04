@@ -21,6 +21,7 @@ struct Stage: View {
                     let composer = Composer(
                         time: comment.time,
                         isOnRegion: comment.region != nil,
+                        text: Binding(get: { model.composerText }, set: { model.composerText = $0 }),
                         commit: { model.commitComposer(text: $0) },
                         cancel: { model.cancelComposer() }
                     )

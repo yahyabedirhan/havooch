@@ -40,10 +40,20 @@ public enum ControlRequest: Equatable, Sendable {
     case commentEdit(id: String, text: String)
     /// `comment delete <id>`: a queued comment taken out.
     case commentDelete(id: String)
+    /// `batch send`: every queued comment of the open video sent as one
+    /// batch, for a listener's `wait`.
+    case batchSend
     /// `screenshot <abs.png> [--appearance light|dark]`: the app's window
     /// written as a PNG at `path`, absolute since the app runs in another
     /// folder; in `appearance` when it's set, as the Mac shows it otherwise.
     case screenshot(path: String, appearance: Appearance?)
+
+    // Listener: no lease.
+    /// `wait [--timeout <seconds>]`: the next batch as the payload's JSON.
+    /// The app holds the connection until a batch comes or `timeoutSeconds`
+    /// (0 to `longestTimeout`) ran out; without one, for as long as it takes.
+    /// The listener is present while a `wait` is open.
+    case wait(timeoutSeconds: Int?)
 
     /// A rectangle on the frame as `--region x,y,w,h` gives it: four
     /// numbers, parts of the frame from its top left. The app decides
@@ -77,11 +87,21 @@ public enum ControlRequest: Equatable, Sendable {
     /// The longest wait in line a `take` asks for, in seconds: an hour.
     public static let longestWait = 3600
 
+    /// The longest `--timeout` a `wait` asks for, in seconds: a day.
+    public static let longestTimeout = 86_400
+
     /// How long the app may hold the connection before it answers, past the
     /// client's usual timeout: a `take`'s wait in line.
-    public var wait: TimeInterval {
+    public var hold: TimeInterval {
         if case .controlTake(let seconds?) = self { return TimeInterval(seconds) }
         return 0
+    }
+
+    /// Whether the app holds the connection for as long as it takes and
+    /// writes a heartbeat meanwhile: a listener's `wait`.
+    public var isLongPoll: Bool {
+        if case .wait = self { return true }
+        return false
     }
 
     /// Who a request is for, which decides whether it needs the lease.
@@ -100,8 +120,10 @@ public enum ControlRequest: Equatable, Sendable {
             .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot:
             .operator
-        case .commentAdd, .commentEdit, .commentDelete:
+        case .commentAdd, .commentEdit, .commentDelete, .batchSend:
             .operator
+        case .wait:
+            .listener
         }
     }
 }

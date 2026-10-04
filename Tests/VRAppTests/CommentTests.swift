@@ -153,7 +153,7 @@ private func exists(_ file: URL) -> Bool {
 
         let reply = await rig.send(.commentAdd(text: "here", at: 5.5, region: nil), json: true)
 
-        #expect(reply.output == #"{"cropPath":null,"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","region":null,"state":"queued","text":"here","time":5.5}"# + "\n")
+        #expect(reply.output == #"{"batchId":null,"cropPath":null,"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","region":null,"state":"queued","text":"here","time":5.5}"# + "\n")
         #expect(rig.player.time == 5.5)
         #expect(!rig.player.isPlaying)
     }
@@ -174,6 +174,7 @@ private func exists(_ file: URL) -> Bool {
               c2 queued at 0:03.000: at 3.0
               c3 queued at 0:10.000: at 10.0
               c1 queued at 0:15.000: at 15.0
+            listener: absent
             lease: Claude Code in /Users/me/repo, 60s left, 0 waiting
 
             """)

@@ -57,6 +57,21 @@ private let playerKeys: [(String, UInt16)] = [
         #expect(PlayerKey.routed(characters: " ", keyCode: 49, hasCommandModifiers: false, focus: onPlayer) == .togglePlay)
     }
 
+    @Test func commandEnterSendsFromAnywhereInTheWindow() {
+        // Return and the keypad's Enter, on the player and inside a text view.
+        for keyCode: UInt16 in [36, 76] {
+            for focus in [KeyFocus(), KeyFocus(inText: true)] {
+                #expect(SendKey.matches(keyCode: keyCode, hasCommand: true, hasOtherModifiers: false, focus: focus))
+            }
+        }
+        // Enter alone queues the comment box's text; it never sends.
+        #expect(!SendKey.matches(keyCode: 36, hasCommand: false, hasOtherModifiers: false, focus: KeyFocus(inText: true)))
+        #expect(!SendKey.matches(keyCode: 36, hasCommand: true, hasOtherModifiers: true, focus: KeyFocus()))
+        #expect(!SendKey.matches(keyCode: 40, hasCommand: true, hasOtherModifiers: false, focus: KeyFocus()))
+        #expect(!SendKey.matches(keyCode: 36, hasCommand: true, hasOtherModifiers: false, focus: KeyFocus(inPanel: true)))
+        #expect(!SendKey.matches(keyCode: 36, hasCommand: true, hasOtherModifiers: false, focus: KeyFocus(underSheet: true)))
+    }
+
     /// A window that is never shown: only its first responder is read.
     @Test func aWindowWhoseFirstResponderIsATextViewHasItsFocusInText() {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)

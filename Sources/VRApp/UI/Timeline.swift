@@ -62,9 +62,13 @@ struct Timeline: View {
 
     private func pin(_ marker: Marker) -> some View {
         let size = marker.isSelected ? Theme.selectedPinSize : Theme.pinSize
-        return Circle()
-            .fill(Theme.colour(for: marker.state))
-            .overlay(Circle().strokeBorder(.white.opacity(marker.isSelected ? 1 : 0.7), lineWidth: marker.isSelected ? 2 : 1))
+        // The state's glyph in its colour, as on the card: the status reads
+        // without colour too.
+        return Image(systemName: Theme.glyph(for: marker.state))
+            .resizable()
+            .foregroundStyle(Theme.colour(for: marker.state))
+            .background(Circle().fill(.background).padding(0.5))
+            .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: marker.isSelected ? 1.5 : 0).padding(-2))
             .frame(width: size, height: size)
             .frame(width: Self.pinArea + 2, height: Self.pinArea + 2)
             .contentShape(Rectangle())

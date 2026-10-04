@@ -74,6 +74,18 @@ struct OperatorDesk {
         }
     }
 
+    /// `batch send`: `sent b1 with 2 comments`, or `{id, sentAt, commentIds}`.
+    func sendBatch(json: Bool) async -> ControlReply {
+        await answer { () async throws(ModelRefusal) in
+            let batch = try await model.sendBatch()
+            struct Sent: Encodable { var id: String; var sentAt: String; var commentIds: [String] }
+            let count = batch.commentIDs.count
+            return json
+                ? JSONLine.string(Sent(id: batch.id, sentAt: batch.sentAt.formatted(.iso8601), commentIds: batch.commentIDs))
+                : "sent \(batch.id) with \(count) comment\(count == 1 ? "" : "s")\n"
+        }
+    }
+
     /// `{id}`: what a change to one comment prints with `--json`.
     private struct Named: Encodable {
         var id: String

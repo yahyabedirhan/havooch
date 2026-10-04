@@ -53,8 +53,12 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id):
             wire = Wire(command: "comment.delete", id: id)
+        case .batchSend:
+            wire = Wire(command: "batch.send")
         case .screenshot(let path, let appearance):
             wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue)
+        case .wait(let timeoutSeconds):
+            wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
         }
         wire.holder = holder
         wire.json = json
@@ -115,6 +119,14 @@ public struct ControlMessage: Equatable, Sendable {
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
             return .commentDelete(id: try field(wire.id, "id", of: wire))
+        case "batch.send": return .batchSend
+        case "wait":
+            if let seconds = wire.timeoutSeconds, !(0...ControlRequest.longestTimeout).contains(seconds) {
+                throw .unreadable(
+                    "the control command `wait` needs a `timeoutSeconds` from 0 to \(ControlRequest.longestTimeout), not \(seconds)"
+                )
+            }
+            return .wait(timeoutSeconds: wire.timeoutSeconds)
         case "screenshot":
             let path = try absolute(wire)
             var appearance: ControlRequest.Appearance?
@@ -161,6 +173,7 @@ public struct ControlMessage: Equatable, Sendable {
         var time: Double?
         var appearance: String?
         var waitSeconds: Int?
+        var timeoutSeconds: Int?
         var id: String?
         var text: String?
         var region: ControlRequest.WireRegion?

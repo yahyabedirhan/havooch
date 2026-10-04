@@ -40,6 +40,16 @@ enum PlayerKey: Equatable {
     }
 }
 
+/// Cmd+Enter: send the queue. It works from anywhere in the window, also
+/// from inside the comment box, which a player's key never does.
+enum SendKey {
+    /// Whether a press is Cmd+Enter (Return, or the keypad's Enter) with no
+    /// other modifier, in the window itself: not in a panel or under a sheet.
+    static func matches(keyCode: UInt16, hasCommand: Bool, hasOtherModifiers: Bool, focus: KeyFocus) -> Bool {
+        (keyCode == 36 || keyCode == 76) && hasCommand && !hasOtherModifiers && !focus.inPanel && !focus.underSheet
+    }
+}
+
 /// Where the keyboard's focus is when a key is pressed.
 struct KeyFocus: Equatable {
     /// In a panel: the open panel's file list uses Space and the arrows.
@@ -69,7 +79,7 @@ extension KeyFocus {
 }
 
 /// The player's keys, watched for the whole app and given up while a text
-/// view has the focus.
+/// view has the focus, and Cmd+Enter, which sends from anywhere.
 @MainActor
 final class Shortcuts {
     private let model: ReviewModel
@@ -84,6 +94,14 @@ final class Shortcuts {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             // The monitor runs on the main thread, where events are handled.
             let handled = MainActor.assumeIsolated {
+                if let window = event.window, SendKey.matches(
+                    keyCode: event.keyCode,
+                    hasCommand: event.modifierFlags.contains(.command),
+                    hasOtherModifiers: !event.modifierFlags.isDisjoint(with: [.control, .option, .shift]),
+                    focus: KeyFocus(window: window)
+                ) {
+                    return self?.send() ?? false
+                }
                 guard let window = event.window, let key = PlayerKey.routed(
                     characters: event.charactersIgnoringModifiers,
                     keyCode: event.keyCode,
@@ -100,6 +118,14 @@ final class Shortcuts {
     func remove() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+    }
+
+    /// Cmd+Enter: the same send as `batch send`; false when no video is
+    /// open to send from.
+    private func send() -> Bool {
+        guard model.video != nil else { return false }
+        model.sendByPerson()
+        return true
     }
 
     /// Runs the key's action; false when no video is open to run it on.

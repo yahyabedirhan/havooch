@@ -60,6 +60,10 @@ public struct ControlClient: Sendable {
     public var timeout: TimeInterval
 
     public static let defaultTimeout: TimeInterval = 15
+    /// How long a long poll's connection may stay silent. The app writes a
+    /// heartbeat every few seconds while it holds one, so a silence this
+    /// long means the app died, however long the poll itself may take.
+    public static let longestSilence: TimeInterval = 10
 
     public init(socket: URL, holder: Holder, transport: any ControlTransport, timeout: TimeInterval = ControlClient.defaultTimeout) {
         self.socket = socket
@@ -79,9 +83,10 @@ public struct ControlClient: Sendable {
 
     /// Sends `request`, asking for JSON output when `json` is set. A request
     /// the app may hold before it answers (a `take` waiting in line) is
-    /// waited for that much longer.
+    /// waited for that much longer. A long poll (`wait`) is waited for as
+    /// long as the app keeps its connection alive.
     public func send(_ request: ControlRequest, json: Bool = false) -> Result<ControlReply, Failure> {
-        let timeout = timeout + request.wait
+        let timeout = request.isLongPoll ? Self.longestSilence : timeout + request.hold
         let data: Data
         do throws(ControlTransportFailure) {
             let message = ControlMessage(request, holder: holder, json: json)

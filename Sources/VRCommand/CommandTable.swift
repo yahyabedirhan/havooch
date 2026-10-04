@@ -15,7 +15,9 @@ public struct CommandTable: Sendable {
             StateCommand.entry,
             PlayerCommand.entry,
             CommentCommand.entry,
+            BatchCommand.entry,
             ScreenshotCommand.entry,
+            ListenerCommand.wait,
         ])
         return table
     }

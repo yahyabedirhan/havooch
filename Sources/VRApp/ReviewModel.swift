@@ -35,10 +35,26 @@ final class ReviewModel {
     private(set) var keyframes: Set<String> = []
     /// The comments whose region's crop is on disk.
     private(set) var crops: Set<String> = []
+    /// What the comment box holds, so that sending from inside the box
+    /// queues it first.
+    var composerText = ""
+    /// The batches sent and not finished, and the listener they go to. Kept
+    /// in memory for the run; the store takes its parcels over when reviews
+    /// are kept on disk.
+    private(set) var outbox = Outbox()
+    /// Why the last send a person asked for didn't work, for the send bar;
+    /// nil after one that did.
+    private(set) var sendFailure: String?
 
+    /// Told when a batch was posted to the outbox: the listener desk gives
+    /// it to a `wait` that is open.
+    @ObservationIgnored var posted: (@MainActor () -> Void)?
     @ObservationIgnored private let player: any Playing
     @ObservationIgnored private let frames: any FrameGrabbing
     @ObservationIgnored private let library: Library
+    @ObservationIgnored private let now: @MainActor () -> Date
+    /// Whether a send a person asked for is on its way.
+    @ObservationIgnored private var isSending = false
     /// Each comment's keyframe, and its region's crop, being written: nil
     /// once they're on disk, or why they couldn't be saved.
     @ObservationIgnored private var grabs: [String: Task<String?, Never>] = [:]
@@ -47,11 +63,18 @@ final class ReviewModel {
     /// over when reviews are kept on disk.
     @ObservationIgnored private var shelved: [String: ReviewSession] = [:]
 
-    init(player: any Playing, frames: any FrameGrabbing, library: Library, demoFolder: URL? = nil) {
+    init(
+        player: any Playing,
+        frames: any FrameGrabbing,
+        library: Library,
+        demoFolder: URL? = nil,
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.player = player
         self.frames = frames
         self.library = library
         self.demoFolder = demoFolder
+        self.now = now
     }
 
     var time: Double { player.time }
@@ -139,10 +162,18 @@ final class ReviewModel {
             throw ModelRefusal("couldn't number the comment: \(error.localizedDescription)")
         }
         session?.draft(id: id, time: time, region: region)
+        grabs[id] = grab(id, at: time, region: region, of: video)
+        return id
+    }
+
+    /// Writes the keyframe of the comment `id` from the video file, then
+    /// cuts its region's crop from it. The task ends with nil once they're
+    /// on disk, or with why they couldn't be saved.
+    private func grab(_ id: String, at time: Double, region: Region?, of video: VideoFile) -> Task<String?, Never> {
         let hash = video.info.contentHash
         let file = library.keyframeURL(hash, comment: id)
         let crop = library.cropURL(hash, comment: id)
-        grabs[id] = Task { [frames, weak self] in
+        return Task { [frames, weak self] in
             var failure: String?
             do {
                 _ = try await frames.writeKeyframe(of: video.url, at: time, to: file)
@@ -161,7 +192,6 @@ final class ReviewModel {
             }
             return failure
         }
-        return id
     }
 
     /// Gives the draft `id` its text and queues it.
@@ -169,6 +199,8 @@ final class ReviewModel {
         try change { (session) throws(ReviewRefusal) in try session.commit(id, text: text) }
         if composing == id { composing = nil }
         selection = id
+        // There's something to send again: an earlier refusal is stale.
+        sendFailure = nil
     }
 
     /// Drops the draft `id`, its keyframe and its crop.
@@ -230,6 +262,113 @@ final class ReviewModel {
         selection = id
     }
 
+    /// Sends every queued comment of the open video as one batch, for a
+    /// listener's `wait`: what Cmd+Enter and `batch send` both do. With no
+    /// listener, the batch waits in the outbox for the next one. A queued
+    /// comment whose keyframe or crop isn't on disk has it grabbed once
+    /// more, and is sent with what it has: a frame that can't be saved never
+    /// holds the batch back.
+    func sendBatch() async throws(ModelRefusal) -> Batch {
+        let video = try openVideo()
+        let hash = video.info.contentHash
+        var checked: Set<String> = []
+        // A comment queued while the frames of the others are waited for goes too.
+        while let comment = session?.queue.first(where: { !checked.contains($0.id) }) {
+            checked.insert(comment.id)
+            _ = await grabs[comment.id]?.value
+            let hasImages = keyframes.contains(comment.id) && (comment.region == nil || crops.contains(comment.id))
+            if !hasImages, review(of: hash)?.comment(comment.id) != nil {
+                let again = grab(comment.id, at: comment.time, region: comment.region, of: video)
+                grabs[comment.id] = again
+                _ = await again.value
+            }
+        }
+        guard self.video?.info.contentHash == hash else {
+            throw ModelRefusal("another video was opened while the batch was sent; nothing was sent")
+        }
+        guard session?.queue.isEmpty == false else {
+            throw ModelRefusal("there's nothing to send: no comment is queued")
+        }
+        let id: String
+        do {
+            id = try library.nextBatchID()
+        } catch {
+            throw ModelRefusal("couldn't number the batch: \(error.localizedDescription)")
+        }
+        var sent: Batch?
+        try change { (session) throws(ReviewRefusal) in sent = try session.send(batchID: id, at: now()) }
+        guard let sent else { throw ModelRefusal("the batch \(id) wasn't sent") }
+        outbox.post(batchID: id, videoHash: hash)
+        sendFailure = nil
+        posted?()
+        return sent
+    }
+
+    // MARK: - What the listener can do
+
+    /// Whether a listener is there now, and whether it has work.
+    var presence: Outbox.Presence { outbox.presence(at: now()) }
+
+    /// A `wait` opened, from the listener session `key`. From another
+    /// session than the last one, the batches that one took and didn't
+    /// finish are pending again and their comments back to `sent`.
+    func listenerArrived(key: String, name: String) {
+        for parcel in outbox.arrive(key: key, name: name, at: now()) {
+            changeReview(of: parcel.videoHash) { $0.requeue(parcel.batchID) }
+        }
+    }
+
+    /// The oldest batch waiting for the listener, now taken by it.
+    func takeParcel() -> Outbox.Parcel? {
+        outbox.take(at: now())
+    }
+
+    /// A taken batch's payload didn't reach its `wait`: it's pending again.
+    func parcelUndelivered(_ batchID: String) {
+        outbox.undelivered(batchID)
+    }
+
+    /// A batch nothing can be delivered of leaves the outbox.
+    func parcelDropped(_ batchID: String) {
+        outbox.finish(batchID)
+    }
+
+    /// A `wait` of the session `key` closed.
+    func listenerLeft(key: String, delivered: Bool) {
+        outbox.leave(key: key, at: now(), delivered: delivered)
+    }
+
+    /// What `wait` prints for `parcel`: the batch's comments that aren't
+    /// done or failed, with the paths of their images. The video needn't be
+    /// the open one.
+    func payload(for parcel: Outbox.Parcel) throws(ModelRefusal) -> BatchPayload {
+        guard let review = review(of: parcel.videoHash), let batch = review.batch(parcel.batchID) else {
+            throw ModelRefusal("there's no batch \(parcel.batchID)")
+        }
+        let hash = parcel.videoHash
+        return BatchPayload(
+            batch: batch,
+            session: review,
+            context: outbox.context(for: hash, text: contextText(of: hash)),
+            keyframePath: { self.keyframes.contains($0.id) ? self.library.keyframeURL(hash, comment: $0.id).path : nil },
+            cropPath: { self.crops.contains($0.id) ? self.library.cropURL(hash, comment: $0.id).path : nil },
+            transcript: { self.transcript(around: $0, of: hash) }
+        )
+    }
+
+    /// The context of the video `hash` as a listener gets it: its sidecar's
+    /// text and the person's note. Nil until the context is built; the
+    /// outbox already sends it once per listener session.
+    private func contextText(of hash: String) -> String? {
+        nil
+    }
+
+    /// The transcript lines around a comment's time. Empty until the
+    /// transcript is built.
+    private func transcript(around comment: Comment, of hash: String) -> [BatchPayload.Line] {
+        []
+    }
+
     /// How close to the end counts as at the end, in seconds.
     private static let endMargin = 0.05
 
@@ -264,6 +403,17 @@ final class ReviewModel {
     /// The review of the video `hash`: the open one, or one opened earlier.
     private func review(of hash: String) -> ReviewSession? {
         session?.video.contentHash == hash ? session : shelved[hash]
+    }
+
+    /// Changes the review of the video `hash`, open or opened earlier.
+    private func changeReview(of hash: String, _ body: (inout ReviewSession) -> Void) {
+        if session?.video.contentHash == hash, var changed = session {
+            body(&changed)
+            session = changed
+        } else if var changed = shelved[hash] {
+            body(&changed)
+            shelved[hash] = changed
+        }
     }
 
     /// Forgets a dropped comment's keyframe and crop and removes their
@@ -327,7 +477,29 @@ final class ReviewModel {
     func compose(region: Region? = nil) {
         guard video != nil, composing == nil else { return }
         try? pause()
+        composerText = ""
         composing = try? beginComment(region: region)
+    }
+
+    /// Cmd+Enter, and the send bar's button: what the comment box holds is
+    /// queued first, then the queue is sent (`sendBatch`). A refusal lands
+    /// in `sendFailure` for the send bar to show.
+    func sendByPerson() {
+        // A second press while the first is on its way would find nothing
+        // queued and say so over a send that worked.
+        guard video != nil, !isSending else { return }
+        if composing != nil, !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = commitComposer(text: composerText)
+        }
+        isSending = true
+        Task {
+            defer { isSending = false }
+            do throws(ModelRefusal) {
+                _ = try await sendBatch()
+            } catch {
+                sendFailure = error.reason
+            }
+        }
     }
 
     /// The person started to draw on the frame: the video pauses, so the

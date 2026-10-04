@@ -13,7 +13,7 @@ enum Theme {
     static let trackHeight: CGFloat = 4
     static let thumbSize: CGFloat = 12
     /// A comment's pin above the track, and the pin of the selected one.
-    static let pinSize: CGFloat = 9
+    static let pinSize: CGFloat = 11
     static let selectedPinSize: CGFloat = 13
     static let sidebarWidth: CGFloat = 340
     static let cardCorner: CGFloat = 8
@@ -47,5 +47,30 @@ enum Theme {
     /// A comment state as a word in a card.
     static func label(for state: CommentState) -> String {
         state.rawValue.prefix(1).uppercased() + state.rawValue.dropFirst()
+    }
+
+    /// The listener's presence as the send bar's chip says it.
+    static func label(for presence: Outbox.Presence) -> String {
+        switch presence {
+        case .absent: "No listener"
+        case .listening: "Listening"
+        case .working: "Working"
+        }
+    }
+
+    static func glyph(for presence: Outbox.Presence) -> String {
+        switch presence {
+        case .absent: "antenna.radiowaves.left.and.right.slash"
+        case .listening: "antenna.radiowaves.left.and.right"
+        case .working: "ellipsis.circle.fill"
+        }
+    }
+
+    static func colour(for presence: Outbox.Presence) -> Color {
+        switch presence {
+        case .absent: .secondary
+        case .listening: .green
+        case .working: .orange
+        }
     }
 }

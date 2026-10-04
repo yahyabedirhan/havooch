@@ -4,29 +4,39 @@ import VRWire
 
 /// The listening socket's POSIX side, off the main actor: accepts each
 /// connection on its own queue, reads the request to its end, has the server
-/// answer it, writes the reply and closes. A reply granting the lease that
-/// can't be written goes back to the server (`undelivered`).
+/// answer it, writes the reply and closes. While the server holds a long
+/// poll's connection, a heartbeat is written to it, so both ends notice the
+/// other going away. How writing a reply went that something hangs on (a
+/// granted lease, a delivered batch) goes back to the server (`written`).
 final class SocketListener: @unchecked Sendable {
-    typealias Respond = @Sendable (Data) async -> ControlServer.Answer
-    typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
+    typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
+    typealias Written = @MainActor @Sendable (ControlServer.Answer, Bool) -> Void
+    typealias Dropped = @MainActor @Sendable (UUID) -> Void
 
     private let path: String
     private let source: DispatchSourceRead
     private let respond: Respond
-    private let undelivered: Undelivered
+    private let written: Written
+    private let dropped: Dropped
     private let quit: @MainActor @Sendable () -> Void
+    private let heartbeat: TimeInterval
     private static let queue = DispatchQueue(label: "video-review.control", attributes: .concurrent)
     /// How long a connection may take to send its request or read the
     /// reply, so a client that stalls never holds a thread.
     private static let connectionTimeout: TimeInterval = 5
+    /// How often a held connection gets its heartbeat, in seconds: well
+    /// inside the silence the client allows (`ControlClient.longestSilence`).
+    static let heartbeat: TimeInterval = 2
 
     private init(
-        path: String, descriptor: Int32, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        quit: @escaping @MainActor @Sendable () -> Void
+        path: String, descriptor: Int32, heartbeat: TimeInterval, respond: @escaping Respond, written: @escaping Written,
+        dropped: @escaping Dropped, quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.path = path
+        self.heartbeat = heartbeat
         self.respond = respond
-        self.undelivered = undelivered
+        self.written = written
+        self.dropped = dropped
         self.quit = quit
         source = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: Self.queue)
         source.setEventHandler { [weak self] in self?.acceptAll(descriptor) }
@@ -34,13 +44,17 @@ final class SocketListener: @unchecked Sendable {
         source.resume()
     }
 
-    /// Listens at `socket`, owner-only. `respond` answers each request;
-    /// `undelivered` hears of a reply granting the lease that couldn't be
-    /// written; `quit` runs after a reply that says the app quits.
+    /// Listens at `socket`, owner-only. `respond` answers each request,
+    /// given a ticket that names its connection; `written` hears how
+    /// writing a reply went that something hangs on; `dropped` hears of a
+    /// held connection whose heartbeat couldn't be written; `quit` runs
+    /// after a reply that says the app quits.
     static func open(
         at socket: URL,
+        heartbeat: TimeInterval = SocketListener.heartbeat,
         respond: @escaping Respond,
-        undelivered: @escaping Undelivered,
+        written: @escaping Written,
+        dropped: @escaping Dropped,
         quit: @escaping @MainActor @Sendable () -> Void
     ) throws(ControlServer.Failure) -> SocketListener {
         let path = socket.path
@@ -64,7 +78,9 @@ final class SocketListener: @unchecked Sendable {
             unlink(path)
             throw .init(description: "couldn't listen on \(path): \(why)")
         }
-        return SocketListener(path: path, descriptor: descriptor, respond: respond, undelivered: undelivered, quit: quit)
+        return SocketListener(
+            path: path, descriptor: descriptor, heartbeat: heartbeat, respond: respond, written: written, dropped: dropped, quit: quit
+        )
     }
 
     /// Whether something accepts a connection at `address`.
@@ -94,22 +110,74 @@ final class SocketListener: @unchecked Sendable {
 
     /// Answers one connection. One that sends nothing, such as another
     /// app's look at whether this one listens, gets no reply. The client
-    /// half-closes once it has sent, so its hanging up shows only when the
-    /// reply can't be written: a granted lease then goes back.
+    /// half-closes once it has sent, so its hanging up shows only when
+    /// something can't be written: the reply, or a long poll's heartbeat.
     private func serve(_ connection: Int32) {
         guard case .data(let request) = UnixSocket.readToEnd(connection, limit: ControlRequest.largestMessage), !request.isEmpty else {
             Darwin.close(connection)
             return
         }
         let respond = respond
-        let undelivered = undelivered
+        let written = written
+        let dropped = dropped
         let quit = quit
+        let ticket = UUID()
+        let pulse = ControlServer.isLongPoll(request)
+            ? Pulse(connection: connection, every: heartbeat, on: Self.queue) { Task { await dropped(ticket) } }
+            : nil
         Task {
-            let answer = await respond(request)
-            let delivered = UnixSocket.writeAll(connection, answer.reply.encoded())
+            let answer = await respond(request, ticket)
+            let reply = answer.reply.encoded()
+            let delivered = pulse?.finish(writing: reply) ?? UnixSocket.writeAll(connection, reply)
             Darwin.close(connection)
-            if !delivered, answer.granted != nil { await undelivered(answer) }
+            if answer.hangsOnDelivery { await written(answer, delivered) }
             if answer.quits { await quit() }
+        }
+    }
+}
+
+/// A held connection's heartbeat: one space byte every few seconds until the
+/// reply is written. JSON ignores space before it, so the reply still
+/// reads. A beat that can't be written means the client is gone.
+private final class Pulse: @unchecked Sendable {
+    private let connection: Int32
+    private let timer: DispatchSourceTimer
+    private let lock = NSLock()
+    /// Set once the reply is being written, or a beat failed: no more beats.
+    private var isOver = false
+    private var isGone = false
+
+    init(connection: Int32, every interval: TimeInterval, on queue: DispatchQueue, gone: @escaping @Sendable () -> Void) {
+        self.connection = connection
+        timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            guard let self, self.beat() == false else { return }
+            gone()
+        }
+        timer.resume()
+    }
+
+    /// Writes one beat; false when it couldn't be written, nil once the
+    /// heartbeat is over.
+    private func beat() -> Bool? {
+        lock.withLock {
+            guard !isOver else { return nil }
+            if UnixSocket.writeAll(connection, Data([0x20])) { return true }
+            isOver = true
+            isGone = true
+            timer.cancel()
+            return false
+        }
+    }
+
+    /// Ends the heartbeat and writes the reply after the last beat; false
+    /// when it couldn't be written, or the client was gone already.
+    func finish(writing reply: Data) -> Bool {
+        lock.withLock {
+            if !isOver { timer.cancel() }
+            isOver = true
+            return !isGone && UnixSocket.writeAll(connection, reply)
         }
     }
 }

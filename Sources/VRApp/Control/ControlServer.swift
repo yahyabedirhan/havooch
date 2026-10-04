@@ -5,19 +5,28 @@ import VRWire
 /// App control's server: while the app runs it listens on `control.sock` in
 /// the support folder and answers one JSON request per connection with one
 /// reply. Each request is decoded, checked for its version, passed the
-/// lease's gate when it's an operator's, and dispatched. Every refusal is a
+/// lease's gate when it's an operator's, and dispatched: an operator's to
+/// `OperatorDesk`, a listener's to `ListenerDesk`. Every refusal is a
 /// reply, so the `video-review` command always has a line to print. A
 /// `take`'s reply granting the lease that can't be written (its client gone)
-/// gives the lease up at once.
+/// gives the lease up at once; a `wait`'s batch that can't be written is
+/// pending again.
 @MainActor
 final class ControlServer {
-    /// A reply, whether the app quits once it's written, and the lease a
-    /// `control take`'s reply grants, released when the reply can't be
-    /// written (`undelivered`).
+    /// A reply, whether the app quits once it's written, and what hangs on
+    /// the reply being written: the lease a `control take`'s reply grants,
+    /// released when it can't be (`undelivered`), and the batch a `wait`'s
+    /// reply delivers to the listener session `listener`, pending again
+    /// when it can't be.
     struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: ControlLease.Term?
+        var batch: String?
+        var listener: String?
+
+        /// Whether the server hears how writing the reply went (`written`).
+        var hangsOnDelivery: Bool { granted != nil || batch != nil }
     }
 
     /// Why the server couldn't start listening.
@@ -28,6 +37,8 @@ final class ControlServer {
     let socket: URL
     private let model: ReviewModel
     private let desk: OperatorDesk
+    /// The listener's requests, and the `wait`s holding their connections.
+    let listeners: ListenerDesk
     private let quit: @MainActor () -> Void
     /// The time the lease is decided at, and the zone its refusals name it in.
     private let now: @MainActor () -> Date
@@ -70,6 +81,10 @@ final class ControlServer {
         self.socket = socket
         self.model = model
         self.desk = desk
+        let listeners = ListenerDesk(model: model)
+        self.listeners = listeners
+        // A batch the person or an operator sends goes to a wait that is open.
+        model.posted = { [weak listeners] in listeners?.outboxChanged() }
         self.lease = lease
         self.indicator = indicator
         self.now = now
@@ -87,8 +102,9 @@ final class ControlServer {
     /// nothing done. A quit hands the lease back in its reply, for a
     /// relaunch to pass on. A `take` that waits in line is answered once it
     /// gets the lease or its wait runs out, other requests answered
-    /// meanwhile.
-    func reply(to data: Data) async -> Answer {
+    /// meanwhile; so is a listener's `wait`, until a batch comes. `ticket`
+    /// names the request's connection, for `dropped`.
+    func reply(to data: Data, ticket: UUID = UUID()) async -> Answer {
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)
@@ -139,14 +155,39 @@ final class ControlServer {
             return Answer(reply: await desk.editComment(id, text: text, json: json))
         case .commentDelete(let id):
             return Answer(reply: await desk.deleteComment(id, json: json))
+        case .batchSend:
+            return Answer(reply: await desk.sendBatch(json: json))
         case .screenshot(let path, let appearance):
             return Answer(reply: await desk.screenshot(to: path, appearance: appearance, json: json))
+        case .wait(let seconds):
+            return await listeners.wait(by: message.holder, timeout: seconds, ticket: ticket)
         }
     }
 
     /// What the app shows, with the lease as it is now.
     private func report() -> StateReport {
         StateReport(model: model, lease: lease.status(at: now()))
+    }
+
+    // MARK: - What hangs on a reply
+
+    /// Whether the app holds the connection of the request `data` for as
+    /// long as it takes, writing a heartbeat meanwhile: a listener's `wait`.
+    nonisolated static func isLongPoll(_ data: Data) -> Bool {
+        (try? ControlMessage.decode(data))?.request.isLongPoll ?? false
+    }
+
+    /// How writing a reply went, for one something hangs on
+    /// (`Answer.hangsOnDelivery`): a granted lease that didn't arrive is
+    /// given up, a `wait` whose batch was written or wasn't closes.
+    func written(_ answer: Answer, delivered: Bool) {
+        if !delivered { undelivered(answer) }
+        listeners.written(answer, delivered: delivered)
+    }
+
+    /// The connection `ticket` went away while the app held it.
+    func dropped(_ ticket: UUID) {
+        listeners.dropped(ticket)
     }
 
     // MARK: - Taking turns
@@ -270,10 +311,12 @@ final class ControlServer {
     /// doesn't listen.
     func start() throws(Failure) {
         guard listener == nil else { return }
-        listener = try SocketListener.open(at: socket) { [weak self] data in
-            await self?.reply(to: data) ?? Answer(reply: .refused("video-review is quitting"))
-        } undelivered: { [weak self] answer in
-            self?.undelivered(answer)
+        listener = try SocketListener.open(at: socket) { [weak self] data, ticket in
+            await self?.reply(to: data, ticket: ticket) ?? Answer(reply: .refused("video-review is quitting"))
+        } written: { [weak self] answer, delivered in
+            self?.written(answer, delivered: delivered)
+        } dropped: { [weak self] ticket in
+            self?.dropped(ticket)
         } quit: { [weak self] in
             self?.quit()
         }
@@ -292,5 +335,6 @@ final class ControlServer {
             waiter.answer.resume(returning: Answer(reply: .refused("video-review is quitting")))
         }
         waiters = [:]
+        listeners.stop()
     }
 }

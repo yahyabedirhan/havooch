@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The review beside the video: the open video's comments as cards, in time
-/// order. The selected comment's card is scrolled into view.
+/// order, with the send bar under them. The selected comment's card is
+/// scrolled into view.
 struct Sidebar: View {
     let model: ReviewModel
 
@@ -12,7 +13,7 @@ struct Sidebar: View {
                 Text("Comments")
                     .font(.headline)
                 Spacer()
-                Text("\(model.session?.queue.count ?? 0) queued")
+                Text("\(comments.count)")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -45,6 +46,8 @@ struct Sidebar: View {
                     }
                 }
             }
+            Divider()
+            SendBar(model: model)
         }
         .frame(width: Theme.sidebarWidth)
         .frame(maxHeight: .infinity)

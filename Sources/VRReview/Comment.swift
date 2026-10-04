@@ -52,12 +52,17 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
     /// frame.
     public var region: Region?
     public var state: CommentState
+    /// The batch it was sent in, or nil while it wasn't sent.
+    public var batchID: String?
 
-    public init(id: String, time: Double, text: String = "", region: Region? = nil, state: CommentState = .draft) {
+    public init(
+        id: String, time: Double, text: String = "", region: Region? = nil, state: CommentState = .draft, batchID: String? = nil
+    ) {
         self.id = id
         self.time = time
         self.text = text
         self.region = region
         self.state = state
+        self.batchID = batchID
     }
 }

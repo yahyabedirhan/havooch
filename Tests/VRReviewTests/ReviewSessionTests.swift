@@ -158,9 +158,81 @@ private func refusal(_ body: () throws(ReviewRefusal) -> Void) -> String? {
         var session = ReviewSession(video: video)
         session.draft(id: "c1", time: 10)
         try session.commit("c1", text: "too fast")
+        _ = try session.send(batchID: "b1", at: Date(timeIntervalSince1970: 1_000))
+        session.draft(id: "c2", time: 12)
 
         let data = try JSONEncoder().encode(session)
 
         #expect(try JSONDecoder().decode(ReviewSession.self, from: data) == session)
+    }
+
+    @Test func sendingMakesOneBatchOfEveryQueuedComment() throws {
+        var session = ReviewSession(video: video)
+        for (id, time) in [("c1", 15.0), ("c2", 3), ("c3", 10)] {
+            session.draft(id: id, time: time)
+            if id != "c3" { try session.commit(id, text: id) }
+        }
+        let sentAt = Date(timeIntervalSince1970: 1_000)
+
+        let batch = try session.send(batchID: "b1", at: sentAt)
+
+        // In time order; the draft isn't sent.
+        #expect(batch == Batch(id: "b1", sentAt: sentAt, commentIDs: ["c2", "c1"]))
+        #expect(session.batches == [batch])
+        #expect(session.batch("b1") == batch)
+        #expect(session.comments.map(\.state) == [.sent, .draft, .sent])
+        #expect(session.comments.map(\.batchID) == ["b1", nil, "b1"])
+        #expect(session.queue.isEmpty)
+        #expect(!session.isFinished("b1"))
+    }
+
+    @Test func sendingWithNothingQueuedIsRefused() {
+        var session = ReviewSession(video: video)
+        session.draft(id: "c1", time: 10)
+
+        #expect(refusal { () throws(ReviewRefusal) in _ = try session.send(batchID: "b1", at: Date()) }
+            == "there's nothing to send: no comment is queued")
+        #expect(session.batches.isEmpty)
+    }
+
+    @Test func aSecondSendTakesOnlyWhatWasQueuedSince() throws {
+        var session = ReviewSession(video: video)
+        session.draft(id: "c1", time: 10)
+        try session.commit("c1", text: "one")
+        _ = try session.send(batchID: "b1", at: Date())
+        session.draft(id: "c2", time: 5)
+        try session.commit("c2", text: "two")
+
+        let second = try session.send(batchID: "b2", at: Date())
+
+        #expect(second.commentIDs == ["c2"])
+        #expect(session.comment("c1")?.batchID == "b1")
+        #expect(session.comment("c2")?.batchID == "b2")
+    }
+
+    /// A batch whose comments a listener had moved on, as the store keeps it.
+    private func taken(_ states: [CommentState]) throws -> ReviewSession {
+        let comments = states.enumerated().map { index, state in
+            #"{"id":"c\#(index + 1)","time":\#(index),"text":"x","state":"\#(state.rawValue)","batchID":"b1"}"#
+        }
+        let json = """
+            {"video":{"path":"/Users/me/sample.mp4","contentHash":"abc","duration":21.233,"title":"sample"},
+             "comments":[\(comments.joined(separator: ","))],
+             "batches":[{"id":"b1","sentAt":0,"commentIDs":["c1"]}]}
+            """
+        return try JSONDecoder().decode(ReviewSession.self, from: Data(json.utf8))
+    }
+
+    @Test func aRequeuePutsUnfinishedCommentsBackToSentAndLeavesTheFinishedOnes() throws {
+        var session = try taken([.sent, .acknowledged, .working, .done, .failed])
+
+        session.requeue("b1")
+
+        #expect(session.comments.map(\.state) == [.sent, .sent, .sent, .done, .failed])
+    }
+
+    @Test func aBatchIsFinishedOnceEveryCommentIsDoneOrFailed() throws {
+        #expect(try taken([.done, .failed]).isFinished("b1"))
+        #expect(try !taken([.done, .working]).isFinished("b1"))
     }
 }

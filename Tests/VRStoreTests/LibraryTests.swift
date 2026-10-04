@@ -18,6 +18,26 @@ import VRStore
         #expect(try Library(root: root).nextCommentID() == "c3")
     }
 
+    @Test func batchIdsCountUpBesideTheCommentIds() throws {
+        let root = scratchFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        #expect(try Library(root: root).nextCommentID() == "c1")
+        #expect(try Library(root: root).nextBatchID() == "b1")
+        #expect(try Library(root: root).nextBatchID() == "b2")
+        #expect(try Library(root: root).nextCommentID() == "c2")
+    }
+
+    @Test func anIndexWrittenBeforeBatchesWereNumberedStillReads() throws {
+        let root = scratchFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data(#"{"nextComment":7}"#.utf8).write(to: root.appendingPathComponent("index.json"))
+
+        #expect(try Library(root: root).nextBatchID() == "b1")
+        #expect(try Library(root: root).nextCommentID() == "c7")
+    }
+
     @Test func aKeyframeIsNamedByItsVideoAndItsComment() {
         let library = Library(root: URL(fileURLWithPath: "/Users/me/support", isDirectory: true))
 

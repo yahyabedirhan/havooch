@@ -126,18 +126,19 @@ struct Rig {
         let rig = Rig()
         let answer = await rig.send(.state, json: true)
         #expect(answer.reply.output ==
-            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"comments":[],"lease":null,"player":{"playing":false,"time":0},"queue":[],"time":0,"video":null}"# + "\n")
+            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"batches":[],"comments":[],"lease":null,"listener":{"name":null,"presence":"absent"},"player":{"playing":false,"time":0},"queue":[],"time":0,"video":null}"# + "\n")
     }
 
     @Test func stateAsLinesNamesTheVideoAndThePlayer() async {
         let rig = Rig()
-        #expect(await rig.send(.state).reply.output == "video: none\nlease: free\n")
+        #expect(await rig.send(.state).reply.output == "video: none\nlistener: absent\nlease: free\n")
 
         _ = await rig.send(.playerOpen(path: fixtureVideo.path))
         _ = await rig.send(.playerSeek(seconds: 10))
         #expect(await rig.send(.state).reply.output == """
             video: sample (0:21.233) \(fixtureVideo.path)
             player: paused at 0:10.000
+            listener: absent
             lease: Claude Code in /Users/me/repo, 60s left, 0 waiting
 
             """)
@@ -224,6 +225,7 @@ struct Rig {
             demo: \(demo.path)
             lease: free
             video: none
+            listener: absent
 
             """)
 
