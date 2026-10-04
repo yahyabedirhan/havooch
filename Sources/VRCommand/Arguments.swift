@@ -64,6 +64,8 @@ enum Arguments {
         return .success((first, arguments[1]))
     }
 
+    /// Whether a text is nothing but white space: the command line's one
+    /// check, before the app's own (`ReviewSession.isBlank`).
     static func isBlank(_ text: String) -> Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

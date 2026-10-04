@@ -88,9 +88,10 @@ private struct OneLine: Transcriber {
             .subtitles(both.appendingPathComponent("sample.srt")),
             .speech,
         ])
-        #expect(TranscriptSources.best(for: both.appendingPathComponent("sample.mp4")).name == "voiceover")
-        #expect(TranscriptSources.best(for: subtitled.appendingPathComponent("sample.mp4")) == .subtitles(subtitled.appendingPathComponent("sample.srt")))
-        #expect(TranscriptSources.best(for: bare.appendingPathComponent("sample.mp4")) == .speech)
+        #expect(TranscriptSources.candidates(for: both.appendingPathComponent("sample.mp4")).map(\.name) == ["voiceover", "subtitles", "speech"])
+        #expect(TranscriptSources.candidates(for: subtitled.appendingPathComponent("sample.mp4"))
+            == [.subtitles(subtitled.appendingPathComponent("sample.srt")), .speech])
+        #expect(TranscriptSources.candidates(for: bare.appendingPathComponent("sample.mp4")) == [.speech])
     }
 
     @Test func subtitlesNeedTheVideosBaseNameAndSrtComesBeforeVtt() throws {
@@ -99,19 +100,22 @@ private struct OneLine: Transcriber {
         try Data("WEBVTT\n".utf8).write(to: folder.appendingPathComponent("sample.vtt"))
         try Data().write(to: folder.appendingPathComponent("other.mp4"))
 
-        #expect(TranscriptSources.best(for: folder.appendingPathComponent("sample.mp4")) == .subtitles(folder.appendingPathComponent("sample.srt")))
+        #expect(TranscriptSources.candidates(for: folder.appendingPathComponent("sample.mp4"))
+            == [.subtitles(folder.appendingPathComponent("sample.srt")), .speech])
         // Another video of the folder has no subtitles of its own.
-        #expect(TranscriptSources.best(for: folder.appendingPathComponent("other.mp4")) == .speech)
+        #expect(TranscriptSources.candidates(for: folder.appendingPathComponent("other.mp4")) == [.speech])
 
         try FileManager.default.removeItem(at: folder.appendingPathComponent("sample.srt"))
-        #expect(TranscriptSources.best(for: folder.appendingPathComponent("sample.mp4")) == .subtitles(folder.appendingPathComponent("sample.vtt")))
+        #expect(TranscriptSources.candidates(for: folder.appendingPathComponent("sample.mp4"))
+            == [.subtitles(folder.appendingPathComponent("sample.vtt")), .speech])
     }
 
     @Test func eachSourceIsReadByItsOwnTranscriber() async throws {
         let video = fixture.appendingPathComponent("sample.mp4")
         let spoken = try await TranscriptSources.speech.transcriber(frameRate: 30, speech: OneLine()).lines(for: video, in: 0...30)
         #expect(spoken.map(\.text) == ["spoken"])
-        let scenes = try await TranscriptSources.best(for: video).transcriber(frameRate: 30, speech: OneLine()).lines(for: video, in: 0...30)
+        let first = try #require(TranscriptSources.candidates(for: video).first)
+        let scenes = try await first.transcriber(frameRate: 30, speech: OneLine()).lines(for: video, in: 0...30)
         #expect(scenes.map(\.text) == [pause, send, answer])
     }
 }

@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import ImageIO
-import UniformTypeIdentifiers
 import VRReview
 
 /// What the model asks for a comment's picture: AVFoundation in the app, a
@@ -32,7 +31,7 @@ struct FrameGrabber: FrameGrabbing {
     func writeKeyframe(of video: URL, at seconds: Double, to file: URL) async throws -> CGSize {
         let frame = try await Self.frame(of: video, at: seconds)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Self.write(frame.image, to: file)
+        try PNGFile.write(frame.image, to: file)
         return CGSize(width: frame.image.width, height: frame.image.height)
     }
 
@@ -47,7 +46,7 @@ struct FrameGrabber: FrameGrabbing {
             throw FrameFailure(errorDescription: "couldn't cut the region \(region.text) from \(keyframe.path)")
         }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Self.write(crop, to: file)
+        try PNGFile.write(crop, to: file)
     }
 
     /// The frame shown at `seconds`, at the track's natural size with its
@@ -65,17 +64,6 @@ struct FrameGrabber: FrameGrabbing {
             generator.requestedTimeToleranceBefore = endTolerance
             let frame = try await generator.image(at: time)
             return (frame.image, frame.actualTime.seconds)
-        }
-    }
-
-    /// `image` written as a PNG at `file`, replacing what's there.
-    private static func write(_ image: CGImage, to file: URL) throws {
-        guard let destination = CGImageDestinationCreateWithURL(file as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw FrameFailure(errorDescription: "couldn't write \(file.path)")
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw FrameFailure(errorDescription: "couldn't write \(file.path)")
         }
     }
 }

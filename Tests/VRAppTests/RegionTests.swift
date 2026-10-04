@@ -279,7 +279,7 @@ private let video = CGSize(width: 1920, height: 1080)
         #expect(!rig.model.beginDrawing())
 
         #expect(rig.model.commitComposer(text: "this button"))
-        await rig.settle { rig.model.cropURL(for: draft) != nil }
+        await settle { rig.model.cropURL(for: draft) != nil }
         let comment = try #require(try await rig.comments().first)
         #expect(comment["state"] as? String == "queued")
         #expect(comment["region"] as? [String: Double] == ["x": 0.1, "y": 0.2, "w": 0.3, "h": 0.25])
@@ -291,7 +291,7 @@ private let video = CGSize(width: 1920, height: 1080)
         let rig = await CommentRig().opened()
         rig.model.compose(region: try Region(x: 0.1, y: 0.2, w: 0.3, h: 0.25))
         let draft = try #require(rig.model.composing)
-        await rig.settle { rig.model.cropURL(for: draft) != nil }
+        await settle { rig.model.cropURL(for: draft) != nil }
         #expect(FileManager.default.fileExists(atPath: rig.crop(draft).path))
 
         // What Escape does, in the comment box and on the player.
@@ -315,8 +315,8 @@ private let video = CGSize(width: 1920, height: 1080)
 
         rig.model.cancelComposer()
         // The images land after the cancel, and remove themselves.
-        await rig.settle { written.value == 1 }
-        await rig.settle { !FileManager.default.fileExists(atPath: rig.keyframe(draft).path) }
+        await settle { written.value == 1 }
+        await settle { !FileManager.default.fileExists(atPath: rig.keyframe(draft).path) }
 
         #expect(!FileManager.default.fileExists(atPath: rig.crop(draft).path))
         #expect(!FileManager.default.fileExists(atPath: rig.keyframe(draft).path))
@@ -394,7 +394,7 @@ private let video = CGSize(width: 1920, height: 1080)
         rig.model.compose(region: drawn)
         let fromWindow = try #require(rig.model.composing)
         #expect(rig.model.commitComposer(text: "from the window"))
-        await rig.settle { rig.model.cropURL(for: fromWindow) != nil }
+        await settle { rig.model.cropURL(for: fromWindow) != nil }
 
         // The command line: the same time and region.
         let reply = await rig.send(.commentAdd(text: "from the command line", at: 10, region: ControlRequest.WireRegion(x: 0.25, y: 0.2, w: 0.5, h: 0.3)))

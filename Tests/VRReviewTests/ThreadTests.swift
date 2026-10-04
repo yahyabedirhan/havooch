@@ -231,6 +231,38 @@ private func states(_ session: ReviewSession) -> [CommentState] {
         #expect(session.openQuestion(on: "c2")?.text == "and why?")
     }
 
+    @Test func theAnsweredQuestionAskedAgainIsOwedItsAnswerAndAsksNothing() throws {
+        var session = try sentSession()
+        try session.ask("c1", question: "which part?", at: noon)
+        try session.answer("c1", text: "the intro", at: noon)
+
+        let owed = try session.ask("c1", question: " which part? ", at: noon)
+
+        #expect(owed?.question.text == "which part?")
+        #expect(owed?.answer.text == "the intro")
+        #expect(session.comment("c1")?.thread.count == 2)
+        // Owed until an ask got it.
+        #expect(session.unheardAnswer(on: "c1") == owed)
+    }
+
+    @Test func anotherQuestionIsAskedAndTheOldAnswerIsOwedNoLonger() throws {
+        var session = try sentSession()
+        try session.ask("c1", question: "which part?", at: noon)
+        try session.answer("c1", text: "the intro", at: noon)
+
+        let owed = try session.ask("c1", question: "and how long?", at: noon)
+
+        #expect(owed == nil)
+        #expect(session.openQuestion(on: "c1")?.text == "and how long?")
+        #expect(session.comment("c1")?.thread.map(\.text) == ["which part?", "the intro", "and how long?"])
+        #expect(session.unheard == [])
+        // A question that is refused leaves the answer owed.
+        try session.ask("c2", question: "which button?", at: noon)
+        try session.answer("c2", text: "the blue one", at: noon)
+        #expect(refusal { () throws(ReviewRefusal) in try session.ask("c2", question: "  ", at: noon) } == "a message needs its text")
+        #expect(session.unheardAnswer(on: "c2")?.answer.text == "the blue one")
+    }
+
     @Test func aNewQuestionAfterAnAnswerThatWasHeardIsOpen() throws {
         var session = try sentSession()
         try session.ask("c1", question: "which part?", at: noon)

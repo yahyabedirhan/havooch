@@ -105,7 +105,7 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// Replaces the note, without the white space around it. An empty text
     /// takes the note away.
     public mutating func setNote(_ text: String) {
-        note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        note = Self.trimmed(text)
     }
 
     /// Starts a comment at `time`, on `region` of the frame when one was
@@ -228,16 +228,28 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// question at a time: while one is open, another is refused. The open
     /// question asked again in the same words is the same question, and
     /// adds nothing.
-    public mutating func ask(_ id: String, question: String, at now: Date) throws(ReviewRefusal) {
+    ///
+    /// Returns the answer the asker is owed, when the question is, in the
+    /// same words, the one whose answer no `ask` heard yet: nothing is
+    /// asked then. Another question is never answered by that old answer:
+    /// it's asked, and the old answer counts as heard and stays in the
+    /// thread.
+    @discardableResult
+    public mutating func ask(_ id: String, question: String, at now: Date) throws(ReviewRefusal) -> Exchange? {
         let text = try Self.said(question)
         let index = try sent(id, toBe: "asked about")
         if let open = openQuestion(on: id) {
             guard open.text == text else {
                 throw ReviewRefusal("\(id) has a question the person hasn't answered: \(open.text)")
             }
-            return
+            return nil
+        }
+        if let owed = unheardAnswer(on: id) {
+            if owed.question.text == text { return owed }
+            unheard.remove(id)
         }
         comments[index].thread.append(ThreadMessage(author: .agent, kind: .question, text: text, at: now))
+        return nil
     }
 
     /// Adds the person's answer to the open question on the comment `id`.
@@ -259,20 +271,28 @@ public struct ReviewSession: Codable, Equatable, Sendable {
 
     // MARK: - Rules
 
+    /// A text without the white space around it, as every text is kept.
+    public static func trimmed(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Whether a text is nothing but white space: nothing to keep.
+    public static func isBlank(_ text: String) -> Bool {
+        trimmed(text).isEmpty
+    }
+
     /// A comment's text as it's kept: without the space around it, and not
     /// empty.
     public static func written(_ text: String) throws(ReviewRefusal) -> String {
-        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !kept.isEmpty else { throw ReviewRefusal("a comment needs its text") }
-        return kept
+        guard !isBlank(text) else { throw ReviewRefusal("a comment needs its text") }
+        return trimmed(text)
     }
 
     /// A thread message's text as it's kept: without the space around it,
     /// and not empty.
     public static func said(_ text: String) throws(ReviewRefusal) -> String {
-        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !kept.isEmpty else { throw ReviewRefusal("a message needs its text") }
-        return kept
+        guard !isBlank(text) else { throw ReviewRefusal("a message needs its text") }
+        return trimmed(text)
     }
 
     private func batchIndex(of id: String) throws(ReviewRefusal) -> Int {

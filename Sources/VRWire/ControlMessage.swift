@@ -164,6 +164,11 @@ public struct ControlMessage: Equatable, Sendable {
             )
         case "screenshot":
             let path = try absolute(wire)
+            // The command checks this too, but the app answers whoever
+            // writes to its socket, and it writes a PNG whatever the name.
+            guard path.lowercased().hasSuffix(".png") else {
+                throw .unreadable("the control command `screenshot` needs a `path` that ends in `.png`, not `\(path)`")
+            }
             var appearance: ControlRequest.Appearance?
             if let name = wire.appearance {
                 guard let known = ControlRequest.Appearance(rawValue: name) else {

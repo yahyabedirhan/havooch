@@ -104,6 +104,18 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         }
     }
 
+    @Test func aScreenshotPathThatDoesNotEndInPngIsRefused() {
+        #expect(throws: ControlProtocolError.unreadable("the control command `screenshot` needs a `path` that ends in `.png`, not `/tmp/shot.jpg`")) {
+            try ControlMessage.decode(raw(#""command":"screenshot","path":"/tmp/shot.jpg","version":1,\#(holderJSON)"#))
+        }
+        #expect(throws: ControlProtocolError.self) {
+            try ControlMessage.decode(raw(#""command":"screenshot","path":"/etc/hosts","version":1,\#(holderJSON)"#))
+        }
+        // As the command takes it: the ending in any case.
+        let upper = try? ControlMessage.decode(raw(#""command":"screenshot","path":"/tmp/SHOT.PNG","version":1,\#(holderJSON)"#))
+        #expect(upper?.request == .screenshot(path: "/tmp/SHOT.PNG", appearance: nil))
+    }
+
     @Test func aNegativeTimeIsRefused() {
         #expect(throws: ControlProtocolError.self) {
             try ControlMessage.decode(raw(#""command":"player.seek","time":-1,"version":1,\#(holderJSON)"#))

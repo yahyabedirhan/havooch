@@ -6,6 +6,7 @@ import VRReview
 ///
 ///     index.json                             the next comment and batch numbers; comment id → hash; batch id → hash
 ///     outbox.json                            the batches sent and not finished
+///     last-video.json                        the video that was open last: its path and content hash
 ///     videos/<contentHash>/review.json       the video's review
 ///     videos/<contentHash>/frames/<id>.png   a comment's keyframe
 ///     videos/<contentHash>/crops/<id>.png    the crop of a comment's region
@@ -65,6 +66,31 @@ public struct Library: Sendable {
     /// Keeps the outbox's parcels. Its listener isn't kept.
     public func save(_ outbox: Outbox) throws {
         try JSONFile.write(outbox.parcels, to: outboxFile)
+    }
+
+    // MARK: - The last open video
+
+    /// The video that was open last, for the next launch to open again.
+    public struct LastVideo: Codable, Equatable, Sendable {
+        public var path: String
+        public var contentHash: String
+
+        public init(path: String, contentHash: String) {
+            self.path = path
+            self.contentHash = contentHash
+        }
+    }
+
+    /// The video that was open last in this library; nil when none was
+    /// kept, or what was kept can't be read.
+    public func lastVideo() -> LastVideo? {
+        (try? JSONFile.read(LastVideo.self, at: lastVideoFile)) ?? nil
+    }
+
+    /// Keeps which video is open, written only when it changed.
+    public func keep(lastVideo video: LastVideo) throws {
+        guard lastVideo() != video else { return }
+        try JSONFile.write(video, to: lastVideoFile)
     }
 
     // MARK: - Ids
@@ -135,6 +161,10 @@ public struct Library: Sendable {
 
     private var outboxFile: URL {
         root.appendingPathComponent("outbox.json")
+    }
+
+    private var lastVideoFile: URL {
+        root.appendingPathComponent("last-video.json")
     }
 
     private var indexFile: URL {

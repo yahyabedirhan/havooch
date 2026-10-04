@@ -128,11 +128,13 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(rig.server.lease.current(at: rig.clock.now)?.holder == third)
     }
 
-    @Test func aTakeWhoseWaitRunsOutIsRefusedWithWhoStillHoldsTheLeaseAndLeavesTheLine() async {
+    @Test func aTakeWhoseWaitRunsOutIsRefusedWithWhoStillHoldsTheLeaseAndLeavesTheLine() async throws {
         let rig = Rig()
         _ = await rig.send(.controlTake(waitSeconds: nil), by: agent)
 
-        let waited = await rig.send(.controlTake(waitSeconds: 1), by: other)
+        let waiting = try await rig.queue(other, seconds: 1, as: 1)
+        rig.clock.advance(by: 1)
+        let waited = await waiting.value
 
         #expect(waited.reply == .refused(
             "waited 1s; video-review is still in use by Claude Code in /work/shop until 00:05:00 (299s left)"
@@ -148,8 +150,8 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(rig.server.indicator.lease.status(at: rig.clock.now)
             == LeaseStatus(holder: "Claude Code", place: "/work/shop", secondsLeft: 60, waiting: 1))
 
-        rig.clock.set(60)
-        rig.server.settleLease()
+        // No request comes: the server's own timer ends the lease.
+        rig.clock.advance(by: 60)
 
         #expect(await waiting.value.reply == .done(#"{"held":true,"until":"1970-01-01T00:06:00Z"}"# + "\n"))
         #expect(rig.server.indicator.lease.status(at: rig.clock.now)

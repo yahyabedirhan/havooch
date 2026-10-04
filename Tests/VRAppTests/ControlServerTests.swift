@@ -33,13 +33,44 @@ let fixtureVideo = URL(fileURLWithPath: #filePath)
 
 private let holder = Holder(key: "test", name: "Claude Code", place: "/Users/me/repo")
 
-/// The time the server decides the lease at, set by the test.
+/// The time the app reads, set by the test, and what the app does later
+/// (`Later`): a call the app asked for is made when the test moves the time
+/// past it with `advance`, at once and on the test's own path. No test
+/// waits for real seconds.
 @MainActor
 final class FakeClock {
     var now = Date(timeIntervalSince1970: 0)
+    private var calls: [(id: Int, due: Date, then: @MainActor () -> Void)] = []
+    private var asked = 0
 
+    /// Sets the time. No call the app asked for is made: `advance` makes them.
     func set(_ seconds: TimeInterval) {
         now = Date(timeIntervalSince1970: seconds)
+    }
+
+    /// The app's `Later` on this clock.
+    var later: Later {
+        Later { [self] seconds, then in
+            asked += 1
+            let id = asked
+            calls.append((id, now.addingTimeInterval(seconds), then))
+            return { [self] in calls.removeAll { $0.id == id } }
+        }
+    }
+
+    /// How many calls the app asked for and are still to make.
+    var waiting: Int { calls.count }
+
+    /// Moves the time on by `seconds`, making each call that falls due on
+    /// the way, in order, at its own time.
+    func advance(by seconds: TimeInterval) {
+        let end = now.addingTimeInterval(seconds)
+        while let next = calls.filter({ $0.due <= end }).min(by: { $0.due < $1.due }) {
+            calls.removeAll { $0.id == next.id }
+            now = max(now, next.due)
+            next.then()
+        }
+        now = end
     }
 }
 
@@ -57,7 +88,7 @@ struct Rig {
         demo: URL? = nil,
         lease: ControlLease = ControlLease()
     ) {
-        let model = ReviewModel(player: player, frames: FakeFrames(), library: scratchLibrary(), demoFolder: demo)
+        let model = ReviewModel(player: player, frames: FakeFrames(), library: scratchLibrary(), demoFolder: demo, later: clock.later)
         self.model = model
         server = ControlServer(
             socket: socket,
@@ -68,6 +99,7 @@ struct Rig {
             lease: lease,
             now: { [clock] in clock.now },
             timeZone: TimeZone(identifier: "UTC")!,
+            later: clock.later,
             quit: {}
         )
     }
@@ -84,12 +116,9 @@ struct Rig {
         return waiting
     }
 
-    /// Returns once `count` takes wait in line, giving up after 2 seconds.
-    func untilWaiting(_ count: Int) async throws {
-        for _ in 0..<200 where server.lease.waiting(at: clock.now) != count {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        #expect(server.lease.waiting(at: clock.now) == count)
+    /// Returns once `count` takes wait in line.
+    func untilWaiting(_ count: Int, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        await settle(until: { server.lease.waiting(at: clock.now) == count }, sourceLocation: sourceLocation)
     }
 
     /// The reply's `output` read as a JSON object.

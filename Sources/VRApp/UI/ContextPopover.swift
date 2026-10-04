@@ -1,4 +1,5 @@
 import SwiftUI
+import VRReview
 
 /// The toolbar's button for the open video's context: its popover shows the
 /// sidecar and holds the note. The button's glyph is filled once the video
@@ -66,7 +67,7 @@ struct ContextPopover: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label(sidecar?.url.lastPathComponent ?? "No context file", systemImage: "doc.text")
                     .font(.subheadline.weight(.medium))
-                if let sidecar, !sidecar.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let sidecar, !ReviewSession.isBlank(sidecar.text) {
                     ScrollView {
                         Text(sidecar.text)
                             .font(.callout.monospaced())

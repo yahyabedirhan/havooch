@@ -1,4 +1,5 @@
 import Foundation
+import VRReview
 
 /// A video's context file: Markdown beside the video that says what the
 /// video is about, for the listener. `<base>.context.md` for the video
@@ -33,8 +34,8 @@ struct ContextSidecar: Equatable, Sendable {
     /// note under `noteHeading`, each without the white space around it.
     /// Nil when both are empty.
     static func text(sidecar: String?, note: String) -> String? {
-        let sidecar = (sidecar ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sidecar = ReviewSession.trimmed(sidecar ?? "")
+        let note = ReviewSession.trimmed(note)
         var parts: [String] = []
         if !sidecar.isEmpty { parts.append(sidecar) }
         if !note.isEmpty { parts.append("\(noteHeading)\n\n\(note)") }

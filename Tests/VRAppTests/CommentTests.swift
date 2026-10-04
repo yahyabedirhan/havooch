@@ -116,13 +116,6 @@ final class CommentRig {
     func keyframe(_ id: String) -> URL {
         library.keyframeURL(model.video?.info.contentHash ?? "", comment: id)
     }
-
-    /// Waits for a frame being written in the background to land.
-    func settle(until done: () -> Bool) async {
-        for _ in 0..<2_000 where !done() {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-    }
 }
 
 private func exists(_ file: URL) -> Bool {
@@ -206,7 +199,7 @@ private func exists(_ file: URL) -> Bool {
         #expect(rig.markers.map(\.time) == [4, 12])
         #expect(try await rig.queue() == ["c1", "c2"])
         // The window's comment has its keyframe too, once it's written.
-        await rig.settle { rig.model.keyframeURL(for: draft) != nil }
+        await settle { rig.model.keyframeURL(for: draft) != nil }
         #expect(try String(contentsOf: rig.keyframe(draft), encoding: .utf8) == "frame of sample.mp4 at 4.0")
     }
 
@@ -214,7 +207,7 @@ private func exists(_ file: URL) -> Bool {
         let rig = await CommentRig().opened()
         rig.model.compose()
         let draft = try #require(rig.model.composing)
-        await rig.settle { rig.model.keyframeURL(for: draft) != nil }
+        await settle { rig.model.keyframeURL(for: draft) != nil }
         #expect(exists(rig.keyframe(draft)))
 
         #expect(!rig.model.commitComposer(text: " \n"))
@@ -238,8 +231,8 @@ private func exists(_ file: URL) -> Bool {
 
         rig.model.cancelComposer()
         // The frame lands after the cancel, and removes itself.
-        await rig.settle { written.value == 1 }
-        await rig.settle { !exists(rig.keyframe(draft)) }
+        await settle { written.value == 1 }
+        await settle { !exists(rig.keyframe(draft)) }
 
         #expect(!exists(rig.keyframe(draft)))
         #expect(rig.model.keyframeURL(for: draft) == nil)

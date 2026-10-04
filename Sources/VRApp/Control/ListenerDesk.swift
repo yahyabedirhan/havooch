@@ -12,6 +12,8 @@ import VRWire
 @MainActor
 final class ListenerDesk {
     private let model: ReviewModel
+    /// Ends a `wait` or an `ask` once its time ran out.
+    private let later: Later
     /// The `wait`s holding their connections open, oldest first.
     private var parked: [Parked] = []
 
@@ -21,8 +23,8 @@ final class ListenerDesk {
         var ticket: UUID
         var key: String
         var answer: CheckedContinuation<ControlServer.Answer, Never>
-        /// Ends the wait when its time runs out; cancelled once it's answered.
-        var timeout: Task<Void, Never>?
+        /// Takes back the end of the wait at its time, once it's answered.
+        var timeout: Later.Cancel?
     }
 
     /// The `ask`s holding their connections open, oldest first.
@@ -35,12 +37,13 @@ final class ListenerDesk {
         var commentID: String
         var json: Bool
         var answer: CheckedContinuation<ControlServer.Answer, Never>
-        /// Ends the ask when its time runs out; cancelled once it's answered.
-        var timeout: Task<Void, Never>?
+        /// Takes back the end of the ask at its time, once it's answered.
+        var timeout: Later.Cancel?
     }
 
-    init(model: ReviewModel) {
+    init(model: ReviewModel, later: Later = .sleeping) {
         self.model = model
+        self.later = later
     }
 
     /// How many `wait`s hold their connections open.
@@ -66,10 +69,7 @@ final class ListenerDesk {
         }
         return await withCheckedContinuation { continuation in
             let timeout = seconds.map { seconds in
-                Task { [weak self] in
-                    do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
-                    self?.end(ticket, with: Self.ranOut(after: seconds))
-                }
+                later.after(TimeInterval(seconds)) { [weak self] in self?.end(ticket, with: Self.ranOut(after: seconds)) }
             }
             parked.append(Parked(ticket: ticket, key: holder.key, answer: continuation, timeout: timeout))
         }
@@ -79,7 +79,7 @@ final class ListenerDesk {
     func outboxChanged() {
         guard let first = parked.first, let answer = next(for: first.key) else { return }
         parked.removeFirst()
-        first.timeout?.cancel()
+        first.timeout?()
         first.answer.resume(returning: answer)
     }
 
@@ -145,25 +145,23 @@ final class ListenerDesk {
 
     /// `ask <comment-id> <question> [--wait <seconds>]` on the connection
     /// `ticket`: the question goes in the comment's thread, and the ask is
-    /// held until the person answers or its time runs out. An answer no ask
-    /// was given yet (it came after an earlier ask ran out) comes back at
-    /// once instead, and nothing is asked.
+    /// held until the person answers or its time runs out. When the question
+    /// is, in the same words, one whose answer no ask was given yet (the
+    /// answer came after an earlier ask ran out), that answer comes back at
+    /// once instead and nothing is asked. Another question is asked: an old
+    /// answer never answers a new question (`ReviewSession.ask`).
     func ask(_ commentID: String, question: String, wait seconds: Int?, json: Bool, ticket: UUID) async -> ControlServer.Answer {
-        if let late = model.unheardAnswer(on: commentID) {
-            return Self.answer(late, on: commentID, json: json)
-        }
+        let owed: ReviewSession.Exchange?
         do throws(ModelRefusal) {
-            try model.ask(commentID, question: question)
+            owed = try model.ask(commentID, question: question)
         } catch {
             return ControlServer.Answer(reply: .refused(error.reason))
         }
+        if let owed { return Self.answer(owed, on: commentID, json: json) }
         guard seconds != 0 else { return Self.unanswered(after: 0) }
         return await withCheckedContinuation { continuation in
             let timeout = seconds.map { seconds in
-                Task { [weak self] in
-                    do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
-                    self?.endAsk(ticket, with: Self.unanswered(after: seconds))
-                }
+                later.after(TimeInterval(seconds)) { [weak self] in self?.endAsk(ticket, with: Self.unanswered(after: seconds)) }
             }
             asking.append(Asking(ticket: ticket, commentID: commentID, json: json, answer: continuation, timeout: timeout))
         }
@@ -202,7 +200,7 @@ final class ListenerDesk {
     private func endAsk(_ ticket: UUID, with answer: ControlServer.Answer) {
         guard let index = asking.firstIndex(where: { $0.ticket == ticket }) else { return }
         let ask = asking.remove(at: index)
-        ask.timeout?.cancel()
+        ask.timeout?()
         ask.answer.resume(returning: answer)
     }
 
@@ -242,7 +240,7 @@ final class ListenerDesk {
     private func end(_ ticket: UUID, with answer: ControlServer.Answer) {
         guard let index = parked.firstIndex(where: { $0.ticket == ticket }) else { return }
         let wait = parked.remove(at: index)
-        wait.timeout?.cancel()
+        wait.timeout?()
         model.listenerLeft(key: wait.key, delivered: false)
         wait.answer.resume(returning: answer)
     }

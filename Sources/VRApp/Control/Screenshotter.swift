@@ -1,7 +1,5 @@
 import AppKit
-import ImageIO
 import ScreenCaptureKit
-import UniformTypeIdentifiers
 import VRWire
 
 /// How a screenshot was made: the window captured from the screen as drawn,
@@ -58,10 +56,10 @@ final class Screenshotter {
             image = drawn
             captureFailure = error.why
         }
-        do throws(ScreenshotFailure) {
-            try Self.write(image, to: file)
+        do throws(PNGFile.Failure) {
+            try PNGFile.write(image, to: file)
         } catch {
-            return .failed(why: error.why)
+            return .failed(why: error.localizedDescription)
         }
         return captureFailure.map { .rendered(why: $0) } ?? .captured
     }
@@ -98,17 +96,6 @@ final class Screenshotter {
               let bitmap = view.bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
         view.cacheDisplay(in: bounds, to: bitmap)
         return bitmap.cgImage
-    }
-
-    /// `image` written as a PNG at `file`, replacing what's there.
-    private static func write(_ image: CGImage, to file: URL) throws(ScreenshotFailure) {
-        guard let destination = CGImageDestinationCreateWithURL(file as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw ScreenshotFailure("couldn't write \(file.path): its folder doesn't exist or can't be written")
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw ScreenshotFailure("couldn't write \(file.path)")
-        }
     }
 }
 

@@ -48,7 +48,7 @@ struct AnswerBox: View {
             Button("Answer", action: send)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(ReviewSession.isBlank(text))
         }
     }
 

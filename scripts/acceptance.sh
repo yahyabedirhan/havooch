@@ -257,7 +257,8 @@ must listener reply "$second" "$second_reply"
 must listener status "$second" done
 ok "both comments have a reply and are set to done"
 
-# What the state must show now, and again after a restart: both comments
+# What the state must show now, and again after a restart, when the app
+# opens the video by itself: both comments
 # done, the thread of the question, and the replies.
 check_state() {
     must operator state --json
@@ -285,9 +286,10 @@ if operator app status >/dev/null 2>&1; then
 fi
 ok "the app quit"
 open_demo
-must operator player open "$video"
-ok "the app runs again with the video open"
-check_state "after the restart"
+ok "the app runs again"
+# No `player open`: the app opens the video it had open at the quit. Step 8's
+# seek is refused when no video is open.
+check_state "after the restart, with no \`player open\`"
 
 begin 8 "screenshots in light and dark"
 # The region comment's moment, so its rectangle shows on the frame beside its

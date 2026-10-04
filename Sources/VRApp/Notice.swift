@@ -14,7 +14,7 @@ struct Notice: Identifiable, Equatable {
     var message: ThreadMessage
 
     /// How long a notice stays, in seconds.
-    static let lifetime: Duration = .seconds(5)
+    static let lifetime: TimeInterval = 5
     /// How many notices show at once: the newest ones.
     static let shown = 3
 

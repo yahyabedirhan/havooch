@@ -47,7 +47,7 @@ final class ReviewModel {
     /// nil after one that did.
     private(set) var sendFailure: String?
     /// The agent's messages the stage shows a brief notice of, oldest first.
-    /// Each goes by itself after `noticeLifetime`.
+    /// Each goes by itself after `Notice.lifetime`.
     private(set) var notices: [Notice] = []
 
     /// Told when a batch was posted to the outbox: the listener desk gives
@@ -56,8 +56,8 @@ final class ReviewModel {
     /// Told when the question on a comment was answered: the listener desk
     /// gives the answer to an `ask` that is open on it.
     @ObservationIgnored var answered: (@MainActor (String) -> Void)?
-    /// How long a notice stays.
-    @ObservationIgnored var noticeLifetime = Notice.lifetime
+    /// Takes a notice away once its time is over.
+    @ObservationIgnored private let later: Later
     @ObservationIgnored private let player: any Playing
     @ObservationIgnored private let frames: any FrameGrabbing
     @ObservationIgnored private let library: Library
@@ -72,6 +72,9 @@ final class ReviewModel {
     /// Reads the transcripts of the videos whose batches the last run left
     /// in the outbox; nil when it left none, and once they're read.
     @ObservationIgnored private var restoring: Task<Void, Never>?
+    /// Opens the video the last run had open; nil when it had none, and
+    /// once that's done.
+    @ObservationIgnored private var reopening: Task<Void, Never>?
 
     init(
         player: any Playing,
@@ -79,7 +82,8 @@ final class ReviewModel {
         library: Library,
         speech: any Transcriber = SpeechSource(),
         demoFolder: URL? = nil,
-        now: @escaping @MainActor () -> Date = { Date() }
+        now: @escaping @MainActor () -> Date = { Date() },
+        later: Later = .sleeping
     ) {
         self.player = player
         self.frames = frames
@@ -87,7 +91,9 @@ final class ReviewModel {
         transcripts = TranscriptService(speech: speech, cache: TranscriptCache(root: library.root))
         self.demoFolder = demoFolder
         self.now = now
+        self.later = later
         restoreOutbox()
+        reopenLastVideo()
     }
 
     var time: Double { player.time }
@@ -131,7 +137,12 @@ final class ReviewModel {
     /// Opens the video at `url`, paused at its start. A file the player
     /// can't play is refused with the reason, and the open video stays.
     func open(_ url: URL) async throws(ModelRefusal) {
-        let file = try await VideoFile.read(url)
+        try await show(try await VideoFile.read(url))
+    }
+
+    /// Makes `file`, which was just read, the open video.
+    private func show(_ file: VideoFile) async throws(ModelRefusal) {
+        let url = file.url
         let hash = file.info.contentHash
         // The history is by the file's content: a renamed copy has it too.
         let stored: ReviewSession?
@@ -160,6 +171,12 @@ final class ReviewModel {
         session = opened
         selection = nil
         video = file
+        // The next launch opens it again (`reopenLastVideo`).
+        do {
+            try library.keep(lastVideo: Library.LastVideo(path: file.info.path, contentHash: hash))
+        } catch {
+            Self.complain("couldn't keep which video is open: \(error.localizedDescription)")
+        }
         // A sidecar's lines are known when this returns; speech goes on in
         // the background.
         await transcripts.start(file)
@@ -476,14 +493,20 @@ final class ReviewModel {
     }
 
     /// `ask`: the agent's question in the comment's thread, with a notice.
-    /// The question that is already open, asked again, adds nothing.
-    func ask(_ commentID: String, question: String) throws(ModelRefusal) {
+    /// The question that is already open, asked again, adds nothing. Nor
+    /// does the question whose answer no `ask` heard yet: that answer is
+    /// returned instead, for the `ask` to give at once.
+    @discardableResult
+    func ask(_ commentID: String, question: String) throws(ModelRefusal) -> ReviewSession.Exchange? {
         let hash = try hash(ofComment: commentID)
         let before = review(of: hash)?.comment(commentID)?.thread.count
-        try changeReview(of: hash) { (review) throws(ReviewRefusal) in try review.ask(commentID, question: question, at: now()) }
+        let owed = try changeReview(of: hash) { (review) throws(ReviewRefusal) in
+            try review.ask(commentID, question: question, at: now())
+        }
         if let comment = review(of: hash)?.comment(commentID), comment.thread.count != before, let message = comment.thread.last {
             notify(message, on: comment, batch: comment.batchID ?? "")
         }
+        return owed
     }
 
     /// The last answer on the comment with its question, when no `ask` has
@@ -500,14 +523,11 @@ final class ReviewModel {
     }
 
     /// Shows a notice of the agent's `message`, gone by itself after
-    /// `noticeLifetime`.
+    /// `Notice.lifetime`.
     private func notify(_ message: ThreadMessage, on comment: Comment?, batch: String) {
         let notice = Notice(id: UUID(), commentID: comment?.id, time: comment?.time, batchID: batch, message: message)
         notices.append(notice)
-        Task { [weak self, noticeLifetime] in
-            try? await Task.sleep(for: noticeLifetime)
-            self?.dismissNotice(notice.id)
-        }
+        _ = later.after(Notice.lifetime) { [weak self] in self?.dismissNotice(notice.id) }
     }
 
     /// Takes a notice away, before its time or at it.
@@ -674,6 +694,30 @@ final class ReviewModel {
         await restoring?.value
     }
 
+    /// Opens the video the last run had open, paused at its start, with its
+    /// review: what the person sees after a restart is what they left, and
+    /// `state` shows the history with no `player open`. A file that is gone
+    /// or whose content changed is left alone: the app starts with no
+    /// video, and says nothing.
+    private func reopenLastVideo() {
+        guard let last = library.lastVideo() else { return }
+        reopening = Task { [weak self] in
+            if let file = try? await VideoFile.read(URL(fileURLWithPath: last.path)), file.info.contentHash == last.contentHash,
+               // The person may have opened a video meanwhile: theirs stays.
+               let self, self.video == nil {
+                try? await self.show(file)
+            }
+            // Nothing to wait for from here on: a request goes straight on.
+            self?.reopening = nil
+        }
+    }
+
+    /// Returns once the video the last run had open is open again, or
+    /// isn't going to be. At once when it had none.
+    func launched() async {
+        await reopening?.value
+    }
+
     /// Finds the images on disk of the review's comments that this run
     /// didn't write: those of an earlier run.
     private func findImages(of review: ReviewSession) {
@@ -766,15 +810,18 @@ final class ReviewModel {
     /// Cmd+Enter, and the send bar's button: what the comment box holds is
     /// queued first, then the queue is sent (`sendBatch`). A refusal lands
     /// in `sendFailure` for the send bar to show.
-    func sendByPerson() {
+    ///
+    /// Returns the send it started, or nil when it started none.
+    @discardableResult
+    func sendByPerson() -> Task<Void, Never>? {
         // A second press while the first is on its way would find nothing
         // queued and say so over a send that worked.
-        guard video != nil, !isSending else { return }
-        if composing != nil, !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        guard video != nil, !isSending else { return nil }
+        if composing != nil, !ReviewSession.isBlank(composerText) {
             _ = commitComposer(text: composerText)
         }
         isSending = true
-        Task {
+        return Task {
             defer { isSending = false }
             do throws(ModelRefusal) {
                 _ = try await sendBatch()

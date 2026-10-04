@@ -51,13 +51,14 @@ final class BatchRig {
         ownsLibrary = library == nil
         let library = self.library
         clock.set(1_759_579_200)
-        let model = ReviewModel(player: player, frames: frames, library: library, now: { [clock] in clock.now })
+        let model = ReviewModel(player: player, frames: frames, library: library, now: { [clock] in clock.now }, later: clock.later)
         self.model = model
         server = ControlServer(
             socket: socket,
             model: model,
             desk: OperatorDesk(model: model) { _, _ in .captured },
             now: { [clock] in clock.now },
+            later: clock.later,
             quit: {}
         )
     }
@@ -111,9 +112,7 @@ final class BatchRig {
     func park(by holder: Holder = listener, timeout: Int? = nil, ticket: UUID = UUID()) async -> Task<ControlServer.Answer, Never> {
         let held = server.listeners.waiting
         let waiting = Task { await server.reply(to: ControlMessage(.wait(timeoutSeconds: timeout), holder: holder).encoded(), ticket: ticket) }
-        for _ in 0..<2_000 where server.listeners.waiting == held {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
+        await settle { server.listeners.waiting != held }
         return waiting
     }
 }
@@ -182,8 +181,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         let rig = await BatchRig().opened()
         await rig.queueTwo()
 
-        rig.model.sendByPerson()
-        await settle { rig.model.session?.batches.isEmpty == false }
+        await rig.model.sendByPerson()?.value
 
         #expect(rig.model.session?.batches.map(\.commentIDs) == [["c2", "c1"]])
         #expect(rig.model.outbox.parcels.map(\.batchID) == ["b1"])
@@ -197,8 +195,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         rig.model.compose()
         rig.model.composerText = "typed, not yet queued"
 
-        rig.model.sendByPerson()
-        await settle { rig.model.session?.batches.isEmpty == false }
+        await rig.model.sendByPerson()?.value
 
         #expect(rig.model.composing == nil)
         #expect(rig.model.comments.map(\.text) == ["typed, not yet queued"])
@@ -208,8 +205,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
     @Test func commandEnterWithNothingToSendSaysWhy() async {
         let rig = await BatchRig().opened()
 
-        rig.model.sendByPerson()
-        await settle { rig.model.sendFailure != nil }
+        await rig.model.sendByPerson()?.value
 
         #expect(rig.model.sendFailure == "there's nothing to send: no comment is queued")
         #expect(SendBar.note(failure: rig.model.sendFailure, presence: .absent, queued: 0, waiting: 0)
@@ -224,13 +220,19 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         let rig = await BatchRig().opened()
         await rig.queueTwo()
 
-        rig.model.sendByPerson()
-        rig.model.sendByPerson()
-        await settle { rig.model.session?.batches.isEmpty == false }
-        try? await Task.sleep(for: .milliseconds(50))
+        let first = rig.model.sendByPerson()
+        // The second press, while the first send is on its way, starts none.
+        let second = rig.model.sendByPerson()
+        #expect(first != nil)
+        #expect(second == nil)
+        await first?.value
 
         #expect(rig.model.session?.batches.count == 1)
+        #expect(rig.model.outbox.parcels.map(\.batchID) == ["b1"])
         #expect(rig.model.sendFailure == nil)
+        // One batch number was given out, so the next send is b2.
+        _ = await rig.send(.commentAdd(text: "one more", at: 1, region: nil))
+        #expect(await rig.send(.batchSend) == .done("sent b2 with 1 comment\n"))
     }
 
     @Test func aCommentWithoutItsKeyframeHasItGrabbedOnceMoreWhenSent() async throws {
@@ -390,6 +392,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
 
         let waiting = await rig.park(timeout: 1)
         #expect(try await rig.presence() == "listening")
+        rig.clock.advance(by: 1)
         #expect(await waiting.value.reply == .done("", note: "no batch came within 1 second\n"))
         #expect(try await rig.presence() == "absent")
         #expect(rig.server.listeners.waiting == 0)
@@ -495,13 +498,5 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
 
         let ranOut = await Task.detached { [environment] in table.run(["wait", "--timeout", "0"], environment: environment) }.value
         #expect(ranOut == CommandResult(error: "no batch came within 0 seconds\n", status: 3))
-    }
-}
-
-/// Waits for work a task does in the background, at most 2 seconds.
-@MainActor
-private func settle(until done: () -> Bool) async {
-    for _ in 0..<2_000 where !done() {
-        try? await Task.sleep(for: .milliseconds(1))
     }
 }

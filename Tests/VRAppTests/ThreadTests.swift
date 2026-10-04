@@ -33,9 +33,7 @@ extension BatchRig {
         let held = server.listeners.asks
         let request = ControlRequest.ask(commentID: id, question: question, waitSeconds: seconds)
         let asking = Task { await server.reply(to: ControlMessage(request, holder: listener, json: json).encoded(), ticket: ticket) }
-        for _ in 0..<2_000 where server.listeners.asks == held {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
+        await settle { server.listeners.asks != held }
         return asking
     }
 
@@ -62,7 +60,7 @@ extension BatchRig {
 }
 
 /// A copy of the fixture video with other content: a free box at its end.
-private func otherVideo(in folder: URL) throws -> URL {
+func otherVideo(in folder: URL) throws -> URL {
     let copy = folder.appendingPathComponent("other.mp4")
     var data = try Data(contentsOf: fixtureVideo)
     data.append(contentsOf: [0, 0, 0, 8] + Array("free".utf8))
@@ -173,14 +171,13 @@ private func otherVideo(in folder: URL) throws -> URL {
 
     @Test func aNoticeGoesByItselfAndAClickShowsItsComment() async throws {
         let rig = await BatchRig().delivered()
-        rig.model.noticeLifetime = .milliseconds(30)
 
         _ = await rig.answer(.reply(id: "c1", text: "first"))
+        rig.clock.advance(by: 4.9)
         #expect(rig.model.notices.count == 1)
-        await settle { rig.model.notices.isEmpty }
+        rig.clock.advance(by: 0.1)
         #expect(rig.model.notices.isEmpty)
 
-        rig.model.noticeLifetime = .seconds(60)
         _ = await rig.answer(.reply(id: "c1", text: "second"))
         rig.model.openNotice(try #require(rig.model.notices.first))
         await settle { rig.model.selection == "c1" }
@@ -338,6 +335,7 @@ private func otherVideo(in folder: URL) throws -> URL {
 
         #expect(await rig.asked("c1", "which part?", wait: 0) == .done("", note: "no answer came within 0 seconds\n"))
         let asking = await rig.ask("c2", "which button?", wait: 1)
+        rig.clock.advance(by: 1)
         let answer = await asking.value
 
         #expect(answer.reply == .done("", note: "no answer came within 1 second\n"))
@@ -351,13 +349,34 @@ private func otherVideo(in folder: URL) throws -> URL {
         _ = await rig.asked("c1", "which part?", wait: 0)
 
         #expect(await rig.send(.threadAnswer(commentID: "c1", text: "the intro")).ok)
-        // The repeated ask gets the answer at once, whatever it waits for.
-        #expect(await rig.asked("c1", "which part?", wait: 0) == .done("the intro\n"))
+        // The same question again gets the answer at once, whatever it waits for.
+        #expect(await rig.asked("c1", " which part?\n", wait: 0) == .done("the intro\n"))
         #expect(try await rig.thread(of: "c1").count == 2)
 
         // Given once: the next ask is a new question, and waits.
         #expect(await rig.asked("c1", "the first intro?", wait: 0) == .done("", note: "no answer came within 0 seconds\n"))
         #expect(try await rig.thread(of: "c1").map { $0["kind"] } == ["question", "answer", "question"])
+    }
+
+    @Test func aNewQuestionIsNotAnsweredByTheAnswerToAnOlderOne() async throws {
+        let rig = await BatchRig().delivered()
+        _ = await rig.asked("c1", "which part?", wait: 0)
+        #expect(await rig.send(.threadAnswer(commentID: "c1", text: "the intro")).ok)
+
+        // Another question, while the answer to the first is still owed: it
+        // is asked, and waits for its own answer.
+        #expect(await rig.asked("c1", "and how long should it be?", wait: 0) == .done("", note: "no answer came within 0 seconds\n"))
+
+        #expect(try await rig.thread(of: "c1").map { $0["text"] } == ["which part?", "the intro", "and how long should it be?"])
+        #expect(rig.model.comments.last?.openQuestion?.text == "and how long should it be?")
+        #expect(rig.model.notices.map(\.message.text) == ["which part?", "and how long should it be?"])
+        // The old answer stays in the thread and is owed to no ask now.
+        #expect(rig.model.unheardAnswer(on: "c1") == nil)
+        let asking = await rig.ask("c1", "and how long should it be?", json: true)
+        _ = await rig.send(.threadAnswer(commentID: "c1", text: "ten seconds"))
+        let output = await asking.value.reply.output
+        #expect(output.contains(#""question":"and how long should it be?""#))
+        #expect(output.contains(#""answer":"ten seconds""#))
     }
 
     @Test func anAnswerWhoseReplyCouldNotBeWrittenIsGivenToTheNextAsk() async throws {
@@ -477,13 +496,5 @@ private func otherVideo(in folder: URL) throws -> URL {
             == CommandResult(error: "c1 is done; it can't be set to working\n", status: 1))
         #expect(await run(["thread", "answer", "c1", "again"], as: listening).status == 1)
         #expect(try await rig.thread(of: "c1").map { $0["kind"] } == ["question", "answer", "message"])
-    }
-}
-
-/// Waits for work a task does in the background, at most 2 seconds.
-@MainActor
-private func settle(until done: () -> Bool) async {
-    for _ in 0..<2_000 where !done() {
-        try? await Task.sleep(for: .milliseconds(1))
     }
 }

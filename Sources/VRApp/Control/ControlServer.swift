@@ -46,6 +46,8 @@ final class ControlServer {
     /// The time the lease is decided at, and the zone its refusals name it in.
     private let now: @MainActor () -> Date
     private let timeZone: TimeZone
+    /// Ends a waiting `take` once its wait ran out, and the lease at its end.
+    private let later: Later
     /// App control's lease: who may send operator requests, and until when.
     /// Each change is shown (`indicator`) and its end looked out for.
     private(set) var lease: ControlLease {
@@ -53,8 +55,8 @@ final class ControlServer {
     }
     /// The banner, which follows the lease.
     let indicator: LeaseIndicator
-    /// Ends the lease once it runs out, when no request comes to.
-    private var settling: Task<Void, Never>?
+    /// Takes back the end of the lease at its time, set when it last changed.
+    private var settling: Later.Cancel?
     /// The `take`s waiting in line, each holding its connection open until
     /// it gets the lease or its wait runs out.
     private var waiters: [UUID: Waiter] = [:]
@@ -67,8 +69,8 @@ final class ControlServer {
         var seconds: Int
         var json: Bool
         var answer: CheckedContinuation<Answer, Never>
-        /// Ends the wait when it runs out; cancelled once it's answered.
-        var timeout: Task<Void, Never>?
+        /// Takes back the end of the wait at its time, once it's answered.
+        var timeout: Later.Cancel?
     }
 
     init(
@@ -79,12 +81,14 @@ final class ControlServer {
         indicator: LeaseIndicator = LeaseIndicator(),
         now: @escaping @MainActor () -> Date = { Date() },
         timeZone: TimeZone = .current,
+        later: Later = .sleeping,
         quit: @escaping @MainActor () -> Void
     ) {
         self.socket = socket
         self.model = model
         self.desk = desk
-        let listeners = ListenerDesk(model: model)
+        self.later = later
+        let listeners = ListenerDesk(model: model, later: later)
         self.listeners = listeners
         // A batch the person or an operator sends goes to a wait that is open.
         model.posted = { [weak listeners] in listeners?.outboxChanged() }
@@ -110,6 +114,9 @@ final class ControlServer {
     /// meanwhile; so is a listener's `wait`, until a batch comes. `ticket`
     /// names the request's connection, for `dropped`.
     func reply(to data: Data, ticket: UUID = UUID()) async -> Answer {
+        // The video the last run had open is open again before anything is
+        // answered: `state` right after a launch shows its review.
+        await model.launched()
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)
@@ -232,10 +239,7 @@ final class ControlServer {
         let deadline = time.addingTimeInterval(TimeInterval(seconds))
         let ticket = UUID()
         return await withCheckedContinuation { continuation in
-            let timeout = Task { @MainActor [weak self] in
-                do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
-                self?.waitRanOut(ticket, deadline: deadline)
-            }
+            let timeout = later.after(TimeInterval(seconds)) { [weak self] in self?.waitRanOut(ticket, deadline: deadline) }
             waiters[ticket] = Waiter(holder: holder, seconds: seconds, json: json, answer: continuation, timeout: timeout)
         }
     }
@@ -302,24 +306,18 @@ final class ControlServer {
     /// change replaced by one for this one.
     private func leaseChanged() {
         if indicator.lease != lease { indicator.lease = lease }
-        settling?.cancel()
+        settling?()
         settling = nil
         let time = now()
         if let term = lease.current(at: time) {
             for (ticket, waiter) in waiters where waiter.holder.key == term.holder.key {
                 waiters[ticket] = nil
-                waiter.timeout?.cancel()
+                waiter.timeout?()
                 waiter.answer.resume(returning: held(term, json: waiter.json))
             }
         }
         guard let next = lease.nextEnd(after: time) else { return }
-        let left = next.timeIntervalSince(time)
-        settling = Task { [weak self] in
-            // A wake before the end settles nothing, and sets the timer again.
-            try? await Task.sleep(for: .seconds(left))
-            guard !Task.isCancelled else { return }
-            self?.settleLease()
-        }
+        settling = later.after(next.timeIntervalSince(time)) { [weak self] in self?.settleLease() }
     }
 
     // MARK: - Listening
@@ -346,11 +344,11 @@ final class ControlServer {
     func stop() {
         listener?.close()
         listener = nil
-        settling?.cancel()
+        settling?()
         settling = nil
         // A take waiting in line hears why, rather than a dropped connection.
         for waiter in waiters.values {
-            waiter.timeout?.cancel()
+            waiter.timeout?()
             waiter.answer.resume(returning: Answer(reply: .refused("video-review is quitting")))
         }
         waiters = [:]

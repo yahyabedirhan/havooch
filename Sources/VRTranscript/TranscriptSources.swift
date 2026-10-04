@@ -28,11 +28,6 @@ public enum TranscriptSources: Equatable, Sendable {
         return found + [.speech]
     }
 
-    /// The source `video`'s transcript comes from.
-    public static func best(for video: URL) -> TranscriptSources {
-        candidates(for: video)[0]
-    }
-
     /// The source as `state` names it.
     public var name: String {
         switch self {

@@ -1,4 +1,5 @@
 import SwiftUI
+import VRReview
 
 /// The comment box: opens focused over the stage, so the person types (or
 /// dictates) at once. Enter queues the comment, Shift+Enter adds a line,
@@ -23,7 +24,7 @@ struct Composer: View {
     static let regionWidth: CGFloat = 320
 
     private var isBlank: Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ReviewSession.isBlank(text)
     }
 
     var body: some View {

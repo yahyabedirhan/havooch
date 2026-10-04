@@ -162,6 +162,27 @@ import VRStore
         #expect(files.map { FileManager.default.fileExists(atPath: $0.path) } == [true, true, false, false, true])
     }
 
+    @Test func theLastOpenVideoComesBackAndTheLatestOneWins() throws {
+        let root = scratchFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(Library(root: root).lastVideo() == nil)
+
+        try Library(root: root).keep(lastVideo: .init(path: "/Users/me/sample.mp4", contentHash: "abc"))
+        try Library(root: root).keep(lastVideo: .init(path: "/Users/me/other.mp4", contentHash: "def"))
+
+        // Another value on the same folder, as after a relaunch.
+        #expect(Library(root: root).lastVideo() == Library.LastVideo(path: "/Users/me/other.mp4", contentHash: "def"))
+    }
+
+    @Test func aLastOpenVideoThatCannotBeReadIsNone() throws {
+        let root = scratchFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("not json".utf8).write(to: root.appendingPathComponent("last-video.json"))
+
+        #expect(Library(root: root).lastVideo() == nil)
+    }
+
     @Test func twoLibrariesShareNothing() throws {
         let real = scratchFolder()
         // A demo run's folder is inside the normal one.
@@ -170,7 +191,9 @@ import VRStore
 
         try Library(root: demo).save(try review())
         _ = try Library(root: demo).nextCommentID()
+        try Library(root: demo).keep(lastVideo: .init(path: "/demo/sample.mp4", contentHash: "abc"))
 
+        #expect(Library(root: real).lastVideo() == nil)
         #expect(try Library(root: real).session(for: "abc") == nil)
         #expect(Library(root: real).videoHash(forComment: "c1") == nil)
         #expect(try Library(root: real).nextCommentID() == "c1")

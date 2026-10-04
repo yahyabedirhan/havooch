@@ -195,8 +195,10 @@ public enum ListenerCommand {
 
           One question at a time on a comment. After a timeout, ask again in
           the same words to go on waiting for the same question. An answer
-          that came after the timeout is printed at once by the next ask on
-          that comment, once.
+          that came after the timeout is printed at once, once, by the next
+          ask of that question in the same words. Another question is not
+          answered by it: it is asked, and waits for its own answer. The
+          earlier answer stays in the thread (`state --json`).
 
         The question is one argument: quote it. No lease is needed. Exits 0
         with the answer, 3 when the wait ran out (nothing on standard

@@ -75,7 +75,7 @@ public enum CommentCommand {
                 return .failure(misread("video-review comment add: unexpected `\(extra)`; quote the text"))
             }
         }
-        guard let text, !isBlank(text) else {
+        guard let text, !Arguments.isBlank(text) else {
             return .failure(misread("video-review comment add: missing <text>"))
         }
         return .success(.commentAdd(text: text, at: at, region: region))
@@ -85,7 +85,7 @@ public enum CommentCommand {
         guard let id = arguments.first else {
             return .failure(misread("video-review comment edit: missing <id>"))
         }
-        guard arguments.count >= 2, !isBlank(arguments[1]) else {
+        guard arguments.count >= 2, !Arguments.isBlank(arguments[1]) else {
             return .failure(misread("video-review comment edit: missing <text>"))
         }
         guard arguments.count == 2 else {
@@ -102,10 +102,6 @@ public enum CommentCommand {
             return .failure(misread("video-review comment delete: unexpected `\(arguments[1])`"))
         }
         return .success(.commentDelete(id: id))
-    }
-
-    private static func isBlank(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private static func misread(_ line: String) -> CommandResult {

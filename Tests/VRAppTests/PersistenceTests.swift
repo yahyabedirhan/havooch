@@ -9,8 +9,9 @@ import VRWire
 private let listener = Holder(key: "listener-1", name: "Claude Code", place: "/Users/me/shop")
 
 /// A support folder that outlives the rigs on it: each `launch()` is the app
-/// started again on what the last one kept. Nothing is done at a quit, so
-/// every restart here is also a crash.
+/// started again on what the last one kept, the video that was open
+/// included. Nothing is done at a quit, so every restart here is also a
+/// crash.
 @MainActor
 private final class Support {
     let library = scratchLibrary()
@@ -31,6 +32,13 @@ private final class Support {
         let copy = folder.appendingPathComponent("renamed take 2.mp4")
         try FileManager.default.copyItem(at: fixtureVideo, to: copy)
         return copy
+    }
+
+    /// Has `rig` open another video, so that the fixture isn't the one a
+    /// restart opens again.
+    func leaveAnotherVideoOpen(in rig: BatchRig) async throws {
+        let reply = await rig.send(.playerOpen(path: try otherVideo(in: library.root).path))
+        #expect(reply.ok, "\(reply.error)")
     }
 }
 
@@ -88,6 +96,65 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
 
 @MainActor
 @Suite struct PersistenceTests {
+    @Test func theVideoOpenAtTheQuitIsOpenAgainAfterARestartPausedAtItsStart() async throws {
+        let support = Support()
+        let first = await support.launch().reviewed()
+        _ = await first.send(.playerSeek(seconds: 12))
+        _ = await first.send(.playerPlay)
+        let before = try await first.history()
+
+        // No `player open` in this run.
+        let second = support.launch()
+
+        #expect(try await second.history() == before)
+        #expect(try await second.commentStates() == ["failed", "done", "queued"])
+        let player = try #require(try await second.state()["player"] as? [String: Any])
+        #expect(player["time"] as? Double == 0)
+        #expect(player["playing"] as? Bool == false)
+        #expect(second.player.loaded == fixtureVideo)
+        #expect(second.model.video?.info.path == fixtureVideo.path)
+        #expect(second.model.openFailure == nil)
+    }
+
+    @Test func aLastVideoThatIsGoneOrChangedStartsWithNoVideoAndNoError() async throws {
+        let support = Support()
+        let copy = try support.renamedCopy()
+        let first = support.launch()
+        #expect(await first.send(.playerOpen(path: copy.path)).ok)
+        _ = await first.send(.commentAdd(text: "kept", at: 10, region: nil))
+
+        // The file is gone.
+        try FileManager.default.removeItem(at: copy)
+        let second = support.launch()
+        var state = try await second.state()
+        #expect(state["video"] is NSNull)
+        #expect((state["comments"] as? [[String: Any]])?.isEmpty == true)
+        #expect(second.model.openFailure == nil)
+        #expect(second.player.loaded == nil)
+
+        // Another video is at its path.
+        try FileManager.default.moveItem(at: try otherVideo(in: support.library.root), to: copy)
+        let third = support.launch()
+        state = try await third.state()
+        #expect(state["video"] is NSNull)
+        #expect(third.model.openFailure == nil)
+
+        // The history is still there for the video itself.
+        _ = await third.opened()
+        #expect(try await third.commentStates() == ["queued"])
+    }
+
+    @Test func theVideoOpenedLastIsTheOneARestartOpens() async throws {
+        let support = Support()
+        let first = await support.launch().opened()
+        try await support.leaveAnotherVideoOpen(in: first)
+
+        let second = support.launch()
+
+        let video = try #require(try await second.state()["video"] as? [String: Any])
+        #expect(video["title"] as? String == "other")
+    }
+
     @Test func aVideoOpenedAfterARestartHasItsCommentsThreadsStatusesBatchesAndNote() async throws {
         let support = Support()
         let first = await support.launch().reviewed()
@@ -150,9 +217,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         // The app quits with the comment box open.
         first.model.compose(region: try Region(x: 0.1, y: 0.2, w: 0.3, h: 0.25))
         let draft = try #require(first.model.composing)
-        for _ in 0..<2_000 where first.model.cropURL(for: draft) == nil {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
+        await settle { first.model.cropURL(for: draft) != nil }
         let hash = try #require(first.model.video).info.contentHash
         let left = [support.library.keyframeURL(hash, comment: draft), support.library.cropURL(hash, comment: draft)]
         #expect(left.map { FileManager.default.fileExists(atPath: $0.path) } == [true, true])
@@ -171,8 +236,9 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         let first = await support.launch().opened()
         await first.queueTwo()
         _ = await first.send(.batchSend)
+        try await support.leaveAnotherVideoOpen(in: first)
 
-        // The video isn't opened in this run.
+        // The batch's video isn't the open one in this run.
         let second = support.launch()
         #expect(second.model.outbox.parcels.map(\.delivery) == [.pending])
 
@@ -195,6 +261,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         _ = await first.answer(.ack(batchID: "b1", text: nil))
         _ = await first.answer(.status(commentID: "c1", state: "done"))
         _ = await first.answer(.status(commentID: "c2", state: "working"))
+        try await support.leaveAnotherVideoOpen(in: first)
 
         let second = support.launch()
 
@@ -219,6 +286,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         await first.queueTwo()
         _ = await first.send(.batchSend)
         _ = await first.wait(by: listener)
+        try await support.leaveAnotherVideoOpen(in: first)
 
         let second = support.launch()
         _ = await second.wait(by: listener)

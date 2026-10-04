@@ -99,8 +99,10 @@ final class TranscriptService {
         entries[hash].map { Status(source: $0.source, ready: $0.ready, lines: $0.lines.count, failure: $0.failure) }
     }
 
-    /// Returns once the speech run of the video `hash` has ended, at once
-    /// when there's none.
+    /// The tests' hook, which the app never calls: returns once the speech
+    /// run of the video `hash` has ended, at once when there's none. A test
+    /// holds the recognizer back, lets it go, and waits here for the lines
+    /// to be known, rather than looking again and again.
     func settled(_ hash: String) async {
         await runs[hash]?.value
     }
