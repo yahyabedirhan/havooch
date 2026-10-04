@@ -11,6 +11,7 @@ public struct CommandTable: Sendable {
         var table = CommandTable()
         table.add([
             AppCommand.entry,
+            ControlCommand.entry,
             StateCommand.entry,
             PlayerCommand.entry,
             ScreenshotCommand.entry,

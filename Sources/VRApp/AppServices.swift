@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import VRLease
 import VRWire
 
 /// The composition root: reads the environment, builds every part of the app
@@ -13,6 +14,8 @@ final class AppServices {
     let player: PlayerController
     let model: ReviewModel
     let server: ControlServer
+    /// The lease as the banner reads it; the control server writes it.
+    let leaseIndicator = LeaseIndicator()
     private let shortcuts: Shortcuts
 
     init(variables: [String: String]) {
@@ -29,6 +32,9 @@ final class AppServices {
             socket: ControlSocket.url(in: support),
             model: model,
             desk: OperatorDesk(model: model) { await screenshotter.capture(to: $0, appearance: $1) },
+            // The lease the app that quit for this one handed over, if any.
+            lease: ControlLease(environment: variables, at: Date()),
+            indicator: leaseIndicator,
             quit: { NSApp.terminate(nil) }
         )
         shortcuts = Shortcuts(model: model)

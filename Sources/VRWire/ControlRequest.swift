@@ -10,6 +10,14 @@ public enum ControlRequest: Equatable, Sendable {
     case appStatus
     /// `state`: everything the app shows.
     case state
+    /// `control take [--wait <seconds>]`: the lease held until its cap. While
+    /// another agent holds it, the take waits in line for up to
+    /// `waitSeconds` (0 to `longestWait`), answered once the lease is this
+    /// agent's or the wait runs out.
+    case controlTake(waitSeconds: Int?)
+    /// `control release`: the lease given up, so the next agent in line
+    /// gets it.
+    case controlRelease
 
     // Operator: leased.
     /// `app open` while the app runs: its status, and, unlike `app.status`,
@@ -41,6 +49,16 @@ public enum ControlRequest: Equatable, Sendable {
     /// The most bytes the app reads of one request.
     public static let largestMessage = 1 << 20
 
+    /// The longest wait in line a `take` asks for, in seconds: an hour.
+    public static let longestWait = 3600
+
+    /// How long the app may hold the connection before it answers, past the
+    /// client's usual timeout: a `take`'s wait in line.
+    public var wait: TimeInterval {
+        if case .controlTake(let seconds?) = self { return TimeInterval(seconds) }
+        return 0
+    }
+
     /// Who a request is for, which decides whether it needs the lease.
     public enum Role: Equatable, Sendable {
         /// Changes nothing, or is the lease's own request: no lease.
@@ -53,7 +71,7 @@ public enum ControlRequest: Equatable, Sendable {
 
     public var role: Role {
         switch self {
-        case .appStatus, .state:
+        case .appStatus, .state, .controlTake, .controlRelease:
             .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot:
             .operator

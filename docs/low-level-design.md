@@ -62,7 +62,7 @@ Everything else is derived from it, in the same file and in the `Makefile` (whic
 
 The CLI's name and commands never change. Agents run it from this build's bundle, never from `PATH`. Because the constant is compiled into both binaries, the CLI finds its own app's socket wherever it is copied.
 
-`AppIdentity` also names the two variables a demo run's app is launched with, `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR`. `VIDEO_REVIEW_CONTROL_KEY` is named in `Holder` (`VRLease`), which reads it and cannot import `VRWire`.
+`AppIdentity` also names the two variables a demo run's app is launched with, `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR`. `VIDEO_REVIEW_CONTROL_KEY` is named in `Holder` and `VIDEO_REVIEW_CONTROL_LEASE` in `ControlLease` (`VRLease`), which read them and cannot import `VRWire`.
 
 `app open` launches the bundle the CLI sits in (`<bundle>/Contents/Helpers/video-review` → `<bundle>`), and looks the app up by bundle id only when the CLI runs from somewhere else. So a second copy with the same bundle id on the disk (a `build/` folder) is never launched instead of the installed one.
 
@@ -100,6 +100,7 @@ The CLI's name and commands never change. Agents run it from this build's bundle
 - Every refusal is a reply with `ok: false` and one line in `error`. The CLI prints it on standard error and exits 1. A command line that does not parse prints usage and exits 2. A `wait` or `ask` whose time ran out exits 3.
 - A request of another protocol version is refused, naming both versions.
 - An operator command from another holder than the lease's is refused, naming the holder, its place and when the lease ends.
+- An operator command or a `control take` from a holder the person stopped is refused for 5 min, telling the agent to ask the person.
 - An action in the wrong state is refused by the module that owns the state: editing a sent comment (`ReviewSession`), answering when no question is open (`ReviewSession`), seeking with no video (`ReviewModel`), a region outside 0..1 (`Region`).
 - A file AVPlayer cannot play is refused by `player open` with the reason; the open video stays.
 
@@ -197,7 +198,7 @@ Test targets, all run by `make test` without the app:
 | `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
 | `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player and a temporary library: lease gate, dispatch, a parked `wait` |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, a parked `wait`; the command against the server over a real socket |
 
 ### Folder tree
 
@@ -214,7 +215,7 @@ Sources/
   VRLease/
     Holder.swift                    who sends a request; Holder.find from the environment and process table
     ProcessTable.swift              ProcessTable protocol, SystemProcessTable (sysctl)
-    ControlLease.swift              the lease rules as a pure value; Term, Transition, Refusal, Decision
+    ControlLease.swift              the lease rules as a pure value; Term, Transition, Ending, Refusal, Decision; a relaunch's handover
     LeaseStatus.swift               the lease as status and state report it
   VRWire/
     AppIdentity.swift               variant, version, name, bundle id, support folder, environment variable names
@@ -263,7 +264,7 @@ Sources/
     TranscriptCache.swift           a video's speech transcript on disk
     JSONFile.swift                  atomic read and write of one Codable file
   VRApp/
-    VideoReviewApp.swift            @main, the window scene, the menu commands
+    VideoReviewApp.swift            @main, the window scene with the lease banner over it, the menu commands
     AppServices.swift               composition root: reads the environment, builds and wires everything
     ReviewModel.swift               the orchestrator the views and the desks call
     Notice.swift                    a brief agent message shown over the stage
@@ -280,14 +281,14 @@ Sources/
       ContextSidecar.swift          <base>.context.md, else context.md, beside the video
     Control/
       ControlServer.swift           decode, version, lease gate, dispatch; lease timers and waiters
-      SocketListener.swift          the listening socket: accept, read, answer, heartbeat, close
+      SocketListener.swift          the listening socket: accept, read, answer, heartbeat, close; a granted lease whose reply wasn't written goes back
       OperatorDesk.swift            operator requests → ReviewModel calls → reply text
       ListenerDesk.swift            listener requests; parked wait and ask connections
       StateReport.swift             app status and state as text and JSON
-      LeaseIndicator.swift          the lease as the banner reads it
+      LeaseIndicator.swift          the lease as the banner reads it, and the banner's words
       Screenshotter.swift           the window as a PNG through ScreenCaptureKit, in an appearance
     UI/
-      MainWindow.swift              banner, stage and sidebar laid out
+      MainWindow.swift              stage and sidebar laid out
       EmptyState.swift              no video open: drop, open, the demo folder's videos
       Stage.swift                   the video, the overlay, the composer, the notice
       RegionOverlay.swift           drawing and showing rectangles in frame coordinates
@@ -323,7 +324,7 @@ Signatures are the contract between tickets. Bodies are sketched in section 4.
 
 **VRLease** (rules copied from Shipyard's `ControlLease`)
 
-The first build ticket ships `ControlLease` as a pass-through with only `Term`, `Refusal.inUse`, `Decision.answer`, `init()`, `use(by:at:)`, `current(at:)` and `status(at:)`: every holder is let through and the lease always reports free. `ControlServer` already asks `use(by:at:)` before every operator request, so the lease ticket fills in `VRLease` and adds the rest below without moving the gate.
+The first build ticket shipped `ControlLease` as a pass-through behind `use(by:at:)`, `current(at:)` and `status(at:)`; the lease ticket filled in the rules below without moving the gate in `ControlServer`. Shipyard's Allow (the person lifting a bar early) and its list of barred holders are left out: this app has no place that shows them, and a bar ends by itself.
 
 ```swift
 public struct Holder: Codable, Hashable, Sendable {
@@ -335,24 +336,31 @@ public struct Holder: Codable, Hashable, Sendable {
 
 public struct ControlLease: Equatable, Sendable {
     public static let renewal: TimeInterval = 60, cap: TimeInterval = 300, bar: TimeInterval = 300
-    public struct Term: Codable, Equatable, Sendable { var holder: Holder; var taken: Date; var ends: Date }
+    public struct Term: Codable, Equatable, Sendable { var holder: Holder; var taken: Date; var ends: Date   // coded as seconds since 1970
+        public func secondsLeft(at: Date) -> Int; public func held(timeZone: TimeZone) -> String }           // "you hold video-review until 12:05:00"
     public enum Transition { case started(Holder), renewed(Holder), ended(Holder, Ending) }
-    public enum Refusal: Error { case inUse(Term), queued(Term), waitedOut(seconds: Int, Term), stopped }
+    public enum Ending { case expired, capped, released, stopped }
+    public enum Refusal: Error { case inUse(Term), queued(Term), waitedOut(seconds: Int, Term), stopped
+        public func message(at: Date, timeZone: TimeZone) -> String }
     public struct Decision { var answer: Result<Term, Refusal>; var transitions: [Transition] }
 
     public init()
-    public init(environment: [String: String], at now: Date)          // a relaunch's handover
+    public init(environment: [String: String], at now: Date)          // a relaunch's handover, from VIDEO_REVIEW_CONTROL_LEASE
+    public static func handover(_ term: Term) -> [String: String]     // what a relaunch adds to the launch environment
     public mutating func use(by: Holder, at: Date) -> Decision         // an operator command
     public mutating func take(by: Holder, at: Date, waitingUntil: Date?) -> Decision
     public mutating func giveUp(by: Holder, waited: Int, at: Date) -> Decision
     public mutating func release(by: Holder, at: Date) -> [Transition]
     public mutating func stop(at: Date) -> [Transition]                // the person's Stop
-    public mutating func settle(at: Date) -> [Transition]              // ends what ran out, serves the line
+    public mutating func settle(at: Date) -> [Transition]              // ends what ran out, serves the line, lifts ended bars
     public func current(at: Date) -> Term?
-    public func nextEnd(after: Date) -> Date?
+    public func waiting(at: Date) -> Int
+    public func nextEnd(after: Date) -> Date?                          // the held lease's end
     public func status(at: Date) -> LeaseStatus?
 }
 ```
+
+A holder is the same across commands by its `key` alone; its name and place are as its latest command gave them. The transitions are returned for tests and for a later notice; the app reads the lease's value, not the transitions.
 
 **VRWire**
 
@@ -379,7 +387,9 @@ public enum ControlRequest: Equatable, Sendable {
     public static let version = 1
     public enum Role { case free, operator, listener }
     public var role: Role
-    public var isLongPoll: Bool        // wait, ask, and a take that waits: the app may hold the connection
+    public static let longestWait = 3600   // a take's wait in line, in seconds, at most
+    public var wait: TimeInterval      // how long the app may hold the connection: a take's wait in line, else 0
+    public var isLongPoll: Bool        // wait and ask: the app holds the connection and sends a heartbeat
 }
 
 public struct ControlMessage { var request: ControlRequest; var holder: Holder; var json: Bool
@@ -392,7 +402,7 @@ public struct ControlClient { var socket: URL; var holder: Holder; var transport
     public func send(_ request: ControlRequest, json: Bool) -> Result<ControlReply, Failure> }
 ```
 
-Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; `isLongPoll` arrives with the first long poll.
+Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `wait`; `isLongPoll` arrives with the listener's `wait`. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `wait`.
 
 `ControlMessage.decode` checks the version before it reads the holder or the command, so a request of another version is refused by its version whatever else it holds. A path on the wire (`player.open`, `screenshot`) must be absolute.
 
@@ -554,8 +564,8 @@ The commands are the spec's, unchanged. This table fixes what the spec left open
 |---|---|---|---|
 | `app status` | free | version, demo, lease, video, listener, one per line | `{running, version, variant, demo, lease, video, listener}` |
 | `state` | free | the state as lines | the state object below |
-| `control take [--wait <s>]` | free | `you hold video-review until 12:05:00` | `{held: true, until}` |
-| `control release` | free | `released video-review` | `{released: true}` |
+| `control take [--wait <s>]` | free | `you hold video-review until 12:05:00` (the app's local time) | `{held: true, until}`, `until` in ISO 8601, UTC |
+| `control release` | free | `released video-review` | `{released}`: `false` when the sender held nothing |
 | `app open [--demo <folder>]` | operator | the status lines | the status object |
 | `app quit` | operator | `video-review quit` | `{quit: true}` |
 | `player open <path>` | operator | `opened <title> (0:21.233)` | `{video}` |
@@ -574,6 +584,8 @@ The commands are the spec's, unchanged. This table fixes what the spec left open
 | `ask <id> <question> [--wait <s>]` | listener | the answer's text | `{commentId, question, answer, answeredAt}` |
 
 Exit codes: 0 done; 1 refused, app not running, or no reply; 2 usage; 3 a `wait` or `ask` whose time ran out (nothing on standard output). The reply shape stays `{ok, output, error, lease?}`: a long poll that ran out comes back `ok: true` with empty `output` and a note in `error`, and `ListenerCommand` turns exactly that into exit 3.
+
+`control take --wait` takes whole seconds from 0 to 3600. A take refused or waited out exits 1, like every refusal. `control release` exits 0 whoever sends it. The holder key has no flag: `VIDEO_REVIEW_CONTROL_KEY` is the one way to name it (Shipyard's `--key` is not in the contract).
 
 Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also `h:mm:ss`. A time outside the video is refused. `screenshot` needs an absolute `.png` path whose folder exists. `player open` takes a relative path against the folder the command runs in.
 
@@ -683,7 +695,9 @@ State after each step:
 | after `PlayerController.seek` | the same | time 10 |
 | `state --json` from any holder | reports the lease | `"player": {"time": 10, "playing": false}` |
 
-`app open` is the one command that does not start at the socket: `AppCommand` launches the bundle `AppIdentity.bundleID` through `AppLaunching`, with `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR` set for a demo, writes or removes `demo.json`, and polls `app.status` until the app answers. When an app of the other mode runs (the normal one, or a demo on another folder), it quits it first. `app open --demo` on the folder the running demo already uses sends `app.open` and launches nothing, so the open video stays. The lease ticket adds the handover of the quit app's lease in `VIDEO_REVIEW_CONTROL_LEASE`, as Shipyard does.
+`app open` is the one command that does not start at the socket: `AppCommand` launches the bundle `AppIdentity.bundleID` through `AppLaunching`, with `VIDEO_REVIEW_SUPPORT_DIR` and `VIDEO_REVIEW_DEMO_DIR` set for a demo, writes or removes `demo.json`, and polls `app.status` until the app answers. When an app of the other mode runs (the normal one, or a demo on another folder), it quits it first. `app open --demo` on the folder the running demo already uses sends `app.open` and launches nothing, so the open video stays.
+
+When `app open` quits one app to launch another, the lease moves with it, as in Shipyard: the quit's reply carries the opener's term in `lease`, `AppCommand` puts it in the launched app's environment as `VIDEO_REVIEW_CONTROL_LEASE` (`ControlLease.handover`), and `AppServices` starts the server with `ControlLease(environment:at:)`. The term keeps when it was taken, so the 5 min cap is not started again.
 
 ### One rejection: a second holder
 
@@ -742,6 +756,8 @@ When no `wait` is open, the trace stops after `outbox.post`: the parcel stays `p
 ### How a long poll is held
 
 `wait`, `ask` and a queued `control take` keep their connection open. One request per connection still holds.
+
+A queued `control take` is held the way Shipyard holds it, without the heartbeat below: `ControlServer` parks it as a continuation with a timer for its wait, and the client reads for its usual 15 s plus the wait. A client that went away shows when the reply granting it the lease can't be written; `SocketListener` then tells the server (`undelivered`), which releases that lease so the next in line gets it. The rest of this section is the listener's long polls.
 
 - `ListenerDesk` parks the request as a continuation with a deadline, and `ControlServer` goes on answering other requests.
 - While a connection is parked, `SocketListener` writes one space byte to it every 2 s. JSON ignores leading whitespace, so the reply still reads. A write that fails means the client is gone: the desk drops the parked request, and for a `wait` calls `outbox.leave(at:delivered: false)`, so presence turns `absent` within 2 s of a killed `wait`.
@@ -812,9 +828,20 @@ reply(to data):
         decision = lease.use(by: holder, at: now)
         refused → reply(refusal.message); nothing else runs
     switch message.request: free → self; operator → OperatorDesk; listener → ListenerDesk
+
+control.take:    lease.take(by: holder, at: now, waitingUntil: now + wait)
+                 held → reply at once; in use and no wait → refused; queued → park the connection
+control.release: lease.release(by: holder, at: now)
+
+every change of the lease (leaseChanged):
+    LeaseIndicator.lease = lease                          // the banner redraws
+    a parked take whose holder now has the lease → answered "you hold video-review until …"
+    a timer for lease.nextEnd(after: now) → lease.settle(at: now)
 ```
 
-The banner's Stop calls `lease.stop(at:)`. A timer set for `lease.nextEnd(after:)` calls `lease.settle(at:)`, so the banner goes and the next waiter gets the lease with no request.
+The banner's Stop calls `ControlServer.stopLease`, which calls `lease.stop(at:)`: the lease ends, its holder is barred for 5 min, and the first waiter gets it. Stop is the person's only way into the lease and has no CLI command, since it is the person's override of agents. The timer's `settle` makes the banner go and hands the lease to the next waiter with no request. `LeaseBanner` also redraws each second from the lease's value and the time, so the countdown ticks and the strip goes at the end by itself.
+
+`app status` and `state` are free: any holder gets them, they renew nothing, and they report `lease.status(at: now)`.
 
 **Keyframe and crop** (`FrameGrabber.swift`)
 
@@ -908,7 +935,8 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | An agent message raises a toast at the top right of the stage for 5 s. A click selects its comment. | Seen while watching, gone without a click, and it never pauses the video. |
 | The send bar at the bottom of the sidebar shows the queued count, the Send button and the presence chip (`No listener`, `Listening`, `Working`). | The person sees whether the batch will reach someone at the moment of sending. |
 | Sending with no listener is allowed; the bar then says the batch waits for the next listener. | The spec's story 15. No dialog in the way. |
-| The lease banner is a one-line strip under the title bar: who, where, seconds left, Stop. | Always visible while an agent drives, and it takes one line. |
+| The lease banner is a one-line strip under the title bar, over whatever the window shows (the empty state too): "Claude Code controls this app", the place (a folder's last component), the time left, how many wait, Stop. It is tinted orange. | Always visible while an agent drives, and it takes one line. |
+| Stop is a button in the banner only: no menu item, no key, no CLI command. A stopped agent is told to ask the person; nothing in the window lists it. | Stop is the person's override, so an agent can't reach it. A bar ends by itself after 5 min. |
 | Screenshots show the window as it is, banner included. | A screenshot is evidence of what the person sees. The contract has no flag to hide it. |
 | The context note is a popover from a toolbar button, with the sidecar's text above it, read-only. | Context is set once per video, so it should not take sidebar space. |
 | With no video: a drop target, an Open button, and in a demo run the demo folder's videos as a list. | An operator still uses `player open`; a person in a demo gets one click. |
@@ -920,7 +948,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | Ticket | Builds |
 |---|---|
 | #3 | `Package.swift`, `Makefile`, `Packaging/`, `VRWire`, `VRCommand` (app, state, player, screenshot), `VRLease/Holder` and `ProcessTable`, a pass-through `ControlLease` and `LeaseStatus`, `VRReview/VideoInfo`, `VRStore/ContentHash`, `VRApp` shell: `AppServices`, `ReviewModel` (the player's part), `ControlServer`, `SocketListener`, `OperatorDesk`, `StateReport`, `Screenshotter`, `Player/` without `FrameGrabber`, `TimeText`, `MainWindow`, `EmptyState`, `Stage`, `TransportBar`, `Timeline` (the scrubber), `Shortcuts` (the player's keys), `Theme` |
-| #4 | `ControlLease`, `control take` and `release`, the gate, `LeaseIndicator`, `LeaseBanner` |
+| #4 | `ControlLease`, `control take` and `release` (`ControlCommand`), the gate with its timer and line of takes, the lease's handover on a relaunch, `LeaseIndicator`, `LeaseBanner` |
 | #5 | `VRReview` (comments, states, `ReviewSession`), `FrameGrabber`, `Composer`, `Timeline` markers, `Sidebar`, `comment` commands; `Library` paths for frames |
 | #6 | `Region`, `RegionOverlay`, crops, `--region` |
 | #7 | `Batch`, `Outbox`, `BatchPayload`, `ListenerDesk`, long polls, `wait`, `batch send`, `SendBar`, presence |

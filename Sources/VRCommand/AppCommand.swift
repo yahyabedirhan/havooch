@@ -1,9 +1,12 @@
 import Foundation
+import VRLease
 import VRWire
 
 /// `video-review app …`: `status` asks the running app; `open` launches it
 /// first when it doesn't run (through `AppLaunching`), on a demo folder with
-/// `--demo`; `quit` asks it to quit and waits until it's gone.
+/// `--demo`; `quit` asks it to quit and waits until it's gone. An `open`
+/// that quits one app to launch another hands the quit app's lease over to
+/// the launched one, so the opener keeps it, cap and all.
 public enum AppCommand {
     public static let entry = CommandTable.Entry(
         name: "app",
@@ -113,13 +116,15 @@ public enum AppCommand {
 
     /// The normal app's status when it runs. Otherwise it's launched, then
     /// asked for its status every quarter second until it answers, or exit 1
-    /// after about 10 seconds. A demo left running is quit first and its
-    /// pointer removed.
+    /// after about 10 seconds. A demo left running is quit first, its
+    /// pointer removed, and its lease handed over.
     private static func open(_ context: CommandContext) -> CommandResult {
         let normal = context.client(at: ControlSocket.url(in: context.support))
+        var handover: ControlLease.Term?
         if let demo = DemoPointer.recorded(in: context.support) {
-            if let refused = quitIfRunning(context.client(at: ControlSocket.url(in: demo.supportFolder)), context) {
-                return refused
+            switch quitIfRunning(context.client(at: ControlSocket.url(in: demo.supportFolder)), context) {
+            case .success(let lease): handover = lease
+            case .failure(let refused): return refused
             }
             do {
                 try DemoPointer.remove(in: context.support)
@@ -129,7 +134,7 @@ public enum AppCommand {
         }
         switch normal.send(.appOpen, json: context.json) {
         case .failure(.notRunning):
-            return launch(environment: [:], answeringAt: normal, context)
+            return launch(environment: [:], handing: handover, answeringAt: normal, context)
         case let answer:
             // It runs (or is there but failing): no second launch.
             return CommandContext.result(of: answer)
@@ -139,7 +144,8 @@ public enum AppCommand {
     /// The demo's status when the app already runs on `folder`. Otherwise
     /// the command is pointed at the demo's support folder, whatever app
     /// answers (the normal one, or another demo the pointer named) is quit,
-    /// and the app is launched on the demo and waited for as `open` does.
+    /// and the app is launched on the demo, with the quit app's lease handed
+    /// over, and waited for as `open` does.
     /// The pointer is written before anything is quit, so nothing is quit
     /// when it can't be, and removed again when no demo comes to run.
     private static func openDemo(_ folder: URL, _ context: CommandContext) -> CommandResult {
@@ -167,11 +173,16 @@ public enum AppCommand {
         var sockets = [ControlSocket.url(in: context.support)]
         if let previous, previous != pointer { sockets.append(ControlSocket.url(in: previous.supportFolder)) }
         var outcome: CommandResult?
+        var handover: ControlLease.Term?
         for socket in sockets where outcome == nil {
-            outcome = quitIfRunning(context.client(at: socket), context)
+            switch quitIfRunning(context.client(at: socket), context) {
+            case .success(let lease): handover = lease ?? handover
+            case .failure(let refused): outcome = refused
+            }
         }
         let result = outcome ?? launch(
             environment: [AppIdentity.supportVariable: support.path, AppIdentity.demoVariable: folder.path],
+            handing: handover,
             answeringAt: demo,
             context
         )
@@ -182,22 +193,24 @@ public enum AppCommand {
         return result
     }
 
-    /// Quits the app answering `client`, waiting until it's gone: nil once
-    /// nothing runs there (or never did), else what to exit with.
-    private static func quitIfRunning(_ client: ControlClient, _ context: CommandContext) -> CommandResult? {
-        if case .failure(.notRunning) = client.send(.appStatus) { return nil }
-        if case .failure(let result) = quit(client, context) { return result }
-        return nil
+    /// Quits the app answering `client`, waiting until it's gone: the lease
+    /// its reply handed back (nil when nothing ran there), else what to
+    /// exit with.
+    private static func quitIfRunning(_ client: ControlClient, _ context: CommandContext) -> Result<ControlLease.Term?, CommandResult> {
+        if case .failure(.notRunning) = client.send(.appStatus) { return .success(nil) }
+        return quit(client, context).map(\.lease)
     }
 
-    /// Launches the app with `environment`, then asks `client` for its
-    /// status every quarter second until it answers, or exit 1 after about
-    /// 10 seconds.
+    /// Launches the app with `environment`, and `handover` handed over in
+    /// it, then asks `client` for its status every quarter second until it
+    /// answers, or exit 1 after about 10 seconds.
     private static func launch(
         environment: [String: String],
+        handing handover: ControlLease.Term?,
         answeringAt client: ControlClient,
         _ context: CommandContext
     ) -> CommandResult {
+        let environment = handover.map { environment.merging(ControlLease.handover($0)) { _, lease in lease } } ?? environment
         do throws(AppLaunchFailure) {
             try context.launcher.launch(bundleID: AppIdentity.bundleID, environment: environment)
         } catch {

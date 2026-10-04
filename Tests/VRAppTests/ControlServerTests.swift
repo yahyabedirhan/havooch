@@ -33,14 +33,30 @@ let fixtureVideo = URL(fileURLWithPath: #filePath)
 
 private let holder = Holder(key: "test", name: "Claude Code", place: "/Users/me/repo")
 
-/// A control server over a fake player, with no window to capture.
+/// The time the server decides the lease at, set by the test.
 @MainActor
-private struct Rig {
+final class FakeClock {
+    var now = Date(timeIntervalSince1970: 0)
+
+    func set(_ seconds: TimeInterval) {
+        now = Date(timeIntervalSince1970: seconds)
+    }
+}
+
+/// A control server over a fake player, with no window to capture, a clock
+/// the test sets and times named in UTC.
+@MainActor
+struct Rig {
     let player = FakePlayer()
+    let clock = FakeClock()
     let model: ReviewModel
     let server: ControlServer
 
-    init(socket: URL = URL(fileURLWithPath: "/tmp/vr-unused/control.sock"), demo: URL? = nil) {
+    init(
+        socket: URL = URL(fileURLWithPath: "/tmp/vr-unused/control.sock"),
+        demo: URL? = nil,
+        lease: ControlLease = ControlLease()
+    ) {
         let model = ReviewModel(player: player, demoFolder: demo)
         self.model = model
         server = ControlServer(
@@ -49,13 +65,31 @@ private struct Rig {
             desk: OperatorDesk(model: model) { file, _ in
                 file.path.contains("unwritable") ? .failed(why: "couldn't write \(file.path)") : .captured
             },
-            now: { Date(timeIntervalSince1970: 1_000) },
+            lease: lease,
+            now: { [clock] in clock.now },
+            timeZone: TimeZone(identifier: "UTC")!,
             quit: {}
         )
     }
 
-    func send(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {
-        await server.reply(to: ControlMessage(request, holder: holder, json: json).encoded())
+    func send(_ request: ControlRequest, by sender: Holder? = nil, json: Bool = false) async -> ControlServer.Answer {
+        await server.reply(to: ControlMessage(request, holder: sender ?? holder, json: json).encoded())
+    }
+
+    /// A `take` that waits in line, sent without waiting for its answer;
+    /// returns once the server has it in line as the `count`th waiter.
+    func queue(_ sender: Holder, seconds: Int, as count: Int, json: Bool = false) async throws -> Task<ControlServer.Answer, Never> {
+        let waiting = Task { await send(.controlTake(waitSeconds: seconds), by: sender, json: json) }
+        try await untilWaiting(count)
+        return waiting
+    }
+
+    /// Returns once `count` takes wait in line, giving up after 2 seconds.
+    func untilWaiting(_ count: Int) async throws {
+        for _ in 0..<200 where server.lease.waiting(at: clock.now) != count {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(server.lease.waiting(at: clock.now) == count)
     }
 
     /// The reply's `output` read as a JSON object.
@@ -104,7 +138,7 @@ private struct Rig {
         #expect(await rig.send(.state).reply.output == """
             video: sample (0:21.233) \(fixtureVideo.path)
             player: paused at 0:10.000
-            lease: free
+            lease: Claude Code in /Users/me/repo, 60s left, 0 waiting
 
             """)
     }
@@ -199,14 +233,19 @@ private struct Rig {
         #expect(status["version"] as? String == AppIdentity.version)
         #expect(status["variant"] as? String == AppIdentity.variant)
         #expect(status["demo"] as? String == demo.path)
-        #expect(status["lease"] is NSNull)
+        #expect((status["lease"] as? [String: Any])?["holder"] as? String == "Claude Code")
         #expect((status["video"] as? [String: Any])?["title"] as? String == "sample")
     }
 
-    @Test func quitAnswersThenQuits() async {
+    @Test func quitAnswersWithTheLeaseItRenewedForARelaunchToHandOverThenQuits() async {
         let rig = Rig()
+        _ = await rig.send(.playerPause)
+        rig.clock.set(20)
+
         let answer = await rig.send(.appQuit)
-        #expect(answer == ControlServer.Answer(reply: .done("video-review quit\n"), quits: true))
+
+        let term = ControlLease.Term(holder: holder, taken: Date(timeIntervalSince1970: 0), ends: Date(timeIntervalSince1970: 80))
+        #expect(answer == ControlServer.Answer(reply: ControlReply(ok: true, output: "video-review quit\n", lease: term), quits: true))
         #expect(await rig.send(.appQuit, json: true).reply.output == #"{"quit":true}"# + "\n")
     }
 

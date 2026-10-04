@@ -16,6 +16,10 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
     @Test(arguments: [
         ControlRequest.appStatus,
         .state,
+        .controlTake(waitSeconds: nil),
+        .controlTake(waitSeconds: 0),
+        .controlTake(waitSeconds: 30),
+        .controlRelease,
         .appOpen,
         .appQuit,
         .playerOpen(path: "/Users/me/sample.mp4"),
@@ -108,9 +112,34 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         }
     }
 
+    @Test func aTakeNamesItsWaitOnlyWhenItHasOne() {
+        let waiting = String(decoding: ControlMessage(.controlTake(waitSeconds: 30), holder: holder).encoded(), as: UTF8.self)
+        #expect(waiting.hasPrefix(#"{"command":"control.take","holder":"#))
+        #expect(waiting.hasSuffix(#""json":false,"version":1,"waitSeconds":30}"#))
+        let plain = String(decoding: ControlMessage(.controlTake(waitSeconds: nil), holder: holder).encoded(), as: UTF8.self)
+        #expect(!plain.contains("waitSeconds"))
+    }
+
+    @Test(arguments: [-1, 3601, Int.max])
+    func aWaitOutsideZeroToAnHourIsRefused(seconds: Int) {
+        #expect(throws: ControlProtocolError.unreadable(
+            "the control command `control.take` needs a `waitSeconds` from 0 to 3600, not \(seconds)"
+        )) {
+            try ControlMessage.decode(raw(#""command":"control.take","waitSeconds":\#(seconds),"version":1,\#(holderJSON)"#))
+        }
+    }
+
+    @Test func onlyATakeThatWaitsHoldsItsConnectionLonger() {
+        #expect(ControlRequest.controlTake(waitSeconds: 30).wait == 30)
+        #expect(ControlRequest.controlTake(waitSeconds: nil).wait == 0)
+        #expect(ControlRequest.controlRelease.wait == 0)
+        #expect(ControlRequest.playerPlay.wait == 0)
+    }
+
     @Test func onlyRequestsThatDriveTheAppNeedTheLease() {
-        #expect(ControlRequest.appStatus.role == .free)
-        #expect(ControlRequest.state.role == .free)
+        for request: ControlRequest in [.appStatus, .state, .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 5), .controlRelease] {
+            #expect(request.role == .free)
+        }
         for request: ControlRequest in [
             .appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
             .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
@@ -131,6 +160,13 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         ] {
             #expect(try ControlReply.decode(reply.encoded()) == reply)
         }
+    }
+
+    @Test func aLeaseInAReplyHasItsTimesAsSecondsSince1970() {
+        let term = ControlLease.Term(holder: holder, taken: Date(timeIntervalSince1970: 10), ends: Date(timeIntervalSince1970: 70))
+        let reply = String(decoding: ControlReply(ok: true, lease: term).encoded(), as: UTF8.self)
+        #expect(reply.contains(#""lease":{"ends":70,"holder":"#))
+        #expect(reply.contains(#""taken":10}"#))
     }
 
     @Test func aReplyWithoutALeaseLeavesItOut() {

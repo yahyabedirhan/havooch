@@ -13,6 +13,9 @@ final class FakeApp: ControlTransport, AppLaunching, @unchecked Sendable {
     private var running: Set<String> = []
     private var sent: [(request: ControlRequest, json: Bool, socket: URL)] = []
     private var launched: [(bundleID: String, environment: [String: String])] = []
+    private var waited: [TimeInterval] = []
+    /// Set to make every exchange run out of time instead of answering.
+    var timesOut = false
     /// What the app answers each request with; `done` with the command's
     /// wire name by default.
     var answer: @Sendable (ControlMessage) -> ControlReply = { .done("\($0.request)\n") }
@@ -32,6 +35,8 @@ final class FakeApp: ControlTransport, AppLaunching, @unchecked Sendable {
     var requests: [ControlRequest] { lock.withLock { sent.map(\.request) } }
     var messages: [(request: ControlRequest, json: Bool, socket: URL)] { lock.withLock { sent } }
     var launches: [(bundleID: String, environment: [String: String])] { lock.withLock { launched } }
+    /// How long each exchange was given to answer, in the order sent.
+    var timeouts: [TimeInterval] { lock.withLock { waited } }
 
     /// The environment a command runs with: this fake as the socket and as
     /// Launch Services, and the temporary support folder.
@@ -61,7 +66,11 @@ final class FakeApp: ControlTransport, AppLaunching, @unchecked Sendable {
     func exchange(_ request: Data, socket: URL, timeout: TimeInterval) throws(ControlTransportFailure) -> Data {
         guard lock.withLock({ running.contains(socket.path) }) else { throw .notRunning }
         guard let message = try? ControlMessage.decode(request) else { throw .failed("the fake app couldn't read the request") }
-        lock.withLock { sent.append((message.request, message.json, socket)) }
+        lock.withLock {
+            sent.append((message.request, message.json, socket))
+            waited.append(timeout)
+        }
+        if timesOut { throw .timedOut }
         if message.request == .appQuit {
             lock.withLock { _ = running.remove(socket.path) }
             try? FileManager.default.removeItem(at: socket)

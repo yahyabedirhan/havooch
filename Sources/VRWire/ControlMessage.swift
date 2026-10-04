@@ -31,6 +31,10 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "app.status")
         case .state:
             wire = Wire(command: "state")
+        case .controlTake(let waitSeconds):
+            wire = Wire(command: "control.take", waitSeconds: waitSeconds)
+        case .controlRelease:
+            wire = Wire(command: "control.release")
         case .appOpen:
             wire = Wire(command: "app.open")
         case .appQuit:
@@ -77,6 +81,14 @@ public struct ControlMessage: Equatable, Sendable {
         switch wire.command {
         case "app.status": return .appStatus
         case "state": return .state
+        case "control.take":
+            if let seconds = wire.waitSeconds, !(0...ControlRequest.longestWait).contains(seconds) {
+                throw .unreadable(
+                    "the control command `control.take` needs a `waitSeconds` from 0 to \(ControlRequest.longestWait), not \(seconds)"
+                )
+            }
+            return .controlTake(waitSeconds: wire.waitSeconds)
+        case "control.release": return .controlRelease
         case "app.open": return .appOpen
         case "app.quit": return .appQuit
         case "player.open": return .playerOpen(path: try absolute(wire))
@@ -125,6 +137,7 @@ public struct ControlMessage: Equatable, Sendable {
         var path: String?
         var time: Double?
         var appearance: String?
+        var waitSeconds: Int?
     }
 }
 

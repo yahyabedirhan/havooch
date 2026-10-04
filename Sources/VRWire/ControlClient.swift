@@ -77,8 +77,11 @@ public struct ControlClient: Sendable {
         case failed(String)
     }
 
-    /// Sends `request`, asking for JSON output when `json` is set.
+    /// Sends `request`, asking for JSON output when `json` is set. A request
+    /// the app may hold before it answers (a `take` waiting in line) is
+    /// waited for that much longer.
     public func send(_ request: ControlRequest, json: Bool = false) -> Result<ControlReply, Failure> {
+        let timeout = timeout + request.wait
         let data: Data
         do throws(ControlTransportFailure) {
             let message = ControlMessage(request, holder: holder, json: json)
