@@ -1,0 +1,91 @@
+scripts/acceptance.sh "/Applications/Video Review (proto-1).app/Contents/Helpers/video-review"
+video-review acceptance: the v1 scenario of the spec, through the command line
+command line: /Applications/Video Review (proto-1).app/Contents/Helpers/video-review
+run's folder: /var/folders/qm/y1qzyq1n53s2wz7r13k1l9f40000gp/T/video-review-acceptance.0A5frx
+
+Step 1: open the app in demo mode
+  PASS  `app open --demo <folder>` exits 0
+  PASS  `state --json` answers with JSON
+  PASS  the app keeps its data in the demo folder
+
+Step 2: open the fixture video; seek, pause and add a comment
+  PASS  `player open` exits 0
+  PASS  the state names the open video
+  PASS  `player seek 0:10` exits 0
+  PASS  `player pause` exits 0
+  PASS  `comment add` at the playhead exits 0
+  PASS  one comment, queued
+
+Step 3: add a second comment with a region
+  PASS  `comment add --at 4 --region 0.275,0.375,0.275,0.225` exits 0
+  PASS  two comments, queued
+  PASS  a region outside the frame is refused
+
+Step 4: send the batch
+  PASS  `batch send` exits 0
+  PASS  both comments are sent
+
+Step 5: a second shell's `wait` returns the batch
+  PASS  `wait` exits 0
+  PASS  `wait` prints the batch as one JSON object
+  PASS  batch: `id` and `sentAt`
+  PASS  video: `path` is the fixture
+  PASS  video: `contentHash`, `title`, and a `duration` of 20 to 30 s
+  PASS  comments: two
+  PASS  context: every line of the fixture's sample.context.md
+  PASS  each comment has an id of its own
+  PASS  comment at 0:10: its text
+  PASS  comment at 0:10: `time` is 10 s
+  PASS  comment at 0:10: no crop
+  PASS  comment at 0:10: the keyframe is a PNG at an absolute path
+  PASS  comment at 0:10: the keyframe has the frame's size
+  PASS  comment at 0:10: the transcript window holds "Press command enter"
+  PASS  region comment: its text
+  PASS  region comment: `time` is 4 s
+  PASS  region comment: `region` is 0.275,0.375,0.275,0.225
+  PASS  region comment: the keyframe is a PNG at an absolute path
+  PASS  region comment: the keyframe has the frame's size
+  PASS  region comment: the crop is a PNG at an absolute path
+  PASS  region comment: the crop has the region's size (528x243)
+  PASS  region comment: the transcript window holds "Pause any video"
+
+Step 6: acknowledge, ask and answer, then finish both comments with a reply
+  PASS  `ack` exits 0
+  PASS  both comments are acknowledged
+  PASS  `thread answer` exits 0
+  PASS  `ask` exits 0
+  PASS  `ask` prints the person's answer
+  PASS  `status working` on the region comment
+  PASS  `reply` on the region comment
+  PASS  `status done` on the region comment
+  PASS  `reply` on the comment at 0:10
+  PASS  `status done` on the comment at 0:10, straight from acknowledged
+  PASS  `reply` on the batch
+  PASS  both comments are done
+  PASS  the region comment's thread: question, answer, reply
+  PASS  the other comment's thread: reply
+  PASS  the state holds the batch's messages
+  PASS  `screenshot --appearance light` exits 0
+  PASS  assets/screenshots/v1-proto-1/review-light.png is a PNG, 2200x1440
+  PASS  `screenshot --appearance dark` exits 0
+  PASS  assets/screenshots/v1-proto-1/review-dark.png is a PNG, 2200x1440
+
+Step 7: quit and open the app again
+  PASS  `app quit` exits 0
+  PASS  nothing answers after the quit
+  PASS  `app open --demo <folder>` exits 0 again
+  PASS  `player open` on the same video exits 0
+  PASS  the comments, threads and statuses are the ones from before the quit
+  PASS  both comments are still done
+  PASS  the region comment's thread is still question, answer, reply
+  PASS  the keyframes and the crop are still on disk
+
+Step 8: screenshots in light and dark
+  PASS  `screenshot --appearance light` exits 0
+  PASS  assets/screenshots/v1-proto-1/restart-light.png is a PNG, 2200x1440
+  PASS  `screenshot --appearance dark` exits 0
+  PASS  assets/screenshots/v1-proto-1/restart-dark.png is a PNG, 2200x1440
+  PASS  the light and the dark screenshot differ
+  PASS  `app quit` exits 0
+
+PASSED: 8 of 8 steps, 69 checks

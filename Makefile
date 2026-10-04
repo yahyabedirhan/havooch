@@ -5,6 +5,7 @@
 #   make test       run the tests (swift test); never drives the Mac
 #   make bundle     build/<APP_NAME>.app with the CLI in Contents/Helpers, ad-hoc signed
 #   make install    bundle, quit this build's running app, replace /Applications/<APP_NAME>.app
+#   make acceptance run the spec's v1 scenario against the installed app, in demo mode
 #   make run        run the app's executable from .build, without a bundle
 #   make clean
 
@@ -55,7 +56,7 @@ MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install run clean
+.PHONY: all build test bundle install acceptance run clean
 
 all: build
 
@@ -99,6 +100,11 @@ install: bundle
 	rm -rf "$(INSTALLED)"
 	ditto "$(APP_BUNDLE)" "$(INSTALLED)"
 	@echo "installed $(INSTALLED)"
+
+# Drives the installed app, so take turns with whoever else uses it. The
+# script gets the command line's path and knows nothing else of this build.
+acceptance:
+	scripts/acceptance.sh "$(INSTALLED)/Contents/Helpers/video-review"
 
 clean:
 	rm -rf $(BUILD_DIR) .build

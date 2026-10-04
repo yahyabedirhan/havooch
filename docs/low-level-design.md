@@ -208,7 +208,7 @@ public enum Identity {
 
 ```text
 Package.swift                         the targets and their links (eight once every module has code); swift-tools-version 6.2, macOS 26
-Makefile                              build, test, bundle, install, run, clean, later acceptance; reads Identity.variant
+Makefile                              build, test, bundle, install, acceptance, run, clean; reads Identity.variant
 Packaging/
   Info.plist                          the bundle's template: name, bundle id, version, video document types, usage strings
 
@@ -314,7 +314,8 @@ Tests/
   VRAppTests/                         ShortcutsTests (each key, and none while typing), FrameGeometryTests (letterboxed and pillarboxed, at several window sizes), RegionDrawTests (press, drag, Escape, release), RegionCommentTests (the drawn and the `--region` comment on the fixture: same crop), ControlServerTests (the server's leasing at a clock of the test's, and over the real socket), ListenerWaitTests (a batch from `batch send` to `wait` on the fixture: in memory at a clock of the test's, and over the real socket with a short heartbeat), TranscriptBatchTests (the transcript in the payload and in `state`: from the fixture's voiceover, and from a speech recognition run by hand that is still running at the send), ListenerAnswerTests (`ack`, `status`, `reply`, `ask` and `thread answer` on the fixture: in memory at a clock of the test's, and `ask` over the real socket), RestartTests (a model let go and another made on the same support folder: the same `state`, the listener's batches, the next ids, a renamed copy, another folder, a file that doesn't read, a typed note)
 
 scripts/
-  acceptance.sh                       the v1 acceptance scenario through the CLI, against the installed app in demo mode
+  acceptance.sh                       the v1 acceptance scenario through the CLI, against an installed app in demo mode; its one setting is the CLI's path
+assets/screenshots/v1-proto-1/        the acceptance run's light and dark screenshots, and its output
 .agents/skills/video-review-mate/     ── the listener skill ──
   SKILL.md                            the loop a listener session follows: listen, read the batch, work each comment, answer
   scripts/vr.sh                       finds the app's CLI and runs it; `listen` is `wait`, then `ack` at once
@@ -674,7 +675,7 @@ The state machine, in one place (`Comment.swift`):
 | `sent`, `acknowledged`, `working` | `done`, `failed` | `setStatus` |
 | `acknowledged`, `working` | `sent` | `requeue` only |
 
-Everything else is refused with `ReviewError.illegalMove(_:from:to:)`, which names the comment: `7f3a9c21-c1 is done and can't become working; a comment only moves forward: sent, acknowledged, working, then done or failed, which are final`. `setStatus` may skip a step forward (the acceptance scenario goes from `acknowledged` to `done`), never back, and never to the state the comment is already in. `acknowledge` moves only the batch's comments that are `sent`, so a second `ack`, or one that comes after a status, moves nothing back. A `draft` is the comment being typed: it exists only in memory, on `ReviewDesk`, and has no id until it is queued.
+Everything else is refused with `ReviewError.illegalMove(_:from:to:)`, which names the comment: `7f3a9c21-c1 is done and can't become working; a comment only moves forward: sent, acknowledged, working, then done or failed, which are final`. `setStatus` may skip a step forward (the acceptance scenario takes one comment from `acknowledged` to `done`), never back, and never to the state the comment is already in. `acknowledge` moves only the batch's comments that are `sent`, so a second `ack`, or one that comes after a status, moves nothing back. A `draft` is the comment being typed: it exists only in memory, on `ReviewDesk`, and has no id until it is queued.
 
 `ReviewError` cases: `emptyText`, `timeOutsideVideo(Double, duration:)`, `regionOutsideFrame`, `unknownComment(String)`, `unknownBatch(String)`, `notQueued(CommentID, CommentState)`, `emptyQueue`, `emptyMessage`, `notSent(CommentID, CommentState)`, `noOpenQuestion(CommentID)`, `illegalMove(CommentID, from:to:)`. Each has one `message` line; `emptyQueue` reads `the queue is empty: there is no comment to send`, `unknownComment` reads ``there is no comment `<id>` `` (a listener's command names a comment of any video, not only the open one's), and `noOpenQuestion` reads `<id> has no question waiting for an answer`. `no video is open` is the app's refusal (`ActionError.noVideo`): a review always has its video.
 
@@ -1272,13 +1273,26 @@ The skill has no test in `make test`. `vr.sh` was run against stand-in command l
 | `make test` | `swift test`; with the Command Line Tools alone it adds the flags that find the Testing framework, and shares one module cache, as Shipyard does |
 | `make bundle` | `build/<APP_NAME>.app`: the executable in `Contents/MacOS/VideoReview`, the CLI as `Contents/Helpers/video-review`, the stamped `Info.plist`; signs the CLI, then the bundle, ad hoc |
 | `make install` | quits this build's running app by its path, replaces `/Applications/<APP_NAME>.app`; doesn't start it |
-| `make acceptance` | `scripts/acceptance.sh` against the installed app |
+| `make acceptance` | `scripts/acceptance.sh` with the installed app's CLI path; drives the installed app in a demo folder of its own |
 | `make run`, `make clean` | as named |
 
 `APP_NAME` contains spaces and parentheses, so every recipe quotes it and no target is named after a file that contains it.
 
 - `make test` never drives the Mac. The pure modules are tested directly (lease tables with a clock value, the review's state machine, the payload, the ledger, the window cut, the source order, the version refusal, the content hash of a renamed copy). `VRCommandTests` runs `CLI.run` with a fake transport and launcher. `VRAppTests` covers the player's keys (`Shortcuts`), `FrameGeometry`, `RegionDraw` and the server's routing and leasing: it runs `ControlServer` on a real `AppModel` with no video and no window, at times the test sets, in memory and over the real socket in a temporary folder. `RegionCommentTests` alone opens the fixture video, in a model with no window and a muted player, and drives the pointer's path through `AppModel`'s region methods: the drawn comment and the `--region` comment must keep the same keyframe and the same crop, every decoded pixel equal. It compares pixels and not the files' bytes: each frame read carries a colour profile stamped with the second it was made in, so two PNG files of one frame can differ in that byte. It tests no view.
-- The highest seam is `scripts/acceptance.sh`: the eight steps of the spec's scenario through the installed CLI in demo mode, checked with `jq` on `state --json` and the payload.
+- The highest seam is `scripts/acceptance.sh`: the eight steps of the spec's scenario through the installed CLI in demo mode. See [The acceptance scenario](#the-acceptance-scenario).
+
+#### The acceptance scenario
+
+`scripts/acceptance.sh <path to Contents/Helpers/video-review>` (or `VIDEO_REVIEW_CLI`) runs the spec's eight steps against an installed app and prints one `PASS` or `FAIL` line per check, then `PASSED: 8 of 8 steps, 69 checks` (exit 0) or `FAILED: …` with the steps that failed (exit 1). `make acceptance` gives it this build's path, made from `Identity.variant`; the script itself knows nothing of the build, so the same file runs against any build that keeps the spec's CLI contract. It needs `bash`, `jq` and `sips`, which macOS ships.
+
+- **A run of its own.** Each run makes a new folder under `$TMPDIR` with the demo folder, the payload and the screenshots in it (`ACCEPTANCE_SCREENSHOTS` moves the screenshots), opens the video from `fixtures/sample/`, and quits the app at the end, passed or not. It never reads the person's data.
+- **Two shells.** The operator and the listener are two holders, set through `VIDEO_REVIEW_CONTROL_KEY`. The operator's first leased command takes the lease and `app quit` hands it to the app that opens next, so the script never calls `control take`. After its first `wait` returns the batch, the listener keeps a second `wait` open in the background, as the skill does, so the app shows it present; the script ends that `wait` before the quit.
+- **Ids come from the payload.** The spec fixes the payload's fields and not what `comment add` prints, so the two comments are found in the payload, by whether they have a region.
+- **What is checked.** Step 5: the keyframes are PNG files at absolute paths, 1920 by 1080; the crop is a PNG of the region's size in the frame's pixels, a pixel either way; the transcript windows hold "Press command enter" (at 0:10) and "Pause any video" (at 0:04); `context` holds every line of `sample.context.md`. Step 6: `thread answer` is tried until the app takes it, since it is refused until the background `ask` has put its question; `ask` then exits 0 with the answer. The region comment goes through `working`, the other from `acknowledged` straight to `done`. Step 7: `state` is refused after the quit; after `app open` and `player open` on the same video, the comments with their statuses and threads equal the ones read before the quit, and the keyframes and the crop are still on disk.
+- **What the spec leaves open** is in one block at the head of the script: the shape of `state --json` (`.app.support`, `.video.path`, and `.comments[]` with `id`, `time`, `text`, `region`, `state` and `thread[]` of `author`, `kind`, `text`), and the names inside a payload's `region` (`x`, `y`, `w`, `h`) and transcript line (`text`). Another build changes those filters and nothing else. Everything else is exit codes, the payload's fields and the item states.
+- **Screenshots.** `review-light.png` and `review-dark.png` are taken at the end of step 6, paused on the region comment's frame: that comment is still the one in focus, as the last one added, so its rectangle is on the frame. `restart-light.png` and `restart-dark.png` are step 8, after the restart: the same review read back from disk, with no comment in focus, since focus isn't kept across runs and the contract has no command that selects a comment. The pull request's copies are in `assets/screenshots/v1-proto-1/`, beside `acceptance-output.txt`, the output of the run that made them.
+
+The script drives the installed app, so it isn't part of `make test`. It was run on a clean `make install`.
 
 ---
 
@@ -1574,6 +1588,6 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | #10 Mate: answers | `acknowledge`, `setStatus`, `reply`, `ask`, `answer` in `Review`, the question properties of `Comment`, the errors `emptyMessage`, `notSent`, `noOpenQuestion`, `illegalMove`; `ReviewDesk.hash(naming:)`; `admit`, `acknowledge`, `setStatus`, `reply`, `ask`, `answered` and `ledger.finish` in `ListenerQueue`; `AppModel.answer`, the notice; `ThreadView`, `BatchCard` (with `BatchHeader`, moved out of `Sidebar`), `NoticeToast`, the question's style in `StatusStyle`; `notice` in `StateSnapshot`; the rows and routes of `ack`, `status`, `reply`, `ask`, `thread answer`, exit 3 for `ask`; `ReviewAnswerTests`, `ListenerAnswerTests` |
 | #11 Comment: persist | `VRStore/ReviewStore`, `StoredFile`, `AppState`, the rest of `SupportLayout`; `TranscriptCache` on `StoredFile`; `Batch`'s stored form; `ListenerLedger.reconcile`; `ReviewDesk` reading at launch, saving in `change` and `add`, `changeTyped` and `settle`; `ListenerQueue.record` and its launch; `AppModel.reopenLastVideo`, `leaving`, `typeNote`, `endNote`, `ActionError.store`; the server started after the reopen; `ReviewStoreTests`, `RestartTests`, the reconcile cases of `ListenerLedgerTests` |
 | #12 Mate: the skill | `.agents/skills/video-review-mate/SKILL.md` and `scripts/vr.sh`; the link `.claude/skills/video-review-mate`; the skill's rows in `AGENTS.md` |
-| #13 Proto: acceptance | `scripts/acceptance.sh`, `make acceptance`, `assets/screenshots/` |
+| #13 Proto: acceptance | `scripts/acceptance.sh`, `make acceptance`, `assets/screenshots/v1-proto-1/` (four screenshots and the run's output) |
 
 #4 and #5 can run side by side (lease files against review files; both add rows to `CommandTable` and routes to `ControlServer`, in separate lines). #8, #9 and #10 can run side by side after #7 (Transcript against context against threads; they meet only in `AppModel.sendBatch`, `ListenerQueue.deliverIfPossible` and the command table).
