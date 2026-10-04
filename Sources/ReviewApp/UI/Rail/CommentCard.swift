@@ -3,8 +3,8 @@ import ReviewStore
 import ReviewWire
 import SwiftUI
 
-/// One comment in the rail: its pin, time and state, the keyframe and the
-/// text. A click selects it and moves the player to its time. A queued card
+/// One comment in the rail: its pin, time and state, a picture (the
+/// region's crop, else the keyframe) and the text. A click selects it and moves the player to its time. A queued card
 /// can be edited and deleted; no other card shows those controls.
 struct CommentCard: View {
     let model: AppModel
@@ -68,6 +68,13 @@ struct CommentCard: View {
             MarkerPin(number: number, state: comment.state, isSelected: isSelected)
             Text(TimeCode.text(comment.time))
                 .font(.callout.monospacedDigit().weight(.semibold))
+            if comment.region != nil {
+                Image(systemName: "rectangle.dashed")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .help("On a region of the frame")
+                    .accessibilityLabel("On a region of the frame")
+            }
             StateChip(state: comment.state)
             Spacer(minLength: 4)
             if comment.state.isEditable, edited == nil {
@@ -103,7 +110,8 @@ struct CommentCard: View {
     }
 
     private func loadThumbnail() async {
-        guard let file = model.keyframe(of: comment) else { return }
+        // What the comment points at: its region's crop, else the whole frame.
+        guard let file = model.crop(of: comment) ?? model.keyframe(of: comment) else { return }
         // Twice the card's size, for a sharp picture on a Retina display.
         thumbnail = await Self.thumbnail(of: file, side: Int(Self.thumbnailSize.width) * 2)
     }

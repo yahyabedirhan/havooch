@@ -31,12 +31,25 @@ struct ControlMessageTests {
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
+        .commentAdd(text: "This box", at: 12.5, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
+        .commentAdd(text: "This box", at: nil, region: .init(x: 0, y: 0, w: 1, h: 1)),
         .commentEdit(id: "c-7f3a9c2e", text: "Slower"), .commentDelete(id: "c-7f3a9c2e"),
     ])
     func roundTrip(request: ControlRequest) throws {
         for json in [false, true] {
             let message = ControlMessage(request, holder: Self.holder, json: json)
             #expect(try ControlMessage.decode(message.encoded()) == message)
+        }
+    }
+
+    @Test("a region is four numbers with commas between them, and anything else isn't one")
+    func rectangle() {
+        #expect(ControlRequest.Rectangle("0.25,0.2,0.3,0.25") == .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
+        #expect(ControlRequest.Rectangle("0, 0, 1, 1") == .init(x: 0, y: 0, w: 1, h: 1))
+        // Numbers outside the frame still read: the app refuses them in words.
+        #expect(ControlRequest.Rectangle("0.9,0.2,0.3,0.25") != nil)
+        for text in ["", "0.25,0.2,0.3", "0.25,0.2,0.3,0.25,1", "a,b,c,d", "0.25,,0.3,0.25", "0.25 0.2 0.3 0.25", "nan,0,1,1", "inf,0,1,1"] {
+            #expect(ControlRequest.Rectangle(text) == nil, "\(text)")
         }
     }
 

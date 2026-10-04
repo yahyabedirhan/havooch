@@ -5,9 +5,9 @@ import ReviewWire
 enum CommentCommands {
     static let commands: [Command] = [
         Command(
-            name: "comment add", synopsis: "comment add <text> [--at <time>]",
-            summary: "queue a comment at a time, or where the player is",
-            valuedOptions: ["--at"]
+            name: "comment add", synopsis: "comment add <text> [--at <time>] [--region x,y,w,h]",
+            summary: "queue a comment at a time, or where the player is; --region is 0 to 1 from the frame's top-left corner",
+            valuedOptions: ["--at", "--region"]
         ) { arguments, _ throws(UsageError) in
             let text = try arguments.one("<text>")
             var at: Double?
@@ -17,7 +17,16 @@ enum CommentCommands {
                 }
                 at = seconds
             }
-            return .send(.commentAdd(text: text, at: at))
+            var region: ControlRequest.Rectangle?
+            if let numbers = arguments.options["--region"] {
+                guard let rectangle = ControlRequest.Rectangle(numbers) else {
+                    throw UsageError(
+                        "`\(numbers)` isn't a region; write x,y,w,h as four numbers from 0 to 1, from the frame's top-left corner (`0.25,0.2,0.3,0.25`)"
+                    )
+                }
+                region = rectangle
+            }
+            return .send(.commentAdd(text: text, at: at, region: region))
         },
         Command(name: "comment edit", synopsis: "comment edit <id> <text>", summary: "change a queued comment's text") {
             arguments, _ throws(UsageError) in

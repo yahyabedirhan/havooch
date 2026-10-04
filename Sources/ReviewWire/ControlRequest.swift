@@ -29,9 +29,10 @@ public enum ControlRequest: Equatable, Sendable {
     /// `video-review player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
-    /// `video-review comment add <text> [--at <time>]`: a comment queued at
-    /// `at` seconds, or at the player's time when it's nil.
-    case commentAdd(text: String, at: Double?)
+    /// `video-review comment add <text> [--at <time>] [--region x,y,w,h]`: a
+    /// comment queued at `at` seconds, or at the player's time when it's
+    /// nil, on `region` of the frame when it has one.
+    case commentAdd(text: String, at: Double?, region: Rectangle? = nil)
     /// `video-review comment edit <id> <text>`: a queued comment's new text.
     case commentEdit(id: String, text: String)
     /// `video-review comment delete <id>`: a queued comment removed.
@@ -41,6 +42,29 @@ public enum ControlRequest: Equatable, Sendable {
     /// `path`, in `appearance` when it's set, as the Mac shows it otherwise.
     /// The lease banner is left out unless `withBanner` asks for it.
     case screenshot(path: String, appearance: Appearance?, withBanner: Bool = false)
+
+    /// The four numbers of `--region x,y,w,h` as they were written. The
+    /// app decides whether they're a region of the frame.
+    public struct Rectangle: Codable, Equatable, Sendable {
+        public var x: Double
+        public var y: Double
+        public var w: Double
+        public var h: Double
+
+        public init(x: Double, y: Double, w: Double, h: Double) {
+            (self.x, self.y, self.w, self.h) = (x, y, w, h)
+        }
+
+        /// Reads `x,y,w,h`; nil when it isn't four numbers.
+        public init?(_ text: String) {
+            let numbers = text.split(separator: ",", omittingEmptySubsequences: false)
+                .map { Double($0.trimmingCharacters(in: .whitespaces)) }
+            guard numbers.count == 4, let x = numbers[0], let y = numbers[1], let w = numbers[2], let h = numbers[3],
+                  [x, y, w, h].allSatisfy(\.isFinite)
+            else { return nil }
+            self.init(x: x, y: y, w: w, h: h)
+        }
+    }
 
     /// The appearance `screenshot` draws in.
     public enum Appearance: String, Equatable, Sendable, CaseIterable {

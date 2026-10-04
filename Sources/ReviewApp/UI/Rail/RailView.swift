@@ -61,7 +61,7 @@ struct RailView: View {
                 .padding(.bottom, 2)
             Text("No comments yet")
                 .font(.headline)
-            Text("Press C to comment on the moment you're watching. Comments queue here, then go to your agent as one batch.")
+            Text("Press C to comment on the moment you're watching, or drag on the frame to comment on a part of it. Comments queue here, then go to your agent as one batch.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

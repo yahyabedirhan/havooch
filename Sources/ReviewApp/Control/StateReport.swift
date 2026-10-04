@@ -1,4 +1,5 @@
 import Foundation
+import ReviewCore
 import ReviewLease
 import ReviewWire
 
@@ -26,6 +27,19 @@ struct StateReport: Encodable, Equatable {
     struct Draft: Encodable, Equatable {
         var time: Double
         var text: String
+        /// The region the comment is about; `null` for the whole frame.
+        var region: Region?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(time, forKey: .time)
+            try container.encode(text, forKey: .text)
+            try container.encode(region, forKey: .region)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case time, text, region
+        }
     }
 
     struct Comment: Encodable, Equatable {
@@ -35,6 +49,27 @@ struct StateReport: Encodable, Equatable {
         var state: String
         /// The PNG of the frame at `time`.
         var keyframePath: String
+        /// The part of the frame the comment points at, 0 to 1 from the
+        /// frame's top-left corner; `null` for the whole frame.
+        var region: Region?
+        /// The PNG of the region, cut from the keyframe; `null` with no
+        /// region.
+        var cropPath: String?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(time, forKey: .time)
+            try container.encode(text, forKey: .text)
+            try container.encode(state, forKey: .state)
+            try container.encode(keyframePath, forKey: .keyframePath)
+            try container.encode(region, forKey: .region)
+            try container.encode(cropPath, forKey: .cropPath)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, time, text, state, keyframePath, region, cropPath
+        }
     }
 
     struct Player: Encodable, Equatable {
@@ -105,7 +140,10 @@ struct StateReport: Encodable, Equatable {
     /// The comments, one line each under their count.
     private var commentLines: String {
         guard !comments.isEmpty else { return "none" }
-        let lines = comments.map { "  \($0.id) \(TimeCode.text($0.time)) \($0.state): \($0.text.replacing("\n", with: " "))" }
+        let lines = comments.map {
+            let region = $0.region.map { " region \($0.text)" } ?? ""
+            return "  \($0.id) \(TimeCode.text($0.time))\(region) \($0.state): \($0.text.replacing("\n", with: " "))"
+        }
         return (["\(comments.count) (\(queue.count) queued)"] + lines).joined(separator: "\n")
     }
 

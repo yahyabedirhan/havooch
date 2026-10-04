@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 @testable import ReviewApp
+import ReviewCore
 import ReviewWire
 import Testing
 
@@ -36,11 +37,13 @@ struct ControlServerTests {
             return index
         }
 
-        func addComment(text: String, at: Double?) async throws(AppRefusal) -> StateReport.Comment {
-            try record("comment add \(text) at \(at.map { "\($0)" } ?? "the player's time")")
+        func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment {
+            let place = region.map { " on \($0.text)" } ?? ""
+            try record("comment add \(text) at \(at.map { "\($0)" } ?? "the player's time")\(place)")
             let id = "c-0000000\(comments.count + 1)"
             let comment = StateReport.Comment(
-                id: id, time: at ?? time, text: text, state: "queued", keyframePath: "/demo/videos/abc/frames/\(id).png"
+                id: id, time: at ?? time, text: text, state: "queued", keyframePath: "/demo/videos/abc/frames/\(id).png",
+                region: region, cropPath: region.map { _ in "/demo/videos/abc/crops/\(id).png" }
             )
             comments.append(comment)
             comments.sort { $0.time < $1.time }
@@ -214,12 +217,37 @@ struct ControlServerTests {
         ])
     }
 
+    @Test("a comment on a region reaches the app with its region, and answers with the region and the crop's path")
+    func regionComment() async throws {
+        let region = ControlRequest.Rectangle(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
+        #expect(await answer(.commentAdd(text: "This box", at: 12.5, region: region)).reply
+            == .done("c-00000001 queued at 0:12.5 on the region 0.25,0.2,0.3,0.25\n"))
+        #expect(app.calls == ["comment add This box at 12.5 on 0.25,0.2,0.3,0.25"])
+
+        let added = try object(await answer(.commentAdd(text: "That box", at: 3, region: region), json: true).reply.output)
+        let comment = try #require(added["comment"] as? [String: Any])
+        #expect(comment["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
+        #expect(comment["cropPath"] as? String == "/demo/videos/abc/crops/c-00000002.png")
+        #expect(await answer(.state).reply.output.contains("  c-00000001 0:12.5 region 0.25,0.2,0.3,0.25 queued: This box\n"))
+    }
+
+    @Test("numbers that aren't a region of the frame are refused before the app is asked", arguments: [
+        ControlRequest.Rectangle(x: 0.9, y: 0.2, w: 0.3, h: 0.25), .init(x: 0.25, y: 0.2, w: 0, h: 0.25),
+        .init(x: -0.1, y: 0.2, w: 0.3, h: 0.25), .init(x: 0.25, y: 0.2, w: 0.3, h: 1.5),
+    ])
+    func badRegion(rectangle: ControlRequest.Rectangle) async {
+        let reply = await answer(.commentAdd(text: "This box", at: 12.5, region: rectangle)).reply
+        #expect(!reply.ok)
+        #expect(reply.error.hasPrefix("the region \(rectangle.x),\(rectangle.y),\(rectangle.w),\(rectangle.h) isn't a rectangle inside the frame"))
+        #expect(app.calls.isEmpty)
+    }
+
     @Test("state --json lists the comments in time order, and the queue by id")
     func commentsJSON() async throws {
         let added = try object(await answer(.commentAdd(text: "Later", at: 12.5), json: true).reply.output)
         #expect(added["comment"] as? [String: AnyHashable] == [
             "id": "c-00000001", "time": 12.5, "text": "Later", "state": "queued",
-            "keyframePath": "/demo/videos/abc/frames/c-00000001.png",
+            "keyframePath": "/demo/videos/abc/frames/c-00000001.png", "region": NSNull(), "cropPath": NSNull(),
         ])
         #expect(added.count == 1)
         _ = await answer(.commentAdd(text: "Earlier", at: 3))

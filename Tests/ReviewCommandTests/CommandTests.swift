@@ -24,6 +24,10 @@ struct CommandTests {
         (["comment", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
         (["comment", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
         (["comment", "add", "--at", "12.5", "Too fast here"], .commentAdd(text: "Too fast here", at: 12.5)),
+        (["comment", "add", "This box", "--region", "0.25,0.2,0.3,0.25"],
+         .commentAdd(text: "This box", at: nil, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
+        (["comment", "add", "--region", "0,0,1,1", "This box", "--at", "0:10"],
+         .commentAdd(text: "This box", at: 10, region: .init(x: 0, y: 0, w: 1, h: 1))),
         (["comment", "edit", "c-7f3a9c2e", "Slower here"], .commentEdit(id: "c-7f3a9c2e", text: "Slower here")),
         (["comment", "delete", "c-7f3a9c2e"], .commentDelete(id: "c-7f3a9c2e")),
     ])
@@ -133,7 +137,9 @@ struct CommandTests {
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--with-banner"],
         ["comment"], ["comment", "add"], ["comment", "add", "Too", "fast"], ["comment", "add", "Too fast", "--at", "soon"],
-        ["comment", "add", "Too fast", "--at"], ["comment", "edit"], ["comment", "edit", "c-7f3a9c2e"],
+        ["comment", "add", "Too fast", "--at"], ["comment", "add", "This box", "--region"],
+        ["comment", "add", "This box", "--region", "0.25,0.2,0.3"], ["comment", "add", "This box", "--region", "left,top,0.3,0.25"],
+        ["comment", "edit"], ["comment", "edit", "c-7f3a9c2e"],
         ["comment", "edit", "c-7f3a9c2e", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "c-1", "c-2"],
     ])
     func usage(arguments: [String]) {

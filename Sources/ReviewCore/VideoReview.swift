@@ -41,11 +41,14 @@ public struct VideoReview: Codable, Equatable, Sendable {
         comments.first { $0.id == id }
     }
 
-    /// Queues a comment at `time`. The text loses the space around it; a
-    /// text with no words is refused.
+    /// Queues a comment at `time`, on `region` of the frame when it has
+    /// one. The text loses the space around it; a text with no words is
+    /// refused.
     @discardableResult
-    public mutating func addComment(id: ItemID, time: TimeInterval, text: String) throws(ReviewRefusal) -> Comment {
-        let comment = Comment(id: id, time: time, text: try Self.words(text), state: .queued)
+    public mutating func addComment(
+        id: ItemID, time: TimeInterval, text: String, region: Region? = nil
+    ) throws(ReviewRefusal) -> Comment {
+        let comment = Comment(id: id, time: time, text: try Self.words(text), state: .queued, region: region)
         let index = comments.firstIndex { $0.time > time } ?? comments.endIndex
         comments.insert(comment, at: index)
         return comment

@@ -13,6 +13,9 @@ final class PlayerEngine {
     private(set) var isPlaying = false
     /// The open video's length in seconds; 0 with no video.
     private(set) var duration: Double = 0
+    /// The size of the open video's picture as it's shown; zero with no
+    /// video.
+    private(set) var videoSize = CGSize.zero
     /// One frame's length in seconds.
     private(set) var frameDuration: Double = 1.0 / 30
     /// The open video, for reading its frames; nil with no video.
@@ -55,10 +58,15 @@ final class PlayerEngine {
         }
         let length: CMTime
         let frameRate: Float
+        let shown: CGSize
         do {
             // The video track's own length: a sound track may run a few
             // milliseconds past the last frame.
             (length, frameRate) = (try await track.load(.timeRange).duration, try await track.load(.nominalFrameRate))
+            // The picture as it's shown: a rotated video's sides are swapped.
+            let box = CGRect(origin: .zero, size: try await track.load(.naturalSize))
+                .applying(try await track.load(.preferredTransform))
+            shown = CGSize(width: abs(box.width), height: abs(box.height))
         } catch {
             throw AppRefusal("can't play \(url.path): \(error.localizedDescription)")
         }
@@ -81,6 +89,7 @@ final class PlayerEngine {
         }
         self.asset = asset
         duration = length.seconds
+        videoSize = shown
         frameDuration = frameRate > 0 ? 1 / Double(frameRate) : 1.0 / 30
         time = 0
     }

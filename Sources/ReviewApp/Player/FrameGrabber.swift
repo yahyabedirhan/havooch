@@ -1,10 +1,12 @@
 import AVFoundation
+import ReviewCore
 import ReviewStore
 
-/// A comment's keyframe: the frame of the video at the comment's time, read
-/// from the asset and not from the window. A comment from the UI and one
-/// from the CLI therefore get the same pixels, at the video's own size,
-/// whatever the window's size, and with no screen permission.
+/// A comment's pictures: the keyframe, which is the frame of the video at
+/// the comment's time, and the crop of its region. Both are read from the
+/// asset and not from the window. A comment from the UI and one from the
+/// CLI therefore get the same pixels, at the video's own size, whatever the
+/// window's size, and with no screen permission.
 enum FrameGrabber {
     /// The frame of `asset` on screen at `seconds`.
     nonisolated static func keyframe(
@@ -23,15 +25,30 @@ enum FrameGrabber {
         }
     }
 
-    /// The keyframe written as a PNG at `file`, off the main actor.
-    nonisolated static func writeKeyframe(
-        of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double, to file: URL
+    /// The part of `keyframe` inside `region`: the keyframe's own pixels.
+    nonisolated static func crop(_ keyframe: CGImage, to region: Region) throws(AppRefusal) -> CGImage {
+        let pixels = region.pixels(width: keyframe.width, height: keyframe.height)
+        guard let crop = keyframe.cropping(to: CGRect(x: pixels.x, y: pixels.y, width: pixels.width, height: pixels.height)) else {
+            throw AppRefusal("couldn't cut the region \(region.text) from the frame")
+        }
+        return crop
+    }
+
+    /// The keyframe written as a PNG at `file`, and the crop of `region`
+    /// at `cropFile` when the comment has one, off the main actor. When
+    /// either can't be written, neither is left behind.
+    nonisolated static func writeImages(
+        of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double,
+        keyframe file: URL, region: Region?, crop cropFile: URL
     ) async throws(AppRefusal) {
         let image = try await keyframe(of: asset, at: seconds, duration: duration, frameDuration: frameDuration)
-        do throws(ImageFiles.Failure) {
+        do {
             try ImageFiles.write(image, to: file)
+            if let region { try ImageFiles.write(try crop(image, to: region), to: cropFile) }
         } catch {
-            throw AppRefusal(error.reason)
+            ImageFiles.remove(file)
+            ImageFiles.remove(cropFile)
+            throw (error as? AppRefusal) ?? AppRefusal((error as? ImageFiles.Failure)?.reason ?? "\(error)")
         }
     }
 

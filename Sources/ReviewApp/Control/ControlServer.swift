@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import ReviewCore
 import ReviewLease
 import ReviewWire
 
@@ -21,9 +22,10 @@ protocol AppControlling: AnyObject {
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
-    /// Queues a comment at `at`, or at the player's time, once its keyframe
-    /// is on disk.
-    func addComment(text: String, at: Double?) async throws(AppRefusal) -> StateReport.Comment
+    /// Queues a comment at `at`, or at the player's time, on `region` of
+    /// the frame when it has one, once its keyframe and its crop are on
+    /// disk.
+    func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment
     func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment
     func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment
 }
@@ -170,9 +172,20 @@ final class ControlServer {
             case .screenshot(let path, let appearance, let withBanner):
                 try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, withBanner: withBanner)
                 return done(path, Output(path: path), json)
-            case .commentAdd(let text, let at):
-                let comment = try await app.addComment(text: text, at: at)
-                return done("\(comment.id) queued at \(TimeCode.text(comment.time))", Output(comment: comment), json)
+            case .commentAdd(let text, let at, let rectangle):
+                // Numbers that aren't a region of the frame are refused
+                // before the app is asked for anything.
+                var region: Region?
+                if let rectangle {
+                    do throws(ReviewRefusal) {
+                        region = try Region(x: rectangle.x, y: rectangle.y, w: rectangle.w, h: rectangle.h)
+                    } catch {
+                        throw AppRefusal(error.line)
+                    }
+                }
+                let comment = try await app.addComment(text: text, at: at, region: region)
+                let place = comment.region.map { " on the region \($0.text)" } ?? ""
+                return done("\(comment.id) queued at \(TimeCode.text(comment.time))\(place)", Output(comment: comment), json)
             case .commentEdit(let id, let text):
                 let comment = try app.editComment(id, text: text)
                 return done("\(comment.id) edited", Output(comment: comment), json)

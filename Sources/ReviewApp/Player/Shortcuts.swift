@@ -2,9 +2,9 @@ import AppKit
 
 /// The player's keys, as in QuickTime: Space or K plays and pauses, Left and
 /// Right move 5 seconds, Shift+Left and Shift+Right move one frame, Up and
-/// Down jump to the marker before and after, C or Return starts a comment.
-/// They're off while a text view has the focus, so typing never reaches the
-/// player.
+/// Down jump to the marker before and after, C or Return starts a comment,
+/// Escape drops a rectangle that's being drawn. They're off while a text
+/// view has the focus, so typing never reaches the player.
 @MainActor
 enum Shortcuts {
     /// The seconds Left and Right move.
@@ -18,6 +18,9 @@ enum Shortcuts {
         /// To the marker after the player's time, or the one before it.
         case marker(forward: Bool)
         case startComment
+        /// Escape: drops the rectangle being drawn, or the comment box
+        /// when its text view lost the focus.
+        case cancel
     }
 
     /// The action of the key `keyCode` with `modifiers`, if it has one.
@@ -33,6 +36,7 @@ enum Shortcuts {
         case 126: return shift ? nil : .marker(forward: false) // Up
         case 125: return shift ? nil : .marker(forward: true) // Down
         case 8, 36, 76: return shift ? nil : .startComment // C, Return, Enter
+        case 53: return .cancel // Escape
         default: return nil
         }
     }
@@ -59,6 +63,8 @@ enum Shortcuts {
         case .step(let frames): model.step(frames: frames)
         case .marker(let forward): model.jumpToMarker(forward: forward)
         case .startComment: model.startDraft()
+        // With nothing to cancel, Escape stays the window's.
+        case .cancel: return model.escape()
         }
         return true
     }

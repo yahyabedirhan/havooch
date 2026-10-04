@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// written:
 ///
 ///     <support>/videos/<contentHash>/frames/<comment-id>.png
+///     <support>/videos/<contentHash>/crops/<comment-id>.png
 public struct ImageFiles: Sendable {
     public let support: URL
 
@@ -29,6 +30,13 @@ public struct ImageFiles: Sendable {
     /// The keyframe of `comment` on the video with `contentHash`.
     public func keyframe(of comment: ItemID, contentHash: String) -> URL {
         folder(of: contentHash).appendingPathComponent("frames", isDirectory: true)
+            .appendingPathComponent("\(comment.text).png")
+    }
+
+    /// The crop of `comment`'s region on the video with `contentHash`. Only
+    /// a comment on a region has the file.
+    public func crop(of comment: ItemID, contentHash: String) -> URL {
+        folder(of: contentHash).appendingPathComponent("crops", isDirectory: true)
             .appendingPathComponent("\(comment.text).png")
     }
 
