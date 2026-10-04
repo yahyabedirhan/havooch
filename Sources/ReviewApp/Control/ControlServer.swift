@@ -28,6 +28,9 @@ protocol AppControlling: AnyObject {
     func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment
     func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment
     func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment
+    /// Sets the open video's context note, without the space around it,
+    /// and returns it as it's kept. An empty text clears the note.
+    func setContextNote(_ text: String) throws(AppRefusal) -> String
     /// Sends every queued comment as one batch, and hands it to the
     /// listener queue.
     func sendBatch() async throws(AppRefusal) -> StateReport.Batch
@@ -209,6 +212,12 @@ final class ControlServer {
             case .commentDelete(let id):
                 let comment = try app.deleteComment(id)
                 return done("\(comment.id) deleted", Output(deleted: comment.id), json)
+            case .contextSet(let text):
+                let note = try app.setContextNote(text)
+                let line = note.isEmpty
+                    ? "context note cleared"
+                    : "context note set (\(note.count) character\(note.count == 1 ? "" : "s"))"
+                return done(line, Output(video: app.state().video), json)
             case .batchSend:
                 let batch = try await app.sendBatch()
                 let count = batch.commentIds.count

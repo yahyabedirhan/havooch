@@ -39,6 +39,7 @@ struct RootView: View {
                     .sharedBackgroundVisibility(.hidden)
             }
             if model.video != nil {
+                ToolbarItem(placement: .primaryAction) { ContextButton(model: model) }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         model.isRailVisible.toggle()

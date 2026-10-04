@@ -33,9 +33,10 @@ public enum Presence: String, Codable, Sendable, CaseIterable {
 ///
 /// A batch goes `enqueue → deliverNext → finished`. A `wait` from another
 /// holder key is a new listener session: what the last one took and didn't
-/// finish goes back to the front of the line. `pending`, `taken` and
-/// `session` are what's kept on disk; whether a `wait` is open and when the
-/// listener was last heard belong to one run of the app.
+/// finish goes back to the front of the line, and it gets each video's
+/// context again (`contextSent`). `pending`, `taken`, `session` and
+/// `contextSent` are what's kept on disk; whether a `wait` is open and when
+/// the listener was last heard belong to one run of the app.
 public struct Outbox: Codable, Equatable, Sendable {
     /// Sent and not yet delivered, first in, first out.
     public private(set) var pending: [BatchRef] = []
@@ -47,6 +48,9 @@ public struct Outbox: Codable, Equatable, Sendable {
     public private(set) var isWaitOpen = false
     /// When the listener last sent a command or closed its `wait`.
     public private(set) var lastHeard: Date?
+    /// The context this listener session has, by the video's content hash:
+    /// the digest of the text it last got. Empty for a new session.
+    public private(set) var contextSent: [String: String] = [:]
 
     /// How long a listener with a taken batch counts as alive after its
     /// last command: it works between two commands.
@@ -58,7 +62,7 @@ public struct Outbox: Codable, Equatable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case pending, taken, session
+        case pending, taken, session, contextSent
     }
 
     /// A batch the person sent joins the end of the line.
@@ -78,6 +82,8 @@ public struct Outbox: Codable, Equatable, Sendable {
             requeued = taken
             pending.insert(contentsOf: taken, at: 0)
             taken = []
+            // The new session has read no video's context yet.
+            contextSent = [:]
         }
         session = listener
         isWaitOpen = true
@@ -111,6 +117,8 @@ public struct Outbox: Codable, Equatable, Sendable {
         guard let index = taken.firstIndex(of: ref) else { return }
         taken.remove(at: index)
         pending.insert(ref, at: 0)
+        // The context that payload may have carried was lost with it.
+        contextSent[ref.contentHash] = nil
     }
 
     /// `ref` leaves the line undelivered: there's nothing of it to deliver.
@@ -121,6 +129,39 @@ public struct Outbox: Codable, Equatable, Sendable {
     /// The listener has nothing left to do on `ref`.
     public mutating func finished(_ ref: BatchRef) {
         taken.removeAll { $0 == ref }
+    }
+
+    // MARK: - The video context
+
+    /// The payload's `context` for a batch of the video `contentHash`,
+    /// whose context is `text` now: the text when this session hasn't had
+    /// it (its first batch of the video, or the text changed since), which
+    /// it has from now on; nil when the session has this very text, and
+    /// when there's no text.
+    public mutating func context(for contentHash: String, text: String?) -> String? {
+        guard let text, isContextDue(for: contentHash, text: text) else { return nil }
+        contextSent[contentHash] = Self.digest(text)
+        return text
+    }
+
+    /// Whether the next batch of the video `contentHash` carries `text`:
+    /// there is a text, and it isn't the one this session last got.
+    public func isContextDue(for contentHash: String, text: String?) -> Bool {
+        guard let text, !text.isEmpty else { return false }
+        return contextSent[contentHash] != Self.digest(text)
+    }
+
+    /// A short name for `text` that's the same in every run of the app:
+    /// its length and its 64-bit FNV-1a hash. It tells a changed text from
+    /// the one a session has; it keeps no secret.
+    static func digest(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        var count = 0
+        for byte in text.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+            count += 1
+        }
+        return "\(count)-" + String(hash, radix: 16)
     }
 
     /// The listener sent a command: it's alive.

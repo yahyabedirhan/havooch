@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | edit | delete`, and `batch send`.
+/// `video-review comment add | edit | delete`, `context set` and `batch send`.
 enum CommentCommands {
     static let commands: [Command] = [
         Command(
@@ -36,6 +36,12 @@ enum CommentCommands {
         Command(name: "comment delete", synopsis: "comment delete <id>", summary: "remove a queued comment") {
             arguments, _ throws(UsageError) in
             .send(.commentDelete(id: try arguments.one("<id>")))
+        },
+        Command(
+            name: "context set", synopsis: "context set <text>",
+            summary: "set the open video's context note for the agent; an empty text clears it"
+        ) { arguments, _ throws(UsageError) in
+            .send(.contextSet(text: try arguments.one("<text>")))
         },
         Command(name: "batch send", synopsis: "batch send", summary: "send every queued comment as one batch, which `wait` gets") {
             arguments, _ throws(UsageError) in

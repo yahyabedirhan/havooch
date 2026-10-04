@@ -24,7 +24,8 @@ struct ControlServerTests {
         func state() -> StateReport {
             StateReport(
                 app: .init(version: "0.1.0", variant: "proto-2", demo: true, support: "/demo"),
-                video: hasVideo ? .init(path: "/videos/sample.mp4", contentHash: "abc", title: "sample", duration: 21.233) : nil,
+                video: hasVideo
+                    ? .init(path: "/videos/sample.mp4", contentHash: "abc", title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
                 comments: comments
             )
@@ -59,6 +60,14 @@ struct ControlServerTests {
 
         func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment {
             comments.remove(at: try comment(id, "comment delete \(id)"))
+        }
+
+        var note = ""
+
+        func setContextNote(_ text: String) throws(AppRefusal) -> String {
+            try record("context set \(text)")
+            note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return note
         }
 
         func sendBatch() async throws(AppRefusal) -> StateReport.Batch {
@@ -183,7 +192,7 @@ struct ControlServerTests {
         #expect(state["app"] as? [String: AnyHashable] == ["version": "0.1.0", "variant": "proto-2", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
-            == ["path": "/videos/sample.mp4", "contentHash": "abc", "title": "sample", "duration": 21.233])
+            == ["path": "/videos/sample.mp4", "contentHash": "abc", "title": "sample", "duration": 21.233, "contextNote": ""])
         #expect(state["lease"] is NSNull)
         #expect(state["draft"] is NSNull)
         #expect(state["comments"] as? [AnyHashable] == [])
@@ -291,6 +300,21 @@ struct ControlServerTests {
 
         let deleted = try object(await answer(.commentDelete(id: "c-00000001"), json: true).reply.output)
         #expect(deleted as? [String: String] == ["deleted": "c-00000001"])
+    }
+
+    @Test("context set reaches the app and answers what it kept; with --json, the video with its note")
+    func contextSet() async throws {
+        #expect(await answer(.contextSet(text: " Compare with the old cut \n")).reply == .done("context note set (24 characters)\n"))
+        #expect(app.calls == ["context set  Compare with the old cut \n"])
+        let set = try object(await answer(.contextSet(text: "Mind the intro"), json: true).reply.output)
+        #expect((set["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
+        #expect(set.count == 1)
+        let state = try object(await answer(.state, json: true).reply.output)
+        #expect((state["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
+        #expect(await answer(.contextSet(text: "")).reply == .done("context note cleared\n"))
+        app.refusal = AppRefusal("no video is open; open one with `video-review player open <path>`")
+        #expect(await answer(.contextSet(text: "note")).reply
+            == .refused("no video is open; open one with `video-review player open <path>`"))
     }
 
     @Test("batch send reaches the app and answers the batch's id and how many comments it carries")

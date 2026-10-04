@@ -65,6 +65,10 @@ final class AppModel: AppControlling {
     private(set) var isDrawingRegion = false
     /// Whether the rail is shown beside the stage.
     var isRailVisible = true
+    /// Whether the context popover is open.
+    var isContextShown = false
+    /// The open video's sidecar context file, as it was last read.
+    private(set) var sidecar: ContextReader.Sidecar?
     /// Shown to the person until they dismiss it.
     var problem: Problem?
 
@@ -121,6 +125,8 @@ final class AppModel: AppControlling {
         draft = nil
         selection = nil
         isDrawingRegion = false
+        isContextShown = false
+        sidecar = ContextReader.sidecar(beside: url)
         desk.open(VideoInfo(contentHash: contentHash, title: title, duration: engine.duration, path: url.path))
     }
 
@@ -167,6 +173,17 @@ final class AppModel: AppControlling {
         return report
     }
 
+    /// The context popover's Save and `context set`: the open video's
+    /// context note, kept without the space around it. The listener gets
+    /// it under the sidecar's text with the next batch. An empty text
+    /// clears the note.
+    @discardableResult
+    func setContextNote(_ text: String) throws(AppRefusal) -> String {
+        let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        try desk.change { review in review.note = note }
+        return note
+    }
+
     /// Cmd+Return and `batch send`: every queued comment of the open video
     /// goes out as one batch, which the listener's `wait` gets, now or when
     /// it next opens. Words still in the comment box are queued first, so
@@ -196,7 +213,10 @@ final class AppModel: AppControlling {
         StateReport(
             app: .init(version: Version.app, variant: AppIdentity.variant, demo: isDemo, support: support.path),
             video: video.map {
-                .init(path: $0.url.path, contentHash: $0.contentHash, title: $0.title, duration: engine.duration)
+                .init(
+                    path: $0.url.path, contentHash: $0.contentHash, title: $0.title, duration: engine.duration,
+                    contextNote: contextNote
+                )
             },
             player: .init(time: engine.time, playing: engine.isPlaying),
             draft: draft.map { .init(time: $0.time, text: $0.text, region: $0.region) },
@@ -475,6 +495,41 @@ final class AppModel: AppControlling {
             _ = try deleteComment(id.text)
         } catch {
             problem = Problem(title: "The comment wasn't deleted", reason: error.reason)
+        }
+    }
+
+    // MARK: - The video context
+
+    /// The open video's context note; empty for none.
+    var contextNote: String { desk.review?.note ?? "" }
+
+    /// The context the listener is told about the open video, as the
+    /// popover last read it: the sidecar's text, then the note.
+    var contextText: String? {
+        ContextReader.text(sidecar: sidecar?.text, note: contextNote)
+    }
+
+    /// Whether the listener's next batch of the open video carries the
+    /// context: there is one, and this listener session hasn't had it.
+    var isContextDue: Bool {
+        guard let video else { return false }
+        return listeners.outbox.isContextDue(for: video.contentHash, text: contextText)
+    }
+
+    /// The context popover opens: the sidecar is read again, since nothing
+    /// watches the file.
+    func readSidecar() {
+        sidecar = video.flatMap { ContextReader.sidecar(beside: $0.url) }
+    }
+
+    /// Save in the context popover: the note goes the way `context set`
+    /// goes, and the popover closes.
+    func saveContextNote(_ text: String) {
+        do throws(AppRefusal) {
+            try setContextNote(text)
+            isContextShown = false
+        } catch {
+            problem = Problem(title: "The note wasn't saved", reason: error.reason)
         }
     }
 

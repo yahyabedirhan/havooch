@@ -41,6 +41,7 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "comment.add", text: text, at: at, region: region)
         case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
+        case .contextSet(let text): wire = Wire(command: "context.set", text: text)
         case .batchSend: wire = Wire(command: "batch.send")
         case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
         }
@@ -113,6 +114,8 @@ public struct ControlMessage: Equatable, Sendable {
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
             return .commentDelete(id: try field(wire.id, "id", of: wire))
+        case "context.set":
+            return .contextSet(text: try field(wire.text, "text", of: wire))
         case "batch.send": return .batchSend
         case "wait":
             if let seconds = wire.timeoutSeconds, !(0...ControlRequest.longestListen).contains(seconds) {

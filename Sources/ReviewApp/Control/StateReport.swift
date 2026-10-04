@@ -21,6 +21,8 @@ struct StateReport: Encodable, Equatable {
         var contentHash: String
         var title: String
         var duration: Double
+        /// The person's context note for the agent; empty for none.
+        var contextNote = ""
     }
 
     /// The comment still in the comment box.
@@ -148,7 +150,10 @@ struct StateReport: Encodable, Equatable {
         self.app = app
         self.lease = lease
         self.video = video.map {
-            Video(path: $0.path, contentHash: $0.contentHash, title: $0.title, duration: Self.milliseconds($0.duration))
+            Video(
+                path: $0.path, contentHash: $0.contentHash, title: $0.title, duration: Self.milliseconds($0.duration),
+                contextNote: $0.contextNote
+            )
         }
         self.player = Player(time: Self.milliseconds(player.time), playing: player.playing)
         self.draft = draft

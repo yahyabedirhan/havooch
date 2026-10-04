@@ -371,6 +371,7 @@ A module and a type never share a name, so a type can always be qualified by its
 - `--json` is taken from anywhere on the command line. An action then prints the parts of the state it changed (`player seek` prints `{"player": {…}}`, `player open` adds `video`, `screenshot` prints `{"path": …}`). `app status --json` prints `{"running": false}` when the app is not running.
 - `wait [--timeout <seconds>]` (`ListenerCommands.wait`) prints the payload as JSON with or without `--json`. It connects again while the app is not running or quits, once a second, until its timeout, and looks for the socket again each time (the app may come back on a demo's data). A listener can start before the app. Each request asks only for the time that is left, counted by the environment's clock (`CommandEnvironment.now`, which tests replace). Exit 0 with the batch, 2 when the time ran out (nothing printed), 1 when the app refuses (a newer `wait` took its place).
 - `batch send` prints `b-5d0c2a91 sent with 2 comments, taken by the listener`, or `…, waiting for a listener`. With `--json` it prints `{"batch": {"id", "sentAt", "commentIds"}}`.
+- `context set <text>` takes one word of text and prints `context note set (14 characters)`. An empty text clears the note and prints `context note cleared`. With `--json` it prints `{"video": {…}}` with the new `contextNote`.
 
 ### ReviewCore
 
@@ -417,22 +418,25 @@ public struct Outbox: Codable, Equatable {
     private(set) var session: ListenerSession?   // holder key, name, place of the last `wait`
     private(set) var isWaitOpen: Bool       // one run only, not on disk
     private(set) var lastHeard: Date?       // one run only, not on disk
-    var contextSent: [String: String]       // content hash → digest of the context text this session got (with the context ticket)
+    private(set) var contextSent: [String: String]   // content hash → digest of the context text this session last got
 
     mutating func enqueue(_ ref:)                                    // a batch is in line once
-    mutating func waitOpened(by listener:, at now:) -> [BatchRef]    // a new key is a new session: taken → front of pending; returns the requeued
+    mutating func waitOpened(by listener:, at now:) -> [BatchRef]    // a new key is a new session: taken → front of pending, contextSent emptied; returns the requeued
     mutating func waitClosed(at now:)                                // the open wait ended with no batch
     mutating func deliverNext(at now:) -> BatchRef?                  // only while a wait is open: pending.first → taken; the wait is answered, so no longer open
-    mutating func undelivered(_ ref:)                                // the reply could not be written: back to the front
+    mutating func undelivered(_ ref:)                                // the reply could not be written: back to the front; its video's digest is forgotten
     mutating func discard(_ ref:)                                    // nothing of it is left to deliver: out of the line
     mutating func finished(_ ref:)
-    mutating func context(for hash:, text:) -> String?               // the text when it is due, else nil; records the digest (with the context ticket)
+    mutating func context(for hash:, text:) -> String?               // the text when it is due, else nil; records the digest
+    func isContextDue(for hash:, text:) -> Bool                      // there is a text, and its digest is not the one this session has
     mutating func heard(at now:)                                     // any listener command
     func presence(at now:) -> Presence                               // listening | working | absent
 }
 ```
 
-`ListenerSession` is the holder's `key`, `name` and `place` as `ReviewCore`'s own type, since `ReviewCore` does not link `ReviewWire`. `Codable` keeps `pending`, `taken` and `session`; an outbox read from disk has no open `wait`.
+`ListenerSession` is the holder's `key`, `name` and `place` as `ReviewCore`'s own type, since `ReviewCore` does not link `ReviewWire`. `Codable` keeps `pending`, `taken`, `session` and `contextSent`; an outbox read from disk has no open `wait`.
+
+The context rule: `context(for:text:)` gives the text on a session's first batch of a video and whenever the text's digest differs from the one the session last got, and `nil` otherwise. With no text it gives `nil` and keeps the digest, so a sidecar that goes and comes back unchanged is not sent again. The digest (`Outbox.digest`) is the text's length in bytes and its 64-bit FNV-1a hash, the same in every run of the app. `VideoReview` reads a review with no `note` key as an empty note.
 
 Presence: `working` when the session has a taken batch and is alive; `listening` when it is alive and nothing is taken; `absent` otherwise. Alive means a `wait` is open (or an `ask`, once there is one), or the last listener command or the close of its `wait` was less than 120 s ago while a batch is taken (`Outbox.workingGrace`), or less than 5 s ago otherwise (`Outbox.listeningGrace`, so a listener that runs `wait` in a loop does not flicker).
 
@@ -504,7 +508,7 @@ public protocol Transcriber: Sendable {
 | `select(id)`, `jumpToMarker(forward)` | a click on a marker or a card, and Up and Down: select, pause, seek to the comment's time | |
 | `sendBatch()` | waits for a comment the box is still queueing, queues a draft with text, sends, hands the batch to `ListenerQueue`. `batch send` calls it; Cmd+Return, the Send button and the menu item call `send()`, which calls it and does nothing when `canSend` is false or a send is under way | empty queue |
 | `answer(commentID, text)` | through `ReviewDesk`, then tells `ListenerQueue` | no open question |
-| `setContextNote(text)` | saved on the review | no video |
+| `setContextNote(text)` | the note is kept on the review without the space around it; an empty text clears it. `context set` calls it, and the popover's Save calls `saveContextNote`, which calls it and closes the popover | no video |
 
 - `ReviewDesk.change(hash) { review in … }` is the one path for every change to a `VideoReview`: it takes the open review from memory or loads another video's from the `Library`, runs the change, saves, and publishes when the review is the open one. A thrown `ReviewRefusal` changes nothing. `change { … }` with no hash changes the open review. `review(of: hash)` reads a review, open or not.
 - `PlayerEngine` wraps `AVPlayer`. `seek` uses zero tolerance and returns when the seek has finished, so `state` reports the time that was asked for. The duration is the video track's own length (21.233 s for the fixture), not the container's, whose sound track can run a few milliseconds longer. A file that does not play is refused, and the video that was open stays open.
@@ -517,6 +521,8 @@ public protocol Transcriber: Sendable {
 - `RegionOverlay` is the layer above the picture that takes the mouse: one drag gesture with no minimum distance, which calls `clickFrame`, `beginRegion` and `endRegion`. It draws the rectangle being drawn, the draft's region, and the selected comment's region with the comment's pin on its corner: the rest of the picture is dimmed and the rectangle is outlined in the accent colour.
 - `Composer.placement(beside:box:stage:)` is where the comment box sits for a region, as a pure function: right of the rectangle, else left, else below, else above, else the stage's lower right corner, always 12 pt inside the stage. `StageView` measures the box and passes its size.
 - `ListenerQueue` (`@Observable`, owned by `AppModel`) holds the `Outbox`, the one open `wait` (a continuation, with its timeout and the id of its connection) and the open `ask`s by comment id. `wait(by:timeout:connection:)` ends as an `Outcome`: `batch(ref, payload)`, `ranOut`, `replaced` or `gone`. It assembles the payload when a `wait` takes a batch; a batch in line with nothing left to deliver (no review in this run, or every comment finished) is discarded. `connectionClosed(id)` ends the `wait` held on that connection, `undelivered(ref)` puts a batch back, `stop()` ends the open `wait` with no reply. `report(at:)` is the `listener` of `state`. `ack`, `status`, `reply` and `ask` go through `ReviewDesk.change` and raise a notice.
+- `ContextReader` is the context as the listener is told it. `sidecar(beside: video)` is the first of `<video base name>.context.md` and `context.md` in the video's folder that is a file and reads as UTF-8, with its text trimmed; a blank file of the video's own name still serves, so a video can opt out of its folder's `context.md`. `text(sidecar:note:)` joins the sidecar's text and the note under the heading `## Note from the reviewer` (pure), and is `nil` when both are empty. `text(for: review)` reads the sidecar beside the path the video was last opened at. `ListenerQueue.payload` calls it when a `wait` takes a batch and passes the result through `Outbox.context(for:text:)`, so nothing watches the file. `AppModel` keeps the open video's `sidecar` for the popover (read when the video opens and when the popover opens), and `contextText` and `isContextDue` for its words.
+- `ContextPopover` (`UI/ContextPopover.swift`) holds the toolbar's `ContextButton`, the popover and its words as a pure struct, `ContextWords` (where the sidecar's text comes from, and when the agent gets the context). The note is written in `CommentField`, the comment box's text view. While the popover is open (`AppModel.isContextShown`) the player's keys are off, Cmd+Return too.
 - `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It owns the one `ControlLease`, takes the time from a closure the tests replace, and starts from the lease a relaunch handed over. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests, and settles the lease on a timer at `nextEnd`. Every change to the lease goes through one place (`leaseChanged`): it copies the lease to the `LeaseIndicator`, answers the waiting takes of the holder that got it, and sets the timer again. A `take`'s reply that grants the lease and cannot be written releases it (`undelivered`). `stopLease()` is the banner's Stop. `app status` and `state` get their `lease` from the server, not from `AppModel`, and `state` gets its `listener` from the `ListenerQueue` the server is given. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake. An `Answer` is the reply plus what only the client would know: the lease a `take` granted (`granted`) and the batch a `wait` carried (`delivered`). When the reply cannot be written, `undelivered` releases the one and puts the other back in line. A `silent` answer writes nothing and closes the connection, which is how an open `wait` ends when the app quits. Each connection has an id. While its answer is awaited, the socket's side looks at it every 0.5 s (`HangUpWatch`, `UnixSocket.peerClosed`) and tells the server once when the client closed its socket (`connectionClosed`), so a `wait` whose command was stopped is no listener.
 - `LeaseIndicator` (`@Observable`) is the lease as the banner draws it. `shown(at:)` is the lease's `Status`, or nil while it is free or while a screenshot leaves the banner out. `LeaseBanner` makes the banner's words from that status in a pure struct, and `LeaseBannerView` draws them with Stop and redraws each second.
 - `StateReport` builds `state --json`:
@@ -569,7 +575,7 @@ The idea: **the video is the stage, the timeline carries the markers, and a rail
 | 17 | The lease banner is a strip under the toolbar, across the top of the stage: who controls the app ("Claude Code controls Video Review"), where (the working folder's name or the Herdr pane), the time left, how many agents wait, and Stop. It shows with no video open too. Stop ends the lease and bars that agent for 5 min; nothing lifts the bar early. | The person must see at once why things move, and one click takes the app back. |
 | 18 | The window follows the system's light and dark appearance, with system colours and materials. The letterbox around the video is black in both. | It matches the Mac. Black bars are what a player shows. |
 | 19 | With no video: a drop target and "Open a video" (Cmd+O). On launch the app opens the last video again, paused at the start. | Coming back to a review should not need a file dialog. It also makes the history visible after a restart with no extra step. |
-| 20 | A Context button in the toolbar opens a popover with the sidecar's text (read-only, with its path) and the editable note. A small chip beside it names the transcript source and its progress. | The person can check what the agent will be told without leaving the player. |
+| 20 | A Context button in the toolbar opens a popover with the sidecar's text (read-only, in a box that scrolls, under the file's name; its path is the tooltip) and the editable note under it. With no sidecar the popover names the two files it looked for. Return or Save keeps the note and closes the popover, Shift+Return makes a new line, Escape or Cancel closes it with no change. The popover's foot says when the agent gets the context: "Goes to the agent with your next batch", "The agent has this. It goes again when it changes" or "Nothing to tell the agent yet". The button's glyph is filled while the video has a context. A small chip beside it names the transcript source and its progress. | The person can check what the agent will be told without leaving the player, and sees that a change will reach the agent. The keys are the comment box's keys. |
 | 21 | A "Demo data" chip shows in the toolbar during a demo run. | The person can tell a demo from their own data. |
 
 ## 4. Implementation
@@ -617,7 +623,7 @@ ListenerQueue.takeNext()
   while a wait is open and a batch is first in line
     no review of it in this run, or nothing unfinished in it: outbox.discard; next
     ref     = outbox.deliverNext(at: now)                                                 // pending → taken; the wait is answered
-    context = outbox.context(for: ref.hash, text: ContextReader.text(review))             // nil when already sent unchanged; null until the context ticket
+    context = outbox.context(for: ref.hash, text: ContextReader.text(for: review))        // nil when already sent unchanged, and with no text
     payload = BatchPayload.assemble(review, batch, context,
                 transcript: { TranscriptWindow.cut(source.lines(…), around: $0.time) },   // [] until the transcript ticket
                 images: { ImageFiles paths of $0.id under ref.hash })
@@ -854,6 +860,19 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D79 | The rail's cards are in a plain stack, not a lazy one. | A lazy stack kept drawing a sent card as queued after it moved to its batch's group. A review has tens of comments. |
 | D80 | A batch's header says "Sent at 00:13", with a two-digit hour. | "Sent 0:13" reads as a time in the video. |
 | D81 | The comment box's hint row names Return, Cmd+Return and Escape, and no longer Shift+Return. | The row has room for three hints. |
+| D90 | `Outbox.contextSent` is kept on disk with the session. | A listener session is its holder key, which outlives an app restart. What the session has must outlive it too, or every restart sends the context again. |
+| D91 | The digest of a context text is its length in bytes and its 64-bit FNV-1a hash. | `ReviewCore` links Foundation only, and Swift's own hash differs in each run. The digest tells a change; it keeps no secret. |
+| D92 | With no context text the payload has `null` and the session keeps its digest. | `null` already means "nothing new". A sidecar that is gone for one batch and comes back unchanged is not read twice. |
+| D93 | A payload that could not be written forgets its video's digest, whether it carried the context or not. | The outbox does not know which payload carried the text. A context sent twice costs little; one that is lost costs the agent its topic. |
+| D94 | The sidecar is the first of `<base>.context.md` and `context.md` that is a file and reads as UTF-8. Its text is trimmed. A blank file of the video's own name serves, with no text. | The spec's order. A file that does not read must not hide the fallback. A blank file is a way for one video to opt out of its folder's `context.md`. |
+| D95 | A note with no sidecar keeps its heading: the context is `## Note from the reviewer`, then the note. | The agent always knows which words are the person's. |
+| D96 | The note is kept trimmed. `context set ""` clears it. | The contract has no command to clear a note, and a note of spaces is no note. |
+| D97 | The sidecar is read when a `wait` takes the batch (D20), from the folder of the path the video was last opened at, and when the popover opens. Nothing watches the file. | A change to the file reaches the next batch with no watcher, also for a video that is no longer open. |
+| D98 | `state --json` has `video.contextNote`, and nothing about the sidecar. | The note is the app's state. The sidecar is a file the agent can read, and the payload carries its text. |
+| D99 | The popover's Save and `context set` are one method, `AppModel.setContextNote`. In the popover Return saves, as in the comment box. While it is open the player's keys are off, Cmd+Return too. | One code path for the person and the operator (ADR 0001). Cmd+Return in the note must not send the queue with a note that is not saved yet. |
+| D100 | The popover says whether the agent has the context, from `Outbox.isContextDue`. | "Once per session" is invisible otherwise, and the person would wonder whether a new note went out. |
+| D101 | A review with no `note` key reads as an empty note. | Reviews written before this ticket, and the tests' own JSON, still read. |
+| D102 | The context popover is not in a `screenshot`. | A popover is a window of its own, and `Screenshotter` captures the player's window only. The toolbar button, with its filled glyph, is in the picture. |
 
 ## 7. What is built so far
 
@@ -903,12 +922,20 @@ Built (the ticket "Mate: Send a batch to a waiting listener"):
 - Tests: `Batch`, `Outbox` and `BatchPayload` in `ReviewCoreTests`; the requests and the reply in `ReviewWireTests`; `batch send` and `wait` (exit codes, connecting again, the demo's socket) in `ReviewCommandTests`; in `ReviewAppTests` the key's mapping, the pill's words, the rail's groups, and batches through `AppModel` and `ControlServer` on the fixture video (a waiting listener, no listener, the payload against the files on disk, the timeout, a newer `wait`, a new listener session, an undelivered reply, and over the real socket a delivery and a client that goes away).
 - Not checked by an agent: the real Cmd+Return key press, the Send button's click and the menu item. The key's mapping is tested at `Shortcuts.action`, and what it calls at `AppModel.send`. The comment box's new hint row was not seen in a screenshot, since no command opens the box.
 
+Built (the ticket "Mate: Send the video context once per listener session"):
+
+- `ReviewWire`: the `ControlRequest` case `contextSet(text)`, an operator request. `ReviewCommand`: `context set <text>` in `CommentCommands`.
+- `ReviewCore`: `VideoReview.note`, and `Outbox` with `contextSent`, `context(for:text:)`, `isContextDue(for:text:)` and the digest. A new listener session empties `contextSent`, and an undelivered batch forgets its video's digest.
+- `ReviewApp`: `ContextReader`, the context in `ListenerQueue.payload`, `AppModel` (`setContextNote`, `saveContextNote`, `contextNote`, `sidecar`, `readSidecar`, `contextText`, `isContextDue`, `isContextShown`), the `contextSet` branch in `ControlServer`, `UI/ContextPopover` with the toolbar's Context button, and the player's keys off while the popover is open.
+- `state --json` has `video.contextNote`.
+- Tests: the context rule in `ReviewCoreTests` (once per session, a changed text, per video, a new session, no text, an undelivered batch, the round trip); the request in `ReviewWireTests`; `context set` in `ReviewCommandTests`; in `ReviewAppTests` the server's `context set` with the fake app and under the lease, the sidecar lookup and the joined text in a temporary folder, the popover's words, and the real payload through `AppModel` and `ControlServer` on a copy of the fixture video (first batch, next batch, a new note, a changed sidecar, a cleared note, a new listener session, an undelivered reply, a note with no sidecar, the folder's `context.md`).
+- Not checked by an agent: the context popover itself. No command opens it and a `screenshot` does not hold it (D102), so its look in light and dark, the click on the Context button, typing in the note, Return, Escape, Save and Cancel were not seen. What Save calls is tested at `AppModel.saveContextNote`.
+
 Not built yet, and what stands in its place:
 
 - `ReviewTranscript` and its test target. `Package.swift` gets each target with its ticket. Every comment's `transcript` in the payload is `[]`: `ListenerQueue.payload` passes a closure that gives no lines.
-- The context: `ContextReader`, `Outbox.contextSent` and `Outbox.context(for:text:)`. The payload's `context` is `null`. The listener session they need is there: `Outbox.waitOpened` is where a new session clears what was sent, and `Outbox.undelivered` where a lost reply forgets it.
-- The rest of `ReviewCore`: `ThreadMessage`, the batch-level messages on `Batch`, and the `VideoReview` methods for threads and the listener (`acknowledge`, `setStatus`, `reply`, `ask`, `answer`). A comment has no `thread` yet, and `VideoReview` has no `note`. No comment passes `sent`, so no batch is finished: `Outbox.finished` and `Outbox.heard` have no caller yet. They are for the commands `ack`, `status`, `reply` and `ask`, which call `heard` each time and `finished` when `VideoReview.isFinished` turns true.
+- The rest of `ReviewCore`: `ThreadMessage`, the batch-level messages on `Batch`, and the `VideoReview` methods for threads and the listener (`acknowledge`, `setStatus`, `reply`, `ask`, `answer`). A comment has no `thread` yet. No comment passes `sent`, so no batch is finished: `Outbox.finished` and `Outbox.heard` have no caller yet. They are for the commands `ack`, `status`, `reply` and `ask`, which call `heard` each time and `finished` when `VideoReview.isFinished` turns true.
 - The rest of `ReviewStore`: `Library`. Nothing but keyframes and crops is written to disk. `ReviewDesk` keeps each review in memory for as long as the app runs, by content hash, so a video that opens again in the same run has its comments back; after a restart the comments and the outbox are gone and the keyframe files stay.
-- `state --json` lacks the keys `transcript`, `video.contextNote`, `messages` on a batch and `thread` on a comment. They come with their tickets.
-- Threads, the commands `ack`, `status`, `reply`, `ask` and `thread answer`, `context set`, the context popover and the transcript chip.
+- `state --json` lacks the keys `transcript`, `messages` on a batch and `thread` on a comment. They come with their tickets.
+- Threads, the commands `ack`, `status`, `reply`, `ask` and `thread answer`, and the transcript chip.
 - The last video does not open again on launch. That comes with the store.

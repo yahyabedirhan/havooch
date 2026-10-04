@@ -23,6 +23,9 @@ public struct VideoInfo: Codable, Equatable, Sendable {
 /// come in as arguments, so a test names them.
 public struct VideoReview: Codable, Equatable, Sendable {
     public var video: VideoInfo
+    /// The person's context note for the agent, added to the sidecar's
+    /// text; empty for none.
+    public var note = ""
     /// The comments in time order; two at the same time stay in the order
     /// they were added.
     public private(set) var comments: [Comment]
@@ -33,6 +36,19 @@ public struct VideoReview: Codable, Equatable, Sendable {
         self.video = video
         comments = []
         batches = []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case video, note, comments, batches
+    }
+
+    /// Reads a review; one written before there was a note has none.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        video = try container.decode(VideoInfo.self, forKey: .video)
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        comments = try container.decode([Comment].self, forKey: .comments)
+        batches = try container.decode([Batch].self, forKey: .batches)
     }
 
     /// The comments waiting to be sent, in time order.

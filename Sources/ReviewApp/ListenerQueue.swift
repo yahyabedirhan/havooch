@@ -162,12 +162,13 @@ final class ListenerQueue {
     }
 
     /// The payload of `batch`, read at the moment the `wait` takes it. The
-    /// transcript window and the context aren't built yet: no lines, and
-    /// `null`.
+    /// context is in it when this listener session hasn't had it for the
+    /// video, or it changed. The transcript window isn't built yet: no
+    /// lines.
     private func payload(of batch: Batch, in review: VideoReview) -> BatchPayload {
         let hash = review.video.contentHash
         return BatchPayload.assemble(
-            review: review, batch: batch, context: nil,
+            review: review, batch: batch, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
             transcript: { _ in [] },
             images: { [images] comment in
                 BatchPayload.Images(

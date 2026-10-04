@@ -37,6 +37,10 @@ public enum ControlRequest: Equatable, Sendable {
     case commentEdit(id: String, text: String)
     /// `video-review comment delete <id>`: a queued comment removed.
     case commentDelete(id: String)
+    /// `video-review context set <text>`: the open video's context note,
+    /// which the listener gets with the sidecar's text. An empty `text`
+    /// clears it.
+    case contextSet(text: String)
     /// `video-review batch send`: every queued comment of the open video
     /// sent as one batch, which the listener's `wait` gets.
     case batchSend
@@ -95,6 +99,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease: .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
+        case .contextSet: .operator
         case .commentAdd, .commentEdit, .commentDelete, .batchSend: .operator
         case .wait: .listener
         }

@@ -58,7 +58,10 @@ enum Shortcuts {
 
     /// Whether `event` was a player key and was acted on.
     private static func handle(_ event: NSEvent, _ model: AppModel) -> Bool {
-        guard model.video != nil, let window = event.window, window.isKeyWindow, window.attachedSheet == nil,
+        // While the context popover is open every key is its own: Cmd+Return
+        // there must not send the queue with a note that isn't saved yet.
+        guard model.video != nil, !model.isContextShown,
+              let window = event.window, window.isKeyWindow, window.attachedSheet == nil,
               let action = action(
                   keyCode: event.keyCode, modifiers: event.modifierFlags, isTyping: window.firstResponder is NSText
               )

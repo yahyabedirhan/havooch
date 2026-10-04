@@ -34,6 +34,7 @@ struct ControlMessageTests {
         .commentAdd(text: "This box", at: 12.5, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
         .commentAdd(text: "This box", at: nil, region: .init(x: 0, y: 0, w: 1, h: 1)),
         .commentEdit(id: "c-7f3a9c2e", text: "Slower"), .commentDelete(id: "c-7f3a9c2e"),
+        .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .batchSend, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
     ])
     func roundTrip(request: ControlRequest) throws {
@@ -117,6 +118,7 @@ struct ControlMessageTests {
         #expect(refusal(fields("comment.edit", ["text": "Slower"])) == .unreadable("the control command `comment.edit` needs its `id`"))
         #expect(refusal(fields("comment.edit", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `comment.edit` needs its `text`"))
         #expect(refusal(fields("comment.delete", [:])) == .unreadable("the control command `comment.delete` needs its `id`"))
+        #expect(refusal(fields("context.set", [:])) == .unreadable("the control command `context.set` needs its `text`"))
         #expect(refusal(fields("wait", ["timeoutSeconds": -1]))
             == .unreadable("the control command `wait` needs a `timeoutSeconds` from 0 to 86400, not -1"))
         #expect(refusal(fields("wait", ["timeoutSeconds": 86401])) != nil)
@@ -139,7 +141,8 @@ struct ControlMessageTests {
         #expect(ControlRequest.controlRelease.role == .free)
         for request in [ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
                         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
-                        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1")] {
+                        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1"),
+                        .contextSet(text: "a")] {
             #expect(request.role == .operator)
         }
     }

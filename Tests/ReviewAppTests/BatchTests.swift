@@ -86,8 +86,9 @@ struct BatchDeliveryTests {
             "duration": 21.233, "title": "sample",
         ])
         #expect((model.video?.contentHash.count ?? 0) == 64)
-        // The context and the transcript window aren't built yet.
-        #expect(payload["context"] is NSNull)
+        // The fixture's sidecar, on this session's first batch. The transcript window isn't built yet.
+        #expect(payload["context"] as? String == ContextReader.sidecar(beside: CommentTests.fixture)?.text)
+        #expect((payload["context"] as? String)?.hasPrefix("# Context: sample\n") == true)
         let comments = try #require(payload["comments"] as? [[String: Any]])
         #expect(comments.count == 2)
         #expect(comments[0] as? [String: AnyHashable] == [
