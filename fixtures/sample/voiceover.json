@@ -1,0 +1,34 @@
+{
+  "scenes": [
+    {
+      "id": "pause",
+      "text": "This is Video Review. Pause any video, or draw a box on the frame, and write a comment.",
+      "voice": "af_heart",
+      "speed": 1.0,
+      "audioFile": "video-review-sample/audio/pause.wav",
+      "durationSeconds": 5.65,
+      "paddingSeconds": 0.4,
+      "hash": "a644b9abfcaf2936"
+    },
+    {
+      "id": "send",
+      "text": "Your comments queue up. Press command enter, and they go to your agent as one batch, with the time, the frame, and the transcript.",
+      "voice": "af_heart",
+      "speed": 1.0,
+      "audioFile": "video-review-sample/audio/send.wav",
+      "durationSeconds": 7.85,
+      "paddingSeconds": 0.4,
+      "hash": "e791fdd62ef0bcec"
+    },
+    {
+      "id": "answer",
+      "text": "The agent reads your notes and answers right inside the player. No copying, and no screenshots.",
+      "voice": "af_heart",
+      "speed": 1.0,
+      "audioFile": "video-review-sample/audio/answer.wav",
+      "durationSeconds": 6.275,
+      "paddingSeconds": 0.6,
+      "hash": "d53fe7061105c7ed"
+    }
+  ]
+}
