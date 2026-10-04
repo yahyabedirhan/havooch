@@ -27,6 +27,7 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`
 assets/images/<topic>/         tracked   images the project uses
 assets/screenshots/<topic>/    tracked   screenshots worth keeping, linked from issues, pull requests and docs
 fixtures/                      tracked   the sample video and its sidecars for tests and demo mode
+.agents/skills/<name>/         tracked   the project's skills; `.claude/skills/<name>` is a link to each, for Claude Code
 .scratch/                      ignored   notes, logs, temp files and pull request description sources
 .claude/worktrees/             ignored   sub-agent worktrees
 ```
@@ -42,6 +43,10 @@ Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and 
 Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `video-review` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
 
 ## Agent skills
+
+### The listener skill
+
+`.agents/skills/video-review-mate/` is the skill a Claude Code session in any repository uses to listen for batches and act on them. It is part of the product: it speaks only the CLI contract of the spec. Change it with the `writing-for-agents` skill, and keep `docs/low-level-design.md`'s section on it true.
 
 ### Issue tracker
 

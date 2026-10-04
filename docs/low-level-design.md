@@ -11,6 +11,7 @@ This is the design of the `proto-1` build of the v1 spec (#1), written before th
 | add or change a CLI command | [The wire](#the-wire) and [Adding a command](#adding-a-command) |
 | follow a command from the shell to the player | [Trace 1](#trace-1-one-cli-command-player-seek-010) |
 | follow a batch from Cmd+Enter to `wait` | [Trace 2](#trace-2-one-batch-from-cmdenter-to-wait) |
+| know what the listener session does with a batch | [The listener skill](#the-listener-skill) |
 | know what is on disk | [Store: the layout on disk](#store-the-layout-on-disk) |
 | know why the app looks and behaves as it does | [UX choices of this prototype](#ux-choices-of-this-prototype) |
 | know which ticket builds which file | [Which ticket builds what](#which-ticket-builds-what) |
@@ -200,7 +201,7 @@ public enum Identity {
 - The app and the CLI both link `VRWire`, so they can't disagree about the support folder or the bundle id.
 - The `Makefile` reads the same line with `sed` (as Shipyard reads its version from `Version.swift`) and derives `APP_NAME` and `BUNDLE_ID` the same way. It stamps them into `Packaging/Info.plist` (`__APP_NAME__`, `__BUNDLE_ID__`, `__VERSION__`) and names the bundle `build/$(APP_NAME).app`.
 - Clearing the string to `""` gives `Video Review.app`, `com.yahyabedirhan.video-review` and `~/Library/Application Support/Video Review/`. Nothing else changes.
-- The CLI keeps the name `video-review`. Run it from this build's bundle, `/Applications/Video Review (proto-1).app/Contents/Helpers/video-review`, never from `PATH`: another prototype's CLI would speak to another prototype's socket.
+- The CLI keeps the name `video-review`. Run it from this build's bundle, `/Applications/Video Review (proto-1).app/Contents/Helpers/video-review`, never from `PATH`: another prototype's CLI would speak to another prototype's socket. The listener skill finds it without knowing the variant ([The listener skill](#the-listener-skill)).
 - The app's executable is `VideoReview` in every prototype, so `make install` never uses `pkill -x`. It quits this build only, by its full path: `pkill -f` with `/Applications/$(APP_NAME).app/Contents/MacOS/`. `pkill -f` reads a regular expression, so the `Makefile` escapes the name's parentheses and dots first (`RUNNING`); unescaped, the pattern would match no process.
 
 ### Folder tree
@@ -313,8 +314,10 @@ Tests/
 
 scripts/
   acceptance.sh                       the v1 acceptance scenario through the CLI, against the installed app in demo mode
-.agents/skills/video-review-mate/
-  SKILL.md                            the listener skill
+.agents/skills/video-review-mate/     ── the listener skill ──
+  SKILL.md                            the loop a listener session follows: listen, read the batch, work each comment, answer
+  scripts/vr.sh                       finds the app's CLI and runs it; `listen` is `wait`, then `ack` at once
+.claude/skills/video-review-mate      a link to that folder, which is where Claude Code looks
 fixtures/sample/                      the sample video and its sidecars
 ```
 
@@ -1195,6 +1198,29 @@ The lease banner is the one view that doesn't read `AppModel`: the lease belongs
 
 `Comments/ContextNote.swift` is the toolbar's Context button, between the presence pill and the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.setNote`, the call `context set` makes, so there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
 
+### The listener skill
+
+`.agents/skills/video-review-mate/` is what a Claude Code session in any repository runs to be the listener. It links nothing of this package and speaks only the spec's CLI contract, so it is the same skill for every prototype and for the product. Two files:
+
+- **`SKILL.md`** is the loop: start `listen` in the background; on a batch, listen again first, read the context and each comment's keyframe, crop and transcript, decide each comment's intent, and for each one set `working`, do the work, commit once when files changed, `reply`, then `done` or `failed`; `ask` in the background when a comment isn't clear and go on with the next; one `reply` to the batch's id at the end. It also says what each exit code means for the loop and what each refusal asks for.
+- **`scripts/vr.sh`** is the only code. Every command of the skill goes through it.
+
+`vr.sh` finds the CLI, never on `PATH`, in this order: the path in `VIDEO_REVIEW_CLI`; `/Applications/Video Review.app`; the only `Video Review*.app` in `/Applications`; among several, the only one whose `app status --json` says `"running": true`. The last choice is kept for the session in `$TMPDIR/video-review-mate/cli-<session id>`, so a second prototype that starts later doesn't make the commands of a running loop ambiguous. With no app, or several and no single one running, it refuses and names `VIDEO_REVIEW_CLI`. `vr.sh which` prints the choice and its reason. So the variant's name is in no rule of the skill: clearing `Identity.variant` changes nothing in it.
+
+`vr.sh listen` is `wait`, then `ack <batch id>` at once, then the payload on standard output and in `$TMPDIR/video-review-mate/<batch id>.json`. The batch's id is read with `plutil`, which every Mac has. The acknowledgement is the script's and not the session's on purpose: a session that is mid-task, in a long test run, wakes only when that tool call ends, and the person would wait for the acknowledgement that long. A `wait` refused because the app isn't running makes `listen` wait until `app status` says it runs, then wait again; any other refusal, and exit 3, pass through.
+
+What the skill leans on in the design above:
+
+- The session is the listener by `CLAUDE_CODE_SESSION_ID`, so only the session itself runs `vr.sh`; its sub-agents do work and report.
+- `listen` again before the work keeps a `wait` open, so presence is `working` and a second batch is taken and acknowledged while the first is worked.
+- `reply` before `status done`, so the person never sees a finished comment without its answer. The batch's own message goes last; `reply` to a batch needs no open delivery.
+- An `ask` that ended without its answer is asked again with the same words and attaches to the question in the thread.
+- At the end of a session the skill stops its `listen` and `ask` commands and leaves unfinished comments as they are: the next listener session's first command requeues them.
+
+Claude Code reads skills from `.claude/skills/`, so `.claude/skills/video-review-mate` is a tracked link to the folder. Another repository gets the skill by installing it from this one (`npx skills add yahyabedirhan/video-review -s video-review-mate`), or by a link of its own to a clone.
+
+The skill has no test in `make test`. `vr.sh` was run against stand-in command lines in a temporary `VIDEO_REVIEW_APPS_DIR`, which is what that variable is for; the loop is checked by a real session against the installed app.
+
 ### Build and test
 
 - `Package.swift`: `swift-tools-version: 6.2`, `platforms: [.macOS(.v26)]`, Swift 6 language mode, no outside package. Tests use Swift Testing.
@@ -1383,6 +1409,29 @@ The trace's variants, each one branch of the same code:
 - **The listener dies mid-wait.** The next heartbeat can't be written; the task is cancelled; the waiter is removed; presence goes to `absent`. Nothing was taken. A batch sent before that heartbeat is handed to the dead wait, its reply can't be written, and `undelivered` leaves it pending.
 - **The wait's `--timeout` runs out.** The waiter is removed and answered with nothing; the CLI exits 3. A batch sent a moment later finds no waiter and stays pending.
 
+**The listener's side.** `L` is a Claude Code session with the skill, and its `wait` above was `vr.sh listen`, run as a background command. What follows the payload:
+
+```text
+vr.sh listen                                               .agents/skills/video-review-mate/scripts/vr.sh
+├─ video-review wait        exit 0, the payload            kept in $TMPDIR/video-review-mate/7f3a9c21-b1.json
+├─ plutil reads batch.id ⇒ 7f3a9c21-b1
+├─ video-review ack 7f3a9c21-b1                            ListenerQueue.acknowledge: c2, c1 sent → acknowledged
+│     ⇒ both markers show the tick; the batch's head says "Acknowledged"
+└─ prints the payload, exit 0 ⇒ the session wakes
+
+L, by SKILL.md
+├─ vr.sh listen again, in the background                   waiters = [L]; presence stays working (b1 is taken)
+├─ reads the context, then each keyframe and crop
+├─ c2: vr.sh status 7f3a9c21-c2 working                    acknowledged → working ⇒ the marker turns orange
+│      the work, one commit
+│      vr.sh reply 7f3a9c21-c2 '… (4f1c2ab)'               the thread gets the message ⇒ a notice on the frame
+│      vr.sh status 7f3a9c21-c2 done                       working → done ⇒ green
+├─ c1: vr.sh ask 7f3a9c21-c1 '…', in the background        the question waits; L goes on, or waits for the answer
+│      the person answers in the thread ⇒ the ask exits 0 with the answer
+│      status working, the work, reply, status done        review.isFinished(b1) ⇒ ledger.finish(b1); presence → listening
+└─ vr.sh reply 7f3a9c21-b1 '…'                             the message for the whole batch
+```
+
 **A refusal.** After the send, `video-review comment edit 7f3a9c21-c1 "new text"` reaches `Review.editComment`, which finds `c1` in the state `sent` and throws `notQueued(c1, .sent)`. `desk.change` saves nothing. The reply is `refused("7f3a9c21-c1 is sent; only a queued comment can be edited or deleted")`, exit 1.
 
 ### What the traces showed
@@ -1484,7 +1533,7 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | #9 Mate: context | `ContextText`; `Review.note` and `setNote` (in memory until #11); `Mate/ContextSource`; `ledger.contextToSend`, called in `ListenerQueue.deliverIfPossible`; `AppModel.setNote` and `sidecar`; `Comments/ContextNote`; `context set`; `context` in `StateSnapshot`; `ContextTextTests`, `ContextTests`, the context table in `ListenerLedgerTests` |
 | #10 Mate: answers | `acknowledge`, `setStatus`, `reply`, `ask`, `answer` in `Review`, the question properties of `Comment`, the errors `emptyMessage`, `notSent`, `noOpenQuestion`, `illegalMove`; `ReviewDesk.hash(naming:)`; `admit`, `acknowledge`, `setStatus`, `reply`, `ask`, `answered` and `ledger.finish` in `ListenerQueue`; `AppModel.answer`, the notice; `ThreadView`, `BatchCard` (with `BatchHeader`, moved out of `Sidebar`), `NoticeToast`, the question's style in `StatusStyle`; `notice` in `StateSnapshot`; the rows and routes of `ack`, `status`, `reply`, `ask`, `thread answer`, exit 3 for `ask`; `ReviewAnswerTests`, `ListenerAnswerTests` |
 | #11 Comment: persist | `VRStore/ReviewStore`; saving in `ReviewDesk.change`; the ledger saved; `app.json` and reopening the last video; `ReviewStoreTests` |
-| #12 Mate: the skill | `.agents/skills/video-review-mate/SKILL.md` |
+| #12 Mate: the skill | `.agents/skills/video-review-mate/SKILL.md` and `scripts/vr.sh`; the link `.claude/skills/video-review-mate`; the skill's rows in `AGENTS.md` |
 | #13 Proto: acceptance | `scripts/acceptance.sh`, `make acceptance`, `assets/screenshots/` |
 
 #4 and #5 can run side by side (lease files against review files; both add rows to `CommandTable` and routes to `ControlServer`, in separate lines). #8, #9 and #10 can run side by side after #7 (Transcript against context against threads; they meet only in `AppModel.sendBatch`, `ListenerQueue.deliverIfPossible` and the command table).
