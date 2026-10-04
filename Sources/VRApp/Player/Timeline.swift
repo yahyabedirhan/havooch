@@ -2,7 +2,8 @@ import SwiftUI
 import VRReview
 
 /// The scrubber: the played part of the video and the playhead, which a
-/// click or a drag moves, with a marker above the track for each comment.
+/// click or a drag moves, with a marker above the track for each comment:
+/// round for a comment at a time, a rounded square for one on a region.
 /// A click on a marker goes to its comment. The app's own, since AVKit's
 /// scrubber can't carry markers.
 struct Timeline: View {
@@ -31,7 +32,7 @@ struct Timeline: View {
                         Button {
                             select(comment.id)
                         } label: {
-                            StatusMark(state: comment.state, selected: comment.id == selection, size: Self.marker)
+                            StatusMark(state: comment.state, squared: comment.region != nil, selected: comment.id == selection, size: Self.marker)
                                 .frame(width: Self.markerRow, height: Self.markerRow)
                                 .contentShape(Rectangle())
                         }

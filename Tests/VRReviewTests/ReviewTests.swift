@@ -27,6 +27,19 @@ import VRReview
         #expect(try review.comment(comment.id) == comment)
     }
 
+    @Test func aCommentOnARegionKeepsItAndAStoredReviewBringsItBack() throws {
+        var review = review()
+        let region = try #require(Region(x: 0.48, y: 0.3, w: 0.28, h: 0.12))
+        let pointed = try review.addComment(text: "this key", time: 10, region: region, now: now)
+        let plain = try review.addComment(text: "the whole frame", time: 12, now: now)
+        #expect(pointed == Comment(id: CommentID(rawValue: "7f3a9c21-c1"), time: 10, text: "this key", region: region, state: .queued, createdAt: now))
+        #expect(plain.region == nil)
+        #expect(try review.editComment(pointed.id, text: "that key").region == region)
+        let back = try JSONDecoder().decode(Review.self, from: JSONEncoder().encode(review))
+        #expect(back == review)
+        #expect(back.comments.map(\.region) == [region, nil])
+    }
+
     @Test func theQueueIsInTimeOrderWhateverOrderCommentsWereMadeIn() throws {
         var review = review()
         for time in [18.0, 3, 10, 0, 21.233] {

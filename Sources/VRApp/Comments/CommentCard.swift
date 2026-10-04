@@ -2,8 +2,8 @@ import ImageIO
 import SwiftUI
 import VRReview
 
-/// One comment in the sidebar: its keyframe, its state, its time and its
-/// text. A click goes to its moment. A queued comment is edited in place
+/// One comment in the sidebar: its keyframe with its region outlined, its
+/// state, its time and its text. A click goes to its moment. A queued comment is edited in place
 /// (a double click or the pencil; Return keeps the new text, Escape the
 /// old) and deleted with the bin.
 struct CommentCard: View {
@@ -20,10 +20,10 @@ struct CommentCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Keyframe(file: keyframe)
+            Keyframe(file: keyframe, region: comment.region)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    StatusMark(state: comment.state, size: 10)
+                    StatusMark(state: comment.state, squared: comment.region != nil, size: 10)
                     Text(TimeText.short(comment.time))
                         .font(.callout.weight(.semibold).monospacedDigit())
                     Spacer(minLength: 0)
@@ -92,9 +92,11 @@ struct CommentCard: View {
     }
 }
 
-/// A comment's keyframe, small, read from its PNG file.
+/// A comment's keyframe, small, read from its PNG file, with the comment's
+/// region outlined on it.
 private struct Keyframe: View {
     let file: URL
+    let region: Region?
     @State private var image: CGImage?
 
     private static let size = CGSize(width: 72, height: 40.5)
@@ -104,6 +106,10 @@ private struct Keyframe: View {
             Color.black
             if let image {
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                if let region {
+                    let geometry = FrameGeometry(frame: CGSize(width: image.width, height: image.height), view: Self.size)
+                    Path(geometry.rect(of: region)).stroke(Color.accentColor, lineWidth: 1.5)
+                }
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)

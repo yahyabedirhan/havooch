@@ -49,7 +49,7 @@ struct Sidebar: View {
             Text(model.player.video == nil ? "No video is open" : "No comments yet")
                 .font(.callout.weight(.medium))
             if model.player.video != nil {
-                Text("Pause on a moment and press Return or C to comment on it.")
+                Text("Pause on a moment and press Return or C to comment on it, or drag on the frame to comment on a part of it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

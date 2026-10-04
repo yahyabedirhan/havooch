@@ -135,10 +135,7 @@ final class ControlServer {
             case .screenshot(let path, let appearance):
                 return await screenshot(to: path, appearance: appearance, json: json)
             case .commentAdd(let text, let at, let region):
-                guard region == nil else {
-                    return Answer(reply: .refused("this build of video-review doesn't take a comment's region yet"))
-                }
-                return comment(try await model.addComment(text: text, at: at), json)
+                return comment(try await model.addComment(text: text, at: at, region: try Self.checked(region)), json)
             case .commentEdit(let id, let text):
                 return comment(try model.editComment(CommentID(rawValue: id), text: text), json)
             case .commentDelete(let id):
@@ -153,6 +150,17 @@ final class ControlServer {
             }
         } catch {
             return Answer(reply: .refused(error.message))
+        }
+    }
+
+    /// `region` as the review keeps it, or the review's refusal: the wire
+    /// carries any four numbers.
+    private static func checked(_ region: WireRegion?) throws(ActionError) -> Region? {
+        guard let region else { return nil }
+        do throws(ReviewError) {
+            return try Region.checked(x: region.x, y: region.y, w: region.w, h: region.h)
+        } catch {
+            throw .review(error)
         }
     }
 

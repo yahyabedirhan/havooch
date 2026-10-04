@@ -14,6 +14,8 @@ final class ReviewDesk {
     struct Draft {
         /// The time it will be about: where the video was paused.
         var time: Double
+        /// The part of the frame it will point at, when one was drawn.
+        var region: Region?
         /// Whether the video was playing when the comment box opened, and
         /// so plays again once the comment is queued.
         var resumes: Bool
@@ -50,10 +52,16 @@ final class ReviewDesk {
         endDraft()
     }
 
-    /// Opens the comment box for a comment at `time` of the video at `video`.
-    func startDraft(time: Double, resumes: Bool, video: URL) {
+    /// Opens the comment box for a comment at `time` of the video at
+    /// `video`, on `region` of the frame when there is one.
+    func startDraft(time: Double, region: Region?, resumes: Bool, video: URL) {
         endDraft()
-        draft = Draft(time: time, resumes: resumes, frame: Task { await Self.frame(of: video, at: time) })
+        draft = Draft(time: time, region: region, resumes: resumes, frame: Task { await Self.frame(of: video, at: time) })
+    }
+
+    /// The comment being typed now points at `region`.
+    func pointDraft(at region: Region?) {
+        draft?.region = region
     }
 
     /// Closes the comment box.
@@ -72,12 +80,13 @@ final class ReviewDesk {
     }
 
     /// A new queued comment on the video `hash` names, with `frame` as its
-    /// keyframe. The comment exists only once its keyframe is on disk.
-    func add(text: String, time: Double, frame: CGImage, to hash: String) throws(ActionError) -> Comment {
+    /// keyframe and, with a `region`, that part of `frame` as its crop. The
+    /// comment exists only once its files are on disk.
+    func add(text: String, time: Double, region: Region?, frame: CGImage, to hash: String) throws(ActionError) -> Comment {
         guard var review = reviews[hash] else { throw .noVideo }
         let comment: Comment
         do throws(ReviewError) {
-            comment = try review.addComment(text: text, time: time, now: Date())
+            comment = try review.addComment(text: text, time: time, region: region, now: Date())
         } catch {
             throw .review(error)
         }
@@ -86,14 +95,23 @@ final class ReviewDesk {
         } catch {
             throw .keyframe(error.why)
         }
+        if let region {
+            do throws(FrameFailure) {
+                try FrameGrabber.write(try FrameGrabber.crop(frame, to: region), to: layout.crop(comment.id, of: hash))
+            } catch {
+                throw .crop(error.why)
+            }
+        }
         publish(review)
         return comment
     }
 
-    /// Takes the queued comment `id` out of the video `hash` names, and its keyframe with it.
+    /// Takes the queued comment `id` out of the video `hash` names, and its
+    /// keyframe and its crop with it.
     func delete(_ id: CommentID, from hash: String) throws(ActionError) {
         try change(hash) { review throws(ReviewError) in try review.deleteComment(id) }
         try? FileManager.default.removeItem(at: layout.keyframe(id, of: hash))
+        try? FileManager.default.removeItem(at: layout.crop(id, of: hash))
     }
 
     /// The one way a review changes: `body` changes a copy through the
@@ -115,8 +133,20 @@ final class ReviewDesk {
     /// video its id names. An id that names no video here gets a path with
     /// nothing at it.
     func keyframe(of id: CommentID) -> URL {
+        layout.keyframe(id, of: hash(named: id))
+    }
+
+    /// Where the crop of the comment `id` is, beside its keyframe. Only a
+    /// comment with a region has a file there.
+    func crop(of id: CommentID) -> URL {
+        layout.crop(id, of: hash(named: id))
+    }
+
+    /// The content hash of the video `id` names by its first digits, or
+    /// those digits alone when no video here has them.
+    private func hash(named id: CommentID) -> String {
         let prefix = id.rawValue.prefix(VideoPrefix.length)
-        return layout.keyframe(id, of: reviews.keys.first { $0.hasPrefix(prefix) } ?? String(prefix))
+        return reviews.keys.first { $0.hasPrefix(prefix) } ?? String(prefix)
     }
 
     private func publish(_ review: Review) {

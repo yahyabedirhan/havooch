@@ -24,22 +24,27 @@ struct StatusStyle {
     }
 }
 
-/// A comment's state as a round mark: the marker on the timeline and the
-/// dot on its card. The comment in focus gets a ring in the accent colour.
+/// A comment's state as a small mark: the marker on the timeline and the
+/// dot on its card. It is round for a comment at a time and a rounded
+/// square for one on a region, so the two kinds tell apart before a click.
+/// The comment in focus gets a ring in the accent colour.
 struct StatusMark: View {
     let state: CommentState
+    /// Whether the comment points at a region of the frame.
+    var squared = false
     var selected = false
     var size: CGFloat = 12
 
     var body: some View {
         let style = StatusStyle.of(state)
+        let shape = MarkShape(squared: squared)
         ZStack {
             if style.hollow {
                 // Filled with the window's colour, so the track doesn't show through the ring.
-                Circle().fill(.background)
-                Circle().strokeBorder(style.color, lineWidth: size / 5)
+                shape.fill(.background)
+                shape.strokeBorder(style.color, lineWidth: size / 5)
             } else {
-                Circle().fill(style.color)
+                shape.fill(style.color)
                 if let symbol = style.symbol {
                     Image(systemName: symbol)
                         .font(.system(size: size * 0.55, weight: .heavy))
@@ -50,8 +55,23 @@ struct StatusMark: View {
         .frame(width: size, height: size)
         .padding(2)
         .overlay {
-            if selected { Circle().strokeBorder(Color.accentColor, lineWidth: 1.5) }
+            if selected { shape.strokeBorder(Color.accentColor, lineWidth: 1.5) }
         }
-        .accessibilityLabel(style.label)
+        .accessibilityLabel(squared ? "\(style.label), on a region" : style.label)
+    }
+}
+
+/// A mark's outline: a circle, or a square with rounded corners.
+private struct MarkShape: InsettableShape {
+    var squared: Bool
+    var inset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let rect = rect.insetBy(dx: inset, dy: inset)
+        return squared ? Path(roundedRect: rect, cornerRadius: rect.width * 0.28) : Path(ellipseIn: rect)
+    }
+
+    func inset(by amount: CGFloat) -> MarkShape {
+        MarkShape(squared: squared, inset: inset + amount)
     }
 }

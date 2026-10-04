@@ -4,6 +4,7 @@ import VRReview
 /// Every path under a support folder, in one place:
 ///
 ///     <root>/videos/<content hash>/frames/<comment id>.png
+///     <root>/videos/<content hash>/crops/<comment id>.png
 ///
 /// The root is the person's support folder, or a demo's.
 public struct SupportLayout: Equatable, Sendable {
@@ -26,5 +27,11 @@ public struct SupportLayout: Equatable, Sendable {
     /// The keyframe of the comment `id` on the video `hash` names.
     public func keyframe(_ id: CommentID, of hash: String) -> URL {
         folder(hash).appendingPathComponent("frames", isDirectory: true).appendingPathComponent("\(id.rawValue).png")
+    }
+
+    /// The crop of the comment `id` on the video `hash` names: the part of
+    /// its keyframe its region points at.
+    public func crop(_ id: CommentID, of hash: String) -> URL {
+        folder(hash).appendingPathComponent("crops", isDirectory: true).appendingPathComponent("\(id.rawValue).png")
     }
 }

@@ -57,6 +57,13 @@ import VRWire
         #expect(request("comment", "add", "the title is small") == .commentAdd(text: "the title is small", at: nil, region: nil))
         #expect(request("comment", "add", "too fast", "--at", "0:10") == .commentAdd(text: "too fast", at: 10, region: nil))
         #expect(request("comment", "add", "--at", "3.5", "too fast") == .commentAdd(text: "too fast", at: 3.5, region: nil))
+        let region = WireRegion(x: 0.48, y: 0.3, w: 0.28, h: 0.12)
+        #expect(request("comment", "add", "this key", "--region", "0.48,0.30,0.28,0.12") == .commentAdd(text: "this key", at: nil, region: region))
+        #expect(request("comment", "add", "this key", "--at", "10", "--region", "0.48,0.30,0.28,0.12") == .commentAdd(text: "this key", at: 10, region: region))
+        #expect(request("comment", "add", "--region", "0.48,0.30,0.28,0.12", "--at", "0:10", "this key") == .commentAdd(text: "this key", at: 10, region: region))
+        // Whether four numbers lie inside the frame is the app's to say.
+        #expect(request("comment", "add", "off the frame", "--region", "-0.1,0,2,2")
+            == .commentAdd(text: "off the frame", at: nil, region: WireRegion(x: -0.1, y: 0, w: 2, h: 2)))
         #expect(request("comment", "edit", "7f3a9c21-c1", "new text") == .commentEdit(id: "7f3a9c21-c1", text: "new text"))
         #expect(request("comment", "delete", "7f3a9c21-c1") == .commentDelete(id: "7f3a9c21-c1"))
     }
@@ -102,10 +109,16 @@ import VRWire
             "screenshot: no appearance `sepia`; it takes `light` or `dark`", "screenshot <abs.png> [--appearance light|dark]"
         ),
         (["screenshot", "/tmp/w.png", "--appearance"], "screenshot: --appearance needs a value", "screenshot <abs.png> [--appearance light|dark]"),
-        (["comment", "add"], "comment add: missing <text>", "comment add <text> [--at <time>]"),
-        (["comment", "add", "late", "--at", "soon"], "comment add: `soon` isn't a time; write seconds (10, 10.5) or mm:ss (0:10)", "comment add <text> [--at <time>]"),
-        (["comment", "add", "late", "--at"], "comment add: --at needs a value", "comment add <text> [--at <time>]"),
-        (["comment", "add", "one", "two"], "comment add: unexpected `two`", "comment add <text> [--at <time>]"),
+        (["comment", "add"], "comment add: missing <text>", "comment add <text> [--at <time>] [--region x,y,w,h]"),
+        (["comment", "add", "late", "--at", "soon"], "comment add: `soon` isn't a time; write seconds (10, 10.5) or mm:ss (0:10)", "comment add <text> [--at <time>] [--region x,y,w,h]"),
+        (["comment", "add", "late", "--at"], "comment add: --at needs a value", "comment add <text> [--at <time>] [--region x,y,w,h]"),
+        (
+            ["comment", "add", "here", "--region", "0.1,0.2,0.3"],
+            "comment add: `0.1,0.2,0.3` isn't a region; write x,y,w,h as parts of the frame from 0 to 1 (0.48,0.3,0.28,0.12)",
+            "comment add <text> [--at <time>] [--region x,y,w,h]"
+        ),
+        (["comment", "add", "here", "--region"], "comment add: --region needs a value", "comment add <text> [--at <time>] [--region x,y,w,h]"),
+        (["comment", "add", "one", "two"], "comment add: unexpected `two`", "comment add <text> [--at <time>] [--region x,y,w,h]"),
         (["comment", "edit", "7f3a9c21-c1"], "comment edit: missing <text>", "comment edit <id> <text>"),
         (["comment", "delete"], "comment delete: missing <id>", "comment delete <id>"),
         (["app", "open", "--demo"], "app open: --demo needs a value", "app open [--demo <folder>]"),

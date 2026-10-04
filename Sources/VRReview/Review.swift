@@ -55,12 +55,13 @@ public struct Review: Codable, Equatable, Sendable {
         return kept
     }
 
-    /// A new comment at `time`, straight into the queue.
+    /// A new comment at `time`, straight into the queue; with `region`, on
+    /// that part of the frame.
     @discardableResult
-    public mutating func addComment(text: String, time: Double, now: Date) throws(ReviewError) -> Comment {
+    public mutating func addComment(text: String, time: Double, region: Region? = nil, now: Date) throws(ReviewError) -> Comment {
         let comment = Comment(
             id: CommentID(contentHash: video.contentHash, number: nextComment),
-            time: time, text: try checkedText(text, at: time), state: .queued, createdAt: now
+            time: time, text: try checkedText(text, at: time), region: region, state: .queued, createdAt: now
         )
         nextComment += 1
         // After every comment at or before its time, so equal times keep the order they were made in.

@@ -28,6 +28,8 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
     /// The time in the video it's about, in seconds.
     public var time: Double
     public var text: String
+    /// The part of the frame it points at; nil when it's about the whole frame.
+    public var region: Region?
     public var state: CommentState
     /// The batch it was sent in, once it was.
     public var batch: BatchID?
@@ -35,12 +37,13 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
     public var createdAt: Date
 
     public init(
-        id: CommentID, time: Double, text: String, state: CommentState,
+        id: CommentID, time: Double, text: String, region: Region? = nil, state: CommentState,
         batch: BatchID? = nil, thread: [ThreadMessage] = [], createdAt: Date
     ) {
         self.id = id
         self.time = time
         self.text = text
+        self.region = region
         self.state = state
         self.batch = batch
         self.thread = thread

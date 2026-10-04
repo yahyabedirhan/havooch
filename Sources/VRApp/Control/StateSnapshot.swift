@@ -52,7 +52,8 @@ struct StateSnapshot: Encodable {
     /// The comment being written in the comment box.
     struct Draft: Encodable {
         var time: Double
-        @Nulled var region: Unbuilt? = nil
+        /// The part of the frame it points at, as `{x, y, w, h}` from 0 to 1.
+        @Nulled var region: Region?
     }
 
     /// One comment, as `state` lists it and as `comment add --json` prints it.
@@ -60,12 +61,14 @@ struct StateSnapshot: Encodable {
         var id: String
         var time: Double
         var text: String
-        @Nulled var region: Unbuilt? = nil
+        /// The part of the frame it points at, as `{x, y, w, h}` from 0 to 1.
+        @Nulled var region: Region?
         var state: String
         @Nulled var batchId: String?
         /// The PNG of the frame at `time`, as an absolute path.
         var keyframePath: String
-        @Nulled var cropPath: String? = nil
+        /// The PNG of that part of the keyframe, as an absolute path.
+        @Nulled var cropPath: String?
         var thread: [ThreadMessage]
     }
 

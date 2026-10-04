@@ -1,6 +1,7 @@
 import AVFoundation
 import ImageIO
 import UniformTypeIdentifiers
+import VRReview
 
 /// Why a frame wasn't read or written, as one line.
 struct FrameFailure: Error, Equatable {
@@ -9,7 +10,8 @@ struct FrameFailure: Error, Equatable {
 
 /// A video's frames as images and PNG files, read from the video's file and
 /// never from the screen: a keyframe is the exact frame at its time, at the
-/// video's own size, whatever the window shows.
+/// video's own size, whatever the window shows, and a crop is a part of
+/// that keyframe.
 enum FrameGrabber {
     /// The frame `video` shows at `seconds`, upright. At the video's very
     /// end, where no frame starts, it's the last one.
@@ -30,6 +32,16 @@ enum FrameGrabber {
                 throw FrameFailure(why: error.localizedDescription)
             }
         }
+    }
+
+    /// The part of `image` that `region` points at, cut at whole pixels.
+    static func crop(_ image: CGImage, to region: Region) throws(FrameFailure) -> CGImage {
+        let pixels = region.pixels(in: (image.width, image.height))
+        // An image's own rectangle has its origin at the top left, as a region has.
+        guard let cut = image.cropping(to: CGRect(x: pixels.x, y: pixels.y, width: pixels.width, height: pixels.height)) else {
+            throw FrameFailure(why: "the region holds none of the frame")
+        }
+        return cut
     }
 
     /// `image` written as a PNG at `file`, replacing what's there; the

@@ -14,6 +14,7 @@ enum ActionError: Error, Equatable {
     case timeOutsideVideo(Double, duration: Double)
     case noDraft
     case keyframe(String)
+    case crop(String)
     case review(ReviewError)
 
     var message: String {
@@ -28,6 +29,8 @@ enum ActionError: Error, Equatable {
             "no comment is being written"
         case .keyframe(let why):
             "can't keep the comment's keyframe: \(why)"
+        case .crop(let why):
+            "can't keep the comment's crop: \(why)"
         case .review(let refusal):
             refusal.message
         }
@@ -46,6 +49,10 @@ final class AppModel {
     let isDemo: Bool
     /// The comment whose marker and card are in focus.
     private(set) var selection: CommentID?
+    /// The rectangle the person is dragging on the frame, until it is let go.
+    private(set) var draw = RegionDraw()
+    /// Whether the video was playing when that rectangle began.
+    private var drawResumes = false
     /// The last refusal of something the person did, shown until dismissed.
     var failure: String?
     /// The app's one window, for `Screenshotter`.
@@ -114,13 +121,26 @@ final class AppModel {
 
     // MARK: - Comments
 
-    /// Pauses, and opens the comment box for a comment at the playhead.
-    func startDraft() throws(ActionError) {
-        guard let video = player.video else { throw .noVideo }
-        guard desk.draft == nil else { return }
+    /// Pauses, and opens the comment box for a comment at the playhead:
+    /// on `region` of the frame when there is one. With the box already
+    /// open, a region becomes that comment's and nothing else changes.
+    func startDraft(region: Region? = nil) throws(ActionError) {
+        guard player.video != nil else { throw .noVideo }
+        guard desk.draft == nil || region != nil else { return }
         let resumes = player.playing
         player.pause()
-        desk.startDraft(time: player.time, resumes: resumes, video: video.url)
+        openDraft(region: region, resumes: resumes)
+    }
+
+    /// The comment box for a comment at the playhead of the paused video.
+    private func openDraft(region: Region?, resumes: Bool) {
+        guard let video = player.video else { return }
+        if let draft = desk.draft, draft.time == player.time {
+            desk.pointDraft(at: region)
+        } else {
+            // A box left open while the video moved on starts over at the frame on screen.
+            desk.startDraft(time: player.time, region: region, resumes: resumes || desk.draft?.resumes == true, video: video.url)
+        }
     }
 
     /// Return in the comment box: queues what was typed, closes the box,
@@ -128,30 +148,78 @@ final class AppModel {
     @discardableResult
     func commitDraft(text: String) async throws(ActionError) -> Comment {
         guard let draft = desk.draft else { throw .noDraft }
-        let comment = try await queueComment(text: text, time: draft.time, frame: draft.frame)
+        let comment = try await queueComment(text: text, time: draft.time, region: draft.region, frame: draft.frame)
         desk.endDraft()
         if draft.resumes { player.play() }
         return comment
     }
 
-    /// Escape in the comment box: closes it and keeps nothing.
+    /// Escape in the comment box: closes it and keeps nothing, its region
+    /// neither.
     func discardDraft() {
         desk.endDraft()
     }
 
-    /// The command line's way to a comment: at `at`, or at the playhead.
-    /// The playhead stays where it is.
+    // MARK: - Drawing a region
+
+    /// The button went down on the frame's view, at `point` of it.
+    func beginRegion(at point: CGPoint) {
+        guard player.video != nil else { return }
+        draw.begin(at: point)
+    }
+
+    /// The pointer moved to `point` with the button down. The move that
+    /// makes the press a rectangle pauses the video, so the frame drawn on
+    /// is the frame commented on.
+    func dragRegion(to point: CGPoint) {
+        guard draw.move(to: point) == .began else { return }
+        drawResumes = player.playing
+        player.pause()
+    }
+
+    /// The button was let go, with the frame placed as `geometry` says: a
+    /// rectangle opens the comment box on its region, and a press that
+    /// didn't move plays or pauses.
+    func endRegion(in geometry: FrameGeometry) {
+        switch draw.end(in: geometry) {
+        case .nothing:
+            break
+        case .click:
+            togglePlayback()
+        case .region(let region):
+            openDraft(region: region, resumes: drawResumes)
+        case .empty:
+            if drawResumes { player.play() }
+        }
+        drawResumes = false
+    }
+
+    /// Escape while a rectangle is drawn: gives it up, and plays on when
+    /// the video was playing. Whether there was one to give up.
     @discardableResult
-    func addComment(text: String, at: Double?) async throws(ActionError) -> Comment {
-        try await queueComment(text: text, time: at ?? player.time, frame: nil)
+    func cancelRegion() -> Bool {
+        let wasDrawing = draw.isDrawing
+        guard draw.cancel() else { return false }
+        if wasDrawing, drawResumes { player.play() }
+        drawResumes = false
+        return true
+    }
+
+    /// The command line's way to a comment: at `at`, or at the playhead,
+    /// and on `region` of the frame when there is one. The playhead stays
+    /// where it is.
+    @discardableResult
+    func addComment(text: String, at: Double?, region: Region? = nil) async throws(ActionError) -> Comment {
+        try await queueComment(text: text, time: at ?? player.time, region: region, frame: nil)
     }
 
     /// The one way a comment comes to be, from the comment box and the
     /// command line alike: refused first by the review's own rules, then
-    /// queued with the frame at its time as its keyframe. `frame` is that
-    /// frame when it is already being read.
+    /// queued with the frame at its time as its keyframe and, with a
+    /// region, that part of the keyframe as its crop. `frame` is that frame
+    /// when it is already being read. The new comment is the one in focus.
     private func queueComment(
-        text: String, time: Double, frame: Task<Result<CGImage, FrameFailure>, Never>?
+        text: String, time: Double, region: Region?, frame: Task<Result<CGImage, FrameFailure>, Never>?
     ) async throws(ActionError) -> Comment {
         guard let review = desk.open, let video = player.video else { throw .noVideo }
         do throws(ReviewError) {
@@ -166,8 +234,12 @@ final class AppModel {
             grabbed = await ReviewDesk.frame(of: video.url, at: time)
         }
         switch grabbed {
-        case .success(let image): return try desk.add(text: text, time: time, frame: image, to: review.video.contentHash)
-        case .failure(let failure): throw .keyframe(failure.why)
+        case .success(let image):
+            let comment = try desk.add(text: text, time: time, region: region, frame: image, to: review.video.contentHash)
+            selection = comment.id
+            return comment
+        case .failure(let failure):
+            throw .keyframe(failure.why)
         }
     }
 
@@ -277,7 +349,7 @@ final class AppModel {
                 .init(path: $0.url.path, contentHash: desk.open?.video.contentHash, title: $0.title, duration: $0.duration)
             },
             player: .init(time: player.time, playing: player.playing, rate: player.speed),
-            draft: desk.draft.map { .init(time: $0.time) },
+            draft: desk.draft.map { .init(time: $0.time, region: $0.region) },
             comments: desk.open?.comments.map(shown) ?? [],
             queue: desk.open?.queue.map(\.id.rawValue) ?? [],
             lease: lease
@@ -287,8 +359,9 @@ final class AppModel {
     /// `comment` as `state` and a comment command's `--json` print it.
     func shown(_ comment: Comment) -> StateSnapshot.Comment {
         .init(
-            id: comment.id.rawValue, time: comment.time, text: comment.text, state: comment.state.rawValue,
-            batchId: comment.batch?.rawValue, keyframePath: desk.keyframe(of: comment.id).path, thread: comment.thread
+            id: comment.id.rawValue, time: comment.time, text: comment.text, region: comment.region,
+            state: comment.state.rawValue, batchId: comment.batch?.rawValue, keyframePath: desk.keyframe(of: comment.id).path,
+            cropPath: comment.region == nil ? nil : desk.crop(of: comment.id).path, thread: comment.thread
         )
     }
 }

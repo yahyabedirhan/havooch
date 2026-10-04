@@ -136,8 +136,8 @@ enum CommandTable {
             return .send(.playerSeek(seconds: seconds))
         },
         Command(
-            words: ["comment", "add"], usage: "comment add <text> [--at <time>]",
-            summary: "queue a comment at a time, or at the playhead"
+            words: ["comment", "add"], usage: "comment add <text> [--at <time>] [--region x,y,w,h]",
+            summary: "queue a comment at a time, or at the playhead; with --region, on that part of the frame (0..1, origin top left)"
         ) { arguments throws(UsageError) in
             var at: Double?
             if let text = try arguments.option("at") {
@@ -146,7 +146,16 @@ enum CommandTable {
                 }
                 at = seconds
             }
-            return .send(.commentAdd(text: try arguments.positional("text"), at: at, region: nil))
+            var region: WireRegion?
+            if let text = try arguments.option("region") {
+                guard let numbers = RegionArgument.region(text) else {
+                    throw UsageError(
+                        "`\(text)` isn't a region; write x,y,w,h as parts of the frame from 0 to 1 (0.48,0.3,0.28,0.12)"
+                    )
+                }
+                region = numbers
+            }
+            return .send(.commentAdd(text: try arguments.positional("text"), at: at, region: region))
         },
         Command(
             words: ["comment", "edit"], usage: "comment edit <id> <text>", summary: "change a queued comment's text"

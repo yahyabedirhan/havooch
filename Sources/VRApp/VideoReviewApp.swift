@@ -78,9 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 /// The window's content: the lease banner while an agent controls the app,
-/// then the frame above the transport bar, with the comment box over the
-/// frame's foot while a comment is written, and the sidebar on the trailing
-/// edge.
+/// then the frame above the transport bar, under the overlay that draws
+/// regions and holds the comment box, and the sidebar on the trailing edge.
 struct MainView: View {
     let model: AppModel
     let lease: LeaseIndicator
@@ -92,17 +91,12 @@ struct MainView: View {
             ZStack {
                 // Black around a video in both appearances, as players do.
                 Color.black
-                if model.player.video != nil {
+                if let video = model.player.video {
                     PlayerSurface(player: model.player.player)
-                        .onTapGesture { model.togglePlayback() }
+                    RegionOverlay(model: model, video: video)
                 } else {
                     EmptyState(model: model)
                         .background(.background)
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if let draft = model.desk.draft {
-                    Composer(model: model, time: draft.time)
                 }
             }
             Divider()

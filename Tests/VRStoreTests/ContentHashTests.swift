@@ -66,9 +66,10 @@ import VRStore
         #expect(throws: (any Error).self) { try ContentHash.of(URL(fileURLWithPath: "/nowhere/sample.mp4")) }
     }
 
-    @Test func aKeyframeSitsInItsVideosFolderUnderItsCommentsId() {
+    @Test func aKeyframeAndACropSitInTheirVideosFolderUnderTheirCommentsId() {
         let layout = SupportLayout(root: URL(fileURLWithPath: "/support", isDirectory: true))
         let hash = "7f3a9c21" + String(repeating: "0", count: 56)
         #expect(layout.keyframe(CommentID(rawValue: "7f3a9c21-c3"), of: hash).path == "/support/videos/\(hash)/frames/7f3a9c21-c3.png")
+        #expect(layout.crop(CommentID(rawValue: "7f3a9c21-c3"), of: hash).path == "/support/videos/\(hash)/crops/7f3a9c21-c3.png")
     }
 }

@@ -58,6 +58,8 @@ enum Shortcuts {
 final class ShortcutMonitor {
     private let model: AppModel
     private var monitor: Any?
+    /// The Escape key's code.
+    private static let escape: UInt16 = 53
 
     init(model: AppModel) {
         self.model = model
@@ -73,6 +75,9 @@ final class ShortcutMonitor {
 
     /// Whether `event` was a player key, and was done.
     private func handle(_ event: NSEvent) -> Bool {
+        // Escape gives up the rectangle being drawn on the frame, before
+        // anything else hears it: the comment box may be open under it.
+        if event.keyCode == Self.escape, event.window === model.window, model.cancelRegion() { return true }
         // With the comment box open, every key is the box's: also in the
         // moment before the box has taken the focus.
         guard let window = model.window, event.window === window, window.attachedSheet == nil,
