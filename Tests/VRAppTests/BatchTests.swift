@@ -276,7 +276,8 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         let hash = try #require(rig.model.video?.info.contentHash)
         #expect(batch.batch == BatchPayload.Header(id: "b1", sentAt: "2025-10-04T12:00:00Z"))
         #expect(batch.video == rig.model.video?.info)
-        #expect(batch.context == nil)
+        // The fixture video has a context file beside it.
+        #expect(batch.context?.hasPrefix("# Context: sample\n") == true)
         #expect(batch.comments == [
             BatchPayload.Item(
                 id: "c2", time: 4.5, text: "this button",
@@ -309,7 +310,7 @@ private func payload(_ answer: ControlServer.Answer) throws -> BatchPayload {
         #expect(output.dropLast().allSatisfy { !$0.isNewline })
         let object = try #require(try JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
         #expect(Set(object.keys) == ["batch", "video", "context", "comments"])
-        #expect(object["context"] is NSNull)
+        #expect(object["context"] is String)
         #expect(Set(try #require(object["batch"] as? [String: Any]).keys) == ["id", "sentAt"])
         #expect(Set(try #require(object["video"] as? [String: Any]).keys) == ["path", "contentHash", "duration", "title"])
         let comments = try #require(object["comments"] as? [[String: Any]])

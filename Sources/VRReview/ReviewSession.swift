@@ -20,17 +20,22 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     public private(set) var comments: [Comment] = []
     /// The batches sent from this video, oldest first.
     public private(set) var batches: [Batch] = []
+    /// The person's note about the video, part of its context for the
+    /// listener; empty when there's none.
+    public private(set) var note = ""
 
     public init(video: VideoInfo) {
         self.video = video
     }
 
-    /// A review kept before anything was sent has no batches.
+    /// A review kept before anything was sent has no batches, and one kept
+    /// before a note was written has no note.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         video = try container.decode(VideoInfo.self, forKey: .video)
         comments = try container.decode([Comment].self, forKey: .comments)
         batches = try container.decodeIfPresent([Batch].self, forKey: .batches) ?? []
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 
     /// The comments waiting to be sent, in time order.
@@ -52,6 +57,12 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     }
 
     // MARK: - Changes
+
+    /// Replaces the note, without the white space around it. An empty text
+    /// takes the note away.
+    public mutating func setNote(_ text: String) {
+        note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     /// Starts a comment at `time`, on `region` of the frame when one was
     /// drawn: a draft, with no text yet.

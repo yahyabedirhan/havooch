@@ -43,6 +43,9 @@ public enum ControlRequest: Equatable, Sendable {
     /// `batch send`: every queued comment of the open video sent as one
     /// batch, for a listener's `wait`.
     case batchSend
+    /// `context set <text>`: the open video's note replaced; an empty text
+    /// takes it away.
+    case contextSet(text: String)
     /// `screenshot <abs.png> [--appearance light|dark]`: the app's window
     /// written as a PNG at `path`, absolute since the app runs in another
     /// folder; in `appearance` when it's set, as the Mac shows it otherwise.
@@ -120,7 +123,7 @@ public enum ControlRequest: Equatable, Sendable {
             .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot:
             .operator
-        case .commentAdd, .commentEdit, .commentDelete, .batchSend:
+        case .commentAdd, .commentEdit, .commentDelete, .batchSend, .contextSet:
             .operator
         case .wait:
             .listener

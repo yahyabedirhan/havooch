@@ -278,7 +278,7 @@ Sources/
       TranscriptService.swift       resolves the source on open, runs speech in the background, answers windows
       SpeechSource.swift            Transcriber over Apple SpeechAnalyzer
     Context/
-      ContextSidecar.swift          <base>.context.md, else context.md, beside the video
+      ContextSidecar.swift          <base>.context.md, else context.md, beside the video, read fresh; the context's text (the sidecar, then the note under its heading)
     Control/
       ControlServer.swift           decode, version, lease gate, dispatch; lease timers and waiters
       SocketListener.swift          the listening socket: accept, read, answer, heartbeat (Pulse), close; says how writing a reply went that a lease or a batch hangs on
@@ -300,7 +300,7 @@ Sources/
       BatchCard.swift               one batch: its header and its thread
       SendBar.swift                 queued count, Send, the presence chip
       LeaseBanner.swift             who controls the app, time left, Stop
-      ContextPopover.swift          the sidecar's text and the editable note
+      ContextPopover.swift          ContextButton (the toolbar's button and its tooltip) and the popover: the sidecar's text and the editable note
       Shortcuts.swift               the player's keys (PlayerKey, Escape among them), Cmd+Enter (SendKey) and where the focus is (KeyFocus): given up in a panel, under a sheet and while a text view has focus
       Theme.swift                   state colours and glyphs, spacing, fonts
 Tests/
@@ -445,7 +445,8 @@ public struct Comment: Codable, Identifiable { var id: String; var time: Double;
 public struct Batch: Codable, Identifiable { var id: String; var sentAt: Date; var commentIDs: [String]; var thread: [ThreadMessage] }
 
 public struct ReviewSession: Codable, Equatable {
-    public var video: VideoInfo; public var note: String
+    public var video: VideoInfo; public private(set) var note: String    // "" with none
+    public mutating func setNote(_ text: String)     // trimmed; an empty text takes the note away
     public private(set) var comments: [Comment]      // kept in time order
     public private(set) var batches: [Batch]
 
@@ -570,7 +571,9 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
     func showComment(_ id: String) async throws(ModelRefusal)     // a click on a marker or a card: pause, seek, select
     func sendBatch() async throws(ModelRefusal) -> Batch
     func answer(_ commentID: String, text: String) throws(ModelRefusal)
-    func setNote(_ text: String) throws(ModelRefusal)
+    func setNote(_ text: String) throws(ModelRefusal)             // the open video's note; refused with no video
+    var note: String { get }                                      // the open video's note
+    var sidecar: ContextSidecar? { get }                          // the open video's context file, read from disk now
 
     // what the listener can do (any video of the library, open or not)
     var presence: Outbox.Presence { get }
@@ -596,7 +599,7 @@ The region's gestures are `beginDrawing()` (a drag started: pause; false while t
 
 Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over. The outbox is in memory for the run too (`ReviewModel.outbox`, changed only through the model's own methods); the persistence ticket keeps its parcels with `Outbox(parcels:)`.
 
-The model takes the time as a closure (`now`), so the tests set when a batch was sent and when a wait closed. `payload(for:)` is not `async`: everything it reads is in memory (the paths of images on disk, the transcript lines known at that moment, the context), so a batch goes to a parked `wait` in the same step it is sent in, with nothing running between. Two private functions are the seams the next tickets fill: `contextText(of:)` (nil now, so `context` is `null`; `Outbox.context` already sends a text once per listener session) and `transcript(around:of:)` (`[]` now).
+The model takes the time as a closure (`now`), so the tests set when a batch was sent and when a wait closed. `payload(for:)` is not `async`: everything it reads is in memory (the paths of images on disk, the transcript lines known at that moment, the context), so a batch goes to a parked `wait` in the same step it is sent in, with nothing running between. Two private functions are the seams the next tickets fill: `contextText(of:)` (`ContextSidecar.find` beside the review's video path, read from disk on each call, plus the review's note; `Outbox.context` sends the text once per listener session and when it changed) and `transcript(around:of:)` (`[]` now).
 
 `composerText` is what the comment box holds. The model keeps it, not the view, so that Cmd+Enter inside the box can queue it before sending. `sendByPerson()` is the person's send (Cmd+Enter and the send bar's button): it queues the box's text, then calls `sendBatch()`, the same call `batch send` ends in; a refusal lands in `sendFailure` for the send bar. A second press while a send is on its way does nothing. `posted` is the closure the model calls after a batch is in the outbox; `ControlServer` sets it to `ListenerDesk.outboxChanged`.
 
@@ -619,7 +622,7 @@ The commands are the spec's, unchanged. This table fixes what the spec left open
 | `comment edit`, `comment delete` | operator | `edited c1`, `deleted c1` | `{id}` |
 | `batch send` | operator | `sent b1 with 2 comments` | `{id, sentAt, commentIds}` |
 | `thread answer <id> <text>` | operator | `answered c1` | `{id}` |
-| `context set <text>` | operator | `context note set` | `{note}` |
+| `context set <text>` | operator | `context note set`, or `context note cleared` for an empty text | `{note}`, the note as it was kept |
 | `screenshot <abs.png> […]` | operator | the path | `{path}` |
 | `wait [--timeout <s>]` | listener | the payload (always JSON) | the same |
 | `ack <batch-id> [<text>]` | listener | `acknowledged b1` | `{id}` |
@@ -653,7 +656,7 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
   "video": {"path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample"},
   "player": {"time": 10, "playing": false},
   "time": 10,
-  "context": {"sidecarPath": "/abs/sample.context.md", "note": ""},
+  "context": {"sidecarPath": "/abs/sample.context.md", "note": ""},   // sidecarPath null with no file; context null with no video
   "transcript": {"source": "voiceover", "ready": true, "lines": 3},
   "queue": ["c3"],
   "comments": [
@@ -779,7 +782,7 @@ UI/Shortcuts (SendKey), UI/SendBar       ReviewModel.sendByPerson(): the comment
     ├ ReviewModel.payload(for: parcel)
     │ ├ Library paths                    keyframePath, cropPath (absolute); null for a file not on disk
     │ ├ transcript(around:of:)           [] until the transcript ticket: TranscriptWindow.cut(known lines, to: time ± 15 s)
-    │ ├ contextText(of:)                 nil until the context ticket: ContextSidecar.text + note
+    │ ├ contextText(of:)                 ContextSidecar.find (read from disk now) + the review's note → ContextSidecar.text
     │ │ └ outbox.context(for: hash, text)          first batch of this listener → the text; later → nil
     │ └ BatchPayload(…)                  the spec's object
     └ resume the parked connection       Answer(reply: ok, output: <payload JSON>, batch: "b1", listener: key)
@@ -958,7 +961,9 @@ window:    TranscriptWindow.around(t, duration) = max(0, t − 15) … min(durat
 
 A comment made before speech finished gets the lines that exist at send time. `VoiceoverSource` gives one line per scene: a scene lasts `ceil((durationSeconds + paddingSeconds) × fps)` frames and starts where the previous one ends; `fps` is the video track's nominal frame rate.
 
-**The context** (`ContextSidecar.swift`): `<base>.context.md` beside the video, else `context.md` in the same folder. The payload's text is the sidecar's text, then the note under the heading `## Reviewer's note` when the note is not empty. `null` when both are empty or `Outbox.context` says it was sent.
+**The context** (`ContextSidecar.swift`): `<base>.context.md` beside the video, else `context.md` in the same folder. The first of the two that is a readable file wins, even an empty one; a folder of that name is passed over. The payload's text is the sidecar's text, then the note under the heading `## Reviewer's note` when the note is not empty, each without the white space around it, two newlines between them and one at the end. `null` when both are empty or `Outbox.context` says it was sent. The sidecar is not cached: `ReviewModel.contextText(of:)` reads it when a `wait` takes a batch, so an edit on disk reaches the next batch, and `state` and the toolbar button read it when asked. The file is small and local, so the read stays on the main actor and `payload(for:)` stays synchronous. The video's path is the review's (`ReviewSession.video.path`), so a batch of a video that is not the open one finds its sidecar too.
+
+The note is `ReviewSession.note`, one per video, in memory with the review until the persistence ticket keeps the review on disk; a review kept without a note reads with none. `ReviewModel.setNote` is the one way in: `context set <text>` (an operator's, so it needs the lease; one argument, and `""` takes the note away) and the popover both end there. `ContextButton` is a toolbar item shown while a video is open: `doc.text`, filled once the video has a sidecar or a note, with a tooltip that names what the listener gets. Its popover shows the sidecar's file name and text read-only (as read when the popover opened), and the note in a text editor; the note is kept when the popover closes, whichever way (Done, Escape, a click outside). `state` shows the context in its JSON only (`context`); the lines of `state` and `app status` do not name it.
 
 **The content hash** (`ContentHash.swift`): SHA-256 over the file's byte count, its first 4 MiB and its last 4 MiB, as lowercase hex. A file of 8 MiB or less is hashed whole. A renamed or moved copy has the same hash; `review.json` keeps the last path seen.
 
@@ -1041,6 +1046,9 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | Stop is a button in the banner only: no menu item, no key, no CLI command. A stopped agent is told to ask the person; nothing in the window lists it. | Stop is the person's override, so an agent can't reach it. A bar ends by itself after 5 min. |
 | Screenshots show the window as it is, banner included. | A screenshot is evidence of what the person sees. The contract has no flag to hide it. |
 | The context note is a popover from a toolbar button, with the sidecar's text above it, read-only. | Context is set once per video, so it should not take sidebar space. |
+| The context button's glyph is filled when the video has a sidecar or a note, and its tooltip names them. | Whether the agent gets a context shows without opening the popover. |
+| The popover keeps the note when it closes, not on every key. | The note is trimmed when kept, which would fight typing; and the listener gets a note once it is written, not half of it. |
+| `context set ""` clears the note and says `context note cleared`. | The CLI needs a way to take a note away, and the contract has no other command for it. |
 | With no video: a drop target, an Open button, and in a demo run the demo folder's videos as a list. | An operator still uses `player open`; a person in a demo gets one click. |
 | System colours, materials and SF Symbols only. | Light and dark both work without a second palette. |
 | `comment add` from the CLI pauses the video, and seeks first when `--at` is given. Its comment is selected, so a region given with it shows on the stage. | The window then shows what the operator did, as if a person had done it. |

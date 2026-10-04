@@ -18,6 +18,8 @@ private func raw(_ fields: String) -> Data {
         .commentAdd(text: "this corner", at: nil, region: ControlRequest.WireRegion(x: 0, y: 0, w: 1, h: 1)),
         .commentEdit(id: "c1", text: "slower here"),
         .commentDelete(id: "c1"),
+        .contextSet(text: "Mind the pacing.\nIt's a draft."),
+        .contextSet(text: ""),
     ])
     func everyCommentRequestReadsBackAsItWasSent(request: ControlRequest) throws {
         for json in [false, true] {
@@ -52,6 +54,7 @@ private func raw(_ fields: String) -> Data {
         (#""command":"comment.edit","text":"x""#, "the control command `comment.edit` needs its `id`"),
         (#""command":"comment.edit","id":"c1""#, "the control command `comment.edit` needs its `text`"),
         (#""command":"comment.delete""#, "the control command `comment.delete` needs its `id`"),
+        (#""command":"context.set""#, "the control command `context.set` needs its `text`"),
     ])
     func aCommentRequestMissingItsFieldIsRefused(fields: String, why: String) {
         #expect(throws: ControlProtocolError.unreadable(why)) {

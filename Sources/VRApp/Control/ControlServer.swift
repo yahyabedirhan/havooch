@@ -157,6 +157,8 @@ final class ControlServer {
             return Answer(reply: await desk.deleteComment(id, json: json))
         case .batchSend:
             return Answer(reply: await desk.sendBatch(json: json))
+        case .contextSet(let text):
+            return Answer(reply: await desk.setNote(text, json: json))
         case .screenshot(let path, let appearance):
             return Answer(reply: await desk.screenshot(to: path, appearance: appearance, json: json))
         case .wait(let seconds):

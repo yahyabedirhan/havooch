@@ -86,6 +86,17 @@ struct OperatorDesk {
         }
     }
 
+    /// `context set`: `context note set` (`context note cleared` for an
+    /// empty text), or `{note}` with the note as it was kept.
+    func setNote(_ text: String, json: Bool) async -> ControlReply {
+        await answer { () throws(ModelRefusal) in
+            try model.setNote(text)
+            struct Noted: Encodable { var note: String }
+            let note = model.note
+            return json ? JSONLine.string(Noted(note: note)) : "context note \(note.isEmpty ? "cleared" : "set")\n"
+        }
+    }
+
     /// `{id}`: what a change to one comment prints with `--json`.
     private struct Named: Encodable {
         var id: String

@@ -5,8 +5,8 @@ import VRWire
 
 /// What the app shows, as `state` and `app status` report it: as lines for a
 /// person, or as one JSON object. Built from the model and the lease at the
-/// moment of asking. Each later ticket adds its own keys (the context, the
-/// transcript, the threads).
+/// moment of asking. Each later ticket adds its own keys (the transcript, the
+/// threads).
 struct StateReport: Equatable {
     struct Player: Encodable, Equatable {
         /// Where the player is, in seconds, to the millisecond.
@@ -46,6 +46,22 @@ struct StateReport: Equatable {
         var finished: Bool
     }
 
+    /// The open video's context: `{sidecarPath, note}`. `sidecarPath` is the
+    /// context file found beside the video, `null` with none; `note` is the
+    /// person's note, empty with none.
+    struct Context: Encodable, Equatable {
+        var sidecarPath: String?
+        var note: String
+
+        enum Keys: String, CodingKey { case sidecarPath, note }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: Keys.self)
+            try container.encode(sidecarPath, forKey: .sidecarPath)
+            try container.encode(note, forKey: .note)
+        }
+    }
+
     /// The folder a demo run reads, or nil for the person's own app.
     var demo: String?
     /// The lease, or nil when it's free.
@@ -53,6 +69,8 @@ struct StateReport: Equatable {
     /// The open video, or nil when there's none.
     var video: VideoInfo?
     var player: Player
+    /// The open video's context, or nil when there's no video.
+    var context: Context?
     /// Every comment of the open video, drafts included, in time order.
     var comments: [CommentReport]
     var listener: Listener
@@ -70,6 +88,7 @@ struct StateReport: Equatable {
         self.lease = lease
         video = model.video?.info
         player = Player(time: TimeText.rounded(model.time), playing: model.isPlaying)
+        context = model.video.map { _ in Context(sidecarPath: model.sidecar?.url.path, note: model.note) }
         comments = (model.session?.comments ?? []).map { CommentReport($0, keyframe: model.keyframeURL(for: $0.id), crop: model.cropURL(for: $0.id)) }
         listener = Listener(presence: model.presence, name: model.outbox.listener?.name)
         batches = (model.session?.batches ?? []).map { batch in
@@ -87,7 +106,7 @@ struct StateReport: Equatable {
 
     // MARK: - state
 
-    /// `state --json`. `lease`, `video` and `app.demo` are `null` when
+    /// `state --json`. `lease`, `video`, `context` and `app.demo` are `null` when
     /// there's none, never left out. The player's time is at `player.time`
     /// and, for a script that reads one field, at the top-level `time`.
     var stateJSON: String {
@@ -169,7 +188,7 @@ struct StateReport: Equatable {
     private struct State: Encodable {
         var report: StateReport
 
-        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, queue, comments, batches }
+        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, context, queue, comments, batches }
         enum AppKeys: String, CodingKey { case version, variant, demo }
 
         func encode(to encoder: any Encoder) throws {
@@ -182,6 +201,7 @@ struct StateReport: Equatable {
             try container.encode(report.video, forKey: .video)
             try container.encode(report.player, forKey: .player)
             try container.encode(report.player.time, forKey: .time)
+            try container.encode(report.context, forKey: .context)
             try container.encode(report.queue, forKey: .queue)
             try container.encode(report.comments, forKey: .comments)
             try container.encode(report.listener, forKey: .listener)

@@ -85,6 +85,15 @@ final class ReviewModel {
     /// timeline marks and the sidebar lists. A draft isn't among them.
     var comments: [Comment] { session?.comments.filter { $0.state != .draft } ?? [] }
 
+    /// The open video's note; empty with none, or with no video.
+    var note: String { session?.note ?? "" }
+
+    /// The open video's context sidecar as it is on disk now, or nil with
+    /// none, or with no video.
+    var sidecar: ContextSidecar? {
+        video.flatMap { ContextSidecar.find(beside: $0.url) }
+    }
+
     /// Where the keyframe of the comment `id` is, or nil while it isn't on
     /// disk.
     func keyframeURL(for id: String) -> URL? {
@@ -250,6 +259,13 @@ final class ReviewModel {
         dropImages(of: id)
     }
 
+    /// Replaces the open video's note, the part of its context the person
+    /// writes in the app. An empty text takes it away. The listener gets
+    /// the changed context with the next batch.
+    func setNote(_ text: String) throws(ModelRefusal) {
+        try change { (session) throws(ReviewRefusal) in session.setNote(text) }
+    }
+
     /// Shows a comment's moment: the video paused at its time and its card
     /// selected. What a click on its marker or its card does.
     func showComment(_ id: String) async throws(ModelRefusal) {
@@ -357,10 +373,13 @@ final class ReviewModel {
     }
 
     /// The context of the video `hash` as a listener gets it: its sidecar's
-    /// text and the person's note. Nil until the context is built; the
-    /// outbox already sends it once per listener session.
+    /// text and the person's note, or nil with neither. The sidecar is read
+    /// from disk on every call, so an edit to it reaches the next batch; the
+    /// outbox sends the text once per listener session and when it changed.
     private func contextText(of hash: String) -> String? {
-        nil
+        guard let review = review(of: hash) else { return nil }
+        let sidecar = ContextSidecar.find(beside: URL(fileURLWithPath: review.video.path))
+        return ContextSidecar.text(sidecar: sidecar?.text, note: review.note)
     }
 
     /// The transcript lines around a comment's time. Empty until the
@@ -523,6 +542,11 @@ final class ReviewModel {
         guard let composing else { return }
         try? discardComment(composing)
         self.composing = nil
+    }
+
+    /// The context popover closed: the note it holds is kept.
+    func noteByPerson(_ text: String) {
+        try? setNote(text)
     }
 
     /// A click on a comment's marker or card.

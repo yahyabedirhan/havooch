@@ -27,6 +27,13 @@ struct MainWindow: View {
         .frame(minWidth: 820, minHeight: 420)
         .navigationTitle(model.video?.info.title ?? AppIdentity.name)
         .navigationSubtitle(model.demoFolder == nil ? "" : "Demo")
+        .toolbar {
+            if model.video != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    ContextButton(model: model)
+                }
+            }
+        }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             model.openByPerson(url)

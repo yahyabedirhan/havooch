@@ -154,8 +154,21 @@ private func refusal(_ body: () throws(ReviewRefusal) -> Void) -> String? {
         #expect(refusal { () throws(ReviewRefusal) in try session.delete("c9") } == missing)
     }
 
+    @Test func theNoteIsKeptWithoutTheWhiteSpaceAroundItAndAnEmptyOneTakesItAway() throws {
+        var session = try session(with: .queued)
+        // A review kept before a note was written has none.
+        #expect(session.note == "")
+
+        session.setNote("  Mind the pacing.\n")
+        #expect(session.note == "Mind the pacing.")
+
+        session.setNote(" \n")
+        #expect(session.note == "")
+    }
+
     @Test func aSessionReadsBackAsItWasSaved() throws {
         var session = ReviewSession(video: video)
+        session.setNote("Mind the pacing.")
         session.draft(id: "c1", time: 10)
         try session.commit("c1", text: "too fast")
         _ = try session.send(batchID: "b1", at: Date(timeIntervalSince1970: 1_000))
