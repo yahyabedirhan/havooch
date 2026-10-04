@@ -103,7 +103,7 @@ Out, as the spec says: video editing, formats AVPlayer cannot play, URLs, system
 | Requirement | Module | Ticket |
 |---|---|---|
 | 1 play a video | ReviewApp `Player/` | #3 |
-| 2, 4, 6 comments, queue, markers | ReviewCore `VideoReview`, ReviewApp `ReviewDesk`, `FrameGrabber`, `Timeline/` | #5 |
+| 2, 4, 6 comments, queue, markers | ReviewCore `VideoReview`, ReviewStore `ContentHash`, `ImageFiles`, ReviewApp `ReviewDesk`, `FrameGrabber`, `Stage/Composer`, `Timeline/Marker`, `Rail/CommentCard` | #5 |
 | 3 regions | ReviewCore `Region`, ReviewApp `Stage/RegionOverlay`, `VideoFrameGeometry` | #6 |
 | 5, 7 batches, `wait`, presence | ReviewCore `Outbox`, `BatchPayload`, ReviewApp `ListenerQueue` | #7 |
 | 8, 9 answers and questions | ReviewCore `VideoReview` (threads), ReviewApp `ListenerQueue` (asks), `Rail/`, `Stage/Toasts` | #10 |
@@ -253,7 +253,7 @@ Sources/
     main.swift                     exit(VideoReviewCLI.run(...))
   ReviewCore/
     Comment.swift                  Comment, Region (validation), ThreadMessage
-    CommentState.swift             the seven states and the legal moves
+    CommentState.swift             the seven states, the legal moves, and which state can still be edited
     Batch.swift                    Batch: id, sentAt, comment ids, batch-level messages
     VideoReview.swift              one video's review: every rule about comments, batches and threads
     ReviewRefusal.swift            why a change is refused, as the line the CLI prints
@@ -271,7 +271,7 @@ Sources/
   ReviewStore/
     Library.swift                  the support folder's layout; load and save reviews, the outbox, transcripts; the id index
     ContentHash.swift              SHA-256 of the file, streamed
-    ImageFiles.swift               where keyframes and crops are, writing a PNG
+    ImageFiles.swift               where keyframes and crops are, writing and removing a PNG, a small copy for a card
   ReviewApp/
     VideoReviewApp.swift           @main; the one window; the menu commands
     AppModel.swift                 the orchestrator; every action a person or an operator can take
@@ -294,13 +294,14 @@ Sources/
       LeaseBanner.swift            who controls the app, and Stop: the banner's words (pure) and its view
       EmptyState.swift             no video open
       ContextPopover.swift         the sidecar text and the editable note
+      CommentEditor.swift          the text view a comment is written in (the composer and a card being edited), and its keys
       Stage/StageView.swift        the video with the overlay, the composer and the notices
       Stage/RegionOverlay.swift    draw a rectangle; show a comment's region
       Stage/VideoFrameGeometry.swift  view points to normalized frame coordinates and back (pure)
-      Stage/Composer.swift         the comment box
+      Stage/Composer.swift         the comment box, and where it sits on the stage (pure)
       Stage/Toasts.swift           the brief notices
-      Timeline/TimelineLane.swift  play button, time, scrubber, markers
-      Timeline/Marker.swift        one marker: number, state, unread badge
+      Timeline/TimelineLane.swift  play button, time, scrubber, the Comment button
+      Timeline/Marker.swift        one marker's pin (number, state, unread badge), and the layer of pins above the track
       Rail/RailView.swift          the queue, then each batch
       Rail/CommentCard.swift       thumbnail, time, text, status, edit and delete
       Rail/ThreadView.swift        the messages and the answer box
@@ -313,7 +314,7 @@ Tests/
   ReviewCoreTests/                 the state machine, batch assembly, the outbox
   ReviewTranscriptTests/           the window cut, the source order, voiceover timing, srt and vtt parsing (reads fixtures/sample)
   ReviewStoreTests/                round trips in a temp folder, the content hash of a renamed copy
-  ReviewAppTests/                  ControlServer with a fake app, the lease gate and the line of takes over the real socket, VideoFrameGeometry
+  ReviewAppTests/                  ControlServer with a fake app, the lease gate and the line of takes over the real socket, the keys, comments through AppModel on the fixture video, VideoFrameGeometry
 ```
 
 A module and a type never share a name, so a type can always be qualified by its module.
@@ -377,9 +378,9 @@ public struct VideoReview: Codable, Equatable {       // one video's review
     public private(set) var batches: [Batch]           // in the order sent
 
     // the person and the operator
-    mutating func addComment(id:, time:, text:, region:, at now:) throws(ReviewRefusal) -> Comment   // state queued
-    mutating func editComment(_ id:, text:) throws(ReviewRefusal)                // queued only
-    mutating func deleteComment(_ id:) throws(ReviewRefusal)                     // queued only
+    mutating func addComment(id:, time:, text:, region:) throws(ReviewRefusal) -> Comment   // state queued; the text is trimmed
+    mutating func editComment(_ id:, text:) throws(ReviewRefusal) -> Comment     // queued only
+    mutating func deleteComment(_ id:) throws(ReviewRefusal) -> Comment          // queued only; returns what it removed
     mutating func send(batchID:, at now:) throws(ReviewRefusal) -> Batch         // all queued → sent; refused when the queue is empty
     mutating func answer(_ commentID:, text:, messageID:, at now:) throws(ReviewRefusal) -> ThreadMessage   // needs an open question
 
@@ -397,7 +398,10 @@ public struct VideoReview: Codable, Equatable {       // one video's review
 
 - `CommentState.canMove(to:)` is the state machine: forward only, skips allowed (`sent → working`, `acknowledged → done`), `done` and `failed` final. `draft` is a comment still in the composer; it lives in `AppModel` and enters a `VideoReview` as `queued`.
 - `Region` holds `x, y, w, h` from the top-left corner of the displayed frame. `Region.init` refuses values outside 0..1, a rectangle that leaves the frame, and a width or height of 0.
-- Ids and the time come in as arguments, so tests are deterministic. `ItemID` makes `c-`, `b-` and `m-` ids with 8 random hex digits; the prefix tells `reply` whether its target is a comment or a batch.
+- Ids and the time come in as arguments, so tests are deterministic. `ItemID` makes `c-`, `b-` and `m-` ids with 8 random hex digits; the prefix tells `reply` whether its target is a comment or a batch. An `ItemID` reads only from text of that shape, and is one string in JSON.
+- A `Comment` holds `id`, `time`, `text` and `state`. It holds no image path: the keyframe is a file named after the id (`ImageFiles`).
+- Comments at the same time stay in the order they were added. `CommentState.isEditable` is true for `queued` only.
+- `ReviewRefusal` is `emptyText`, `unknownComment(id)` or `notQueued(id, state)` so far, each with its `line`.
 
 `Outbox` is the listener's side as a pure value, given the time on each call, like the lease:
 
@@ -481,9 +485,10 @@ public protocol Transcriber: Sendable {
 |---|---|---|
 | `open(url)` | hash, load the review, pick the transcript source, read the context, remember as recent | a file AVPlayer cannot play |
 | `play()`, `pause()`, `seek(seconds)` | seek is exact and keeps play or pause | no video; a time outside the video |
-| `startDraft(region?)`, `commitDraft()`, `cancelDraft()` | starting a draft pauses; commit captures the keyframe and crop and queues the comment | empty text |
-| `addComment(text, at?, region?)` | the CLI's path: pause, seek to `at`, then the same as commit | no video; bad time or region |
-| `editComment`, `deleteComment` | through `ReviewDesk` | not queued; unknown id |
+| `startDraft(region?)`, `commitDraft()`, `cancelDraft()` | starting a draft pauses and fixes the comment's time; commit writes the keyframe and crop, then queues the comment and selects it. A commit that fails opens the box again with its words | empty text (the box stays open) |
+| `addComment(text, at?, region?)` | the CLI's path: pause, seek to `at`, then the same as commit. It answers once the keyframe is on disk | no video; empty text; bad time or region |
+| `editComment`, `deleteComment` | through `ReviewDesk`; delete removes the keyframe file and the selection | not queued; unknown id |
+| `select(id)`, `jumpToMarker(forward)` | a click on a marker or a card, and Up and Down: select, pause, seek to the comment's time | |
 | `sendBatch()` | commits a draft with text first, waits for image writes, sends, hands the batch to `ListenerQueue` | empty queue |
 | `answer(commentID, text)` | through `ReviewDesk`, then tells `ListenerQueue` | no open question |
 | `setContextNote(text)` | saved on the review | no video |
@@ -491,8 +496,10 @@ public protocol Transcriber: Sendable {
 - `ReviewDesk.change(hash) { review in … }` is the one path for every change to a `VideoReview`: it takes the open review from memory or loads another video's from the `Library`, runs the change, saves, and publishes when the review is the open one. A thrown `ReviewRefusal` changes nothing.
 - `PlayerEngine` wraps `AVPlayer`. `seek` uses zero tolerance and returns when the seek has finished, so `state` reports the time that was asked for. The duration is the video track's own length (21.233 s for the fixture), not the container's, whose sound track can run a few milliseconds longer. A file that does not play is refused, and the video that was open stays open.
 - `PlayerSurface` is an `AVPlayerView` with no controls that takes no click and no key (`hitTest` gives nil). The stage's own layer above it takes the mouse.
-- `Shortcuts` is one local key monitor. It maps a key to an action in a pure function and stands back while a text view has the focus. The Playback menu has the same actions with no key equivalents, since a menu key with no modifier would take the key from a text field.
-- `FrameGrabber` makes the keyframe with `AVAssetImageGenerator` at the exact time, from the asset and not from the window. The crop is the keyframe cut by the region. The UI and the CLI therefore produce the same pixels at any window size.
+- `Shortcuts` is one local key monitor. It maps a key to an action in a pure function, `action(keyCode:modifiers:isTyping:)`, which gives no action while a text view has the focus (`isTyping`). The Playback menu has the same actions with no key equivalents, since a menu key with no modifier would take the key from a text field.
+- `CommentEditor` is the one text view comments are written in: a standard `NSTextView` that takes the focus when it appears. Its pure function `keyAction(for:shift:)` maps the text view's commands: `insertNewline` commits, with Shift it makes a new line, `cancelOperation` cancels, and every other command stays the text view's.
+- A comment's time is the player's time raised to the next millisecond (`AppModel.commentTime`), never rounded down: a frame rarely starts on a whole millisecond, and a time before the frame's start names the frame before it. `comment add --at` keeps the time it was given.
+- `FrameGrabber` makes the keyframe with `AVAssetImageGenerator` at the exact time, from the asset and not from the window. The crop is the keyframe cut by the region. The UI and the CLI therefore produce the same pixels at any window size. A time at the video's very end is asked inside the last frame. The keyframe is written before the comment enters the review, so a comment never exists without its keyframe; a keyframe that cannot be written refuses the comment.
 - `ListenerQueue` holds the `Outbox`, the one open `wait` (a continuation) and the open `ask`s by comment id. It assembles the payload when a `wait` takes a batch. `ack`, `status`, `reply` and `ask` go through `ReviewDesk.change` and raise a notice.
 - `ControlServer` listens on `control.sock` (mode 0600), reads each request off the main actor and answers on it. It owns the one `ControlLease`, takes the time from a closure the tests replace, and starts from the lease a relaunch handed over. It asks `ControlLease.use` before any operator request, holds a queued `take`, a `wait` and an `ask` as suspended continuations while it answers other requests, and settles the lease on a timer at `nextEnd`. Every change to the lease goes through one place (`leaseChanged`): it copies the lease to the `LeaseIndicator`, answers the waiting takes of the holder that got it, and sets the timer again. A `take`'s reply that grants the lease and cannot be written releases it (`undelivered`). `stopLease()` is the banner's Stop. `app status` and `state` get their `lease` from the server, not from `AppModel`. It depends on a small protocol, `AppControlling`, which `AppModel` implements and the server's tests fake.
 - `LeaseIndicator` (`@Observable`) is the lease as the banner draws it. `shown(at:)` is the lease's `Status`, or nil while it is free or while a screenshot leaves the banner out. `LeaseBanner` makes the banner's words from that status in a pure struct, and `LeaseBannerView` draws them with Stop and redraws each second.
@@ -516,7 +523,8 @@ public protocol Transcriber: Sendable {
 }
 ```
 
-  `comments` and `queue` are in time order. `video` is `null` with no video open. `lease` is `null` while the lease is free. `app status --json` has the same `lease`; as lines, both commands print `lease: held by Claude Code in /abs/repo, 48s left, 0 waiting` or `lease: free`.
+  `comments` and `queue` are in time order. `video` is `null` with no video open. `lease` is `null` while the lease is free. `app status --json` has the same `lease`; as lines, both commands print `lease: held by Claude Code in /abs/repo, 48s left, 0 waiting` or `lease: free`. An open comment box is `"draft": { "time": 8.0, "text": "…" }`.
+- What the comment commands print: `comment add` prints `c-7f3a9c2e queued at 0:10`, `comment edit` prints `c-7f3a9c2e edited`, `comment delete` prints `c-7f3a9c2e deleted`. With `--json`, add and edit print `{"comment": {…}}` in the shape above, and delete prints `{"deleted": "c-7f3a9c2e"}`. `state` without `--json` lists each comment on a line: id, time, state, text.
 - `Screenshotter` captures the app's own window with ScreenCaptureKit, from this process's shareable content only, which needs no Screen Recording permission. For `--appearance` it sets the app's appearance, waits for the window to redraw, captures and restores. Captures take turns, so two of them never mix their appearances. It makes the PNG's folder when it is missing. The lease banner is hidden for the capture, since the holder would be in every picture; `--with-banner` keeps it in, which is how an agent proves the banner shows. Every capture first gives the window 400 ms to redraw, since the banner has just gone, or has just come when the capture's own request took the lease.
 - The app has one `Window` scene. Closing the window quits the app. A second copy started on the same support folder finds the socket taken and quits.
 
@@ -530,16 +538,16 @@ The idea: **the video is the stage, the timeline carries the markers, and a rail
 | 2 | Three parts: the stage (video) on the left, the timeline lane under it, the rail (340 pt, can collapse) on the right. The rail is the system's inspector column, with a toolbar button that hides it. The stage is a black card with round corners. The lane has a ruler of times under the track. The default window (1360 by 730 pt) shows a 16:9 video with no letterbox. | Answers stay next to the feedback and stay visible while the video plays. One screenshot shows markers, a region and a thread. The inspector resizes and collapses as the Mac's other apps do. |
 | 3 | The app's own player surface (`AVPlayerView` with no built-in controls) and its own timeline lane, always visible. | The stock controls cannot carry markers, and they take the mouse drags the region overlay needs. Markers are the core of the app, so the lane never hides. |
 | 4 | QuickTime keys: Space or K plays and pauses, Left and Right move 5 s, Shift+Left and Shift+Right move one frame, Up and Down jump to the previous and next marker. A click on the frame plays or pauses. | Playback should feel like QuickTime. Frame steps matter for pointing at an exact frame. |
-| 5 | C or Return starts a comment at the current time and pauses. No automatic focus on pause. | One key from watching to typing, and Space still resumes. Typing never reaches the player: the shortcuts are off while a text field has the focus. |
+| 5 | C or Return starts a comment at the current time and pauses. A Comment button at the right of the lane does the same. No automatic focus on pause. | One key from watching to typing, and Space still resumes. The button makes the key discoverable. Typing never reaches the player: the shortcuts are off while a text field has the focus. |
 | 6 | Dragging on the frame draws a rectangle at any time, with no drawing mode. The drag pauses the video. Releasing opens the comment box. Escape cancels. | It works like Cmd+Shift+4: point first, no tool to pick. |
-| 7 | The comment box floats on the stage: beside the rectangle for a region comment (right, else left, else below, always inside the stage), above the playhead for a time comment. | The person writes where they point. |
+| 7 | The comment box floats on the stage: beside the rectangle for a region comment (right, else left, else below, always inside the stage), above the playhead for a time comment, at the foot of the stage, with a notch that points at the playhead. The box is a solid surface, not a material. While it is open, a click on the frame does not play. | The person writes where they point. A material over a video takes the picture's colours and its words stop being readable. The comment is about the frame on screen, so the frame stays. |
 | 8 | In the comment box, Return queues the comment, Shift+Return makes a new line, Escape cancels, Cmd+Return queues and sends everything. The box is a standard text view that takes the focus when it opens. | Fast entry with one hand on the keyboard. A standard focused text view is all Wispr Flow needs to dictate into. |
 | 9 | Cmd+Return anywhere sends the queue. A draft with text is queued first. | One keystroke delivers all feedback, with nothing left behind in the box. |
-| 10 | Markers are numbered pins on the timeline, numbered in time order. Colour and glyph show the state: hollow for queued, grey for sent, blue check for acknowledged, amber pulse for working, green check for done, red cross for failed. A dot marks an unread agent message; a question mark marks an open question. | The state reads at a glance, and never by colour alone. The number ties a pin to its card. |
+| 10 | Markers are numbered pins on the timeline, numbered in time order. Colour and glyph show the state: hollow for queued, grey for sent, blue check for acknowledged, amber pulse for working, green check for done, red cross for failed. A dot marks an unread agent message; a question mark marks an open question. A pin stands above the track on a stem. The selected pin has a ring and a halo in the accent colour. The same pin heads the comment's card. The band the pins stand in is always there. | The state reads at a glance, and never by colour alone. The number ties a pin to its card. The selection never changes a state's colour. The first comment does not move the lane. |
 | 11 | A click on a marker or a card seeks to its time, pauses, selects it and shows its region on the frame. | One gesture gives the full context back. |
 | 12 | The rail groups by batch: "Queue" on top, then each batch, newest first, with a header (sent time, progress such as 2 of 3 done) and the batch's own messages under the header. Comments are in time order inside a group. | The batch is the unit that is sent and answered, so the batch message has a natural home and the progress of a batch is visible. |
 | 13 | A card shows a thumbnail (the crop, else the keyframe), the time, the text and a status chip. Its thread is inline under it, open for the selected card and for any card with an open question. The answer box sits under the question. | The thread is part of the comment, not a second screen. A question must not hide. |
-| 14 | Edit and delete show on queued cards only. | Only a queued comment can change, so the controls do not appear where they would be refused. |
+| 14 | Edit and delete show on queued cards only. Edit turns the card's text into the same text view as the comment box, with Save and Cancel (Return and Escape). Delete acts at once. A new comment is selected, and the rail scrolls to the selected card. | Only a queued comment can change, so the controls do not appear where they would be refused. A queued comment is cheap to write again, so delete asks nothing. |
 | 15 | The send bar at the foot of the rail holds the presence pill ("Agent listening", "Agent working", "No agent: the batch will wait") and the Send button with the count and the shortcut. | The person sees before sending whether someone will receive the batch, and that sending is safe either way. |
 | 16 | An agent message shows as a notice in the top-right corner of the stage for 5 s. A question stays until it is clicked or answered. A click selects the comment. No system notifications. | Brief while watching; a question blocks the agent, so it does not fade. The app is in front when notices matter. |
 | 17 | The lease banner is a strip under the toolbar, across the top of the stage: who controls the app ("Claude Code controls Video Review"), where (the working folder's name or the Herdr pane), the time left, how many agents wait, and Stop. It shows with no video open too. Stop ends the lease and bars that agent for 5 min; nothing lifts the bar early. | The person must see at once why things move, and one click takes the app back. |
@@ -783,6 +791,13 @@ Each UX choice is in [the UX table](#the-ux-of-this-prototype). The other choice
 | D43 | `app open` on a running app is an operator command, so it takes or renews the lease, and another holder's is refused. | The contract lists `app open` under the operator commands. |
 | D44 | After Stop the banner goes and nothing more shows for the barred agent. | There is no Allow (D30), so a line about the bar would have no action. The agent's refusal tells it to ask the person. |
 | D45 | The server ignores the lease's transitions. | They exist for notifications in Shipyard; this app has none (UX 16). The banner follows the lease itself. |
+| D46 | A comment made at the player's time gets that time raised to the next millisecond. `--at` keeps the time given. | Rounding down would name the frame before the one on screen, and the keyframe would be the wrong frame. |
+| D47 | The keyframe is written first, then the comment is queued. `comment add` answers after both. | A comment never exists without its keyframe, and an agent can read the PNG as soon as the command returns. |
+| D48 | A comment holds no image path. `ImageFiles` derives it from the content hash and the comment id. | A support folder that moves (a demo folder, a restored backup) keeps working. |
+| D49 | Deleting a comment deletes its keyframe file. | Nothing else refers to the file, and no undo exists. |
+| D50 | `comment edit` and `comment delete` on an id that is not a comment id answer the same line as an unknown id. | The caller needs one thing to do: read the ids from `state --json`. |
+| D51 | A comment has no creation date. | Nothing shows it or orders by it. The batch has `sentAt`. |
+| D52 | `comment add` selects the new comment, like a comment from the box. | The person sees which card an operator just added. |
 
 ## 7. What is built so far
 
@@ -804,10 +819,22 @@ Built (the lease ticket, "Control: Lease app control to one agent at a time"):
 - `ReviewApp`: the lease in `ControlServer` (the gate before every operator request, the line of waiting takes, the timer, Stop), `Control/LeaseIndicator`, `UI/LeaseBanner`, the `lease` in `state` and `app status`.
 - Tests: the lease gate with the fake app and a clock, and the line of takes over the real socket, in `ReviewAppTests`; the commands and the handover in `ReviewCommandTests`.
 
+Built (the ticket "Comment: Add a timestamped comment with its keyframe"):
+
+- `ReviewWire`: the `ControlRequest` cases `commentAdd(text, at?)`, `commentEdit(id, text)` and `commentDelete(id)`. `ReviewCommand`: `CommentCommands` with `comment add | edit | delete`.
+- `ReviewCore`: `ItemID`, `CommentState`, `Comment` (`id`, `time`, `text`, `state`), `ReviewRefusal`, `VideoReview` (`video`, `comments`, `queue`, `addComment`, `editComment`, `deleteComment`).
+- `ReviewStore`: `ContentHash` and `ImageFiles` (the keyframe's place, writing, removing, a small copy). It depends on `ReviewCore` only.
+- `ReviewApp`: `ReviewDesk`, `Player/FrameGrabber` (keyframes), `AppModel` (the draft, the selection, add, edit, delete, select, marker jumps), `UI/CommentEditor`, `Stage/Composer`, `Timeline/Marker`, `Rail/CommentCard`, the state colours and glyphs in `Theme`. `Shortcuts` has Up, Down, C and Return.
+- `state --json` has `video.contentHash`, `draft`, `comments` (`id`, `time`, `text`, `state`, `keyframePath`) and `queue`.
+- Tests: `ReviewCoreTests`, `ReviewStoreTests`, and in `ReviewAppTests` comments through `AppModel` on the fixture video, the keys while typing and the comment box's keys.
+
 Not built yet, and what stands in its place:
 
-- `ReviewCore`, `ReviewTranscript`, `ReviewStore` and their test targets. `Package.swift` gets each target with its ticket.
-- `state --json` has the keys `app`, `lease`, `video` (`path`, `title`, `duration`) and `player`. The keys `listener`, `transcript`, `draft`, `comments`, `queue` and `batches`, and `video.contentHash` and `video.contextNote`, come with their tickets.
-- Comments, regions, markers, batches, threads, the listener commands, the context popover and the transcript chip. The rail shows an empty queue and a Send button that is off. The presence pill says "No agent listening". The timeline lane has no markers.
+- `ReviewTranscript` and its test target. `Package.swift` gets each target with its ticket.
+- The rest of `ReviewCore`: `Region`, `ThreadMessage`, `Batch`, `Outbox`, `BatchPayload`, and the `VideoReview` methods for batches, threads and the listener. A comment has no `region` and no `thread` yet, and `VideoReview` has no `note` and no `batches`.
+- The rest of `ReviewStore`: `Library`. Nothing but keyframes is written to disk. `ReviewDesk` keeps each review in memory for as long as the app runs, by content hash, so a video that opens again in the same run has its comments back; after a restart the comments are gone and their keyframe files stay. `ReviewDesk.change` takes no hash yet: it changes the open review only.
+- `state --json` lacks the keys `listener`, `transcript` and `batches`, `video.contextNote`, `draft.region`, and on a comment `region`, `cropPath`, `batchId` and `thread`. They come with their tickets.
+- `comment add` takes no `--region` yet.
+- Regions, batches, threads, the listener commands, the context popover and the transcript chip. The rail shows every comment under "Queue", with no batch groups, and a Send button that is off. The presence pill says "No agent listening". A comment box has no Cmd+Return yet.
 - The last video does not open again on launch. That comes with the store.
-- The keys Up, Down, C and Return, and Cmd+Return.
+- The key Cmd+Return.

@@ -52,9 +52,14 @@ struct Arguments: Equatable {
 
     /// The only word, which the command needs: `name` says what it is.
     func one(_ name: String) throws(UsageError) -> String {
-        guard let word = words.first else { throw UsageError("missing \(name)") }
-        guard words.count == 1 else { throw UsageError("unexpected `\(words[1])`") }
-        return word
+        try exactly([name])[0]
+    }
+
+    /// The words the command needs, one per name in `names`, in order.
+    func exactly(_ names: [String]) throws(UsageError) -> [String] {
+        guard words.count >= names.count else { throw UsageError("missing \(names[words.count])") }
+        guard words.count == names.count else { throw UsageError("unexpected `\(words[names.count])`") }
+        return words
     }
 
     /// Refuses any word: the command takes none.
@@ -82,7 +87,7 @@ struct Command: Sendable {
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
     static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
-        + [ScreenshotCommand.command]
+        + CommentCommands.commands + [ScreenshotCommand.command]
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

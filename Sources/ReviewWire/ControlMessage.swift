@@ -37,6 +37,9 @@ public struct ControlMessage: Equatable, Sendable {
         case .playerSeek(let seconds): wire = Wire(command: "player.seek", seconds: seconds)
         case .screenshot(let path, let appearance, let withBanner):
             wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue, withBanner: withBanner ? true : nil)
+        case .commentAdd(let text, let at): wire = Wire(command: "comment.add", text: text, at: at)
+        case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
+        case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         }
         wire.holder = holder
         wire.json = json
@@ -98,8 +101,23 @@ public struct ControlMessage: Equatable, Sendable {
                 appearance = known
             }
             return .screenshot(path: path, appearance: appearance, withBanner: wire.withBanner ?? false)
+        case "comment.add":
+            if let at = wire.at, !at.isFinite || at < 0 {
+                throw .unreadable("the control command `comment.add` needs its `at` to be 0 or more")
+            }
+            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at)
+        case "comment.edit":
+            return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "comment.delete":
+            return .commentDelete(id: try field(wire.id, "id", of: wire))
         default: throw .unknownCommand(wire.command)
         }
+    }
+
+    /// A field the command needs.
+    private static func field(_ value: String?, _ name: String, of wire: Wire) throws(ControlProtocolError) -> String {
+        guard let value else { throw .unreadable("the control command `\(wire.command)` needs its `\(name)`") }
+        return value
     }
 
     /// The command's `path`, absolute since the app runs in another folder.
@@ -131,5 +149,8 @@ public struct ControlMessage: Equatable, Sendable {
         var appearance: String?
         var waitSeconds: Int?
         var withBanner: Bool?
+        var id: String?
+        var text: String?
+        var at: Double?
     }
 }

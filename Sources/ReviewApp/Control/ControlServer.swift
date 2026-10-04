@@ -21,6 +21,11 @@ protocol AppControlling: AnyObject {
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
+    /// Queues a comment at `at`, or at the player's time, once its keyframe
+    /// is on disk.
+    func addComment(text: String, at: Double?) async throws(AppRefusal) -> StateReport.Comment
+    func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment
+    func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment
 }
 
 /// App control's server: while the app runs it listens on `control.sock`
@@ -165,6 +170,15 @@ final class ControlServer {
             case .screenshot(let path, let appearance, let withBanner):
                 try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, withBanner: withBanner)
                 return done(path, Output(path: path), json)
+            case .commentAdd(let text, let at):
+                let comment = try await app.addComment(text: text, at: at)
+                return done("\(comment.id) queued at \(TimeCode.text(comment.time))", Output(comment: comment), json)
+            case .commentEdit(let id, let text):
+                let comment = try app.editComment(id, text: text)
+                return done("\(comment.id) edited", Output(comment: comment), json)
+            case .commentDelete(let id):
+                let comment = try app.deleteComment(id)
+                return done("\(comment.id) deleted", Output(deleted: comment.id), json)
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -179,6 +193,8 @@ final class ControlServer {
         var quit: Bool?
         var lease: ControlLease.Status?
         var released: Bool?
+        var comment: StateReport.Comment?
+        var deleted: String?
     }
 
     /// What the app shows, with the lease as it is now.

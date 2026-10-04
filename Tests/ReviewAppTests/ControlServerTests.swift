@@ -22,9 +22,39 @@ struct ControlServerTests {
         func state() -> StateReport {
             StateReport(
                 app: .init(version: "0.1.0", variant: "proto-2", demo: true, support: "/demo"),
-                video: hasVideo ? .init(path: "/videos/sample.mp4", title: "sample", duration: 21.233) : nil,
-                player: .init(time: time, playing: playing)
+                video: hasVideo ? .init(path: "/videos/sample.mp4", contentHash: "abc", title: "sample", duration: 21.233) : nil,
+                player: .init(time: time, playing: playing),
+                comments: comments
             )
+        }
+
+        var comments: [StateReport.Comment] = []
+
+        private func comment(_ id: String, _ call: String) throws(AppRefusal) -> Int {
+            try record(call)
+            guard let index = comments.firstIndex(where: { $0.id == id }) else { throw AppRefusal("no comment `\(id)`") }
+            return index
+        }
+
+        func addComment(text: String, at: Double?) async throws(AppRefusal) -> StateReport.Comment {
+            try record("comment add \(text) at \(at.map { "\($0)" } ?? "the player's time")")
+            let id = "c-0000000\(comments.count + 1)"
+            let comment = StateReport.Comment(
+                id: id, time: at ?? time, text: text, state: "queued", keyframePath: "/demo/videos/abc/frames/\(id).png"
+            )
+            comments.append(comment)
+            comments.sort { $0.time < $1.time }
+            return comment
+        }
+
+        func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment {
+            let index = try comment(id, "comment edit \(id) \(text)")
+            comments[index].text = text
+            return comments[index]
+        }
+
+        func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment {
+            comments.remove(at: try comment(id, "comment delete \(id)"))
         }
 
         private func record(_ call: String) throws(AppRefusal) {
@@ -130,8 +160,12 @@ struct ControlServerTests {
         var state = try object(await answer(.state, json: true).reply.output)
         #expect(state["app"] as? [String: AnyHashable] == ["version": "0.1.0", "variant": "proto-2", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
-        #expect(state["video"] as? [String: AnyHashable] == ["path": "/videos/sample.mp4", "title": "sample", "duration": 21.233])
+        #expect(state["video"] as? [String: AnyHashable]
+            == ["path": "/videos/sample.mp4", "contentHash": "abc", "title": "sample", "duration": 21.233])
         #expect(state["lease"] is NSNull)
+        #expect(state["draft"] is NSNull)
+        #expect(state["comments"] as? [AnyHashable] == [])
+        #expect(state["queue"] as? [String] == [])
 
         app.hasVideo = false
         state = try object(await answer(.state, json: true).reply.output)
@@ -145,6 +179,7 @@ struct ControlServerTests {
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
             lease: free
+            comments: none
 
             """)
         #expect(await answer(.appStatus).reply.output == """
@@ -164,6 +199,45 @@ struct ControlServerTests {
         #expect(status["support"] as? String == "/demo")
         #expect(status["video"] as? String == "/videos/sample.mp4")
         #expect(status["lease"] is NSNull)
+    }
+
+    @Test("comment commands reach the app and answer one line")
+    func comments() async {
+        #expect(await answer(.commentAdd(text: "Too fast", at: 10)).reply == .done("c-00000001 queued at 0:10\n"))
+        #expect(await answer(.commentAdd(text: "Good", at: nil)).reply == .done("c-00000002 queued at 0:00\n"))
+        #expect(await answer(.commentEdit(id: "c-00000001", text: "Slower")).reply == .done("c-00000001 edited\n"))
+        #expect(await answer(.commentDelete(id: "c-00000002")).reply == .done("c-00000002 deleted\n"))
+        #expect(await answer(.commentDelete(id: "c-00000002")).reply == .refused("no comment `c-00000002`"))
+        #expect(app.calls == [
+            "comment add Too fast at 10.0", "comment add Good at the player's time", "comment edit c-00000001 Slower",
+            "comment delete c-00000002", "comment delete c-00000002",
+        ])
+    }
+
+    @Test("state --json lists the comments in time order, and the queue by id")
+    func commentsJSON() async throws {
+        let added = try object(await answer(.commentAdd(text: "Later", at: 12.5), json: true).reply.output)
+        #expect(added["comment"] as? [String: AnyHashable] == [
+            "id": "c-00000001", "time": 12.5, "text": "Later", "state": "queued",
+            "keyframePath": "/demo/videos/abc/frames/c-00000001.png",
+        ])
+        #expect(added.count == 1)
+        _ = await answer(.commentAdd(text: "Earlier", at: 3))
+
+        let state = try object(await answer(.state, json: true).reply.output)
+        let comments = try #require(state["comments"] as? [[String: Any]])
+        #expect(comments.map { $0["id"] as? String } == ["c-00000002", "c-00000001"])
+        #expect(comments.map { $0["time"] as? Double } == [3, 12.5])
+        #expect(state["queue"] as? [String] == ["c-00000002", "c-00000001"])
+        #expect(await answer(.state).reply.output.hasSuffix("""
+            comments: 2 (2 queued)
+              c-00000002 0:03 queued: Earlier
+              c-00000001 0:12.5 queued: Later
+
+            """))
+
+        let deleted = try object(await answer(.commentDelete(id: "c-00000001"), json: true).reply.output)
+        #expect(deleted as? [String: String] == ["deleted": "c-00000001"])
     }
 
     @Test("a screenshot is asked of the screenshotter, in the appearance named")

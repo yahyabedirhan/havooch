@@ -26,7 +26,7 @@ struct RootView: View {
             LeaseBannerView(indicator: lease, stop: stopLease)
         }
         .inspector(isPresented: railShown) {
-            RailView()
+            RailView(model: model)
                 .inspectorColumnWidth(
                     min: Theme.railWidthRange.lowerBound, ideal: Theme.railWidth, max: Theme.railWidthRange.upperBound
                 )
@@ -54,10 +54,10 @@ struct RootView: View {
             model.openForPerson(url)
             return true
         }
-        .alert("The video didn't open", isPresented: hasProblem) {
+        .alert(model.problem?.title ?? "", isPresented: hasProblem) {
             Button("OK") {}
         } message: {
-            Text(model.problem ?? "")
+            Text(model.problem?.reason ?? "")
         }
     }
 

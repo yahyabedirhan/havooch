@@ -1,29 +1,52 @@
 import ReviewWire
 import SwiftUI
 
-/// The timeline lane under the stage, always visible: the scrubber with its
-/// ruler, the time, and the transport buttons.
+/// The timeline lane under the stage, always visible: the markers, the
+/// scrubber with its ruler, the time, and the transport buttons.
 struct TimelineLane: View {
     let model: AppModel
+
+    /// The room above the track that the markers' pins stand in. It's
+    /// there with no marker too, so the first comment doesn't move the lane.
+    private static let markerBand: CGFloat = MarkerPin.size + 4
 
     var body: some View {
         let engine = model.engine
         VStack(spacing: 2) {
-            Scrubber(time: engine.time, duration: engine.duration) { model.scrub(to: $0) }
+            ZStack(alignment: .top) {
+                Scrubber(time: engine.time, duration: engine.duration) { model.scrub(to: $0) }
+                    .padding(.top, Self.markerBand)
+                MarkerLayer(
+                    comments: model.comments, duration: engine.duration, selection: model.selection,
+                    select: { model.select($0) },
+                    stem: Self.markerBand - MarkerPin.size + Scrubber.trackTop
+                )
+            }
             TimeRuler(duration: engine.duration)
             ZStack {
-                HStack {
+                HStack(spacing: 14) {
                     timeReadout
                     Spacer()
                     frameSteps
+                    commentButton
                 }
                 transport
             }
             .padding(.top, 4)
         }
-        .padding(.horizontal, Theme.gutter + 4)
-        .padding(.top, 10)
+        .padding(.horizontal, Theme.gutter + Theme.laneInset)
+        .padding(.top, 6)
         .padding(.bottom, 12)
+    }
+
+    private var commentButton: some View {
+        Button {
+            model.startDraft()
+        } label: {
+            Label("Comment", systemImage: "plus.bubble")
+        }
+        .disabled(model.draft != nil)
+        .help("Comment at this time (C)")
     }
 
     private var timeReadout: some View {
@@ -107,6 +130,9 @@ private struct Scrubber: View {
 
     private static let trackHeight: CGFloat = 6
     private static let knob: CGFloat = 14
+    private static let height: CGFloat = 20
+    /// How far below the scrubber's top its track starts.
+    static let trackTop = (height - trackHeight) / 2
 
     var body: some View {
         GeometryReader { proxy in
@@ -135,7 +161,7 @@ private struct Scrubber: View {
                     }
             )
         }
-        .frame(height: 20)
+        .frame(height: Self.height)
         .accessibilityElement()
         .accessibilityLabel("Timeline")
         .accessibilityValue("\(TimelineLane.clock(time)) of \(TimelineLane.clock(duration))")

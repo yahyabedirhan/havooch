@@ -17,8 +17,24 @@ struct StateReport: Encodable, Equatable {
 
     struct Video: Encodable, Equatable {
         var path: String
+        var contentHash: String
         var title: String
         var duration: Double
+    }
+
+    /// The comment still in the comment box.
+    struct Draft: Encodable, Equatable {
+        var time: Double
+        var text: String
+    }
+
+    struct Comment: Encodable, Equatable {
+        var id: String
+        var time: Double
+        var text: String
+        var state: String
+        /// The PNG of the frame at `time`.
+        var keyframePath: String
     }
 
     struct Player: Encodable, Equatable {
@@ -33,16 +49,29 @@ struct StateReport: Encodable, Equatable {
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
+    /// The comment being written; `null` while the comment box is closed.
+    var draft: Draft?
+    /// The open video's comments, in time order.
+    var comments: [Comment]
 
-    init(app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player) {
+    /// The ids of the comments waiting to be sent, in time order.
+    var queue: [String] {
+        comments.filter { $0.state == "queued" }.map(\.id)
+    }
+
+    init(app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, draft: Draft? = nil, comments: [Comment] = []) {
         self.app = app
         self.lease = lease
-        self.video = video.map { Video(path: $0.path, title: $0.title, duration: Self.milliseconds($0.duration)) }
+        self.video = video.map {
+            Video(path: $0.path, contentHash: $0.contentHash, title: $0.title, duration: Self.milliseconds($0.duration))
+        }
         self.player = Player(time: Self.milliseconds(player.time), playing: player.playing)
+        self.draft = draft
+        self.comments = comments
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, lease, video, player
+        case app, lease, video, player, draft, comments, queue
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -51,6 +80,9 @@ struct StateReport: Encodable, Equatable {
         try container.encode(lease, forKey: .lease)
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
+        try container.encode(draft, forKey: .draft)
+        try container.encode(comments, forKey: .comments)
+        try container.encode(queue, forKey: .queue)
     }
 
     // MARK: - state
@@ -65,8 +97,16 @@ struct StateReport: Encodable, Equatable {
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
         \(leaseLine)
+        comments: \(commentLines)
 
         """
+    }
+
+    /// The comments, one line each under their count.
+    private var commentLines: String {
+        guard !comments.isEmpty else { return "none" }
+        let lines = comments.map { "  \($0.id) \(TimeCode.text($0.time)) \($0.state): \($0.text.replacing("\n", with: " "))" }
+        return (["\(comments.count) (\(queue.count) queued)"] + lines).joined(separator: "\n")
     }
 
     // MARK: - app status

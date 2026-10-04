@@ -15,6 +15,8 @@ final class PlayerEngine {
     private(set) var duration: Double = 0
     /// One frame's length in seconds.
     private(set) var frameDuration: Double = 1.0 / 30
+    /// The open video, for reading its frames; nil with no video.
+    @ObservationIgnored private(set) var asset: AVURLAsset?
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var rateObserver: (any NSObjectProtocol)?
@@ -77,6 +79,7 @@ final class PlayerEngine {
             player.replaceCurrentItem(with: previous)
             throw AppRefusal("can't play \(url.path): \(why)")
         }
+        self.asset = asset
         duration = length.seconds
         frameDuration = frameRate > 0 ? 1 / Double(frameRate) : 1.0 / 30
         time = 0

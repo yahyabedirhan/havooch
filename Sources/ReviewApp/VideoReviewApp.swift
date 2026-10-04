@@ -39,6 +39,11 @@ private struct PlaybackCommands: Commands {
                 Button("Forward 5 Seconds") { model.skip(by: Shortcuts.skip) }
                 Button("Previous Frame") { model.step(frames: -1) }
                 Button("Next Frame") { model.step(frames: 1) }
+                Divider()
+                Button("Previous Marker") { model.jumpToMarker(forward: false) }
+                Button("Next Marker") { model.jumpToMarker(forward: true) }
+                Divider()
+                Button("Add Comment") { model.startDraft() }
             }
             .disabled(model.video == nil)
         }

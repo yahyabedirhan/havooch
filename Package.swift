@@ -2,9 +2,9 @@
 import PackageDescription
 
 // Modules follow concerns (docs/low-level-design.md). The agent's side
-// (ReviewWire, ReviewLease, ReviewCommand, ReviewCLI) never links the app's rules, and
-// builds and tests without the app. Only ReviewApp is macOS UI code. A
-// module and a type never share a name.
+// (ReviewWire, ReviewLease, ReviewCommand, ReviewCLI) never links the app's rules
+// (ReviewCore, ReviewStore), and builds and tests without the app. Only
+// ReviewApp is macOS UI code. A module and a type never share a name.
 let package = Package(
     name: "VideoReview",
     platforms: [.macOS(.v26)],
@@ -23,7 +23,16 @@ let package = Package(
         // without a process.
         .target(name: "ReviewCommand", dependencies: ["ReviewWire", "ReviewLease"], path: "Sources/ReviewCommand"),
         .executableTarget(name: "ReviewCLI", dependencies: ["ReviewCommand"], path: "Sources/ReviewCLI"),
-        .executableTarget(name: "ReviewApp", dependencies: ["ReviewWire", "ReviewLease"], path: "Sources/ReviewApp"),
+        // The spec's "Review" module: comments, the queue and the comment
+        // states. Pure logic.
+        .target(name: "ReviewCore", path: "Sources/ReviewCore"),
+        // What's kept on disk, by the content hash of the video.
+        .target(name: "ReviewStore", dependencies: ["ReviewCore"], path: "Sources/ReviewStore"),
+        .executableTarget(
+            name: "ReviewApp", dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewStore"], path: "Sources/ReviewApp"
+        ),
+        .testTarget(name: "ReviewCoreTests", dependencies: ["ReviewCore"], path: "Tests/ReviewCoreTests"),
+        .testTarget(name: "ReviewStoreTests", dependencies: ["ReviewCore", "ReviewStore"], path: "Tests/ReviewStoreTests"),
         .testTarget(name: "ReviewWireTests", dependencies: ["ReviewWire"], path: "Tests/ReviewWireTests"),
         .testTarget(name: "ReviewLeaseTests", dependencies: ["ReviewWire", "ReviewLease"], path: "Tests/ReviewLeaseTests"),
         .testTarget(
@@ -31,6 +40,10 @@ let package = Package(
             dependencies: ["ReviewWire", "ReviewLease", "ReviewCommand"],
             path: "Tests/ReviewCommandTests"
         ),
-        .testTarget(name: "ReviewAppTests", dependencies: ["ReviewApp", "ReviewWire", "ReviewLease"], path: "Tests/ReviewAppTests"),
+        .testTarget(
+            name: "ReviewAppTests",
+            dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewStore"],
+            path: "Tests/ReviewAppTests"
+        ),
     ]
 )

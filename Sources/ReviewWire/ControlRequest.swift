@@ -29,6 +29,13 @@ public enum ControlRequest: Equatable, Sendable {
     /// `video-review player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
+    /// `video-review comment add <text> [--at <time>]`: a comment queued at
+    /// `at` seconds, or at the player's time when it's nil.
+    case commentAdd(text: String, at: Double?)
+    /// `video-review comment edit <id> <text>`: a queued comment's new text.
+    case commentEdit(id: String, text: String)
+    /// `video-review comment delete <id>`: a queued comment removed.
+    case commentDelete(id: String)
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--with-banner]`: the app's window written as a PNG at the absolute
     /// `path`, in `appearance` when it's set, as the Mac shows it otherwise.
@@ -56,6 +63,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease: .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
+        case .commentAdd, .commentEdit, .commentDelete: .operator
         }
     }
 

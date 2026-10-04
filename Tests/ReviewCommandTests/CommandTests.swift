@@ -21,6 +21,11 @@ struct CommandTests {
         (["screenshot", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
         (["screenshot", "/tmp/shot.png", "--appearance", "dark"], .screenshot(path: "/tmp/shot.png", appearance: .dark)),
         (["screenshot", "--appearance", "light", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: .light)),
+        (["comment", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
+        (["comment", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
+        (["comment", "add", "--at", "12.5", "Too fast here"], .commentAdd(text: "Too fast here", at: 12.5)),
+        (["comment", "edit", "c-7f3a9c2e", "Slower here"], .commentEdit(id: "c-7f3a9c2e", text: "Slower here")),
+        (["comment", "delete", "c-7f3a9c2e"], .commentDelete(id: "c-7f3a9c2e")),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -127,6 +132,9 @@ struct CommandTests {
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--with-banner"],
+        ["comment"], ["comment", "add"], ["comment", "add", "Too", "fast"], ["comment", "add", "Too fast", "--at", "soon"],
+        ["comment", "add", "Too fast", "--at"], ["comment", "edit"], ["comment", "edit", "c-7f3a9c2e"],
+        ["comment", "edit", "c-7f3a9c2e", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "c-1", "c-2"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }

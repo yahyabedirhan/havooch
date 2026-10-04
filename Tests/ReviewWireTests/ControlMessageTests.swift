@@ -30,6 +30,8 @@ struct ControlMessageTests {
         .screenshot(path: "/tmp/shot.png", appearance: .light, withBanner: true),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
+        .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
+        .commentEdit(id: "c-7f3a9c2e", text: "Slower"), .commentDelete(id: "c-7f3a9c2e"),
     ])
     func roundTrip(request: ControlRequest) throws {
         for json in [false, true] {
@@ -96,6 +98,11 @@ struct ControlMessageTests {
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)
         #expect(refusal(fields("player.seek", [:])) != nil)
         #expect(refusal(fields("player.seek", ["seconds": -1])) != nil)
+        #expect(refusal(fields("comment.add", [:])) == .unreadable("the control command `comment.add` needs its `text`"))
+        #expect(refusal(fields("comment.add", ["text": "Too fast", "at": -1])) != nil)
+        #expect(refusal(fields("comment.edit", ["text": "Slower"])) == .unreadable("the control command `comment.edit` needs its `id`"))
+        #expect(refusal(fields("comment.edit", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `comment.edit` needs its `text`"))
+        #expect(refusal(fields("comment.delete", [:])) == .unreadable("the control command `comment.delete` needs its `id`"))
     }
 
     @Test("only operator requests take the lease")
@@ -105,7 +112,8 @@ struct ControlMessageTests {
         #expect(ControlRequest.controlTake(waitSeconds: 30).role == .free)
         #expect(ControlRequest.controlRelease.role == .free)
         for request in [ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
-                        .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil)] {
+                        .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
+                        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1")] {
             #expect(request.role == .operator)
         }
     }
