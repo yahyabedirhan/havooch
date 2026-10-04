@@ -172,6 +172,8 @@ VRApp ─▶ VRReview, VRTranscript
 
 `Package.swift` is the guard: `VRCLI` and `VRCommand` list only `VRWire` and `VRLease`. An agent-side target importing `VRReview`, `VRStore` or `VRTranscript` is a design change, not a shortcut.
 
+SwiftPM refuses a target with no source file, so `Package.swift` lists a target from the ticket that writes its first file: the four agent-side targets and `VRApp` now, `VRReview` and `VRStore` with the first comment, `VRTranscript` with the transcript. Each test target joins with its first test.
+
 Two choices keep the agent side thin:
 
 - **The CLI never reads a payload.** The app builds every output, text or JSON, and puts it in the reply's `output`. The CLI prints it. So `BatchPayload` and the state snapshot live on the app's side, and the CLI needs no type from `VRReview`.
@@ -199,13 +201,13 @@ public enum Identity {
 - The `Makefile` reads the same line with `sed` (as Shipyard reads its version from `Version.swift`) and derives `APP_NAME` and `BUNDLE_ID` the same way. It stamps them into `Packaging/Info.plist` (`__APP_NAME__`, `__BUNDLE_ID__`, `__VERSION__`) and names the bundle `build/$(APP_NAME).app`.
 - Clearing the string to `""` gives `Video Review.app`, `com.yahyabedirhan.video-review` and `~/Library/Application Support/Video Review/`. Nothing else changes.
 - The CLI keeps the name `video-review`. Run it from this build's bundle, `/Applications/Video Review (proto-1).app/Contents/Helpers/video-review`, never from `PATH`: another prototype's CLI would speak to another prototype's socket.
-- The app's executable is `VideoReview` in every prototype, so `make install` never uses `pkill -x`. It quits this build only, by its full path: `pkill -f "/Applications/$(APP_NAME).app/Contents/MacOS/"`.
+- The app's executable is `VideoReview` in every prototype, so `make install` never uses `pkill -x`. It quits this build only, by its full path: `pkill -f` with `/Applications/$(APP_NAME).app/Contents/MacOS/`. `pkill -f` reads a regular expression, so the `Makefile` escapes the name's parentheses and dots first (`RUNNING`); unescaped, the pattern would match no process.
 
 ### Folder tree
 
 ```text
-Package.swift                         the eight targets and their links; swift-tools-version 6.2, macOS 26
-Makefile                              build, test, bundle, install, run, acceptance, clean; reads Identity.variant
+Package.swift                         the targets and their links (eight once every module has code); swift-tools-version 6.2, macOS 26
+Makefile                              build, test, bundle, install, run, clean, later acceptance; reads Identity.variant
 Packaging/
   Info.plist                          the bundle's template: name, bundle id, version, video document types, usage strings
 
@@ -224,8 +226,8 @@ Sources/
     ControlClient.swift               one request sent, one reply read; ControlTransport for tests
     UnixSocket.swift                  the POSIX calls both ends share (package access)
   VRCommand/
-    CLI.swift                         CLI.run(arguments, environment) -> CommandResult: parse, send, print, exit code
-    CommandTable.swift                every command: its words, its usage line, its role, its parser
+    CLI.swift                         CLI.run(arguments, environment) -> CommandResult: parse, send, print, exit code; CommandEnvironment
+    CommandTable.swift                every command: its words, its usage line, its summary, its parser; Arguments, Invocation
     TimeArgument.swift                "10", "10.5", "0:10", "1:02:03" to seconds
     RegionArgument.swift              "x,y,w,h" to four numbers
     AppCommand.swift                  app status, app open [--demo], app quit: launch, relaunch, hand the lease over
@@ -270,6 +272,7 @@ Sources/
       PlayerSurface.swift             the AVPlayerLayer in a view, no AVKit controls
       TransportBar.swift              play button, time, speed, the timeline
       Timeline.swift                  the scrubber and the comment markers
+      TimeText.swift                  a time as text: 0:10 in the window, 0:10.000 in a command's output
       Shortcuts.swift                 the player's keys, live only while no text field has the focus
       EmptyState.swift                "Open a video": the button and the drop target
     Overlay/
@@ -358,6 +361,8 @@ public struct ControlLease: Equatable, Sendable {
 
 The key order is `VIDEO_REVIEW_CONTROL_KEY`, then `CLAUDE_CODE_SESSION_ID`, then the nearest ancestor process that isn't a shell. A refusal names the holder, its place and the lease's end as `HH:mm:ss`.
 
+Until the lease ticket lands, `ControlLease` is the seam only: `Term`, `Status`, `Refusal.inUse`, `Decision`, `use`, `current`, `status` and the handover (`init(environment:at:)`, `handover`, in the variable `VIDEO_REVIEW_CONTROL_LEASE`). `use` grants every request: its holder's term is renewed, and another holder's command takes the lease over. So `state` already names who drove the app last, and `ControlServer` and `app open` already call the lease as they will when it refuses.
+
 ### Wire: `VRWire`
 
 #### Where the socket is
@@ -366,7 +371,8 @@ The key order is `VIDEO_REVIEW_CONTROL_KEY`, then `CLAUDE_CODE_SESSION_ID`, then
 public enum SupportFolder {
     public static let overrideVariable = "VIDEO_REVIEW_SUPPORT_DIR"
     public static func real() -> URL                                  // ~/Library/Application Support/<Identity.supportFolderName>/
-    public static func current(environment: [String: String]) -> URL  // the override when it is absolute, else real()
+    public static func demo(environment: [String: String]) -> URL?    // the override when it is absolute: what makes a run a demo run
+    public static func current(environment: [String: String]) -> URL  // demo(environment) ?? real()
 }
 public enum ControlSocket {
     public static func real(in support: URL) -> URL      // <real support>/control.sock
@@ -428,6 +434,7 @@ public enum ControlRequest: Equatable, Sendable {
 
     public static let version = 1
     public static let longestWait = 3600        // the longest `take --wait`, in seconds
+    public var command: String                  // the wire name of the table above: "player.seek"
     public var isLeased: Bool                   // true for the operator rows above, false for the others
 }
 public struct WireRegion: Codable, Equatable, Sendable { public var x, y, w, h: Double }
@@ -439,7 +446,7 @@ public struct ControlMessage: Equatable, Sendable {
 public enum ControlProtocolError: Error { case unreadable(String), otherVersion(Int), unknownCommand(String); public var message: String }
 ```
 
-`decode` checks the version before anything else. Another version is refused with: `the video-review command speaks control version 2 and the app version 1: run the command from this app's bundle (Contents/Helpers/video-review) so both come from one build`.
+`decode` checks the version before anything else: it reads `version` alone first, so a request of another version is told so even when its other fields have another shape. `decode` also refuses a relative `path`, an unknown `appearance`, a negative `seconds` and a `waitSeconds` out of range. Another version is refused with: `the video-review command speaks control version 2 and the app version 1: run the command from this app's bundle (Contents/Helpers/video-review) so both come from one build`.
 
 Ids travel as plain strings: the wire knows nothing of what an id means. The app checks them.
 
@@ -462,7 +469,7 @@ Text is for people and shell variables. With `--json` the output is one JSON obj
 
 | Command | Text | `--json` |
 |---|---|---|
-| `app status` | lines: running, version, variant, data, video, lease, listener; `not running` (exit 0) when nothing answers | `{running, version, variant, demo, video, lease, listener}`; `{"running":false}` |
+| `app status` | lines: running, version, variant, data, video, lease, listener; `not running` (exit 0) when nothing answers | `{running, version, variant, demo, support, video, lease, listener}`, each part as in `state`; `{"running":false}` |
 | `state` | always the state object, with or without `--json` | see [StateSnapshot](#app-vrapp) |
 | `control take` | `you hold video-review until 12:05:00` | `{holder, place, secondsLeft, waiting}` |
 | `control release` | `released` | `{"released":true}` |
@@ -519,33 +526,41 @@ public enum CLI {
     /// Everything the executable does, testable with a fake transport and launcher.
     public static func run(arguments: [String], environment: CommandEnvironment) -> CommandResult
 }
-public struct CommandEnvironment { variables, workingDirectory, processes: any ProcessTable, transport: any ControlTransport, launcher: any AppLaunching, bundle: URL? }
-public struct CommandResult: Equatable { public var output, error: String; public var exitCode: Int32 }
+public struct CommandEnvironment { variables, workingDirectory, processes: any ProcessTable, transport: any ControlTransport, launcher: any AppLaunching,
+                                   bundle: URL?, support: URL, pause: (TimeInterval) -> Void;  public static func live() -> CommandEnvironment }
+public struct CommandResult: Error, Equatable { public var output, error: String; public var exitCode: Int32 }
 
 struct Command {                       // one row of CommandTable.all
     var words: [String]                // ["player", "seek"]
     var usage: String                  // "player seek <seconds|mm:ss>"
-    var parse: (inout Arguments) throws(UsageError) -> ControlRequest
+    var summary: String                // its line in `video-review help`
+    var parse: (inout Arguments) throws(UsageError) -> Invocation
 }
+enum Invocation { case send(ControlRequest), appStatus, appOpen(demo: URL?), appQuit }
 ```
+
+`support` is the real support folder (the sockets and the demo pointer) and `pause` the wait between two looks at an app that starts or quits; tests give both. A row's parser returns an `Invocation`: one request to send, or one of the three `app` commands, which have steps of their own (`AppCommand`).
 
 - `CommandTable.all` is the one list of commands; `video-review help` and a usage error print from it.
 - `--json` is accepted anywhere on the line and travels as the message's `json`.
 - A relative `player open` path and `--demo` folder are made absolute against the working folder; `screenshot` refuses a relative path, since the spec says `<abs.png>`.
-- Every command but `app open` is: parse, find the holder, locate the socket, send, print, exit.
+- Every command but the `app` ones is: parse, find the holder, locate the socket, send, print, exit.
+- `app status` prints `not running` and exits 0 when nothing answers. `app quit` sends `app.quit`, then waits up to 10 s until nothing answers on the socket.
 
 `app open` is the one command with logic of its own, since the app may not be running:
 
 ```text
 app open [--demo <folder>]
   wanted = the demo folder made absolute, or nil for the person's data
-  if an app answers `app.status` on the located socket:
+  ask `app.status` on demo.sock, then on control.sock    both, so a stale pointer or socket hides no running app
+  if one answers:                                        demo.sock's data is the pointer's folder, control.sock's the person's
       same data as wanted  → send `app.open` (leased; renews the lease), print its status
       other data           → send `app.quit` (leased); keep the lease from its reply; wait for the socket to go
-  record the demo pointer (wanted != nil) or remove it (wanted == nil)
+  make the demo folder and record the demo pointer (wanted != nil), or remove the pointer (wanted == nil)
   launcher.launch(bundle: the .app this CLI sits in, environment:
       VIDEO_REVIEW_SUPPORT_DIR = wanted, VIDEO_REVIEW_CONTROL_LEASE = the lease handed over)
-  wait up to 10 s for the socket to answer, then send `app.open` and print its status
+  send `app.open` every quarter second, up to 10 s, until the app answers; print its status
+  a demo that doesn't come to run leaves no pointer behind
 ```
 
 `WorkspaceLauncher` starts the bundle that contains the CLI (`…/Contents/Helpers/video-review` gives `…`), through `NSWorkspace`, without bringing it to the front. So a build's CLI can only ever start its own build. Outside a bundle (`swift run`), it falls back to `Identity.bundleID`. This is the only AppKit use on the agent side.
@@ -793,9 +808,11 @@ public struct TranscriptCache: TranscriptCaching { public init(layout: SupportLa
     var selection: CommentID?                        // the marker and card in focus
 
     // one method per action; the views and ControlServer are its only callers
-    func open(_ video: URL) async throws(ActionError) -> VideoInfo
+    func open(_ video: URL) async throws(ActionError) -> OpenVideo       // the player's reading of the file; VideoInfo once reviews exist
     func play() throws(ActionError);  func pause() throws(ActionError)
-    func seek(to seconds: Double) async throws(ActionError) -> Double
+    func seek(to seconds: Double) async throws(ActionError) -> Double    // exact; refused outside 0...duration
+    func scrub(to seconds: Double);  func setSpeed(_ speed: Double)      // the scrubber's drag and the speed menu: the person's only
+    func openForPerson(_ video: URL);  func chooseVideo();  func togglePlayback()   // the person's ways into the actions: a refusal is shown, not thrown
 
     func startDraft(region: Region?) throws(ActionError)                 // pauses; the composer opens
     func commitDraft(text: String) async throws(ActionError) -> Comment  // Return in the composer
@@ -811,13 +828,15 @@ public struct TranscriptCache: TranscriptCaching { public init(layout: SupportLa
 }
 ```
 
-`ActionError` wraps a `ReviewError`, or says `no video is open`, `can't open <path>: <why>`. Its `message` is the refusal line.
+`ActionError` wraps a `ReviewError`, or says `no video is open`, `can't open <path>: <why>`, `<time> is outside the video, which ends at <duration>`. Its `message` is the refusal line. What the person does can't throw to anyone, so `AppModel.failure` keeps the line and the window shows it in an alert.
+
+`AppModel` also knows the run's data folder (`support`, `isDemo`, from `SupportFolder`) and the app's one window, which `Screenshotter` captures.
 
 The listener's actions (`wait`, `ack`, `status`, `reply`, `ask`) are methods on `ListenerQueue`, since they act on a batch by its id whatever video is open.
 
 #### Player
 
-`PlayerEngine` wraps one `AVPlayer`. `open` loads the asset's duration, natural size and frame rate, and refuses a file AVPlayer can't play. `seek` uses zero tolerance and returns when the seek has landed, so `state` after `player seek 0:10` reads exactly 10. A periodic time observer publishes `time` 30 times a second. `PlayerSurface` hosts the `AVPlayerLayer` alone: AVKit's own controls are off, because the timeline has to carry the markers.
+`PlayerEngine` wraps one `AVPlayer`. `open` loads the video track's length, shown size and frame rate, refuses a file AVPlayer can't play, and answers once the item is ready to play, so a seek or a screenshot right after finds the frame there. When two opens overlap, the later one wins and the earlier is refused. The `duration` is the video track's, to the millisecond (21.233 for the fixture, whose audio runs to 21.248): every time up to it has a frame. `seek` uses zero tolerance and returns when the seek has landed, so `state` after `player seek 0:10` reads exactly 10. A periodic time observer publishes `time` 30 times a second, to the millisecond and never past `duration`, and `playing` from the player's rate. `play` at the video's end starts again from 0. `PlayerSurface` hosts the `AVPlayerLayer` alone: AVKit's own controls are off, because the timeline has to carry the markers.
 
 `Shortcuts` attaches the player's keys to the player area with `onKeyPress`, which SwiftUI delivers to the focused view only. While the composer, an answer box or the note has the focus, the player never sees a key. No plain key is a menu shortcut, since a menu shortcut would fire while typing. Menu items carry only Command shortcuts (Cmd+O, Cmd+Return).
 
@@ -909,6 +928,10 @@ reply(to data):
 
 `SocketListener` owns the POSIX side off the main actor: bind (0600), listen, accept, read one request to its end (8 MB at most), await `reply(to:)` with the heartbeat running, write, close, then tell the server `written` or `undelivered`.
 
+The server grows with its tickets. Today `Answer` is `{reply, quits}` and the listener only reads, answers, writes and quits: `granted`, the take's wait and `stopLease` come with the lease, the heartbeat, `delivery`, `written` and `undelivered` with `wait`. A request whose route isn't built yet is refused in words: ``this build of video-review doesn't answer `wait` yet``.
+
+The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo run, else on `control.sock`, both in the real support folder. A socket file nothing answers on (left by an app that was killed) is replaced.
+
 `StateSnapshot` is what `state` prints. It is built by `AppModel.snapshot` and encoded with sorted keys:
 
 ```json
@@ -932,9 +955,9 @@ reply(to data):
 }
 ```
 
-`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. With no video open, `comments`, `queue` and `batches` are empty.
+`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. With no video open, `comments`, `queue` and `batches` are empty. The object is one line. Every key is there from the first build: a part whose ticket hasn't landed carries its empty value (`[]`, `null`, `""`, presence `absent`), `video.contentHash` is `null` until reviews are kept by it, and `transcript` is `{"source": null, "complete": false, "lines": 0}` until a source has lines. `player.time` and `video.duration` are to the millisecond; `player.rate` is the speed playback runs at while it plays.
 
-`Screenshotter` captures the app's own window through ScreenCaptureKit limited to this process (`SCShareableContent.currentProcess`), which needs no Screen Recording permission. With `--appearance` it sets the app's appearance, waits 350 ms for the redraw, captures, and puts the appearance back. If the capture fails, it draws the window's view itself, with the current frame from `FrameGrabber` in the video's place, and the reply says on standard error that the PNG was rendered.
+`Screenshotter` captures the app's own window through ScreenCaptureKit limited to this process (`SCShareableContent.currentProcess`), which needs no Screen Recording permission. With `--appearance` it sets the app's appearance, waits 350 ms for the redraw, captures, and puts the appearance back. If the capture fails, it draws the window's content view itself and then the frame at the playhead, read from the file, where the player's layer shows it (`AVPlayerLayer.videoRect`), since a player layer doesn't draw into a bitmap; the title bar's place stays blank, and the reply says on standard error that the PNG was rendered. Until `FrameGrabber` exists it reads that frame with its own `AVAssetImageGenerator`. A window that isn't on screen (closed, minimized, hidden) is refused.
 
 #### Views
 
@@ -958,7 +981,7 @@ reply(to data):
 └──────────────────────────────────────────────────┴──────────────────────────┘
 ```
 
-One `Window` scene. The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule.
+One `Window` scene. The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter` and `ControlServer`, starts the server at launch and stops it at quit) and `MainView`, the window's content.
 
 ### Build and test
 
@@ -1038,7 +1061,7 @@ main                                                  Sources/VRCLI/main.swift
    │     demo.json is there and demo.sock exists ⇒ demo.sock
    └─ ControlClient.send(.playerSeek, json: false)    Sources/VRWire/ControlClient.swift
       ├─ ControlMessage.encoded()                     Sources/VRWire/ControlMessage.swift
-      └─ UnixSocketTransport.exchange                 Sources/VRWire/UnixSocket.swift
+      └─ UnixSocketTransport.exchange                 Sources/VRWire/ControlClient.swift, over UnixSocket.swift
             connect, write, shut down the write side, read to the end
 ════════════════════ demo.sock ════════════════════
 SocketListener: accept, read the request              Sources/VRApp/Control/SocketListener.swift
@@ -1202,7 +1225,7 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 
 | Ticket | Creates or fills |
 |---|---|
-| #3 Control: play and drive | `Package.swift`, `Makefile`, `Packaging/`; `VRWire` whole; `VRLease/Holder.swift`, `ProcessTable.swift` and a `ControlLease` that grants every request; `VRCommand` and `VRCLI` with the `app`, `player`, `state` and `screenshot` rows; `VRApp`: `VideoReviewApp`, `AppModel` (player actions), `Player/` without markers, `Control/` without the banner; `VRWireTests`, `VRCommandTests` |
+| #3 Control: play and drive | `Package.swift`, `Makefile`, `Packaging/`; `VRWire` whole; `VRLease/Holder.swift`, `ProcessTable.swift` and a `ControlLease` that grants every request; `VRCommand` (without `RegionArgument`) and `VRCLI` with the `app`, `player`, `state` and `screenshot` rows; `VRApp`: `VideoReviewApp`, `AppModel` (player actions), `Player/` without markers and without `Shortcuts`, `Control/` without the banner; `VRWireTests`, `VRCommandTests` |
 | #4 Control: lease | `VRLease/ControlLease.swift` in full; `control take` and `release`; the take's wait in `ControlServer`; `LeaseBanner`; `VRLeaseTests` |
 | #5 Comment: timestamped | `VRReview`: `Identifiers`, `Comment`, `ThreadMessage`, `Review` (add, edit, delete), `ReviewError`; `VRStore`: `SupportLayout`, `ContentHash`; `Comments/ReviewDesk` (in memory), `FrameGrabber` (keyframe), `Sidebar`, `CommentCard`, `StatusStyle`; `Overlay/Composer`; markers in `Timeline`; `Shortcuts`; the `comment` rows |
 | #6 Comment: region | `VRReview/Region.swift`; `Overlay/FrameGeometry`, `RegionOverlay`; the crop in `FrameGrabber`; `--region` |
