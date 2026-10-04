@@ -19,6 +19,13 @@ struct VideoReviewApp: App {
                 Button("Open…") { delegate.model.chooseVideo() }
                     .keyboardShortcut("o")
             }
+            // A Command shortcut, so it works wherever the focus is, the
+            // comment box included.
+            CommandGroup(after: .newItem) {
+                Button("Send Comments") { delegate.model.sendBatchForPerson() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(!delegate.model.canSend)
+            }
         }
     }
 }
@@ -108,6 +115,9 @@ struct MainView: View {
                 .inspectorColumnWidth(min: 240, ideal: 300, max: 440)
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                PresencePill(listener: model.listener)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     sidebar.toggle()

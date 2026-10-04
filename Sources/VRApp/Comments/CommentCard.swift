@@ -26,6 +26,13 @@ struct CommentCard: View {
                     StatusMark(state: comment.state, squared: comment.region != nil, size: 10)
                     Text(TimeText.short(comment.time))
                         .font(.callout.weight(.semibold).monospacedDigit())
+                    if comment.state != .queued {
+                        // A sent comment says where it stands in a word, beside its mark.
+                        let style = StatusStyle.of(comment.state)
+                        Text(style.label)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(style.color)
+                    }
                     Spacer(minLength: 0)
                     if comment.state == .queued, !editing {
                         Group {

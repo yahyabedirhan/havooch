@@ -57,9 +57,9 @@ public struct ControlClient: Sendable {
     /// Who every request is sent as (`Holder.find`).
     public var holder: Holder
     public var transport: any ControlTransport
-    /// The longest silence accepted while the reply is awaited. A
-    /// screenshot settles and captures, and a video takes a moment to
-    /// open, so it's generous.
+    /// The longest silence accepted while the reply is awaited. The app
+    /// writes a heartbeat every two seconds until it answers, so this only
+    /// runs out on an app that hangs.
     public var idleTimeout: TimeInterval
 
     public static let defaultIdleTimeout: TimeInterval = 15
@@ -81,9 +81,8 @@ public struct ControlClient: Sendable {
     }
 
     public func send(_ request: ControlRequest, json: Bool = false) -> Result<ControlReply, Failure> {
-        // A take waiting in line is answered when it gets the lease or its
-        // wait runs out: the app may stay silent for that long as well.
-        let idleTimeout = idleTimeout + request.silence
+        // A request the app answers late on purpose (a `wait`, a take in
+        // line) needs no longer timeout: the app's heartbeat breaks the silence.
         let data: Data
         do throws(ControlTransportFailure) {
             data = try transport.exchange(

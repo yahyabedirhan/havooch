@@ -113,7 +113,7 @@ A noun that holds changing state or enforces a rule is an entity. A noun that is
 | **Review** | one video's comments, batches, batch threads, note and id counters | the comment state machine; who may edit what; what a batch contains |
 | **ReviewDesk** | the reviews in memory, by content hash; the draft | every change to a review is saved, and its images written, before it is answered |
 | **ListenerLedger** | the listener session and the deliveries | which batch goes to whom; requeue on a new session; context once per session; presence |
-| **ListenerQueue** | the open `wait` and `ask` connections | a batch is taken only once its reply was written; one listener session at a time |
+| **ListenerQueue** | the open `wait` and `ask` connections, the ledger, the batches whose reply is being written | a batch is taken only once its reply was written, and is never handed to two waits; one listener session at a time |
 | **ControlLease** | the lease's term, the line of waiters, the bars | the lease rules |
 | **ControlServer** | the socket and the one `ControlLease` | every request is decoded, version-checked and leased before it reaches `AppModel` |
 | **ReviewStore** | the files under the support folder | the layout on disk; atomic writes; demo data apart from real data |
@@ -140,7 +140,7 @@ Agent ─▶ video-review (CLI)    │      │
 - `AppModel` **has** one `PlayerEngine`, one `ReviewDesk`, one `ListenerQueue` and one `Transcriber`.
 - `ControlServer` **has** the one `ControlLease` and **uses** `AppModel`. The views use `AppModel` too. Neither reaches past it, so the UI and the CLI can't drift apart: a new action is a new `AppModel` method with two callers.
 - `ReviewDesk` **has** the reviews and **uses** `ReviewStore` and `FrameGrabber`. A `Review` is a value: the desk changes a copy through the review's own methods, saves it, then publishes it.
-- `ListenerQueue` **has** the `ListenerLedger` and **uses** `ReviewDesk` (to read a batch and to change comment states) and `ReviewStore` (to save the ledger).
+- `ListenerQueue` **has** the `ListenerLedger` and **uses** `ReviewDesk` (to read a batch and to change comment states) and, once the ledger is saved, `ReviewStore`.
 - Rules live with the state they guard: comment and batch rules in `Review`, delivery and context rules in `ListenerLedger`, lease rules in `ControlLease`. All three are pure values given the time on each call, so they test without the app.
 
 ---
@@ -245,8 +245,8 @@ Sources/
     Review.swift                      one video's review and every rule that changes it
     ReviewError.swift                 why a change is refused, in words
     BatchPayload.swift                the JSON object `wait` prints; made from a batch, a review, paths and a context
-    ListenerLedger.swift              the listener session, the deliveries, requeue, context once per session
-    Presence.swift                    listening, working, absent; derived
+    ListenerLedger.swift              the listener session, the deliveries, requeue, presence, context once per session
+    Presence.swift                    listening, working, absent; derived by the ledger
     ContextText.swift                 the sidecar names to look for; sidecar text and note joined
   VRTranscript/
     TimedLine.swift                   start, end, text
@@ -283,16 +283,16 @@ Sources/
     Comments/
       ReviewDesk.swift                the reviews in memory; each change saved and its images written
       FrameGrabber.swift              the keyframe and the crop as PNG files
-      Sidebar.swift                   the queue, the sent comments, the Send button
+      Sidebar.swift                   the queue with the Send button, the sent comments grouped by batch
       CommentCard.swift               one comment: keyframe, time, text, status, thread, edit, delete
       ThreadView.swift                the messages and the answer box
       BatchCard.swift                 the messages for a whole batch
       StatusStyle.swift               one colour and symbol per comment state, for markers and cards
       ContextNote.swift               the in-app note and the sidecar it found
     Mate/
-      ListenerQueue.swift             open waits and asks; delivery; presence
+      ListenerQueue.swift             open waits and asks; delivery; what the pill and `state` show of the listener
       ContextSource.swift             reads the context sidecar of a video
-      PresencePill.swift              listening, working, absent in the toolbar
+      PresencePill.swift              listening, working, absent in the toolbar; PresenceStyle, its words and colours
       NoticeToast.swift               the brief notice for an agent message
     Control/
       ControlServer.swift             decode, lease, route to AppModel, reply
@@ -308,7 +308,7 @@ Tests/
   VRReviewTests/                      ReviewTests (state machine), BatchPayloadTests, ListenerLedgerTests, RegionTests
   VRTranscriptTests/                  WindowTests, SourceOrderTests, VoiceoverSourceTests, SubtitleSourceTests
   VRStoreTests/                       ContentHashTests (renamed copy, samples, the keyframe's path), ReviewStoreTests (round trip, demo apart)
-  VRAppTests/                         ShortcutsTests (each key, and none while typing), FrameGeometryTests (letterboxed and pillarboxed, at several window sizes), RegionDrawTests (press, drag, Escape, release), RegionCommentTests (the drawn and the `--region` comment on the fixture: same crop), ControlServerTests (the server's leasing at a clock of the test's, and over the real socket)
+  VRAppTests/                         ShortcutsTests (each key, and none while typing), FrameGeometryTests (letterboxed and pillarboxed, at several window sizes), RegionDrawTests (press, drag, Escape, release), RegionCommentTests (the drawn and the `--region` comment on the fixture: same crop), ControlServerTests (the server's leasing at a clock of the test's, and over the real socket), ListenerWaitTests (a batch from `batch send` to `wait` on the fixture: in memory at a clock of the test's, and over the real socket with a short heartbeat)
 
 scripts/
   acceptance.sh                       the v1 acceptance scenario through the CLI, against the installed app in demo mode
@@ -447,8 +447,7 @@ public enum ControlRequest: Equatable, Sendable {
     case reply(id: String, text: String), ask(id: String, text: String, waitSeconds: Int?)
 
     public static let version = 1
-    public static let longestWait = 3600        // the longest `take --wait`, in seconds
-    public var silence: Double                  // how long the app may leave it unanswered on purpose: a take's wait
+    public static let longestWait = 3600        // the longest `take --wait` and `wait --timeout`, in seconds
     public var command: String                  // the wire name of the table above: "player.seek"
     public var isLeased: Bool                   // true for the operator rows above, false for the others
 }
@@ -461,7 +460,7 @@ public struct ControlMessage: Equatable, Sendable {
 public enum ControlProtocolError: Error { case unreadable(String), otherVersion(Int), unknownCommand(String); public var message: String }
 ```
 
-`decode` checks the version before anything else: it reads `version` alone first, so a request of another version is told so even when its other fields have another shape. `decode` also refuses a relative `path`, an unknown `appearance`, a negative `seconds` and a `waitSeconds` out of range. Another version is refused with: `the video-review command speaks control version 2 and the app version 1: run the command from this app's bundle (Contents/Helpers/video-review) so both come from one build`.
+`decode` checks the version before anything else: it reads `version` alone first, so a request of another version is told so even when its other fields have another shape. `decode` also refuses a relative `path`, an unknown `appearance`, a negative `seconds`, and a take's `waitSeconds` or a wait's `timeoutSeconds` outside 0 to 3600. Another version is refused with: `the video-review command speaks control version 2 and the app version 1: run the command from this app's bundle (Contents/Helpers/video-review) so both come from one build`.
 
 Ids travel as plain strings: the wire knows nothing of what an id means. The app checks them.
 
@@ -476,7 +475,7 @@ public struct ControlReply: Codable, Equatable, Sendable {
 }
 ```
 
-The CLI maps a reply to an exit code: `ok` gives 0, `ok` false gives 1. One exception: a `wait` or an `ask` that ran out answers `ok` true with an empty `output`, and the CLI, which knows it sent a waiting request, exits 3 with `no batch within 30 s` or `no answer within 30 s` on standard error. The reply's shape stays the spec's four fields.
+The CLI maps a reply to an exit code: `ok` gives 0, `ok` false gives 1. One exception: a `wait` or an `ask` that ran out answers `ok` true with an empty `output`, and the CLI, which knows it sent a waiting request, exits 3 with `no batch within 30 s` or `no answer within 30 s` on standard error. The reply's shape stays the spec's four fields. The `wait` half is built (`CLI.run`, `CommandResult.ranOut`); a batch's payload is never empty, so the two can't be confused.
 
 #### What each command prints
 
@@ -494,11 +493,11 @@ Text is for people and shell variables. With `--json` the output is one JSON obj
 | `player play`, `pause`, `seek` | the time as `m:ss.mmm` | `{time, playing}` |
 | `comment add`, `comment edit` | the comment's id | the comment, as in `state` |
 | `comment delete` | `deleted <id>` | `{"deleted":"<id>"}` |
-| `batch send` | the batch's id | `{batchId, commentIds}` |
+| `batch send` | the batch's id | `{batchId, commentIds}`, the ids in time order |
 | `thread answer` | `answered <id>` | the comment |
 | `context set` | `context note set` | `{"note":"…"}` |
 | `screenshot` | the PNG's path | `{path, captured}`; a note on standard error when the window was rendered, not captured |
-| `wait` | the batch payload, always JSON | the same |
+| `wait` | the batch payload, always JSON, on one line | the same |
 | `ack` | `acknowledged <batch-id>` | `{batchId, commentIds}` |
 | `status` | `<comment-id> <state>` | the comment |
 | `reply` | `replied <id>` | the comment, or `{batchId}` |
@@ -516,7 +515,7 @@ public struct ControlClient: Sendable {
 }
 ```
 
-The timeout is an idle timeout: the longest silence the client accepts, not the longest exchange. See the long-poll below.
+The timeout is an idle timeout: the longest silence the client accepts, not the longest exchange. It is the same 15 s for every request, a waiting one too, since the app's heartbeat breaks the silence. See the long-poll below.
 
 ### How a long-poll holds one connection
 
@@ -524,17 +523,19 @@ The timeout is an idle timeout: the longest silence the client accepts, not the 
 
 1. The client writes the request, shuts down its write side and reads until the app closes the connection.
 2. `SocketListener` reads the request and awaits `ControlServer.reply(to:)` in a task. The handler suspends on a continuation kept by `ListenerQueue` (for `wait` and `ask`) or by `ControlServer` (for a `take` in line). The main actor is free meanwhile.
-3. While the task hasn't answered, `SocketListener` writes one space to the connection every 2 s. This **heartbeat** does two jobs:
+3. While the task hasn't answered, `SocketListener` writes one space to the connection every 2 s (`SocketListener.heartbeat`; a test gives a shorter one). It does so for every request, so a slow screenshot is covered too. This **heartbeat** does two jobs:
    - The client's idle timeout (15 s) never fires on a healthy wait, however long. A JSON reader skips leading spaces, so the reply still reads as one JSON object.
-   - A heartbeat that can't be written (the listener was killed, the shell closed) cancels the task. The cancellation handler removes the waiter and resumes it, so presence drops within about 2 s and no batch is handed to a dead connection.
-4. When the handler resumes (a batch arrived, an answer arrived, the timeout ran out, the app is quitting), the reply is written and the connection closed.
-5. If the reply itself can't be written, the server undoes the grant: a batch stays `pending` (it is marked `taken` only after a successful write), and a lease a `take` just got is released, as in Shipyard.
+   - A heartbeat that can't be written (the listener was killed, the shell closed) cancels the task. The `wait`'s cancellation handler removes the waiter and resumes it, so presence drops within about 2 s and no batch is handed to a dead connection.
+4. When the handler resumes (a batch arrived, an answer arrived, the timeout ran out, the app is quitting), the heartbeat is stopped and waited for, so a space never lands inside the reply or on a closed connection. Then the reply is written and the connection closed.
+5. An answer that hands something over goes back to the server: `written` when its reply was written, `undelivered` when it couldn't be. A batch is marked `taken` only in `written`; in `undelivered` it stays `pending`, and a lease a `take` just got is released, as in Shipyard.
 
-The take's part is built: a `take` in line suspends on a continuation in `ControlServer`, the app answers it when the lease changes hands or its wait runs out, and a grant whose reply can't be written is released (`undelivered`), which a test proves over the real socket. The heartbeat comes with `wait`. Until then the client accepts a longer silence for a waiting take: `ControlClient.send` adds `ControlRequest.silence` (the take's `waitSeconds`) to its idle timeout, so `control take --wait 120` waits up to 135 s for its answer. A take whose client has gone keeps its place until it is granted the lease, and gives it back then.
+Between the moment a batch is handed to a `wait` and the moment the server hears how the write went, the batch is **in flight**: still `pending` in the ledger, and kept out of every other `wait` by `ListenerQueue.inFlight`. So a batch can't go to two waits, and a failed write loses nothing. A batch sent in the two seconds before a dead listener is found out is handed to it, fails to write, and is pending again; a test proves both ways over the real socket.
 
-A `wait` without `--timeout` waits without limit. The app answers every open wait with a refusal (`the app is quitting`) when it quits, so the listener's loop sees exit 1, not a hang.
+The take and the `wait` are built this way; `ask` follows with its ticket. A `take` in line suspends on a continuation in `ControlServer`, which has no cancellation handler: a take whose client has gone keeps its place until it is granted the lease, and gives it back then (`undelivered`).
 
-NOTE: #7 must check that a write to a Unix stream socket whose peer has closed fails at once on macOS 26 (`EPIPE`, with `SO_NOSIGPIPE` set). If it doesn't, the fallback is a `DispatchSource` read source on the connection that fires on `EV_EOF` after the peer's half-close; the rest of the design is unchanged.
+A `wait` without `--timeout` waits without limit. A `--timeout` is whole seconds from 0 to 3600; 0 answers at once, with a pending batch or with nothing. The app answers every open wait with a refusal (`video-review is quitting`) when it quits, so the listener's loop sees exit 1, not a hang: the `app.quit` route does it before its own reply, while the app can still write, and `stop()` does it again for a quit from the window. A `wait` that comes after is refused the same way.
+
+A write to a Unix stream socket whose peer has closed fails at once on macOS 26 (`MSG_NOSIGNAL` on each `send`), so the heartbeat finds a dead listener with no read source on the connection. `ListenerWaitTests` proves it over the real socket.
 
 ### Command: `VRCommand`
 
@@ -587,7 +588,8 @@ app open [--demo <folder>]
 ```swift
 public struct CommentID: RawRepresentable, Hashable, Codable, Sendable { public let rawValue: String }   // "7f3a9c21-c3"
 public struct BatchID: RawRepresentable, Hashable, Codable, Sendable { public let rawValue: String }     // "7f3a9c21-b1"
-// Each is stored and sent as its text alone. CommentID(contentHash:number:) makes one; VideoPrefix.length is the 8.
+// Each is stored and sent as its text alone. CommentID(contentHash:number:) and BatchID(contentHash:number:) make one;
+// VideoPrefix.length is the 8. BatchID.number is the 1 of "7f3a9c21-b1", for the sidebar's "Batch 1".
 // The first eight hex digits of the video's content hash, then a counter per video.
 // An id names its video, so `status <comment-id>` works whatever video is open. A number is never used twice.
 
@@ -630,6 +632,7 @@ public struct Review: Codable, Equatable, Sendable {
     public private(set) var note: String
     public var queue: [Comment] { get }                 // state == .queued, in time order
     public func comment(_ id: CommentID) throws(ReviewError) -> Comment
+    public func batch(_ id: BatchID) throws(ReviewError) -> Batch
     public func checkedText(_ text: String, at time: Double) throws(ReviewError) -> String   // what addComment would keep, or its refusal; changes nothing
 
     // the person and the operator
@@ -648,7 +651,7 @@ public struct Review: Codable, Equatable, Sendable {
     public mutating func ask(_ id: CommentID, question: String, now: Date) throws(ReviewError) -> Comment  // the same open question isn't posted twice
 
     // delivery
-    public func isFinished(_ id: BatchID) -> Bool                    // every comment done or failed
+    public func isFinished(_ id: BatchID) -> Bool                    // every comment done or failed; false for a batch that isn't here
     public mutating func requeue(_ id: BatchID)                      // its unfinished comments → sent
 }
 ```
@@ -666,9 +669,15 @@ The state machine, in one place (`Comment.swift`):
 
 Everything else is refused with `ReviewError.illegalMove(from:to:)`. `setStatus` may skip a step forward (the acceptance scenario goes from `acknowledged` to `done`), never back. A `draft` is the comment being typed: it exists only in memory, on `ReviewDesk`, and has no id until it is queued.
 
-`ReviewError` cases: `emptyText`, `timeOutsideVideo(Double, duration:)`, `regionOutsideFrame`, `unknownComment(String)`, `unknownBatch(String)`, `notQueued(CommentID, CommentState)`, `emptyQueue`, `noOpenQuestion(CommentID)`, `illegalMove(from:to:)`. Each has one `message` line. `no video is open` is the app's refusal (`ActionError.noVideo`): a review always has its video.
+`ReviewError` cases: `emptyText`, `timeOutsideVideo(Double, duration:)`, `regionOutsideFrame`, `unknownComment(String)`, `unknownBatch(String)`, `notQueued(CommentID, CommentState)`, `emptyQueue`, `noOpenQuestion(CommentID)`, `illegalMove(from:to:)`. Each has one `message` line; `emptyQueue` reads `the queue is empty: there is no comment to send`. `no video is open` is the app's refusal (`ActionError.noVideo`): a review always has its video.
 
-Built so far (the two comment tickets): `CommentID`, `BatchID`, `Region`, `CommentState` with `canMove`, `ThreadMessage`, `Comment` without `openQuestion`, `VideoInfo`, and `Review` with `comments`, `queue`, `comment`, `checkedText`, `addComment(text:time:region:now:)`, `editComment` and `deleteComment`; the errors `emptyText`, `timeOutsideVideo`, `regionOutsideFrame`, `unknownComment` and `notQueued`. The rest above comes with its ticket.
+Built so far (the two comment tickets): `CommentID`, `BatchID`, `Region`, `CommentState` with `canMove`, `ThreadMessage`, `Comment` without `openQuestion`, `VideoInfo`, and `Review` with `comments`, `queue`, `comment`, `checkedText`, `addComment(text:time:region:now:)`, `editComment` and `deleteComment`; the errors `emptyText`, `timeOutsideVideo`, `regionOutsideFrame`, `unknownComment` and `notQueued`. With the send: `Batch`, `batches`, `batch`, `sendBatch`, `isFinished` and `requeue`, and the errors `unknownBatch` and `emptyQueue`. The rest above comes with its ticket.
+
+Rules of a batch:
+
+- `sendBatch` takes every queued comment, in time order, makes them `sent` and names the batch on each. It keeps only the transcript lines of the comments it took. An empty queue is refused.
+- A batch's number counts up per video and is never used twice, as a comment's.
+- `requeue` writes `sent` over `acknowledged` and `working` directly. It is the one move backwards, so it isn't in `canMove`. Until the listener's answers are built, a sent comment is never anything but `sent`, and `requeue` changes nothing.
 
 Rules of a region:
 
@@ -700,12 +709,14 @@ public struct BatchPayload: Codable, Equatable, Sendable {
     public var batch: BatchPart; public var video: VideoPart; public var context: String?; public var comments: [CommentPart]
 
     public static func make(batch: Batch, review: Review, context: String?,
-                            keyframe: (CommentID) -> String, crop: (CommentID) -> String?) -> BatchPayload
-    public func encoded() -> Data          // sorted keys, slashes not escaped, null written for context, region and cropPath
+                            keyframe: (CommentID) -> String, crop: (CommentID) -> String) -> BatchPayload
+    public func encoded() -> Data          // one line: sorted keys, slashes not escaped, null written for context, region and cropPath
 }
 ```
 
-`make` lists the batch's comments that aren't `done` or `failed`, in time order: all of them on the first delivery, the unfinished ones on a redelivery. `region` is `{x, y, w, h}`, normalized. Times are seconds.
+`make` lists the batch's comments that aren't `done` or `failed`, in time order: all of them on the first delivery, the unfinished ones on a redelivery. `region` is `{x, y, w, h}`, normalized. Times are seconds. `crop` is asked only for a comment with a region; the others get `null`. `sentAt` is written as `2026-10-04T12:00:00Z`. Each part has a public initializer, so a test states the payload it expects.
+
+Two parts are empty until their tickets: `transcript` is `[]` for every comment (the seam is the `lines` dictionary in `AppModel.sendBatch`, which `Review.sendBatch` keeps on the batch), and `context` is `null` (the seam is the `context` constant in `ListenerQueue.deliverIfPossible`, which travels with the batch to `ledger.delivered`).
 
 #### The ledger: listener session, deliveries, context once per session
 
@@ -714,27 +725,34 @@ public struct ListenerLedger: Codable, Equatable, Sendable {
     public struct Session: Codable, Equatable { public var key, name, place: String; public var firstSeen, lastSeen: Date
                                                 public var contextSent: [String: String] }   // content hash → the context text it last got
     public struct Delivery: Codable, Equatable { public var batch: BatchID; public var video: String; public var sentAt: Date
-                                                 public var takenBy: String?; public var takenAt: Date? }
+                                                 public var takenBy: String?; public var takenAt: Date?
+                                                 public var isPending: Bool }
+    public enum Standing: String { case pending, taken, finished }           // what `state` names a batch's delivery
+    public static let workingWindow: TimeInterval = 120
     public private(set) var session: Session?
     public private(set) var deliveries: [Delivery]        // oldest first; a finished one is removed
 
     public mutating func enqueue(_ batch: BatchID, video: String, sentAt: Date)
     /// A listener command arrived. Another key than the session's starts a new session:
-    /// returns the batches the old one took and didn't finish, now pending again.
-    public mutating func attach(_ holder: (key: String, name: String, place: String), now: Date) -> [BatchID]
-    public func next() -> Delivery?                                          // the oldest pending one
-    public func contextToSend(_ text: String, video: String) -> String?      // nil when empty, or the same as the session last got
-    public mutating func delivered(_ batch: BatchID, context: String?, video: String, now: Date)   // taken; context remembered
+    /// returns the deliveries the old one took and didn't finish, now pending again.
+    public mutating func attach(_ holder: (key: String, name: String, place: String), now: Date) -> [Delivery]
+    public func next(except: Set<BatchID> = []) -> Delivery?                 // the oldest pending one that isn't in flight
+    public func contextToSend(_ text: String, video: String) -> String?      // nil when empty, or the same as the session last got (with the context)
+    public mutating func delivered(_ batch: BatchID, to key: String, context: String?, now: Date)   // taken; context remembered
     public mutating func finish(_ batch: BatchID)
+    public func standing(of batch: BatchID) -> Standing                      // a batch that isn't here is finished
+    public var hasTaken: Bool                                                // the session has a taken, unfinished batch
     public func presence(waitOpen: Bool, now: Date) -> Presence
 }
 public enum Presence: String, Codable, Sendable { case listening, working, absent }
 ```
 
 - **A listener session is a holder key.** Every request already carries its holder, so a listener is told apart with nothing new on the wire: one Claude Code session is one listener session (`CLAUDE_CODE_SESSION_ID`), and a test starts another with `VIDEO_REVIEW_CONTROL_KEY`.
-- **Requeue.** When a listener command arrives from a key other than the session's, the old session is over: its taken, unfinished batches become pending again and their unfinished comments go back to `sent`. The same key calling `wait` again (the skill does, before it starts work) gets nothing twice.
+- **Requeue.** When a listener command arrives from a key other than the session's, the old session is over: its taken, unfinished batches become pending again and their unfinished comments go back to `sent`. The same key calling `wait` again (the skill does, before it starts work) gets nothing twice. `attach` returns the deliveries, not their ids alone, since the queue needs each one's video to requeue its comments.
+- **Taken by its listener only.** `delivered` names the key the reply went to. When that key is no longer the session (another listener started while the reply was written), nothing is taken and the batch stays pending for the session there is.
+- **In flight.** `next(except:)` leaves out the batches whose reply is being written. The set is the queue's, not the ledger's: it lives for one write and is never saved.
 - **Context once per session.** The session remembers, per video, the context text it last got. `contextToSend` returns the text for the first batch of that video, `nil` while it is unchanged, and the text again after the sidecar or the note changed. A new session remembers nothing, so it gets the context again. The memory is written only in `delivered`, after the reply reached the listener.
-- **The ledger is saved** in `listener.json`, so an app restart neither sends the context twice to a session that goes on, nor loses a pending batch.
+- **The ledger is saved** in `listener.json`, so an app restart neither sends the context twice to a session that goes on, nor loses a pending batch. Until the store is built, `ListenerQueue` keeps it in memory; it is `Codable` and reads back as it was written.
 - **Presence is derived**, never stored:
 
 | An open `wait`? | The session has a taken, unfinished batch? | The session's last command | Presence |
@@ -845,7 +863,8 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
     let player: PlayerEngine
     let desk: ReviewDesk
     let listener: ListenerQueue
-    let transcriber: any Transcriber
+    let transcriber: any Transcriber                 // with the transcript
+    init(environment: [String: String], now: @escaping @MainActor () -> Date = { Date() })   // the time a batch is sent at, and the listener queue's
     private(set) var notice: Notice?                 // the last agent message, shown for 5 s
     private(set) var selection: CommentID?           // the marker and card in focus
 
@@ -871,7 +890,8 @@ A path takes the video's whole hash beside the id, so `SupportLayout` is pure: i
     func addComment(text: String, at: Double?, region: Region?) async throws(ActionError) -> Comment   // the CLI's path
     func editComment(_ id: CommentID, text: String) throws(ActionError) -> Comment
     func deleteComment(_ id: CommentID) throws(ActionError)
-    func sendBatch() async throws(ActionError) -> Batch                  // Cmd+Enter and `batch send`
+    func sendBatch() async throws(ActionError) -> Batch                  // Cmd+Enter, the Send button and `batch send`
+    func sendBatchForPerson();  var canSend: Bool                        // the person's way in; whether a comment is queued or text is in the comment box
     func answer(_ id: CommentID, text: String) throws(ActionError) -> Comment
     func setNote(_ text: String) throws(ActionError)
 
@@ -916,7 +936,7 @@ enum Shortcuts {     // pure: the whole table, and the rule that typing never re
 @MainActor final class ShortcutMonitor { init(model: AppModel); func start() }
 ```
 
-`ShortcutMonitor` is a local `NSEvent` monitor for key-down events, started by the `AppDelegate`. For each key it asks `Shortcuts.action` with `typing` set to whether the window's first responder is a text view (`NSText`: the field editor of every text field, and every text view). A player key is done through `AppModel.perform` and swallowed; any other event travels on untouched. Before any of that, Escape goes to `AppModel.cancelRegion`: while a rectangle is being drawn it gives the rectangle up and the key goes no further, with the comment box open or not. The monitor also steps aside for another window (the open panel), under a sheet (the alert), with no video open, and while the comment box is open, which covers the moment before the box has taken the focus. `Shortcuts.action` returns nil when `typing` is true, and for a key with Command, Control or Option, so the rule is one pure function that `ShortcutsTests` covers for every key. No plain key is a menu shortcut, since a menu shortcut would fire while typing. Menu items carry only Command shortcuts (Cmd+O, Cmd+Return).
+`ShortcutMonitor` is a local `NSEvent` monitor for key-down events, started by the `AppDelegate`. For each key it asks `Shortcuts.action` with `typing` set to whether the window's first responder is a text view (`NSText`: the field editor of every text field, and every text view). A player key is done through `AppModel.perform` and swallowed; any other event travels on untouched. Before any of that, Escape goes to `AppModel.cancelRegion`: while a rectangle is being drawn it gives the rectangle up and the key goes no further, with the comment box open or not. The monitor also steps aside for another window (the open panel), under a sheet (the alert), with no video open, and while the comment box is open, which covers the moment before the box has taken the focus. `Shortcuts.action` returns nil when `typing` is true, and for a key with Command, Control or Option, so the rule is one pure function that `ShortcutsTests` covers for every key. No plain key is a menu shortcut, since a menu shortcut would fire while typing. Menu items carry only Command shortcuts (Cmd+O, and Cmd+Return on "Send Comments" in the File menu). A menu shortcut is asked before the focused field gets the key, so Cmd+Return sends from the comment box too. The item and the sidebar's Send button are off while `canSend` is false.
 
 A monitor was chosen over SwiftUI's `onKeyPress`, which reaches the focused view only: the player's keys must work wherever the focus is, as long as it isn't in a text field, and the monitor asks exactly that question.
 
@@ -955,13 +975,16 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
 
 ```swift
 @MainActor @Observable final class ReviewDesk {
-    struct Draft { var time: Double; var region: Region?; var resumes: Bool; var frame: Task<Result<CGImage, FrameFailure>, Never> }
+    struct Draft { var time: Double; var region: Region?; var resumes: Bool; var frame: Task<Result<CGImage, FrameFailure>, Never>
+                   var text = "" }                      // what is typed so far: here, not in the comment box, so a send can queue it
     private(set) var open: Review?                      // the playing video's review
     private(set) var draft: Draft?                      // its time, its region, whether to play on afterwards, the frame being read
     let layout: SupportLayout
     func load(_ video: VideoInfo) -> Review             // the one kept under the hash, with the file it was opened from now, or a new one
     func close()                                        // no video is open any more
     func startDraft(time: Double, region: Region?, resumes: Bool, video: URL);  func pointDraft(at region: Region?);  func endDraft()
+    func typeDraft(_ text: String)                      // the comment box's binding writes here
+    func review(_ hash: String) -> Review?              // any video this run has seen, open or not
     func add(text: String, time: Double, region: Region?, frame: CGImage, to hash: String) throws(ActionError) -> Comment
     func delete(_ id: CommentID, from hash: String) throws(ActionError)      // the comment, then its keyframe and crop files
     func keyframe(of id: CommentID) -> URL;  func crop(of id: CommentID) -> URL   // in the folder of the video its id names
@@ -976,12 +999,16 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
 
 ```swift
 @MainActor @Observable final class ListenerQueue {
-    private(set) var presence: Presence
-    private(set) var session: ListenerLedger.Session?
+    struct Handed { var batch: BatchID; var listener: String; var context: String? }   // a batch handed to a wait, until its reply is written or not
+    init(desk: ReviewDesk, now: @escaping @MainActor () -> Date)
+    private(set) var ledger: ListenerLedger
+    var session: ListenerLedger.Session?
+    var presence: Presence;  func presence(at: Date) -> Presence;  var presenceRunsOut: Bool
+    func standing(of batch: BatchID) -> ListenerLedger.Standing
 
     func enqueue(_ batch: Batch, video: VideoInfo)                                     // from AppModel.sendBatch
-    func wait(holder: Holder, timeout: Int?) async -> WaitOutcome                      // .batch(Delivery, json) | .timedOut | .refused(String)
-    func delivered(_ delivery: Delivery, context: String?)                             // the reply was written
+    func wait(holder: Holder, timeout: Int?) async -> WaitOutcome                      // .batch(Handed, payload:) | .timedOut | .refused(String) | .gone
+    func delivered(_ handed: Handed);  func undelivered(_ handed: Handed)              // the reply was written, or couldn't be
     func acknowledge(_ id: String, text: String?, holder: Holder) throws(ActionError) -> Batch
     func setStatus(_ id: String, _ state: String, holder: Holder) throws(ActionError) -> Comment
     func reply(_ id: String, text: String, holder: Holder) throws(ActionError) -> ReplyTarget
@@ -991,11 +1018,14 @@ Points have their origin at the view's top left, as SwiftUI's have and as a regi
 }
 ```
 
-- It keeps the open `wait`s (a continuation each, oldest first) and the open `ask`s (by comment id).
-- A `wait` from another key while a `wait` is open is refused: `<name> in <place> is already listening`. One listener at a time.
-- `enqueue` and `wait` both end in the same step: while there is a pending delivery and an open wait, build the payload and resume the oldest wait with it.
+- It keeps the open `wait`s (a continuation each, oldest first) and the open `ask`s (by comment id). The `ask` side, `acknowledge`, `setStatus`, `reply` and `answered` come with the listener's answers.
+- A `wait` from another key while a `wait` is open is refused: `<name> in <place> is already listening; one listener at a time`. A refused `wait` doesn't touch the session. Several waits of one key may be open; the oldest gets the batch.
+- `enqueue` and `wait` both end in the same step, `deliverIfPossible`: while there is a pending delivery that isn't in flight and an open wait, build the payload, mark the batch in flight and resume the oldest wait with it. `delivered` and `undelivered` take the batch out of flight and run the step again.
+- A delivery whose batch is finished, or whose review this run doesn't have, is taken out of the ledger there instead of being sent with no comment.
+- A `wait` ends in one place, `end(ticket, with:)`, whoever ends it: the delivery, its timeout, its cancelled connection (`.gone`), or the quit. The waiter is removed first, so only the first of them answers it.
+- Presence is not stored: `presence(at:)` asks the ledger with whether a `wait` is open. Both are observed, so the pill follows them. Only the 120 s rule changes by time alone; while `presenceRunsOut` says it can, the pill redraws every second, and `state` asks at the request's time.
 - `ask` without `--wait` waits without limit, as the spec says the command exits with the answer. An `ask` with the same text as the comment's last question attaches to that question: when it is already answered, it returns the answer at once, so a listener that timed out can ask again and lose nothing.
-- Every listener command calls `ledger.attach`, saves the ledger and re-derives `presence`. A one-second timer re-derives it too, for the 120 s rule.
+- Every listener command calls `ledger.attach` and, once the store is built, saves the ledger.
 
 #### ControlServer
 
@@ -1003,7 +1033,8 @@ Shipyard's server, with this app's routes.
 
 ```swift
 @MainActor final class ControlServer {
-    struct Answer { var reply: ControlReply; var quits = false; var granted: ControlLease.Term?; var delivery: Delivery? }
+    struct Answer { var reply: ControlReply; var quits = false; var granted: ControlLease.Term?; var delivery: ListenerQueue.Handed?
+                    var handsOver: Bool }           // a lease or a batch: the server must hear how the write went
     private(set) var lease: ControlLease                // every change runs leaseChanged()
     let indicator: LeaseIndicator                       // what the banner reads
     func start() throws;  func stop()
@@ -1043,9 +1074,9 @@ reply(to data):
 
 The wire carries a region as any four numbers (`WireRegion`). The `comment.add` route turns them into a `Region` through `Region.checked`, so numbers outside the frame are refused in the review's words before anything is read or written, and `RegionArgument` in the command only refuses what isn't four numbers (exit 2, with the usage).
 
-`SocketListener` owns the POSIX side off the main actor: bind (0600), listen, accept, read one request to its end (8 MB at most), await `reply(to:)` with the heartbeat running, write, close, then tell the server `written` or `undelivered`.
+`SocketListener` owns the POSIX side off the main actor: bind (0600), listen, accept, read one request to its end (8 MB at most), await `reply(to:)` with the heartbeat running, write, close, then tell the server `written` or `undelivered` for an answer that hands something over.
 
-The server grows with its tickets. Today `Answer` is `{reply, quits, granted}`, and the listener reads, answers, writes, tells the server `undelivered` when a reply that grants the lease can't be written, and quits. The heartbeat, `delivery` and `written` come with `wait`. A request whose route isn't built yet is refused in words: ``this build of video-review doesn't answer `wait` yet``.
+The server grows with its tickets. `written` marks a `wait`'s batch taken; `undelivered` leaves the batch pending and releases a lease a `take` was granted. A request whose route isn't built yet is refused in words: ``this build of video-review doesn't answer `ack` yet``.
 
 The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo run, else on `control.sock`, both in the real support folder. A socket file nothing answers on (left by an app that was killed) is replaced.
 
@@ -1072,7 +1103,7 @@ The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo r
 }
 ```
 
-`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. `draft` is `{"time": 10, "region": null}` while the comment box is open, with its region as `{"x": 0.48, "y": 0.3, "w": 0.28, "h": 0.12}` once one is drawn. A comment's `region` is the same four numbers and its `cropPath` the crop's absolute path; both are `null` for a comment on the whole frame. With no video open, `comments`, `queue` and `batches` are empty. The object is one line. Every key is there from the first build: a part whose ticket hasn't landed carries its empty value (`[]`, `null`, `""`, presence `absent`), and `transcript` is `{"source": null, "complete": false, "lines": 0}` until a source has lines. `player.time` and `video.duration` are to the millisecond; `player.rate` is the speed playback runs at while it plays.
+`comments` are in time order; `queue` lists the ids of the queued ones in the same order; `video`, `draft`, `lease` and `notice` are `null` when there is none. `draft` is `{"time": 10, "region": null}` while the comment box is open, with its region as `{"x": 0.48, "y": 0.3, "w": 0.28, "h": 0.12}` once one is drawn. A comment's `region` is the same four numbers and its `cropPath` the crop's absolute path; both are `null` for a comment on the whole frame. `batches` are the open video's, in the order they were sent; a batch's `delivery` is `pending`, `taken` or `finished`. `listener` names the listener and its place only while it is `listening` or `working`. With no video open, `comments`, `queue` and `batches` are empty. The object is one line. Every key is there from the first build: a part whose ticket hasn't landed carries its empty value (`[]`, `null`, `""`, presence `absent`), and `transcript` is `{"source": null, "complete": false, "lines": 0}` until a source has lines. `player.time` and `video.duration` are to the millisecond; `player.rate` is the speed playback runs at while it plays.
 
 `Screenshotter` captures the app's own window through ScreenCaptureKit limited to this process (`SCShareableContent.currentProcess`), which needs no Screen Recording permission. With `--appearance` it sets the app's appearance, waits 350 ms for the redraw, captures, and puts the appearance back. If the capture fails, it draws the window's content view itself and then the frame at the playhead, read from the file, where the player's layer shows it (`AVPlayerLayer.videoRect`), since a player layer doesn't draw into a bitmap; the title bar's place stays blank, and the reply says on standard error that the PNG was rendered. A window that isn't on screen (closed, minimized, hidden) is refused.
 
@@ -1133,13 +1164,13 @@ The methods that carry the logic, then two traces and two refusals.
 
 ```text
 AppModel.sendBatch():
-    review = desk.open                         else refuse "no video is open"
-    if a draft has text: commitDraft(text)     Cmd+Enter in the composer sends what is being typed too
-    queue = review.queue                       else refuse "the queue is empty"
-    for comment in queue:                      the transcript as it exists now
+    desk.open                                  else refuse "no video is open"
+    if the draft has text: commitDraft(text)   Cmd+Enter in the composer sends what is being typed too
+    review = desk.open                         read again: queueing the draft waited for its frame
+    for comment in queue:                      the transcript as it exists now (empty until the transcript is built)
         lines[comment.id] = cut(transcriber.lines(video, around(comment.time)))
-    batch = desk.change(hash) { $0.sendBatch(transcripts: lines, now) }      queued → sent; saved
-    listener.enqueue(batch, video)             ledger.enqueue; saved; deliver if a wait is open
+    batch = desk.change(hash) { $0.sendBatch(transcripts: lines, now) }      queued → sent; refused "the queue is empty: …"
+    listener.enqueue(batch, video)             ledger.enqueue; deliver if a wait is open
     return batch
 ```
 
@@ -1147,23 +1178,25 @@ AppModel.sendBatch():
 
 ```text
 ListenerQueue.wait(holder, timeout):
+    if the app is quitting: return .refused
     if another session's wait is open: return .refused
     requeued = ledger.attach(holder, now)      a new key: the old session's unfinished batches are pending again
-    for id in requeued: desk.change(…) { $0.requeue(id) }
-    add a waiter; start its timeout if any; presence = derive
+    for delivery in requeued: desk.change(delivery.video) { $0.requeue(delivery.batch) }
+    add a waiter; start its timeout if any
     deliverIfPossible()
-    suspend until resumed                      by a delivery, the timeout, a cancelled connection, or quitting
+    suspend until ended                        by a delivery, the timeout, a cancelled connection, or quitting
 
 ListenerQueue.deliverIfPossible():
-    while let delivery = ledger.next(), let waiter = oldest waiter:
-        review   = desk.review(for: delivery.video)
-        text     = ContextText.compose(sidecar: ContextSource.read(review.video.path), note: review.note)
-        context  = ledger.contextToSend(text, video)
-        payload  = BatchPayload.make(batch, review, context, keyframe: layout.keyframe, crop: …)
-        resume waiter with .batch(delivery, payload.encoded())
+    while let waiter = oldest waiter, let delivery = ledger.next(except: inFlight):
+        review   = desk.review(delivery.video)       finished or missing: ledger.finish, and on to the next
+        text     = ContextText.compose(sidecar: ContextSource.read(review.video.path), note: review.note)   with the context;
+        context  = ledger.contextToSend(text, video)                                                         nil until then
+        payload  = BatchPayload.make(batch, review, context, keyframe: layout.keyframe, crop: layout.crop)
+        inFlight.insert(batch)
+        end waiter with .batch(Handed(batch, waiter's key, context), payload.encoded())
 
-ControlServer.written(answer) with a delivery:   listener.delivered → ledger.delivered(batch, context, video, now); saved
-ControlServer.undelivered(answer) with a delivery: nothing changes; the batch is still pending for the next wait
+ControlServer.written(answer) with a delivery:     listener.delivered → out of flight; ledger.delivered(batch, to: key, context, now)
+ControlServer.undelivered(answer) with a delivery: listener.undelivered → out of flight; still pending; deliverIfPossible()
 ```
 
 ### Trace 1: one CLI command, `player seek 0:10`
@@ -1257,7 +1290,8 @@ The trace's variants, each one branch of the same code:
 - **No listener at the send.** `deliverIfPossible` finds no waiter. `b1` stays pending in `listener.json`, through a quit too. The next `wait` attaches, and `deliverIfPossible` runs from `wait`.
 - **The second batch for `L`.** `contextToSend` finds the same text in `L.contextSent`, so the payload has `"context": null`. After `context set` or an edit of the sidecar, the text differs and goes out again.
 - **A new listener session `M`** calls `wait` while `b1` is taken by `L` and unfinished. `attach` replaces the session, returns `[b1]`; the desk requeues it (its unfinished comments go back to `sent`); `deliverIfPossible` hands `b1` to `M`, with the context, since `M` remembers nothing.
-- **The listener dies mid-wait.** The next heartbeat can't be written; the task is cancelled; the waiter is removed; presence goes to `absent`. Nothing was taken.
+- **The listener dies mid-wait.** The next heartbeat can't be written; the task is cancelled; the waiter is removed; presence goes to `absent`. Nothing was taken. A batch sent before that heartbeat is handed to the dead wait, its reply can't be written, and `undelivered` leaves it pending.
+- **The wait's `--timeout` runs out.** The waiter is removed and answered with nothing; the CLI exits 3. A batch sent a moment later finds no waiter and stays pending.
 
 **A refusal.** After the send, `video-review comment edit 7f3a9c21-c1 "new text"` reaches `Review.editComment`, which finds `c1` in the state `sent` and throws `notQueued(c1, .sent)`. `desk.change` saves nothing. The reply is `refused("7f3a9c21-c1 is sent; only a queued comment can be edited or deleted")`, exit 1.
 
@@ -1301,14 +1335,15 @@ The spec fixes the CLI, the payload and the states. Everything below is this pro
 | 10 | The comment box is a standard text field. | Story 8: Wispr Flow dictates into any standard field, so dictation needs no code. |
 | 11 | Player keys act only while no text field has the focus, and no plain key is a menu shortcut. | The ticket's rule that typing must never trigger a player shortcut, held by one question (is the first responder a text view?), not by a list of exceptions. |
 | 12 | Cmd+Return sends the queue from anywhere. Typed text in an open comment box is queued first, then sent. | Story 11: one keystroke, and nothing the person typed is left behind. |
-| 13 | The sidebar is an inspector on the right: the queue on top with its count and the Send button, sent comments below, grouped by batch, in time order. It can be hidden. | The queue is what the person acts on next; the frame keeps the larger share. |
+| 13 | The sidebar is an inspector on the right: the queue on top with its count and the Send button, sent comments below, grouped by batch with the newest batch first, in time order inside a batch. A batch's head has its number, the time it was sent and where it stands. A sent comment's card has its mark in the sent colour and the word `Sent`. It can be hidden. | The queue is what the person acts on next; the frame keeps the larger share. The newest batch is the one the person just sent. |
 | 14 | A queued comment is edited in place in its card (double-click or the pencil; Return keeps the new text, Escape the old) and deleted with the trash button, or with Delete while it is the comment in focus. Each card shows its keyframe, small. | Story 10, without a separate editor. The keyframe shows which frame the agent will get. |
 | 15 | Clicking a marker or a card seeks to the comment's time, pauses, selects it in both places and draws its region on the frame. The region shows only while the video is paused at that time. | Story 13: the marker, the card and the region are one selection. |
 | 16 | A thread shows under its comment's card. The answer box appears only while a question is open. | Stories 18 and 20: the answer goes where the question is. A person's message with no question has no command to deliver it, so the box isn't offered. |
 | 17 | Messages for a whole batch show in a card at the head of that batch's group. | Story 21: the overall result sits above the comments it is about. |
 | 18 | An agent message shows as a notice at the bottom right of the frame for 5 s, with the comment's time. A click selects the comment. | Story 19: seen while watching, away from the centre of the frame, and gone by itself. |
 | 19 | Presence is a pill in the toolbar: green Listening, orange Working, grey No listener. Hovering names the listener and its folder. | Story 14: the answer to "will my batch reach someone" is always in sight. |
-| 20 | Sending with no listener works. The batch's card says "Waiting for a listener". | Story 15: the person isn't blocked, and knows why nothing answers yet. |
+| 20 | Sending with no listener works. The batch's head says "Waiting for a listener" in orange, then "Delivered to the listener" once a `wait` took it. | Story 15: the person isn't blocked, and knows why nothing answers yet. |
+| 20a | The Send button and the menu item are off while nothing is queued and nothing is typed in the comment box. | Cmd+Return with nothing to send does nothing, in place of an alert. |
 | 21 | While an agent holds the lease, a banner under the toolbar names it, its folder, the seconds left and how many agents wait, with a Stop button. Stop ends the lease and refuses that agent for 5 minutes; an agent in line gets the lease at once. The person's own clicks and keys always work. A screenshot shows the banner, since it is in the window. | Stories 29 and 30. The person never needs the lease. A screenshot is what the window shows, and the contract has no option to hide a part of it. |
 | 22 | The context note is a popover from a toolbar button. It also names the sidecar file that was found. | Story 26: rarely used, so out of the way, and it shows what the agent will get. |
 | 23 | The app follows the Mac's appearance with system colours and materials. The frame's surround is black in both. | Story 31. Black around a video is what players do, and it keeps the frame's colours honest. |
@@ -1349,10 +1384,10 @@ Later tickets fill this structure in; they don't re-decide it. A ticket that has
 | Ticket | Creates or fills |
 |---|---|
 | #3 Control: play and drive | `Package.swift`, `Makefile`, `Packaging/`; `VRWire` whole; `VRLease/Holder.swift`, `ProcessTable.swift` and a `ControlLease` that grants every request; `VRCommand` (without `RegionArgument`) and `VRCLI` with the `app`, `player`, `state` and `screenshot` rows; `VRApp`: `VideoReviewApp`, `AppModel` (player actions), `Player/` without markers and without `Shortcuts`, `Control/` without the banner; `VRWireTests`, `VRCommandTests` |
-| #4 Control: lease | `VRLease/ControlLease.swift` in full; `control take` and `release`; the take's wait, the settle timer, `stopLease` and `undelivered` in `ControlServer`; `ControlRequest.silence`; `LeaseBanner` with `LeaseIndicator`; `VRLeaseTests`, and `VRAppTests` with `ControlServerTests` |
+| #4 Control: lease | `VRLease/ControlLease.swift` in full; `control take` and `release`; the take's wait, the settle timer, `stopLease` and `undelivered` in `ControlServer`; `ControlRequest.silence` (taken out again with the heartbeat); `LeaseBanner` with `LeaseIndicator`; `VRLeaseTests`, and `VRAppTests` with `ControlServerTests` |
 | #5 Comment: timestamped | `VRReview`: `Identifiers`, `Comment`, `ThreadMessage`, `Review` (add, edit, delete), `ReviewError`; `VRStore`: `SupportLayout`, `ContentHash`; `Comments/ReviewDesk` (in memory), `FrameGrabber` (keyframe), `Sidebar` (the queue), `CommentCard`, `StatusStyle`; `Overlay/Composer`; markers in `Timeline`; `Shortcuts`; the `comment` rows; the comments, the queue and the draft in `StateSnapshot`; `VRReviewTests`, `VRStoreTests` (`ContentHashTests`), `VRAppTests` (`ShortcutsTests`) |
 | #6 Comment: region | `VRReview/Region.swift`, `regionOutsideFrame`, `region` on `Comment` and `addComment`; `SupportLayout.crop`; `VRCommand/RegionArgument.swift` and `--region`; `Overlay/FrameGeometry`, `RegionDraw`, `RegionOverlay`, the composer placed next to the region; the region methods of `AppModel` and Escape in `ShortcutMonitor`; the crop in `FrameGrabber` and `ReviewDesk`; `region` and `cropPath` in `StateSnapshot`; the square marker; `RegionTests`, `RegionArgumentTests`, `FrameGeometryTests`, `RegionDrawTests`, `RegionCommentTests` |
-| #7 Mate: send and wait | `Batch`, `Review.sendBatch`, `BatchPayload`, `ListenerLedger`, `Presence`; `Mate/ListenerQueue`, `PresencePill`; the heartbeat in `SocketListener`; `batch send`, `wait`; Cmd+Return |
+| #7 Mate: send and wait | `Batch`, `Review.sendBatch`, `batch`, `isFinished`, `requeue`, `BatchPayload`, `ListenerLedger` (without `contextToSend`), `Presence`; `Mate/ListenerQueue` (the `wait` side, in memory), `PresencePill`; the heartbeat, `written` and a batch's `undelivered` in `SocketListener` and `ControlServer`; `batch send`, `wait`, exit 3; Cmd+Return, the Send button, the draft's text on `ReviewDesk`, the sent comments in `Sidebar`; `batches` and `listener` in `StateSnapshot`; `BatchPayloadTests`, `ListenerLedgerTests`, `ListenerWaitTests` |
 | #8 Transcript | `VRTranscript` whole; `VRStore/TranscriptCache`; the lines captured in `AppModel.sendBatch` |
 | #9 Mate: context | `ContextText`; `Mate/ContextSource`; `ledger.contextToSend`; `Comments/ContextNote`; `context set` |
 | #10 Mate: answers | `acknowledge`, `setStatus`, `reply`, `ask`, `answer` in `Review`; the `ask` side of `ListenerQueue`; `ThreadView`, `BatchCard`, `NoticeToast`; `ack`, `status`, `reply`, `ask`, `thread answer` |

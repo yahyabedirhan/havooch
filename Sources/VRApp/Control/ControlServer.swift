@@ -9,16 +9,23 @@ import VRWire
 /// `AppModel`, then answered on the main actor. Every refusal is a reply,
 /// so the `video-review` command always has a line to print. A `take`'s
 /// reply granting the lease that can't be written (its client gone) gives
-/// the lease up at once.
+/// the lease up at once, and a `wait`'s reply carrying a batch that can't
+/// be written leaves the batch for the next `wait`.
 @MainActor
 final class ControlServer {
-    /// A reply, whether the app quits once it's written, and the lease a
-    /// `control take`'s reply grants, released when the reply can't be
-    /// written (`undelivered`).
+    /// A reply, whether the app quits once it's written, and what the
+    /// reply hands over: the lease a `control take`'s reply grants,
+    /// released when the reply can't be written (`undelivered`), and the
+    /// batch a `wait`'s reply carries, taken once the reply is written
+    /// (`written`) and still pending when it can't be.
     struct Answer: Equatable, Sendable {
         var reply: ControlReply
         var quits = false
         var granted: ControlLease.Term?
+        var delivery: ListenerQueue.Handed?
+
+        /// Whether the server must hear how writing the reply went.
+        var handsOver: Bool { granted != nil || delivery != nil }
     }
 
     let socket: URL
@@ -41,6 +48,8 @@ final class ControlServer {
     /// it gets the lease or its wait runs out.
     private var waiters: [UUID: Waiter] = [:]
     private var listener: SocketListener?
+    /// How often a connection that waits for its answer is written to.
+    private let heartbeat: Duration
 
     /// A `take` waiting in line: who sent it, how long it waits, and how it
     /// gets its answer.
@@ -61,6 +70,7 @@ final class ControlServer {
         indicator: LeaseIndicator,
         now: @escaping @MainActor () -> Date = { Date() },
         timeZone: TimeZone = .current,
+        heartbeat: Duration = SocketListener.heartbeat,
         quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.socket = socket
@@ -70,6 +80,7 @@ final class ControlServer {
         self.indicator = indicator
         self.now = now
         self.timeZone = timeZone
+        self.heartbeat = heartbeat
         self.quit = quit
         // The banner's Stop is the person's only way into the lease.
         indicator.stop = { [weak self] in self?.stopLease() }
@@ -116,6 +127,8 @@ final class ControlServer {
                 _ = lease.release(by: message.holder, at: now())
                 return done(json ? "{\"released\":true}\n" : "released\n")
             case .appQuit:
+                // An open `wait` hears why while the app can still write to it.
+                model.listener.quitting()
                 return Answer(reply: ControlReply(ok: true, output: json ? "{\"quit\":true}\n" : "quit\n", lease: renewed), quits: true)
             case .playerOpen(let path):
                 struct Opened: Encodable {
@@ -144,8 +157,25 @@ final class ControlServer {
                 }
                 try model.deleteComment(CommentID(rawValue: id))
                 return done(json ? JSONText.line(Deleted(deleted: id)) : "deleted \(id)\n")
-            case .batchSend, .threadAnswer,
-                 .contextSet, .wait, .ack, .status, .reply, .ask:
+            case .batchSend:
+                struct Sent: Encodable {
+                    var batchId: String
+                    var commentIds: [String]
+                }
+                let batch = try await model.sendBatch()
+                return done(
+                    json ? JSONText.line(Sent(batchId: batch.id.rawValue, commentIds: batch.comments.map(\.rawValue)))
+                        : batch.id.rawValue + "\n"
+                )
+            case .wait(let timeout):
+                switch await model.listener.wait(holder: message.holder, timeout: timeout) {
+                case .batch(let handed, let payload): return Answer(reply: .done(payload), delivery: handed)
+                // Nothing to print: the command, which knows it waited, exits 3.
+                case .timedOut: return done("")
+                case .refused(let why): return Answer(reply: .refused(why))
+                case .gone: return Answer(reply: .refused("the listener's connection closed"))
+                }
+            case .threadAnswer, .contextSet, .ack, .status, .reply, .ask:
                 return Answer(reply: .refused("this build of video-review doesn't answer `\(message.request.command)` yet"))
             }
         } catch {
@@ -267,9 +297,17 @@ final class ControlServer {
     /// rather than it sitting unused until it runs out. A lease that has
     /// moved on meanwhile (another holder's, or a new one) is left alone.
     func undelivered(_ answer: Answer) {
+        // A batch whose `wait` has gone is still pending, for the next one.
+        if let delivery = answer.delivery { model.listener.undelivered(delivery) }
         guard let granted = answer.granted, let term = lease.current(at: now()),
               term.holder.key == granted.holder.key, term.taken == granted.taken else { return }
         _ = lease.release(by: granted.holder, at: now())
+    }
+
+    /// An answer that hands something over was written to its client: the
+    /// batch a `wait` got is now taken by its listener.
+    func written(_ answer: Answer) {
+        if let delivery = answer.delivery { model.listener.delivered(delivery) }
     }
 
     // MARK: - The person taking the app back
@@ -321,8 +359,10 @@ final class ControlServer {
     /// Starts listening on the socket.
     func start() throws(SocketListener.Failure) {
         guard listener == nil else { return }
-        listener = try SocketListener.open(at: socket) { [weak self] data in
+        listener = try SocketListener.open(at: socket, heartbeat: heartbeat) { [weak self] data in
             await self?.reply(to: data) ?? Answer(reply: .refused("video-review is quitting"))
+        } written: { [weak self] answer in
+            self?.written(answer)
         } undelivered: { [weak self] answer in
             self?.undelivered(answer)
         } quit: { [quit] in
@@ -343,5 +383,6 @@ final class ControlServer {
             waiter.answer.resume(returning: Answer(reply: .refused("video-review is quitting")))
         }
         waiters = [:]
+        model.listener.quitting()
     }
 }

@@ -4,11 +4,20 @@ import VRWire
 
 /// The listening socket's POSIX side, off the main actor: accepts each
 /// connection on its own queue, reads the request to its end, has the
-/// server answer it, writes the reply and closes. A reply granting the
-/// lease that can't be written goes back to the server (`undelivered`).
+/// server answer it, writes the reply and closes. While the answer is
+/// awaited, a heartbeat of one space is written to the connection: the
+/// client's idle timeout never fires on a healthy wait, and a client that
+/// has gone is found out, which cancels the request's task. An answer that
+/// hands something over (the lease, a batch) goes back to the server once
+/// its reply was written (`written`) or couldn't be (`undelivered`).
 final class SocketListener: @unchecked Sendable {
     typealias Respond = @Sendable (Data) async -> ControlServer.Answer
     typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
+    typealias Written = @MainActor @Sendable (ControlServer.Answer) -> Void
+
+    /// How often a waiting connection is written to. A JSON reader skips
+    /// the spaces before the reply.
+    static let heartbeat: Duration = .seconds(2)
 
     /// Why the socket couldn't be listened on.
     struct Failure: Error, CustomStringConvertible {
@@ -18,6 +27,8 @@ final class SocketListener: @unchecked Sendable {
     private let path: String
     private let source: DispatchSourceRead
     private let respond: Respond
+    private let heartbeat: Duration
+    private let written: Written
     private let undelivered: Undelivered
     private let quit: @MainActor @Sendable () -> Void
     private static let queue = DispatchQueue(label: "video-review.control", attributes: .concurrent)
@@ -28,11 +39,13 @@ final class SocketListener: @unchecked Sendable {
     private static let largestRequest = 8 << 20
 
     private init(
-        path: String, descriptor: Int32, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        quit: @escaping @MainActor @Sendable () -> Void
+        path: String, descriptor: Int32, heartbeat: Duration, respond: @escaping Respond, written: @escaping Written,
+        undelivered: @escaping Undelivered, quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.path = path
+        self.heartbeat = heartbeat
         self.respond = respond
+        self.written = written
         self.undelivered = undelivered
         self.quit = quit
         source = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: Self.queue)
@@ -45,11 +58,12 @@ final class SocketListener: @unchecked Sendable {
     /// its folder when it's missing. A socket file nothing answers on (left
     /// by an app that crashed) is replaced; one another app answers on is
     /// left alone, and this one doesn't listen. `respond` answers each
-    /// request; `undelivered` gets an answer granting the lease whose reply
-    /// couldn't be written; `quit` runs once a reply that says so is written.
+    /// request; an answer that hands something over goes to `written` once
+    /// its reply was written, or to `undelivered` when it couldn't be;
+    /// `quit` runs once a reply that says so is written.
     static func open(
-        at socket: URL, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        quit: @escaping @MainActor @Sendable () -> Void
+        at socket: URL, heartbeat: Duration = SocketListener.heartbeat, respond: @escaping Respond,
+        written: @escaping Written, undelivered: @escaping Undelivered, quit: @escaping @MainActor @Sendable () -> Void
     ) throws(Failure) -> SocketListener {
         let path = socket.path
         guard let address = UnixSocket.address(path) else { throw Failure(description: UnixSocket.tooLong(path)) }
@@ -72,7 +86,10 @@ final class SocketListener: @unchecked Sendable {
             unlink(path)
             throw Failure(description: "couldn't listen on \(path): \(why)")
         }
-        return SocketListener(path: path, descriptor: descriptor, respond: respond, undelivered: undelivered, quit: quit)
+        return SocketListener(
+            path: path, descriptor: descriptor, heartbeat: heartbeat, respond: respond, written: written,
+            undelivered: undelivered, quit: quit
+        )
     }
 
     /// Whether something accepts a connection at `address`.
@@ -104,21 +121,41 @@ final class SocketListener: @unchecked Sendable {
 
     /// Answers one connection. One that sends nothing, such as another
     /// app's look at whether this one listens, gets no reply. The client
-    /// half-closes once it has sent, so its hanging up shows only when the
-    /// reply can't be written: a granted lease then goes back.
+    /// half-closes once it has sent, so its hanging up shows only when
+    /// something can't be written to it: a heartbeat, which cancels the
+    /// request's task, or the reply, which hands back what it carried.
     private func serve(_ connection: Int32) {
         guard case .data(let request) = UnixSocket.readToEnd(connection, limit: Self.largestRequest), !request.isEmpty else {
             Darwin.close(connection)
             return
         }
         let respond = respond
+        let heartbeat = heartbeat
+        let written = written
         let undelivered = undelivered
         let quit = quit
         Task {
-            let answer = await respond(request)
+            let answering = Task { await respond(request) }
+            let beating = Task {
+                while true {
+                    do { try await Task.sleep(for: heartbeat) } catch { return }
+                    guard UnixSocket.writeAll(connection, Data([0x20])) else {
+                        // The client has gone: whatever waits for it stops waiting.
+                        answering.cancel()
+                        return
+                    }
+                }
+            }
+            let answer = await answering.value
+            // The heartbeat has stopped before the reply is written, so
+            // the two never mix and nothing is written after the close.
+            beating.cancel()
+            await beating.value
             let delivered = UnixSocket.writeAll(connection, answer.reply.encoded())
             Darwin.close(connection)
-            if !delivered, answer.granted != nil { await undelivered(answer) }
+            if answer.handsOver {
+                if delivered { await written(answer) } else { await undelivered(answer) }
+            }
             if answer.quits { await quit() }
         }
     }

@@ -40,7 +40,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// both numbers, never misread.
     public static let version = 1
 
-    /// The longest `take --wait`, in seconds: an hour.
+    /// The longest `take --wait` and `wait --timeout`, in seconds: an hour.
     public static let longestWait = 3600
 
     /// The request's name on the wire.
@@ -69,14 +69,6 @@ public enum ControlRequest: Equatable, Sendable {
         case .reply: "reply"
         case .ask: "ask"
         }
-    }
-
-    /// How long the app may leave the request unanswered on purpose, in
-    /// seconds: a `take`'s wait in line. The client adds it to the silence
-    /// it accepts.
-    public var silence: Double {
-        if case .controlTake(let waitSeconds) = self { return Double(waitSeconds ?? 0) }
-        return 0
     }
 
     /// Whether the request needs the lease before it's answered: true for

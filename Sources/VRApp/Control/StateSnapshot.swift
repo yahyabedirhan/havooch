@@ -72,6 +72,17 @@ struct StateSnapshot: Encodable {
         var thread: [ThreadMessage]
     }
 
+    /// One batch of the open video, in the order they were sent.
+    struct Batch: Encodable {
+        var id: String
+        var sentAt: Date
+        var commentIds: [String]
+        /// Where it stands on its way to the listener: `pending`, `taken`
+        /// or `finished`.
+        var delivery: String
+        var thread: [ThreadMessage]
+    }
+
     /// A part that has no shape yet: its key is there, with nothing in it.
     struct Unbuilt: Encodable {}
 
@@ -83,7 +94,7 @@ struct StateSnapshot: Encodable {
     var comments: [Comment] = []
     /// The ids of the queued ones, in the same order.
     var queue: [String] = []
-    var batches: [Unbuilt] = []
+    var batches: [Batch] = []
     var context = Context(sidecarPath: nil, note: "")
     var transcript = Transcript(source: nil, complete: false, lines: 0)
     var listener = Listener(presence: "absent", name: nil, place: nil)

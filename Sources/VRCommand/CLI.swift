@@ -105,7 +105,14 @@ public enum CLI {
             bundle: environment.bundle, pause: environment.pause, json: json
         )
         switch invocation {
-        case .send(let request): return AppCommand.result(of: client.send(request, json: json))
+        case .send(let request):
+            let result = AppCommand.result(of: client.send(request, json: json))
+            // A `wait` the app answers with nothing ran out: the reply keeps
+            // its four fields, and the command, which knows what it sent, says so.
+            if case .wait(let timeout) = request, result.exitCode == CommandResult.success, result.output.isEmpty {
+                return CommandResult(error: "no batch within \(timeout ?? 0) s\n", exitCode: CommandResult.ranOut)
+            }
+            return result
         case .appStatus: return app.status()
         case .appOpen(let demo): return app.open(demo: demo)
         case .appQuit: return app.quit()

@@ -85,6 +85,7 @@ import VRWire
             "the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"
         ),
         (#""command":"control.take","waitSeconds":4000"#, "the control command `control.take` needs a `waitSeconds` from 0 to 3600, not 4000"),
+        (#""command":"wait","timeoutSeconds":-1"#, "the control command `wait` needs a `timeoutSeconds` from 0 to 3600, not -1"),
     ])
     func aRequestMissingWhatItsCommandNeedsIsRefused(fields: String, refusal: String) {
         let data = Data(#"{\#(fields),"holder":{"key":"k","name":"n","place":"p"},"version":1}"#.utf8)

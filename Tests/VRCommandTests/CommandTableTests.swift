@@ -36,12 +36,49 @@ import VRWire
         #expect(request("control", "release") == .controlRelease)
     }
 
-    @Test func aTakeThatWaitsInLineIsGivenItsWaitOnTopOfTheUsualSilence() {
+    @Test func aRequestThatWaitsAcceptsNoLongerSilenceSinceTheAppsHeartbeatBreaksIt() {
         let transport = FakeTransport(reply: .done("you hold video-review until 12:05:00\n"))
         _ = harness.run("control", "take", transport: transport)
         _ = harness.run("control", "take", "--wait", "120", transport: transport)
-        _ = harness.run("control", "release", transport: transport)
-        #expect(transport.exchanges.current.map(\.idleTimeout) == [15, 135, 15])
+        _ = harness.run("wait", transport: transport)
+        _ = harness.run("wait", "--timeout", "600", transport: transport)
+        #expect(transport.exchanges.current.map(\.idleTimeout) == [15, 15, 15, 15])
+    }
+
+    // MARK: - Sending and listening
+
+    @Test func sendAndWaitBecomeTheirRequests() {
+        #expect(request("batch", "send") == .batchSend)
+        #expect(request("wait") == .wait(timeoutSeconds: nil))
+        #expect(request("wait", "--timeout", "30") == .wait(timeoutSeconds: 30))
+        #expect(request("wait", "--timeout", "0") == .wait(timeoutSeconds: 0))
+        #expect(request("wait", "--json") == .wait(timeoutSeconds: nil))
+    }
+
+    @Test func aWaitPrintsTheBatchAsTheAppBuiltItAndExitsZero() {
+        let payload = #"{"batch":{"id":"7f3a9c21-b1","sentAt":"2026-10-04T12:00:00Z"},"comments":[],"context":null}"# + "\n"
+
+        let result = harness.run("wait", "--timeout", "30", transport: FakeTransport(reply: .done(payload)))
+
+        #expect(result == CommandResult(output: payload))
+    }
+
+    @Test func aWaitWhoseTimeoutRanOutExitsThreeAndPrintsNothingOnStandardOutput() {
+        // The app answers a wait that ran out with nothing to print.
+        let ranOut = FakeTransport(reply: .done(""))
+
+        #expect(harness.run("wait", "--timeout", "30", transport: ranOut) == CommandResult(error: "no batch within 30 s\n", exitCode: 3))
+        #expect(harness.run("wait", "--timeout", "0", "--json", transport: ranOut) == CommandResult(error: "no batch within 0 s\n", exitCode: 3))
+        // Only a wait: another command with nothing to print is done.
+        #expect(harness.run("player", "play", transport: ranOut) == CommandResult())
+    }
+
+    @Test func aWaitThatIsRefusedExitsOne() {
+        let refusal = "Claude Code in /work is already listening; one listener at a time"
+
+        let refused = harness.run("wait", transport: FakeTransport(reply: .refused(refusal)))
+
+        #expect(refused == CommandResult(error: refusal + "\n", exitCode: 1))
     }
 
     @Test func aCommandRefusedTheLeaseExitsOneWithTheHolderAndTheEndOfTheLease() {
@@ -127,6 +164,11 @@ import VRWire
         (["control", "take", "--wait", "3601"], "control take: --wait takes whole seconds from 0 to 3600, not `3601`", "control take [--wait <s>]"),
         (["control", "take", "--wait", "-1"], "control take: --wait takes whole seconds from 0 to 3600, not `-1`", "control take [--wait <s>]"),
         (["control", "take", "30"], "control take: unexpected `30`", "control take [--wait <s>]"),
+        (["batch", "send", "now"], "batch send: unexpected `now`", "batch send"),
+        (["wait", "--timeout"], "wait: --timeout needs a value", "wait [--timeout <s>]"),
+        (["wait", "--timeout", "soon"], "wait: --timeout takes whole seconds from 0 to 3600, not `soon`", "wait [--timeout <s>]"),
+        (["wait", "--timeout", "3601"], "wait: --timeout takes whole seconds from 0 to 3600, not `3601`", "wait [--timeout <s>]"),
+        (["wait", "30"], "wait: unexpected `30`", "wait [--timeout <s>]"),
         (["control", "release", "--wait", "5"], "control release: unknown option `--wait`", "control release"),
         (["app", "quit", "now"], "app quit: unexpected `now`", "app quit"),
     ])

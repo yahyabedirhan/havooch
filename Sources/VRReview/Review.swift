@@ -26,11 +26,17 @@ public struct Review: Codable, Equatable, Sendable {
     /// The number the next comment gets. It only goes up, so a deleted
     /// comment's id is never given again.
     private var nextComment: Int
+    /// In the order they were sent.
+    public private(set) var batches: [Batch]
+    /// The number the next batch gets.
+    private var nextBatch: Int
 
     public init(video: VideoInfo) {
         self.video = video
         comments = []
         nextComment = 1
+        batches = []
+        nextBatch = 1
     }
 
     /// The comments waiting to be sent, in time order.
@@ -81,6 +87,50 @@ public struct Review: Codable, Equatable, Sendable {
     /// Takes a comment that is still queued out of the review.
     public mutating func deleteComment(_ id: CommentID) throws(ReviewError) {
         comments.remove(at: try queuedIndex(id))
+    }
+
+    // MARK: - Batches
+
+    /// The batch `id` names.
+    public func batch(_ id: BatchID) throws(ReviewError) -> Batch {
+        guard let batch = batches.first(where: { $0.id == id }) else { throw .unknownBatch(id.rawValue) }
+        return batch
+    }
+
+    /// Sends the queue as one batch: every queued comment is now `sent`
+    /// and names the batch. `transcripts` are the transcript lines around
+    /// each comment as they exist now. Refused when nothing is queued.
+    @discardableResult
+    public mutating func sendBatch(transcripts: [CommentID: [BatchPayload.Line]] = [:], now: Date) throws(ReviewError) -> Batch {
+        let queued = queue.map(\.id)
+        guard !queued.isEmpty else { throw .emptyQueue }
+        let batch = Batch(
+            id: BatchID(contentHash: video.contentHash, number: nextBatch), sentAt: now, comments: queued,
+            transcripts: transcripts.filter { queued.contains($0.key) }
+        )
+        nextBatch += 1
+        for index in comments.indices where comments[index].state == .queued {
+            comments[index].state = .sent
+            comments[index].batch = batch.id
+        }
+        batches.append(batch)
+        return batch
+    }
+
+    /// Whether every comment of the batch `id` is done or failed: nothing
+    /// of it is left for a listener. A batch that isn't here isn't finished.
+    public func isFinished(_ id: BatchID) -> Bool {
+        let sent = comments.filter { $0.batch == id }
+        return !sent.isEmpty && sent.allSatisfy { $0.state == .done || $0.state == .failed }
+    }
+
+    /// The batch `id` goes to a listener again: its comments that aren't
+    /// finished are `sent` once more, whatever the listener before made of
+    /// them. The one move backwards a comment makes.
+    public mutating func requeue(_ id: BatchID) {
+        for index in comments.indices where comments[index].batch == id {
+            if comments[index].state == .acknowledged || comments[index].state == .working { comments[index].state = .sent }
+        }
     }
 
     /// Where the comment `id` names is, when it may still be changed.

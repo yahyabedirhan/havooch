@@ -124,7 +124,13 @@ public struct ControlMessage: Equatable, Sendable {
                 appearance = known
             }
             return .screenshot(path: try wire.absolutePath(), appearance: appearance)
-        case "wait": return .wait(timeoutSeconds: wire.timeoutSeconds)
+        case "wait":
+            if let seconds = wire.timeoutSeconds, !(0...ControlRequest.longestWait).contains(seconds) {
+                throw .unreadable(
+                    "the control command `wait` needs a `timeoutSeconds` from 0 to \(ControlRequest.longestWait), not \(seconds)"
+                )
+            }
+            return .wait(timeoutSeconds: wire.timeoutSeconds)
         case "ack": return .ack(id: try wire.field(\.id, "id"), text: wire.text)
         case "status": return .status(id: try wire.field(\.id, "id"), state: try wire.field(\.state, "state"))
         case "reply": return .reply(id: try wire.field(\.id, "id"), text: try wire.field(\.text, "text"))

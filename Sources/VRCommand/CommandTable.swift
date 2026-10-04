@@ -169,6 +169,24 @@ enum CommandTable {
             .send(.commentDelete(id: try arguments.positional("id")))
         },
         Command(
+            words: ["batch", "send"], usage: "batch send", summary: "send every queued comment to the listener as one batch"
+        ) { _ in
+            .send(.batchSend)
+        },
+        Command(
+            words: ["wait"], usage: "wait [--timeout <s>]",
+            summary: "listen: wait for the next batch and print it as JSON; with --timeout, exit 3 when none came in <s> seconds"
+        ) { arguments throws(UsageError) in
+            var timeout: Int?
+            if let text = try arguments.option("timeout") {
+                guard let seconds = Int(text), (0...ControlRequest.longestWait).contains(seconds) else {
+                    throw UsageError("--timeout takes whole seconds from 0 to \(ControlRequest.longestWait), not `\(text)`")
+                }
+                timeout = seconds
+            }
+            return .send(.wait(timeoutSeconds: timeout))
+        },
+        Command(
             words: ["screenshot"], usage: "screenshot <abs.png> [--appearance light|dark]",
             summary: "write the app's window as a PNG"
         ) { arguments throws(UsageError) in
@@ -205,8 +223,10 @@ enum CommandTable {
             One agent at a time drives the app. A command that drives it takes or renews
             the lease, which ends 60 s after its holder's last command and 5 min after it
             was taken at most. While another agent holds it, such a command exits 1 and
-            names the holder and the lease's end. `app status` and `state` need no lease.
-            Exit codes: 0 done, 1 refused or failed, 2 the command line doesn't parse.
+            names the holder and the lease's end. `app status`, `state` and `wait` need no
+            lease. A listener is present while its `wait` is open.
+            Exit codes: 0 done, 1 refused or failed, 2 the command line doesn't parse,
+            3 a `wait --timeout` ran out with no batch.
 
             """
     }

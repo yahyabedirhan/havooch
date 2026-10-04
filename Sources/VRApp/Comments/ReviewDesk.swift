@@ -22,6 +22,9 @@ final class ReviewDesk {
         /// The frame at `time`, read from the moment the box opens, so
         /// Return doesn't wait for it.
         var frame: Task<Result<CGImage, FrameFailure>, Never>
+        /// What is typed in the comment box so far: here, not in the box,
+        /// so a send from anywhere can queue it first.
+        var text = ""
     }
 
     /// The open video's review.
@@ -54,9 +57,16 @@ final class ReviewDesk {
 
     /// Opens the comment box for a comment at `time` of the video at
     /// `video`, on `region` of the frame when there is one.
+    /// A box that was open keeps what was typed in it.
     func startDraft(time: Double, region: Region?, resumes: Bool, video: URL) {
+        let typed = draft?.text ?? ""
         endDraft()
-        draft = Draft(time: time, region: region, resumes: resumes, frame: Task { await Self.frame(of: video, at: time) })
+        draft = Draft(time: time, region: region, resumes: resumes, frame: Task { await Self.frame(of: video, at: time) }, text: typed)
+    }
+
+    /// The comment box's text is now `text`.
+    func typeDraft(_ text: String) {
+        draft?.text = text
     }
 
     /// The comment being typed now points at `region`.
@@ -127,6 +137,12 @@ final class ReviewDesk {
         }
         publish(review)
         return result
+    }
+
+    /// The review of the video `hash` names, open or not; nil when this
+    /// run has seen no such video.
+    func review(_ hash: String) -> Review? {
+        reviews[hash]
     }
 
     /// Where the keyframe of the comment `id` is: in the folder of the

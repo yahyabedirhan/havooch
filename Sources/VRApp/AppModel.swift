@@ -44,6 +44,10 @@ enum ActionError: Error, Equatable {
 final class AppModel {
     let player = PlayerEngine()
     let desk: ReviewDesk
+    /// The listener's side: the open `wait`s and the batches on their way.
+    let listener: ListenerQueue
+    /// The time a batch is sent at and presence is judged at.
+    @ObservationIgnored private let now: @MainActor () -> Date
     /// The folder this run keeps its data in, and whether it's a demo's.
     let support: URL
     let isDemo: Bool
@@ -58,10 +62,13 @@ final class AppModel {
     /// The app's one window, for `Screenshotter`.
     @ObservationIgnored weak var window: NSWindow?
 
-    init(environment: [String: String]) {
+    init(environment: [String: String], now: @escaping @MainActor () -> Date = { Date() }) {
         support = SupportFolder.current(environment: environment)
         isDemo = SupportFolder.demo(environment: environment) != nil
-        desk = ReviewDesk(layout: SupportLayout(root: support))
+        let desk = ReviewDesk(layout: SupportLayout(root: support))
+        self.desk = desk
+        self.now = now
+        listener = ListenerQueue(desk: desk, now: now)
     }
 
     // MARK: - Actions
@@ -255,6 +262,47 @@ final class AppModel {
         if selection == id { selection = nil }
     }
 
+    // MARK: - Sending
+
+    /// Whether there is anything to send: a queued comment, or text in the
+    /// comment box.
+    var canSend: Bool {
+        desk.open?.queue.isEmpty == false || desk.draft?.text.contains { !$0.isWhitespace } == true
+    }
+
+    /// Cmd+Return, the Send button and `batch send`: sends the whole queue
+    /// as one batch, to the listener that waits or to the next one. Text
+    /// in the comment box is queued first, so nothing typed is left behind.
+    @discardableResult
+    func sendBatch() async throws(ActionError) -> Batch {
+        guard desk.open != nil else { throw .noVideo }
+        if let draft = desk.draft, draft.text.contains(where: { !$0.isWhitespace }) {
+            try await commitDraft(text: draft.text)
+        }
+        // Read again: queueing the box's text waited for its frame.
+        guard let review = desk.open else { throw .noVideo }
+        // The transcript lines around each comment, as they exist at the
+        // send, go here once there is a transcriber; none until then.
+        let lines: [CommentID: [BatchPayload.Line]] = [:]
+        let sent = now()
+        let batch = try desk.change(review.video.contentHash) { review throws(ReviewError) in
+            try review.sendBatch(transcripts: lines, now: sent)
+        }
+        listener.enqueue(batch, video: review.video)
+        return batch
+    }
+
+    /// Sends the queue for the person: a refusal is shown, not thrown.
+    func sendBatchForPerson() {
+        Task {
+            do throws(ActionError) {
+                try await sendBatch()
+            } catch {
+                failure = error.message
+            }
+        }
+    }
+
     /// A click on a comment's marker or card: moves to its time, paused,
     /// with the comment in focus in both places.
     func select(_ id: CommentID) {
@@ -352,8 +400,23 @@ final class AppModel {
             draft: desk.draft.map { .init(time: $0.time, region: $0.region) },
             comments: desk.open?.comments.map(shown) ?? [],
             queue: desk.open?.queue.map(\.id.rawValue) ?? [],
+            batches: desk.open?.batches.map { batch in
+                .init(
+                    id: batch.id.rawValue, sentAt: batch.sentAt, commentIds: batch.comments.map(\.rawValue),
+                    delivery: listener.standing(of: batch.id).rawValue, thread: batch.thread
+                )
+            } ?? [],
+            listener: shownListener,
             lease: lease
         )
+    }
+
+    /// The listener as `state` and `app status` print it: named only while
+    /// it is there.
+    private var shownListener: StateSnapshot.Listener {
+        let presence = listener.presence
+        let session = presence == .absent ? nil : listener.session
+        return .init(presence: presence.rawValue, name: session?.name, place: session?.place)
     }
 
     /// `comment` as `state` and a comment command's `--json` print it.
