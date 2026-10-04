@@ -182,6 +182,32 @@ struct PersistenceTests {
         #expect(again.comments.map(\.state) == [.queued, .done, .done])
     }
 
+    @Test("what the listener says about a comment while its video is opening is kept, in the player and on disk")
+    func changedWhileOpening() async throws {
+        defer { cleanUp() }
+        let (model, server) = await run()
+        try await model.open(CommentTests.fixture)
+        let ids = try await build(model, server)
+        model.listeners.stop()
+
+        let (again, later) = await run()
+        let opening = Task { try await again.open(CommentTests.fixture) }
+        // The player has the file and isn't ready yet: the video is on its way in.
+        let deadline = ContinuousClock.now + .seconds(10)
+        while again.engine.player.currentItem == nil, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(await listen(.status(commentID: ids.first, state: .done), later).ok)
+        #expect(await listen(.reply(id: ids.first, text: "Slowed it down"), later).ok)
+        #expect(again.video == nil, "the listener spoke after the video was open: the test missed the opening")
+        try await opening.value
+
+        #expect(again.comments.map(\.state) == [.queued, .done, .done])
+        #expect(again.comments[1].thread.map(\.text) == ["Slowed it down"])
+        let hash = try #require(again.video?.contentHash)
+        let kept = try #require(try Library(support: support).load(hash))
+        #expect(kept.comments.map(\.state) == [.queued, .done, .done])
+        #expect(kept.comments.first { $0.id.text == ids.first }?.thread.map(\.text) == ["Slowed it down"])
+    }
+
     @Test("demo data and real data don't mix: the same video on another support folder has no history, and each folder keeps its own")
     func separateSupportFolders() async throws {
         defer { cleanUp() }

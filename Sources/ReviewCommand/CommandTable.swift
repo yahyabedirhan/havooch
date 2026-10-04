@@ -35,11 +35,17 @@ struct Arguments: Equatable {
 
     /// Reads `raw`; `valued` names the options the command takes, each
     /// with a value after it, and `flags` those with none. Any other
-    /// `--option` is refused.
+    /// `--option` is refused. A text may look like an option: an argument
+    /// with a space in it is a word, and so is every argument after `--`.
     init(_ raw: [String], valued: Set<String>, flags known: Set<String> = []) throws(UsageError) {
         var rest = raw[...]
+        var optionsEnded = false
         while let argument = rest.popFirst() {
-            guard argument.hasPrefix("--") else {
+            if !optionsEnded, argument == Self.optionsEnd {
+                optionsEnded = true
+                continue
+            }
+            guard !optionsEnded, Self.isOption(argument) else {
                 words.append(argument)
                 continue
             }
@@ -51,6 +57,15 @@ struct Arguments: Equatable {
             guard let value = rest.popFirst() else { throw UsageError("`\(argument)` needs a value") }
             options[argument] = value
         }
+    }
+
+    /// The argument that ends the options: every argument after it is a word.
+    static let optionsEnd = "--"
+
+    /// Whether `argument` is written as an option: `--name`. No option's
+    /// name has a space in it, so a sentence that starts with `--` is a word.
+    static func isOption(_ argument: String) -> Bool {
+        argument.hasPrefix("--") && !argument.contains(where: \.isWhitespace)
     }
 
     /// The only word, which the command needs: `name` says what it is.

@@ -22,7 +22,7 @@ public enum TimeCode {
             total += value * unit
             unit *= 60
         }
-        return total
+        return total.isFinite ? total : nil
     }
 
     /// `seconds` as `m:ss` (`0:10`), `h:mm:ss` from an hour on, with the
@@ -43,12 +43,14 @@ public enum TimeCode {
     }
 
     /// `text` as a number of digits, with one decimal point when `fraction`
-    /// allows it: no sign, no exponent, no spaces.
+    /// allows it: no sign, no exponent, no spaces. Digits too many for a
+    /// number are refused: they'd read as infinity, which no request can
+    /// carry.
     private static func number(_ text: String, fraction: Bool) -> Double? {
         guard !text.isEmpty, text.first != ".", text.last != "." else { return nil }
         let points = text.filter { $0 == "." }.count
         guard points <= (fraction ? 1 : 0), text.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }) else { return nil }
-        return Double(text)
+        return Double(text).flatMap { $0.isFinite ? $0 : nil }
     }
 
     private static func pad(_ value: Int) -> String {

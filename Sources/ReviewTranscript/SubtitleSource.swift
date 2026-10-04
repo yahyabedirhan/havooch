@@ -42,15 +42,17 @@ public struct SubtitleSource: Transcriber {
     }
 
     /// `00:00:06,067` (SubRip), `00:00:06.067` or `00:06.067` (WebVTT) as
-    /// seconds.
+    /// seconds. A part that isn't a finite number (`inf`, `1e999`) is no
+    /// time: a batch's JSON can't carry it.
     static func seconds(_ text: String) -> TimeInterval? {
         let parts = text.trimmingCharacters(in: .whitespaces).replacing(",", with: ".").split(separator: ":", omittingEmptySubsequences: false)
         guard (2...3).contains(parts.count) else { return nil }
         var seconds = 0.0
         for part in parts {
-            guard let value = Double(part), value >= 0 else { return nil }
+            guard let value = Double(part), value.isFinite, value >= 0 else { return nil }
             seconds = seconds * 60 + value
         }
+        guard seconds.isFinite else { return nil }
         return TranscriptLine.milliseconds(seconds)
     }
 

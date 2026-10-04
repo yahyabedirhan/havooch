@@ -145,7 +145,8 @@ struct CommandTests {
 
     @Test("arguments that don't read exit 64 and send nothing", arguments: [
         [], ["rewind"], ["player"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
-        ["player", "seek", "-5"], ["player", "seek", "1", "2"], ["player", "open"], ["player", "play", "now"],
+        ["player", "seek", "-5"], ["player", "seek", "1", "2"], ["player", "seek", String(repeating: "9", count: 400)],
+        ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
@@ -301,6 +302,43 @@ struct CommandTests {
         let result = run("--help")
         #expect(result.exitCode == 0)
         #expect(result.output.contains("video-review player seek <seconds|mm:ss>"))
+        for arguments in [["-h"], ["--json", "--help"], ["--help", "comment", "add"]] {
+            #expect(VideoReviewCLI.run(arguments, environment: run.environment) == result)
+        }
+    }
+
+    @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's name", arguments: [
+        (["reply", "c-7f3a9c2e", "--region now takes pixels"], ControlRequest.reply(id: "c-7f3a9c2e", text: "--region now takes pixels")),
+        (["comment", "add", "--at is wrong here", "--at", "5"], .commentAdd(text: "--at is wrong here", at: 5)),
+        (["comment", "add", "--json is the default now"], .commentAdd(text: "--json is the default now", at: nil)),
+        (["comment", "add", "-h"], .commentAdd(text: "-h", at: nil)),
+        (["reply", "c-7f3a9c2e", "-h"], .reply(id: "c-7f3a9c2e", text: "-h")),
+        (["reply", "c-7f3a9c2e", "--", "--region"], .reply(id: "c-7f3a9c2e", text: "--region")),
+        (["reply", "--", "c-7f3a9c2e", "--help"], .reply(id: "c-7f3a9c2e", text: "--help")),
+        (["comment", "add", "--at", "5", "--", "--json"], .commentAdd(text: "--json", at: 5)),
+        (["context", "set", "--", "--"], .contextSet(text: "--")),
+    ])
+    func optionLikeText(arguments: [String], request: ControlRequest) {
+        let run = Run { _, _ in .success(.done("done\n")) }
+        defer { run.cleanUp() }
+        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        #expect(result == CommandResult(output: "done\n"))
+        #expect(run.transport.requests == [request])
+        // The text's `--json` isn't the command's.
+        #expect(run.transport.sent.map(\.message.json) == [false])
+    }
+
+    @Test("an option is an option wherever it's written before --, and --json after -- is a word")
+    func optionsAnywhere() {
+        let run = Run { _, _ in .success(.done("{}\n")) }
+        defer { run.cleanUp() }
+        _ = run("comment", "add", "Too fast here", "--at", "5", "--json")
+        _ = run("comment", "add", "--json", "--at", "5", "--", "Too fast here")
+        #expect(run.transport.requests == [.commentAdd(text: "Too fast here", at: 5), .commentAdd(text: "Too fast here", at: 5)])
+        #expect(run.transport.sent.map(\.message.json) == [true, true])
+        // A word too many is still refused, also after --.
+        #expect(run("reply", "c-7f3a9c2e", "--", "--region", "--json").exitCode == 64)
+        #expect(run("reply", "c-7f3a9c2e", "--region").exitCode == 64)
     }
 
     @Test("a reply that doesn't read, or none in time, exits 1 saying why")

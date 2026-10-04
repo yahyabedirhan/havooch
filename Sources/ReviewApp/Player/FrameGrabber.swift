@@ -19,7 +19,7 @@ enum FrameGrabber {
         // The video's end is past its last frame: ask inside that frame.
         let inside = min(max(seconds, 0), max(duration - frameDuration / 2, 0))
         do {
-            return try await generator.image(at: CMTime(seconds: inside, preferredTimescale: timescale)).image
+            return try await generator.image(at: PlayerEngine.exact(inside)).image
         } catch {
             throw AppRefusal("couldn't read the frame at \(seconds) s: \(error.localizedDescription)")
         }
@@ -51,7 +51,4 @@ enum FrameGrabber {
             throw (error as? AppRefusal) ?? AppRefusal((error as? ImageFiles.Failure)?.reason ?? "\(error)")
         }
     }
-
-    /// Fine enough to hold a millisecond exactly.
-    private static let timescale: CMTimeScale = 60_000
 }

@@ -85,10 +85,14 @@ public struct CommandEnvironment: Sendable {
 /// Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.
 public enum VideoReviewCLI {
     public static func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult {
-        var arguments = arguments
-        let json = arguments.contains("--json")
-        arguments.removeAll { $0 == "--json" }
-        if arguments.contains("--help") || arguments.contains("-h") {
+        // `--json` is an option anywhere before `--`; after it, it's a word.
+        let end = arguments.firstIndex(of: Arguments.optionsEnd) ?? arguments.endIndex
+        let json = arguments[..<end].contains("--json")
+        let arguments = arguments[..<end].filter { $0 != "--json" } + arguments[end...]
+        // Help is asked for before the command's name: after it, `-h` and
+        // `--help` may be a comment's text.
+        let beforeTheName = arguments.prefix { $0.hasPrefix("-") && $0 != Arguments.optionsEnd }
+        if beforeTheName.contains("--help") || beforeTheName.contains("-h") {
             return CommandResult(output: CommandTable.usageText)
         }
         guard !arguments.isEmpty else { return .usage(CommandTable.usageText) }

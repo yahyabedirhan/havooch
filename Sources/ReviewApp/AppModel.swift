@@ -141,8 +141,11 @@ final class AppModel: AppControlling {
         // Before the player changes: a history that doesn't read keeps the
         // video shut, and the one that was open stays open.
         let title = url.deletingPathExtension().lastPathComponent
-        var review = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
+        let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
         try await engine.load(url)
+        // The review as it is now, not as it was before the load: a
+        // listener may have answered one of its comments meanwhile.
+        var review = desk.review(of: contentHash) ?? found
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         draft = nil
         selection = nil

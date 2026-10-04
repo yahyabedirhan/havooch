@@ -17,7 +17,7 @@ You are the **listener**: you take each batch, do what each comment asks in this
 2. Else `/Applications/Video Review.app/Contents/Helpers/video-review`.
 3. Else the one match of `/Applications/Video Review*.app/Contents/Helpers/video-review`. With several matches, ask the user which app they review in.
 
-Every text argument is one quoted argument. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`video-review --help` prints the usage).
+Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`video-review --help` prints the usage).
 
 You run only `wait`, `ack`, `status`, `reply`, `ask`, `state` and `app status`. The other commands drive the player and take control of the app from the user.
 

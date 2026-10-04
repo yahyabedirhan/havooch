@@ -111,11 +111,21 @@ final class PlayerEngine {
     /// Moves to exactly `seconds`, still playing or still paused, and
     /// returns once the player is there.
     func seek(to seconds: Double) async {
-        let target = CMTime(seconds: seconds, preferredTimescale: 600)
+        let target = Self.exact(seconds)
         // False when a newer seek took over: the time is then that seek's.
         if await player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) {
             moved(to: player.currentTime())
         }
+    }
+
+    /// Fine enough to hold a millisecond exactly.
+    nonisolated static let timescale: CMTimeScale = 60_000
+
+    /// `seconds` as the time the player and the frame reader are asked
+    /// for: both take a comment's time, which is in milliseconds, and a
+    /// coarser time could name the frame before the comment's.
+    nonisolated static func exact(_ seconds: Double) -> CMTime {
+        CMTime(seconds: seconds, preferredTimescale: timescale)
     }
 
     private func moved(to time: CMTime) {

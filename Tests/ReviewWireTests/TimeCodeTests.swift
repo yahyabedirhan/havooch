@@ -18,6 +18,16 @@ struct TimeCodeTests {
         #expect(TimeCode.seconds(text) == nil)
     }
 
+    @Test("digits too many for a number are no time: nothing reads as infinity")
+    func refusesOverflow() {
+        let digits = String(repeating: "9", count: 400)
+        for text in [digits, "\(digits).5", "\(digits):00", "\(digits):00:00"] {
+            #expect(TimeCode.seconds(text) == nil, "\(text.prefix(8))…")
+        }
+        // Many digits after the point are still a time.
+        #expect(TimeCode.seconds("1.\(String(repeating: "0", count: 400))") == 1)
+    }
+
     @Test("seconds are written as m:ss", arguments: [
         (0.0, "0:00"), (10, "0:10"), (12.5, "0:12.5"), (21.233, "0:21.233"), (90, "1:30"), (3600, "1:00:00"),
         (3725.25, "1:02:05.25"), (9.9996, "0:10"),

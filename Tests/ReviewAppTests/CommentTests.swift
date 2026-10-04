@@ -209,6 +209,18 @@ struct CommentTests {
         #expect(AppModel.commentTime(player: -0.01, duration: 21.233) == 0)
     }
 
+    @Test("the player and the keyframe are asked for a comment's time to the millisecond, so both show the comment's frame")
+    func exactTime() {
+        // At 29.97 frames a second the third frame starts at 0.066733… s, and
+        // a comment on it is at 0.067 s. A coarser time (0.0666… s in 600ths)
+        // would name the frame before it.
+        let frameStart = 2 * 1001.0 / 30000
+        #expect(PlayerEngine.exact(0.067) == CMTime(value: 4020, timescale: 60_000))
+        #expect(PlayerEngine.exact(0.067).seconds >= frameStart)
+        #expect(PlayerEngine.exact(7.234) == CMTime(value: 434_040, timescale: 60_000))
+        #expect(PlayerEngine.exact(21.233).seconds == 21.233)
+    }
+
     @Test("the comment box stays inside the stage, with its notch on the playhead")
     func composerPlacement() {
         let middle = Composer.placement(fraction: 0.5, stageWidth: 1000)

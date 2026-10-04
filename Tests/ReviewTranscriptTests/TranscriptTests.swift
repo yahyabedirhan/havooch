@@ -143,7 +143,20 @@ struct SubtitleSourceTests {
         5
         00:00:09,000 --> 00:00:08,000
         Backwards
+
+        6
+        00:00:10,000 --> 00:inf
+        Forever
+
+        7
+        00:00:11,000 --> 1e999:00
+        Too long
+
+        8
+        infinity:00 --> 00:00:12,000
+        From nowhere
         """
+        // A time that isn't a finite number is no time: the payload's JSON has no way to write it.
         #expect(SubtitleSource.parse(text).map(\.text) == ["First", "Second"])
         #expect(SubtitleSource.parse("just some words").isEmpty)
     }
