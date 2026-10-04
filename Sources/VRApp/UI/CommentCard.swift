@@ -3,19 +3,24 @@ import ImageIO
 import SwiftUI
 import VRReview
 
-/// One comment in the sidebar: its time, its state, its picture and its
-/// text. A click shows its moment. While it's queued it can be edited in
-/// place or deleted.
+/// One comment in the sidebar: its time, its state, its picture, its text
+/// and its thread. A click shows its moment. While it's queued it can be
+/// edited in place or deleted. While the agent's question on it is open,
+/// its edge is orange and it holds the answer box.
 struct CommentCard: View {
     let comment: Comment
     /// The file of the crop of its region, else of its keyframe, or nil
     /// while it isn't on disk.
     let picture: URL?
     let isSelected: Bool
+    /// Whether the agent's question on it waits for the person's answer.
+    let hasOpenQuestion: Bool
     let show: () -> Void
     /// Replaces the text; false when it's refused.
     let edit: (String) -> Bool
     let delete: () -> Void
+    /// Answers the open question; false when it's refused.
+    let answer: (String) -> Bool
 
     @State private var editing: String?
     @FocusState private var isEditorFocused: Bool
@@ -63,12 +68,19 @@ struct CommentCard: View {
                         .textSelection(.enabled)
                 }
             }
+            if !comment.thread.isEmpty {
+                Divider()
+                ThreadView(messages: comment.thread)
+            }
+            if hasOpenQuestion {
+                AnswerBox(answer: answer)
+            }
         }
         .padding(10)
         .background(.quaternary.opacity(isSelected ? 0.9 : 0.4), in: RoundedRectangle(cornerRadius: Theme.cardCorner))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.cardCorner)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                .strokeBorder(hasOpenQuestion ? Theme.question : isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
         )
         .contentShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
         .onTapGesture(perform: show)

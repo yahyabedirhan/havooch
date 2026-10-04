@@ -46,6 +46,9 @@ public enum ControlRequest: Equatable, Sendable {
     /// `context set <text>`: the open video's note replaced; an empty text
     /// takes it away.
     case contextSet(text: String)
+    /// `thread answer <comment-id> <text>`: the person's answer to the
+    /// question open on that comment, as the answer box gives it.
+    case threadAnswer(commentID: String, text: String)
     /// `screenshot <abs.png> [--appearance light|dark]`: the app's window
     /// written as a PNG at `path`, absolute since the app runs in another
     /// folder; in `appearance` when it's set, as the Mac shows it otherwise.
@@ -57,6 +60,23 @@ public enum ControlRequest: Equatable, Sendable {
     /// (0 to `longestTimeout`) ran out; without one, for as long as it takes.
     /// The listener is present while a `wait` is open.
     case wait(timeoutSeconds: Int?)
+    /// `ack <batch-id> [<text>]`: the listener has the batch; its comments
+    /// are acknowledged, and `text` is a message for the full batch.
+    case ack(batchID: String, text: String?)
+    /// `status <comment-id> working|done|failed`: `state` is one of
+    /// `statuses`.
+    case status(commentID: String, state: String)
+    /// `reply <comment-id|batch-id> <text>`: a message in the thread of the
+    /// comment or the batch `id`.
+    case reply(id: String, text: String)
+    /// `ask <comment-id> <question> [--wait <seconds>]`: a question in the
+    /// comment's thread, answered with the person's answer. The app holds
+    /// the connection until the answer comes or `waitSeconds` (0 to
+    /// `longestTimeout`) ran out; without one, for as long as it takes.
+    case ask(commentID: String, question: String, waitSeconds: Int?)
+
+    /// The states `status` sets a comment to.
+    public static let statuses = ["working", "done", "failed"]
 
     /// A rectangle on the frame as `--region x,y,w,h` gives it: four
     /// numbers, parts of the frame from its top left. The app decides
@@ -90,7 +110,8 @@ public enum ControlRequest: Equatable, Sendable {
     /// The longest wait in line a `take` asks for, in seconds: an hour.
     public static let longestWait = 3600
 
-    /// The longest `--timeout` a `wait` asks for, in seconds: a day.
+    /// The longest `--timeout` a `wait` and `--wait` an `ask` ask for, in
+    /// seconds: a day.
     public static let longestTimeout = 86_400
 
     /// How long the app may hold the connection before it answers, past the
@@ -101,10 +122,12 @@ public enum ControlRequest: Equatable, Sendable {
     }
 
     /// Whether the app holds the connection for as long as it takes and
-    /// writes a heartbeat meanwhile: a listener's `wait`.
+    /// writes a heartbeat meanwhile: a listener's `wait` and `ask`.
     public var isLongPoll: Bool {
-        if case .wait = self { return true }
-        return false
+        switch self {
+        case .wait, .ask: true
+        default: false
+        }
     }
 
     /// Who a request is for, which decides whether it needs the lease.
@@ -123,9 +146,9 @@ public enum ControlRequest: Equatable, Sendable {
             .free
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot:
             .operator
-        case .commentAdd, .commentEdit, .commentDelete, .batchSend, .contextSet:
+        case .commentAdd, .commentEdit, .commentDelete, .batchSend, .contextSet, .threadAnswer:
             .operator
-        case .wait:
+        case .wait, .ack, .status, .reply, .ask:
             .listener
         }
     }

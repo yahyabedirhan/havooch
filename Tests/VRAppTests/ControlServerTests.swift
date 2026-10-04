@@ -126,7 +126,7 @@ struct Rig {
         let rig = Rig()
         let answer = await rig.send(.state, json: true)
         #expect(answer.reply.output ==
-            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"batches":[],"comments":[],"context":null,"lease":null,"listener":{"name":null,"presence":"absent"},"player":{"playing":false,"time":0},"queue":[],"time":0,"transcript":null,"video":null}"# + "\n")
+            #"{"app":{"demo":null,"variant":"\#(AppIdentity.variant)","version":"\#(AppIdentity.version)"},"batches":[],"comments":[],"context":null,"lease":null,"listener":{"name":null,"presence":"absent"},"notices":[],"player":{"playing":false,"time":0},"queue":[],"time":0,"transcript":null,"video":null}"# + "\n")
     }
 
     @Test func stateAsLinesNamesTheVideoAndThePlayer() async {

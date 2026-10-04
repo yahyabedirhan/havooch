@@ -47,6 +47,27 @@ enum Arguments {
         return ControlRequest.WireRegion(x: numbers[0], y: numbers[1], w: numbers[2], h: numbers[3])
     }
 
+    /// Why arguments don't read, as the words after the command's name.
+    struct Misreading: Error, Equatable {
+        var reason: String
+    }
+
+    /// An id and one text after it, as `reply`, `ask` and `thread answer`
+    /// take them. `id` and `text` are their names in the usage. A text that
+    /// is missing or blank, and a word after it, don't read.
+    static func idAndText(_ arguments: [String], id: String, text: String) -> Result<(String, String), Misreading> {
+        guard let first = arguments.first else { return .failure(Misreading(reason: "missing \(id)")) }
+        guard arguments.count >= 2, !isBlank(arguments[1]) else { return .failure(Misreading(reason: "missing \(text)")) }
+        guard arguments.count == 2 else {
+            return .failure(Misreading(reason: "unexpected `\(arguments[2])`; quote the text"))
+        }
+        return .success((first, arguments[1]))
+    }
+
+    static func isBlank(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// `path` as a file, taken against `directory` when it's relative.
     static func absolute(_ path: String, in directory: URL) -> URL {
         URL(fileURLWithPath: path, relativeTo: directory).standardizedFileURL

@@ -61,6 +61,16 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "screenshot", path: path, appearance: appearance?.rawValue)
         case .wait(let timeoutSeconds):
             wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
+        case .threadAnswer(let commentID, let text):
+            wire = Wire(command: "thread.answer", id: commentID, text: text)
+        case .ack(let batchID, let text):
+            wire = Wire(command: "ack", id: batchID, text: text)
+        case .status(let commentID, let state):
+            wire = Wire(command: "status", id: commentID, state: state)
+        case .reply(let id, let text):
+            wire = Wire(command: "reply", id: id, text: text)
+        case .ask(let commentID, let question, let waitSeconds):
+            wire = Wire(command: "ask", waitSeconds: waitSeconds, id: commentID, text: question)
         }
         wire.holder = holder
         wire.json = json
@@ -130,6 +140,28 @@ public struct ControlMessage: Equatable, Sendable {
                 )
             }
             return .wait(timeoutSeconds: wire.timeoutSeconds)
+        case "thread.answer":
+            return .threadAnswer(commentID: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "ack":
+            return .ack(batchID: try field(wire.id, "id", of: wire), text: wire.text)
+        case "status":
+            let state = try field(wire.state, "state", of: wire)
+            guard ControlRequest.statuses.contains(state) else {
+                throw .unreadable("the control command `status` has no state `\(state)`; it takes `working`, `done` or `failed`")
+            }
+            return .status(commentID: try field(wire.id, "id", of: wire), state: state)
+        case "reply":
+            return .reply(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "ask":
+            if let seconds = wire.waitSeconds, !(0...ControlRequest.longestTimeout).contains(seconds) {
+                throw .unreadable(
+                    "the control command `ask` needs a `waitSeconds` from 0 to \(ControlRequest.longestTimeout), not \(seconds)"
+                )
+            }
+            return .ask(
+                commentID: try field(wire.id, "id", of: wire), question: try field(wire.text, "text", of: wire),
+                waitSeconds: wire.waitSeconds
+            )
         case "screenshot":
             let path = try absolute(wire)
             var appearance: ControlRequest.Appearance?
@@ -180,6 +212,7 @@ public struct ControlMessage: Equatable, Sendable {
         var id: String?
         var text: String?
         var region: ControlRequest.WireRegion?
+        var state: String?
     }
 }
 

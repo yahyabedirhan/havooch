@@ -5,8 +5,7 @@ import VRWire
 
 /// What the app shows, as `state` and `app status` report it: as lines for a
 /// person, or as one JSON object. Built from the model and the lease at the
-/// moment of asking. Each later ticket adds its own keys (the transcript, the
-/// threads).
+/// moment of asking.
 struct StateReport: Equatable {
     struct Player: Encodable, Equatable {
         /// Where the player is, in seconds, to the millisecond.
@@ -35,8 +34,8 @@ struct StateReport: Equatable {
     }
 
     /// One batch of the open video: `{id, sentAt, commentIds, delivery,
-    /// finished}`. `delivery` is `pending` until a `wait` took it, then
-    /// `taken`.
+    /// finished, thread}`. `delivery` is `pending` until a `wait` took it,
+    /// then `taken`. `thread` holds the messages for the full batch.
     struct BatchReport: Encodable, Equatable {
         var id: String
         /// ISO 8601, UTC.
@@ -44,6 +43,26 @@ struct StateReport: Equatable {
         var commentIds: [String]
         var delivery: String
         var finished: Bool
+        var thread: [ThreadReport]
+    }
+
+    /// A notice the stage shows now: `{commentId, batchId, kind, text}`.
+    /// `commentId` is `null` for a message for a full batch.
+    struct NoticeReport: Encodable, Equatable {
+        var commentId: String?
+        var batchId: String
+        var kind: ThreadMessage.Kind
+        var text: String
+
+        enum Keys: String, CodingKey { case commentId, batchId, kind, text }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: Keys.self)
+            try container.encode(commentId, forKey: .commentId)
+            try container.encode(batchId, forKey: .batchId)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(text, forKey: .text)
+        }
     }
 
     /// The open video's context: `{sidecarPath, note}`. `sidecarPath` is the
@@ -105,6 +124,8 @@ struct StateReport: Equatable {
     var listener: Listener
     /// The batches sent from the open video, oldest first.
     var batches: [BatchReport]
+    /// The notices of agent messages on the stage now, oldest first.
+    var notices: [NoticeReport]
 
     /// The ids of the comments waiting to be sent, in time order.
     var queue: [String] {
@@ -131,8 +152,12 @@ struct StateReport: Equatable {
                 sentAt: batch.sentAt.formatted(.iso8601),
                 commentIds: batch.commentIDs,
                 delivery: isPending ? "pending" : "taken",
-                finished: model.session?.isFinished(batch.id) ?? false
+                finished: model.session?.isFinished(batch.id) ?? false,
+                thread: batch.thread.map(ThreadReport.init)
             )
+        }
+        notices = model.notices.map {
+            NoticeReport(commentId: $0.commentID, batchId: $0.batchID, kind: $0.message.kind, text: $0.message.text)
         }
     }
 
@@ -151,10 +176,13 @@ struct StateReport: Equatable {
     ///     player: paused at 0:10.000
     ///     transcript: voiceover, 3 lines
     ///     comments: 2, 1 queued
-    ///       c1 queued at 0:10.000: too fast
+    ///       c1 working at 0:10.000: too fast
+    ///         agent question: which part?
+    ///         person answer: the intro
     ///       c2 draft at 0:12.000:
     ///     batches: 1
-    ///       b1 pending: c1
+    ///       b1 taken: c1
+    ///         agent message: on it
     ///     listener: absent
     ///     lease: free
     var stateText: String {
@@ -168,14 +196,17 @@ struct StateReport: Equatable {
         }
         if !comments.isEmpty {
             lines.append("comments: \(comments.count), \(queue.count) queued")
-            lines += comments.map { comment in
-                let text = comment.text.split(whereSeparator: \.isNewline).joined(separator: " ")
-                return "  \(comment.id) \(comment.state.rawValue) at \(TimeText.exact(comment.time)): \(text)"
+            for comment in comments {
+                lines.append("  \(comment.id) \(comment.state.rawValue) at \(TimeText.exact(comment.time)): \(Self.oneLine(comment.text))")
+                lines += comment.thread.map(\.line)
             }
         }
         if !batches.isEmpty {
             lines.append("batches: \(batches.count)")
-            lines += batches.map { "  \($0.id) \($0.finished ? "finished" : $0.delivery): \($0.commentIds.joined(separator: ", "))" }
+            for batch in batches {
+                lines.append("  \(batch.id) \(batch.finished ? "finished" : batch.delivery): \(batch.commentIds.joined(separator: ", "))")
+                lines += batch.thread.map(\.line)
+            }
         }
         lines.append("listener: \(listener.text)")
         lines.append(leaseLine)
@@ -212,6 +243,11 @@ struct StateReport: Equatable {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// A text on one line, its line breaks as spaces.
+    fileprivate static func oneLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
+
     private var leaseLine: String {
         guard let lease else { return "lease: free" }
         return "lease: \(lease.holder) in \(lease.place), \(lease.secondsLeft)s left, \(lease.waiting) waiting"
@@ -222,7 +258,7 @@ struct StateReport: Equatable {
     private struct State: Encodable {
         var report: StateReport
 
-        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, context, transcript, queue, comments, batches }
+        enum Keys: String, CodingKey { case app, lease, listener, video, player, time, context, transcript, queue, comments, batches, notices }
         enum AppKeys: String, CodingKey { case version, variant, demo }
 
         func encode(to encoder: any Encoder) throws {
@@ -241,6 +277,7 @@ struct StateReport: Equatable {
             try container.encode(report.comments, forKey: .comments)
             try container.encode(report.listener, forKey: .listener)
             try container.encode(report.batches, forKey: .batches)
+            try container.encode(report.notices, forKey: .notices)
         }
     }
 
@@ -264,8 +301,30 @@ struct StateReport: Equatable {
     }
 }
 
+/// One thread message as `state` reports it: `{author, kind, text, at}`,
+/// `at` in ISO 8601, UTC.
+struct ThreadReport: Encodable, Equatable {
+    var author: ThreadMessage.Author
+    var kind: ThreadMessage.Kind
+    var text: String
+    var at: String
+
+    init(_ message: ThreadMessage) {
+        author = message.author
+        kind = message.kind
+        text = message.text
+        at = message.at.formatted(.iso8601)
+    }
+
+    /// `    agent question: which part?`, as `state` lists it under its
+    /// comment or batch.
+    var line: String {
+        "    \(author.rawValue) \(kind.rawValue): \(StateReport.oneLine(text))"
+    }
+}
+
 /// One comment as `state` and `comment add` report it: `{id, time, text,
-/// state, batchId, region, keyframePath, cropPath}`. `batchId` is the batch
+/// state, batchId, region, keyframePath, cropPath, thread}`. `batchId` is the batch
 /// it was sent in, `null` before. `keyframePath` is the keyframe's absolute
 /// path, or `null` while the file isn't on disk. `region` is `{x, y, w, h}`
 /// and `cropPath` its crop's absolute path; both are `null` for a comment on
@@ -279,6 +338,9 @@ struct CommentReport: Encodable, Equatable {
     var region: Region?
     var keyframePath: String?
     var cropPath: String?
+    /// The agent's messages and questions and the person's answers, oldest
+    /// first.
+    var thread: [ThreadReport]
 
     init(_ comment: Comment, keyframe: URL?, crop: URL?) {
         id = comment.id
@@ -289,9 +351,10 @@ struct CommentReport: Encodable, Equatable {
         region = comment.region
         keyframePath = keyframe?.path
         cropPath = crop?.path
+        thread = comment.thread.map(ThreadReport.init)
     }
 
-    enum Keys: String, CodingKey { case id, time, text, state, batchId, region, keyframePath, cropPath }
+    enum Keys: String, CodingKey { case id, time, text, state, batchId, region, keyframePath, cropPath, thread }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Keys.self)
@@ -304,6 +367,7 @@ struct CommentReport: Encodable, Equatable {
         try container.encode(region, forKey: .region)
         try container.encode(keyframePath, forKey: .keyframePath)
         try container.encode(cropPath, forKey: .cropPath)
+        try container.encode(thread, forKey: .thread)
     }
 }
 

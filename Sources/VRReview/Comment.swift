@@ -54,9 +54,13 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
     public var state: CommentState
     /// The batch it was sent in, or nil while it wasn't sent.
     public var batchID: String?
+    /// What the agent wrote on this comment and what the person answered,
+    /// oldest first.
+    public var thread: [ThreadMessage]
 
     public init(
-        id: String, time: Double, text: String = "", region: Region? = nil, state: CommentState = .draft, batchID: String? = nil
+        id: String, time: Double, text: String = "", region: Region? = nil, state: CommentState = .draft, batchID: String? = nil,
+        thread: [ThreadMessage] = []
     ) {
         self.id = id
         self.time = time
@@ -64,5 +68,25 @@ public struct Comment: Codable, Equatable, Identifiable, Sendable {
         self.region = region
         self.state = state
         self.batchID = batchID
+        self.thread = thread
+    }
+
+    /// The agent's question the person hasn't answered, or nil: the last
+    /// question, while no answer follows it.
+    public var openQuestion: ThreadMessage? {
+        guard let last = thread.last(where: { $0.kind != .message }), last.kind == .question else { return nil }
+        return last
+    }
+
+    /// A comment kept before it had a thread has none.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        time = try container.decode(Double.self, forKey: .time)
+        text = try container.decode(String.self, forKey: .text)
+        region = try container.decodeIfPresent(Region.self, forKey: .region)
+        state = try container.decode(CommentState.self, forKey: .state)
+        batchID = try container.decodeIfPresent(String.self, forKey: .batchID)
+        thread = try container.decodeIfPresent([ThreadMessage].self, forKey: .thread) ?? []
     }
 }

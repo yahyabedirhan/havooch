@@ -17,8 +17,13 @@ public struct CommandTable: Sendable {
             CommentCommand.entry,
             BatchCommand.entry,
             ContextCommand.entry,
+            ThreadCommand.entry,
             ScreenshotCommand.entry,
             ListenerCommand.wait,
+            ListenerCommand.ack,
+            ListenerCommand.status,
+            ListenerCommand.reply,
+            ListenerCommand.ask,
         ])
         return table
     }
@@ -57,7 +62,7 @@ public struct CommandTable: Sendable {
             `video-review <command> --help` explains one command. --json prints
             one JSON object on one line instead of lines. Exit status: 0 done,
             1 refused or not running, 2 arguments that don't read, 3 a wait
-            whose time ran out.
+            or an ask whose time ran out.
 
             """
     }

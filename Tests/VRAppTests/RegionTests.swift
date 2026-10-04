@@ -208,7 +208,7 @@ private let video = CGSize(width: 1920, height: 1080)
         )
 
         #expect(reply.output == #"{"batchId":null,"cropPath":"\#(rig.crop("c1").path)","id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","#
-            + #""region":{"h":0.5,"w":0.25,"x":0.5,"y":0.25},"state":"queued","text":"this button","time":10}"# + "\n")
+            + #""region":{"h":0.5,"w":0.25,"x":0.5,"y":0.25},"state":"queued","text":"this button","thread":[],"time":10}"# + "\n")
         // The crop is on disk by the time the command answers, cut from the
         // comment's keyframe.
         #expect(try String(contentsOf: rig.crop("c1"), encoding: .utf8) == "crop 0.5,0.25,0.25,0.5 of c1.png")

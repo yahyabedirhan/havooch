@@ -49,6 +49,35 @@ enum Theme {
         state.rawValue.prefix(1).uppercased() + state.rawValue.dropFirst()
     }
 
+    /// The colour of an open question: the agent waits for the person.
+    static let question = Color.orange
+
+    /// Who wrote a thread message and what it is, as a word in a card.
+    static func label(for message: ThreadMessage) -> String {
+        switch (message.author, message.kind) {
+        case (.agent, .question): "Agent asks"
+        case (.agent, _): "Agent"
+        case (.person, .answer): "You answered"
+        case (.person, _): "You"
+        }
+    }
+
+    static func glyph(for message: ThreadMessage) -> String {
+        switch message.kind {
+        case .message: "bubble.left.fill"
+        case .question: "questionmark.bubble.fill"
+        case .answer: "arrowshape.turn.up.left.fill"
+        }
+    }
+
+    static func colour(for message: ThreadMessage) -> Color {
+        switch message.kind {
+        case .message: .accentColor
+        case .question: question
+        case .answer: .secondary
+        }
+    }
+
     /// The listener's presence as the send bar's chip says it.
     static func label(for presence: Outbox.Presence) -> String {
         switch presence {

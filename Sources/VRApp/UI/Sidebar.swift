@@ -1,10 +1,45 @@
 import SwiftUI
+import VRReview
 
 /// The review beside the video: the open video's comments as cards, in time
-/// order, with the send bar under them. The selected comment's card is
-/// scrolled into view.
+/// order, each batch as a header card above the first of its comments, with
+/// the send bar under them. The selected comment's card is scrolled into
+/// view.
 struct Sidebar: View {
     let model: ReviewModel
+
+    /// One card of the list.
+    enum Row: Equatable, Identifiable {
+        case batch(Batch)
+        case comment(Comment)
+
+        var id: String {
+            switch self {
+            case .batch(let batch): "batch-" + batch.id
+            case .comment(let comment): comment.id
+            }
+        }
+    }
+
+    /// The cards for `comments` (in time order) and the batches they were
+    /// sent in: each batch's header stands above the first of its comments.
+    nonisolated static func rows(comments: [Comment], batches: [Batch]) -> [Row] {
+        var headed: Set<String> = []
+        var rows: [Row] = []
+        for comment in comments {
+            if let id = comment.batchID, headed.insert(id).inserted, let batch = batches.first(where: { $0.id == id }) {
+                rows.append(.batch(batch))
+            }
+            rows.append(.comment(comment))
+        }
+        return rows
+    }
+
+    /// Where the batch is on its way, as its header says it.
+    private func progress(of batch: Batch) -> BatchCard.Progress {
+        if model.session?.isFinished(batch.id) == true { return .finished }
+        return model.outbox.parcel(batch.id)?.delivery == .pending ? .pending : .taken
+    }
 
     var body: some View {
         let comments = model.comments
@@ -26,16 +61,23 @@ struct Sidebar: View {
                 ScrollViewReader { scroll in
                     ScrollView {
                         LazyVStack(spacing: 8) {
-                            ForEach(comments) { comment in
-                                CommentCard(
-                                    comment: comment,
-                                    picture: model.cropURL(for: comment.id) ?? model.keyframeURL(for: comment.id),
-                                    isSelected: model.selection == comment.id,
-                                    show: { model.showByPerson(comment.id) },
-                                    edit: { (try? model.editComment(comment.id, text: $0)) != nil },
-                                    delete: { try? model.deleteComment(comment.id) }
-                                )
-                                .id(comment.id)
+                            ForEach(Self.rows(comments: comments, batches: model.session?.batches ?? [])) { row in
+                                switch row {
+                                case .batch(let batch):
+                                    BatchCard(batch: batch, progress: progress(of: batch))
+                                case .comment(let comment):
+                                    CommentCard(
+                                        comment: comment,
+                                        picture: model.cropURL(for: comment.id) ?? model.keyframeURL(for: comment.id),
+                                        isSelected: model.selection == comment.id,
+                                        hasOpenQuestion: comment.openQuestion != nil,
+                                        show: { model.showByPerson(comment.id) },
+                                        edit: { (try? model.editComment(comment.id, text: $0)) != nil },
+                                        delete: { try? model.deleteComment(comment.id) },
+                                        answer: { model.answerByPerson(comment.id, text: $0) }
+                                    )
+                                    .id(comment.id)
+                                }
                             }
                         }
                         .padding(Theme.gap)

@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Where the video shows, with the region layer over it and the comment box
-/// while a comment is being written. Black in light and dark: video is
+/// Where the video shows, with the region layer over it, the comment box
+/// while a comment is being written, and the notices of agent messages at
+/// its top right. Black in light and dark: video is
 /// judged against black, so only the chrome around it follows the appearance.
 struct Stage: View {
     let controller: PlayerController
@@ -35,6 +36,9 @@ struct Stage: View {
                         composer.padding(Theme.edge)
                     }
                 }
+            }
+            .overlay(alignment: .topTrailing) {
+                NoticeStack(notices: model.notices) { model.openNotice($0) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

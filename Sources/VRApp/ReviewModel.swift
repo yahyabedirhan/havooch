@@ -46,10 +46,18 @@ final class ReviewModel {
     /// Why the last send a person asked for didn't work, for the send bar;
     /// nil after one that did.
     private(set) var sendFailure: String?
+    /// The agent's messages the stage shows a brief notice of, oldest first.
+    /// Each goes by itself after `noticeLifetime`.
+    private(set) var notices: [Notice] = []
 
     /// Told when a batch was posted to the outbox: the listener desk gives
     /// it to a `wait` that is open.
     @ObservationIgnored var posted: (@MainActor () -> Void)?
+    /// Told when the question on a comment was answered: the listener desk
+    /// gives the answer to an `ask` that is open on it.
+    @ObservationIgnored var answered: (@MainActor (String) -> Void)?
+    /// How long a notice stays.
+    @ObservationIgnored var noticeLifetime = Notice.lifetime
     @ObservationIgnored private let player: any Playing
     @ObservationIgnored private let frames: any FrameGrabbing
     @ObservationIgnored private let library: Library
@@ -328,6 +336,16 @@ final class ReviewModel {
         return sent
     }
 
+    /// Answers the question open on the comment `commentID`: what the
+    /// answer box in its card and `thread answer` both do. An `ask` waiting
+    /// on the comment gets the text.
+    func answer(_ commentID: String, text: String) throws(ModelRefusal) {
+        try changeReview(of: try hash(ofComment: commentID)) { (review) throws(ReviewRefusal) in
+            try review.answer(commentID, text: text, at: now())
+        }
+        answered?(commentID)
+    }
+
     // MARK: - What the listener can do
 
     /// Whether a listener is there now, and whether it has work.
@@ -338,7 +356,7 @@ final class ReviewModel {
     /// finish are pending again and their comments back to `sent`.
     func listenerArrived(key: String, name: String) {
         for parcel in outbox.arrive(key: key, name: name, at: now()) {
-            changeReview(of: parcel.videoHash) { $0.requeue(parcel.batchID) }
+            try? changeReview(of: parcel.videoHash) { (review) throws(ReviewRefusal) in review.requeue(parcel.batchID) }
         }
     }
 
@@ -378,6 +396,92 @@ final class ReviewModel {
             cropPath: { self.crops.contains($0.id) ? self.library.cropURL(hash, comment: $0.id).path : nil },
             transcript: { self.transcript(around: $0, of: review.video) }
         )
+    }
+
+    // The listener answers by a comment's or a batch's id alone. Its video
+    // needn't be the open one: the id is looked up in every review of this
+    // run (`hash(ofComment:)`).
+
+    /// `ack`: each comment of the batch still `sent` is `acknowledged`, and
+    /// `text`, when given, is a message for the full batch.
+    func acknowledge(_ batchID: String, text: String?) throws(ModelRefusal) {
+        let hash = try hash(ofBatch: batchID)
+        try changeReview(of: hash) { (review) throws(ReviewRefusal) in
+            try review.acknowledge(batchID, text: text, at: now())
+        }
+        if text != nil, let message = review(of: hash)?.batch(batchID)?.thread.last {
+            notify(message, on: nil, batch: batchID)
+        }
+    }
+
+    /// `status`: the comment is `working`, `done` or `failed`. A batch whose
+    /// comments are all done or failed is finished and leaves the outbox,
+    /// so the listener has no work of it left.
+    func setStatus(_ commentID: String, to state: CommentState) throws(ModelRefusal) {
+        let hash = try hash(ofComment: commentID)
+        try changeReview(of: hash) { (review) throws(ReviewRefusal) in try review.setStatus(commentID, to: state) }
+        if let review = review(of: hash), let batch = review.comment(commentID)?.batchID, review.isFinished(batch) {
+            outbox.finish(batch)
+        }
+    }
+
+    /// `reply`: the agent's message in the thread of the comment or the
+    /// batch `id`, with a notice. Returns where it went.
+    @discardableResult
+    func reply(to id: String, text: String) throws(ModelRefusal) -> ReviewSession.Place {
+        guard let hash = (try? hash(ofBatch: id)) ?? (try? hash(ofComment: id)) else {
+            throw ModelRefusal("there's no comment or batch \(id)")
+        }
+        let place = try changeReview(of: hash) { (review) throws(ReviewRefusal) in try review.reply(to: id, text: text, at: now()) }
+        switch place {
+        case .batch:
+            if let message = review(of: hash)?.batch(id)?.thread.last { notify(message, on: nil, batch: id) }
+        case .comment:
+            if let comment = review(of: hash)?.comment(id), let message = comment.thread.last {
+                notify(message, on: comment, batch: comment.batchID ?? "")
+            }
+        }
+        return place
+    }
+
+    /// `ask`: the agent's question in the comment's thread, with a notice.
+    /// The question that is already open, asked again, adds nothing.
+    func ask(_ commentID: String, question: String) throws(ModelRefusal) {
+        let hash = try hash(ofComment: commentID)
+        let before = review(of: hash)?.comment(commentID)?.thread.count
+        try changeReview(of: hash) { (review) throws(ReviewRefusal) in try review.ask(commentID, question: question, at: now()) }
+        if let comment = review(of: hash)?.comment(commentID), comment.thread.count != before, let message = comment.thread.last {
+            notify(message, on: comment, batch: comment.batchID ?? "")
+        }
+    }
+
+    /// The last answer on the comment with its question, when no `ask` has
+    /// been given it yet.
+    func unheardAnswer(on commentID: String) -> ReviewSession.Exchange? {
+        guard let hash = try? hash(ofComment: commentID) else { return nil }
+        return review(of: hash)?.unheardAnswer(on: commentID)
+    }
+
+    /// The answer on the comment reached an `ask`: it isn't given again.
+    func answerHeard(_ commentID: String) {
+        guard let hash = try? hash(ofComment: commentID) else { return }
+        try? changeReview(of: hash) { (review) throws(ReviewRefusal) in review.answerHeard(commentID) }
+    }
+
+    /// Shows a notice of the agent's `message`, gone by itself after
+    /// `noticeLifetime`.
+    private func notify(_ message: ThreadMessage, on comment: Comment?, batch: String) {
+        let notice = Notice(id: UUID(), commentID: comment?.id, time: comment?.time, batchID: batch, message: message)
+        notices.append(notice)
+        Task { [weak self, noticeLifetime] in
+            try? await Task.sleep(for: noticeLifetime)
+            self?.dismissNotice(notice.id)
+        }
+    }
+
+    /// Takes a notice away, before its time or at it.
+    func dismissNotice(_ id: UUID) {
+        notices.removeAll { $0.id == id }
     }
 
     /// The context of the video `hash` as a listener gets it: its sidecar's
@@ -433,15 +537,47 @@ final class ReviewModel {
         session?.video.contentHash == hash ? session : shelved[hash]
     }
 
-    /// Changes the review of the video `hash`, open or opened earlier.
-    private func changeReview(of hash: String, _ body: (inout ReviewSession) -> Void) {
-        if session?.video.contentHash == hash, var changed = session {
-            body(&changed)
-            session = changed
-        } else if var changed = shelved[hash] {
-            body(&changed)
-            shelved[hash] = changed
+    /// Changes the review of the video `hash`, open or opened earlier; the
+    /// review's refusal is the model's, and leaves the review as it was.
+    @discardableResult
+    private func changeReview<Value>(
+        of hash: String, _ body: (inout ReviewSession) throws(ReviewRefusal) -> Value
+    ) throws(ModelRefusal) -> Value {
+        let isOpen = session?.video.contentHash == hash
+        guard var changed = isOpen ? session : shelved[hash] else { throw ModelRefusal("there's no review of that video") }
+        let value: Value
+        do throws(ReviewRefusal) {
+            value = try body(&changed)
+        } catch {
+            throw ModelRefusal(error.reason)
         }
+        if isOpen { session = changed } else { shelved[hash] = changed }
+        return value
+    }
+
+    /// The video whose review has the comment `id`: the open one, or one
+    /// opened earlier in this run. The store's index takes this over when
+    /// reviews are kept on disk.
+    private func hash(ofComment id: String) throws(ModelRefusal) -> String {
+        guard let review = reviews.first(where: { $0.comment(id) != nil }) else {
+            throw ModelRefusal("there's no comment \(id)")
+        }
+        return review.video.contentHash
+    }
+
+    /// The video whose review has the batch `id`.
+    private func hash(ofBatch id: String) throws(ModelRefusal) -> String {
+        guard let review = reviews.first(where: { $0.batch(id) != nil }) else {
+            throw ModelRefusal("there's no batch \(id)")
+        }
+        return review.video.contentHash
+    }
+
+    /// Every review of this run: the open video's, then those of the videos
+    /// opened earlier.
+    private var reviews: [ReviewSession] {
+        let open = session.map { [$0] } ?? []
+        return open + shelved.values.filter { $0.video.contentHash != session?.video.contentHash }
     }
 
     /// Forgets a dropped comment's keyframe and crop and removes their
@@ -561,5 +697,17 @@ final class ReviewModel {
     /// A click on a comment's marker or card.
     func showByPerson(_ id: String) {
         Task { try? await showComment(id) }
+    }
+
+    /// The answer box: answers the question on the comment; false when it's
+    /// refused (no text), and the box keeps what it holds.
+    func answerByPerson(_ commentID: String, text: String) -> Bool {
+        (try? answer(commentID, text: text)) != nil
+    }
+
+    /// A click on a notice: its comment's moment shows, and the notice goes.
+    func openNotice(_ notice: Notice) {
+        dismissNotice(notice.id)
+        if let id = notice.commentID { showByPerson(id) }
     }
 }

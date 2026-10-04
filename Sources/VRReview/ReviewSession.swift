@@ -9,10 +9,10 @@ public struct ReviewRefusal: Error, Equatable, Sendable {
     }
 }
 
-/// One video's review: its comments and the batches they were sent in, and
-/// every change to them. The rules
-/// about a comment's state live here, so the window and the command line
-/// are refused the same things in the same words.
+/// One video's review: its comments, the batches they were sent in and the
+/// threads on both, and every change to them. The rules about a comment's
+/// state and about questions and answers live here, so the window and the
+/// command line are refused the same things in the same words.
 public struct ReviewSession: Codable, Equatable, Sendable {
     public var video: VideoInfo
     /// Every comment of the video, drafts included, in time order; comments
@@ -23,6 +23,27 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// The person's note about the video, part of its context for the
     /// listener; empty when there's none.
     public private(set) var note = ""
+
+    /// The comments whose last answer no `ask` has been given yet: the
+    /// question's `ask` had run out of time, or its reply didn't arrive.
+    public private(set) var unheard: Set<String> = []
+
+    /// A question and the answer the person gave to it.
+    public struct Exchange: Equatable, Sendable {
+        public var question: ThreadMessage
+        public var answer: ThreadMessage
+
+        public init(question: ThreadMessage, answer: ThreadMessage) {
+            self.question = question
+            self.answer = answer
+        }
+    }
+
+    /// Where a reply went: the thread of a comment, or of a batch.
+    public enum Place: Equatable, Sendable {
+        case comment(String)
+        case batch(String)
+    }
 
     public init(video: VideoInfo) {
         self.video = video
@@ -36,6 +57,7 @@ public struct ReviewSession: Codable, Equatable, Sendable {
         comments = try container.decode([Comment].self, forKey: .comments)
         batches = try container.decodeIfPresent([Batch].self, forKey: .batches) ?? []
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        unheard = try container.decodeIfPresent(Set<String>.self, forKey: .unheard) ?? []
     }
 
     /// The comments waiting to be sent, in time order.
@@ -54,6 +76,20 @@ public struct ReviewSession: Codable, Equatable, Sendable {
     /// Whether every comment of the batch `batchID` is done or failed.
     public func isFinished(_ batchID: String) -> Bool {
         comments.filter { $0.batchID == batchID }.allSatisfy(\.state.isFinal)
+    }
+
+    /// The question on the comment `id` the person hasn't answered, or nil.
+    public func openQuestion(on id: String) -> ThreadMessage? {
+        comment(id)?.openQuestion
+    }
+
+    /// The last answer on the comment `id` with its question, when no `ask`
+    /// has been given it yet; else nil.
+    public func unheardAnswer(on id: String) -> Exchange? {
+        guard unheard.contains(id), let thread = comment(id)?.thread,
+              let answer = thread.lastIndex(where: { $0.kind == .answer }),
+              let question = thread[..<answer].last(where: { $0.kind == .question }) else { return nil }
+        return Exchange(question: question, answer: thread[answer])
     }
 
     // MARK: - Changes
@@ -131,6 +167,88 @@ public struct ReviewSession: Codable, Equatable, Sendable {
         }
     }
 
+    // MARK: - What the listener does
+
+    /// The listener has the batch: each of its comments still `sent` is
+    /// `acknowledged`. `text`, when given, is a message for the full batch.
+    /// Acknowledging again changes no state.
+    public mutating func acknowledge(_ batchID: String, text: String? = nil, at now: Date) throws(ReviewRefusal) {
+        let batch = try batchIndex(of: batchID)
+        var message: String?
+        if let text { message = try Self.said(text) }
+        for index in comments.indices where comments[index].batchID == batchID && comments[index].state == .sent {
+            comments[index].state = .acknowledged
+        }
+        if let message {
+            batches[batch].thread.append(ThreadMessage(author: .agent, kind: .message, text: message, at: now))
+        }
+    }
+
+    /// Sets a sent comment to `working`, `done` or `failed`. A status may
+    /// skip forward (`sent` to `done`); `done` and `failed` are final. The
+    /// state it already has is set again without a change.
+    public mutating func setStatus(_ id: String, to state: CommentState) throws(ReviewRefusal) {
+        guard state == .working || state.isFinal else {
+            throw ReviewRefusal("a comment's status is working, done or failed, not \(state.rawValue)")
+        }
+        let index = try sent(id, toBe: "given a status")
+        let current = comments[index].state
+        guard current != state else { return }
+        guard current.canMove(to: state) else {
+            throw ReviewRefusal("\(id) is \(current.rawValue); it can't be set to \(state.rawValue)")
+        }
+        comments[index].state = state
+    }
+
+    /// Adds the agent's message to the thread of the comment or the batch
+    /// `id`, and says which it was.
+    @discardableResult
+    public mutating func reply(to id: String, text: String, at now: Date) throws(ReviewRefusal) -> Place {
+        let message = ThreadMessage(author: .agent, kind: .message, text: try Self.said(text), at: now)
+        if let batch = batches.firstIndex(where: { $0.id == id }) {
+            batches[batch].thread.append(message)
+            return .batch(id)
+        }
+        guard comments.contains(where: { $0.id == id }) else {
+            throw ReviewRefusal("there's no comment or batch \(id)")
+        }
+        comments[try sent(id, toBe: "replied on")].thread.append(message)
+        return .comment(id)
+    }
+
+    /// Adds the agent's question to the thread of the comment `id`. One
+    /// question at a time: while one is open, another is refused. The open
+    /// question asked again in the same words is the same question, and
+    /// adds nothing.
+    public mutating func ask(_ id: String, question: String, at now: Date) throws(ReviewRefusal) {
+        let text = try Self.said(question)
+        let index = try sent(id, toBe: "asked about")
+        if let open = openQuestion(on: id) {
+            guard open.text == text else {
+                throw ReviewRefusal("\(id) has a question the person hasn't answered: \(open.text)")
+            }
+            return
+        }
+        comments[index].thread.append(ThreadMessage(author: .agent, kind: .question, text: text, at: now))
+    }
+
+    /// Adds the person's answer to the open question on the comment `id`.
+    /// The answer waits for an `ask` to be given to (`unheardAnswer`).
+    public mutating func answer(_ id: String, text: String, at now: Date) throws(ReviewRefusal) {
+        let index = try index(of: id)
+        let text = try Self.said(text)
+        guard openQuestion(on: id) != nil else {
+            throw ReviewRefusal("\(id) has no question to answer")
+        }
+        comments[index].thread.append(ThreadMessage(author: .person, kind: .answer, text: text, at: now))
+        unheard.insert(id)
+    }
+
+    /// The answer on the comment `id` reached an `ask`: it isn't given again.
+    public mutating func answerHeard(_ id: String) {
+        unheard.remove(id)
+    }
+
     // MARK: - Rules
 
     /// A comment's text as it's kept: without the space around it, and not
@@ -139,6 +257,33 @@ public struct ReviewSession: Codable, Equatable, Sendable {
         let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kept.isEmpty else { throw ReviewRefusal("a comment needs its text") }
         return kept
+    }
+
+    /// A thread message's text as it's kept: without the space around it,
+    /// and not empty.
+    public static func said(_ text: String) throws(ReviewRefusal) -> String {
+        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !kept.isEmpty else { throw ReviewRefusal("a message needs its text") }
+        return kept
+    }
+
+    private func batchIndex(of id: String) throws(ReviewRefusal) -> Int {
+        guard let index = batches.firstIndex(where: { $0.id == id }) else {
+            throw ReviewRefusal("there's no batch \(id)")
+        }
+        return index
+    }
+
+    /// The place of the comment `id`, which a listener has or had; refused
+    /// for one that wasn't sent.
+    private func sent(_ id: String, toBe change: String) throws(ReviewRefusal) -> Int {
+        let index = try index(of: id)
+        switch comments[index].state {
+        case .draft, .queued:
+            throw ReviewRefusal("\(id) wasn't sent yet; it can't be \(change)")
+        case .sent, .acknowledged, .working, .done, .failed:
+            return index
+        }
     }
 
     private func index(of id: String) throws(ReviewRefusal) -> Int {

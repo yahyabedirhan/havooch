@@ -153,7 +153,7 @@ private func exists(_ file: URL) -> Bool {
 
         let reply = await rig.send(.commentAdd(text: "here", at: 5.5, region: nil), json: true)
 
-        #expect(reply.output == #"{"batchId":null,"cropPath":null,"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","region":null,"state":"queued","text":"here","time":5.5}"# + "\n")
+        #expect(reply.output == #"{"batchId":null,"cropPath":null,"id":"c1","keyframePath":"\#(rig.keyframe("c1").path)","region":null,"state":"queued","text":"here","thread":[],"time":5.5}"# + "\n")
         #expect(rig.player.time == 5.5)
         #expect(!rig.player.isPlaying)
     }

@@ -10,23 +10,26 @@ import VRWire
 /// reply, so the `video-review` command always has a line to print. A
 /// `take`'s reply granting the lease that can't be written (its client gone)
 /// gives the lease up at once; a `wait`'s batch that can't be written is
-/// pending again.
+/// pending again, and an `ask`'s answer that can't be written waits for the
+/// next `ask`.
 @MainActor
 final class ControlServer {
     /// A reply, whether the app quits once it's written, and what hangs on
     /// the reply being written: the lease a `control take`'s reply grants,
     /// released when it can't be (`undelivered`), and the batch a `wait`'s
     /// reply delivers to the listener session `listener`, pending again
-    /// when it can't be.
+    /// when it can't be, and the comment `heard` whose answer an `ask`'s
+    /// reply carries, given again when it can't be.
     struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: ControlLease.Term?
         var batch: String?
         var listener: String?
+        var heard: String?
 
         /// Whether the server hears how writing the reply went (`written`).
-        var hangsOnDelivery: Bool { granted != nil || batch != nil }
+        var hangsOnDelivery: Bool { granted != nil || batch != nil || heard != nil }
     }
 
     /// Why the server couldn't start listening.
@@ -85,6 +88,8 @@ final class ControlServer {
         self.listeners = listeners
         // A batch the person or an operator sends goes to a wait that is open.
         model.posted = { [weak listeners] in listeners?.outboxChanged() }
+        // An answer the person or an operator gives goes to an ask that is open.
+        model.answered = { [weak listeners] in listeners?.answered($0) }
         self.lease = lease
         self.indicator = indicator
         self.now = now
@@ -161,8 +166,18 @@ final class ControlServer {
             return Answer(reply: await desk.setNote(text, json: json))
         case .screenshot(let path, let appearance):
             return Answer(reply: await desk.screenshot(to: path, appearance: appearance, json: json))
+        case .threadAnswer(let commentID, let text):
+            return Answer(reply: await desk.answer(commentID, text: text, json: json))
         case .wait(let seconds):
             return await listeners.wait(by: message.holder, timeout: seconds, ticket: ticket)
+        case .ack(let batchID, let text):
+            return Answer(reply: listeners.acknowledge(batchID, text: text, json: json))
+        case .status(let commentID, let state):
+            return Answer(reply: listeners.setStatus(commentID, to: state, json: json))
+        case .reply(let id, let text):
+            return Answer(reply: listeners.reply(to: id, text: text, json: json))
+        case .ask(let commentID, let question, let seconds):
+            return await listeners.ask(commentID, question: question, wait: seconds, json: json, ticket: ticket)
         }
     }
 
@@ -174,14 +189,16 @@ final class ControlServer {
     // MARK: - What hangs on a reply
 
     /// Whether the app holds the connection of the request `data` for as
-    /// long as it takes, writing a heartbeat meanwhile: a listener's `wait`.
+    /// long as it takes, writing a heartbeat meanwhile: a listener's `wait`
+    /// and `ask`.
     nonisolated static func isLongPoll(_ data: Data) -> Bool {
         (try? ControlMessage.decode(data))?.request.isLongPoll ?? false
     }
 
     /// How writing a reply went, for one something hangs on
     /// (`Answer.hangsOnDelivery`): a granted lease that didn't arrive is
-    /// given up, a `wait` whose batch was written or wasn't closes.
+    /// given up, a `wait` whose batch was written or wasn't closes, an
+    /// `ask`'s answer that was written counts as heard.
     func written(_ answer: Answer, delivered: Bool) {
         if !delivered { undelivered(answer) }
         listeners.written(answer, delivered: delivered)

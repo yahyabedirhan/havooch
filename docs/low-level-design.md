@@ -130,7 +130,7 @@ Entities hold changing state or enforce rules. Everything else is a field.
 | Entity | Module | Holds | Enforces |
 |---|---|---|---|
 | `ControlLease` | VRLease | the current term, the line of waiters, the bars | who may send operator commands, and until when |
-| `ReviewSession` | VRReview | one video's comments, batches, threads and note | the comment state machine, what may be edited, sent, answered |
+| `ReviewSession` | VRReview | one video's comments, batches, threads, note and the answers no `ask` heard yet | the comment state machine, what may be edited, sent, asked, answered |
 | `Outbox` | VRReview | sent batches not finished (`Parcel`s), the listener, the context already sent | which batch a `wait` gets, requeue, presence, context once |
 | `Library` | VRStore | the support folder | where each file is, id counters, id → video lookup |
 | `ReviewModel` | VRApp | the open video, its session, the outbox, the player | the order of work for each action: check, change, save, publish |
@@ -184,7 +184,7 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
               VRApp ──▶ VRReview, VRTranscript
 ```
 
-`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the batch ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `Region`, `ReviewSession`, `Batch`, `Outbox`, `BatchPayload`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; `Library` does not keep sessions before the persistence ticket) and `VRApp`. The transcript ticket adds `VRTranscript`, and `TranscriptCache` to `VRStore`, which depends on `VRTranscript` from then on and on `VRReview` from the persistence ticket.
+`Package.swift` holds a target from the ticket that gives it its first file, and a dependency from the ticket whose code first needs it. After the answers ticket it has `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` (`VideoInfo`, `Comment`, `Region`, `ThreadMessage`, `ReviewSession`, `Batch`, `Outbox`, `BatchPayload`), `VRStore` (`ContentHash`, `Library`, `JSONFile`; `Library` does not keep sessions before the persistence ticket) and `VRApp`. The transcript ticket adds `VRTranscript`, and `TranscriptCache` to `VRStore`, which depends on `VRTranscript` from then on and on `VRReview` from the persistence ticket.
 
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
@@ -195,10 +195,10 @@ Test targets, all run by `make test` without the app:
 | `VRLeaseTests` | time-driven lease tables (take, renew, expire, cap, queue, stop, bar), holder discovery with a fake process table |
 | `VRWireTests` | encode and decode of every request, version refusal, demo pointer, socket location |
 | `VRCommandTests` | parsing, output and exit codes through `CommandTable.run` with a fake transport and launcher |
-| `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON |
+| `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once), the payload's JSON, the threads (ack, each status, replies, questions and answers, the answer no `ask` heard yet) |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
 | `VRStoreTests` | save and load in a temporary folder, the content hash of a renamed copy, id counters, the transcript cache |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`); the transcript in the payload and in `state` with a recognizer the test holds back (`TranscriptTests`): the fixture's voiceover, a copy with only the `.srt`, a copy with no sidecar sent before and after speech is ready, the cache, a failure |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and a temporary library: lease gate, takes in line, Stop, the banner's words, dispatch, comments, a parked `wait`, the listener's answers (`ack`, `status`, `reply`), a parked `ask` answered by `thread answer` and by the answer box's model call, notices, the sidebar's rows; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`); the transcript in the payload and in `state` with a recognizer the test holds back (`TranscriptTests`): the fixture's voiceover, a copy with only the `.srt`, a copy with no sidecar sent before and after speech is ready, the cache, a failure |
 
 ### Folder tree
 
@@ -267,7 +267,7 @@ Sources/
     VideoReviewApp.swift            @main, the window scene with the lease banner over it, the menu commands
     AppServices.swift               composition root: reads the environment, builds and wires everything
     ReviewModel.swift               the orchestrator the views and the desks call
-    Notice.swift                    a brief agent message shown over the stage
+    Notice.swift                    a brief notice of one agent message, shown over the stage
     TimeText.swift                  a time as text (0:10.000, 0:10) and rounded to the millisecond
     Player/
       PlayerController.swift        Playing protocol and its AVPlayer implementation
@@ -283,21 +283,23 @@ Sources/
       ControlServer.swift           decode, version, lease gate, dispatch; lease timers and waiters
       SocketListener.swift          the listening socket: accept, read, answer, heartbeat (Pulse), close; says how writing a reply went that a lease or a batch hangs on
       OperatorDesk.swift            operator requests → ReviewModel calls → reply text
-      ListenerDesk.swift            listener requests; parked wait and ask connections
+      ListenerDesk.swift            listener requests: ack, status, reply; parked wait and ask connections
       StateReport.swift             app status and state as text and JSON
       LeaseIndicator.swift          the lease as the banner reads it, and the banner's words
       Screenshotter.swift           the window as a PNG through ScreenCaptureKit, in an appearance
     UI/
       MainWindow.swift              stage and sidebar laid out
       EmptyState.swift              no video open: drop, open, the demo folder's videos
-      Stage.swift                   the video, the overlay, the composer, the notice
+      Stage.swift                   the video, the overlay, the composer, the notices
       RegionOverlay.swift           drawing and showing rectangles in frame coordinates: FrameFit (the frame inside the stage), RegionMark (which regions show), ComposerPlacement (the box beside a region), the overlay view
       Composer.swift                the comment box
       TransportBar.swift            play, time, the timeline
       Timeline.swift                the scrubber track and the marker pins
-      Sidebar.swift                 batch cards and comment cards in time order
+      Sidebar.swift                 batch cards and comment cards in time order (Sidebar.rows)
       CommentCard.swift             one comment: time, status, text, thumbnail, thread, answer box
-      BatchCard.swift               one batch: its header and its thread
+      BatchCard.swift               one batch: its header, where it is (BatchCard.Progress) and its thread
+      ThreadView.swift              a thread's messages inside a card; AnswerBox, the box under an open question
+      NoticeToast.swift             the notices of agent messages at the stage's top right
       SendBar.swift                 queued count, Send, the presence chip
       LeaseBanner.swift             who controls the app, time left, Stop
       ContextPopover.swift          ContextButton (the toolbar's button and its tooltip) and the popover: the sidecar's text and the editable note
@@ -388,7 +390,8 @@ public enum ControlRequest: Equatable, Sendable {
     public enum Role { case free, operator, listener }
     public var role: Role
     public static let longestWait = 3600   // a take's wait in line, in seconds, at most
-    public static let longestTimeout = 86_400   // a wait's --timeout, in seconds, at most
+    public static let longestTimeout = 86_400   // a wait's --timeout and an ask's --wait, in seconds, at most
+    public static let statuses = ["working", "done", "failed"]   // what status sets; the wire can't name CommentState
     public var hold: TimeInterval      // how long the app may hold the connection: a take's wait in line, else 0
     public var isLongPoll: Bool        // wait and ask: the app holds the connection and sends a heartbeat
     public struct WireRegion: Codable, Equatable { var x, y, w, h: Double }   // four numbers as --region gave them, not yet checked
@@ -404,7 +407,7 @@ public struct ControlClient { var socket: URL; var holder: Holder; var transport
     public func send(_ request: ControlRequest, json: Bool) -> Result<ControlReply, Failure> }
 ```
 
-Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `hold`; the comment ticket adds the three `comment` cases, and the region ticket gives `commentAdd` its `region`; the batch ticket adds `batchSend`, `wait(timeoutSeconds:)` and `isLongPoll`; `ack`, `status`, `reply`, `ask` and `threadAnswer` arrive with their ticket. The property is `hold`, not `wait`, because an enum can't have a case and a property of one name. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `hold`; for a long poll it waits as long as the connection isn't silent for 10 s (`ControlClient.longestSilence`). On the wire, `wait` carries `timeoutSeconds` when `--timeout` is given (0 to 86400); `batch.send` carries nothing; `comment.add` carries `text`, for `--at` its `time`, and for `--region` a `region` object `{x, y, w, h}`; `comment.edit` carries `id` and `text`; `comment.delete` carries `id`.
+Each ticket adds its own cases to `ControlRequest`. The first build ticket has `appStatus`, `state`, `appOpen`, `appQuit`, the four `player` cases and `screenshot`; the lease ticket adds `controlTake`, `controlRelease` and `hold`; the comment ticket adds the three `comment` cases, and the region ticket gives `commentAdd` its `region`; the batch ticket adds `batchSend`, `wait(timeoutSeconds:)` and `isLongPoll`; the answers ticket adds `ack`, `status`, `reply`, `ask` and `threadAnswer`, and makes `ask` a long poll. The property is `hold`, not `wait`, because an enum can't have a case and a property of one name. `ControlClient.send` waits for a reply for its timeout (15 s) plus the request's `hold`; for a long poll it waits as long as the connection isn't silent for 10 s (`ControlClient.longestSilence`). On the wire, `wait` carries `timeoutSeconds` when `--timeout` is given (0 to 86400); `batch.send` carries nothing; `comment.add` carries `text`, for `--at` its `time`, and for `--region` a `region` object `{x, y, w, h}`; `comment.edit` carries `id` and `text`; `comment.delete` carries `id`; `ack` carries `id` and, when a text is given, `text`; `status` carries `id` and `state` (one of `ControlRequest.statuses`, anything else is refused as unreadable); `reply` and `thread.answer` carry `id` and `text`; `ask` carries `id`, `text` (the question) and, for `--wait`, `waitSeconds` (0 to 86400).
 
 `ControlMessage.decode` checks the version before it reads the holder or the command, so a request of another version is refused by its version whatever else it holds. A path on the wire (`player.open`, `screenshot`) must be absolute.
 
@@ -440,7 +443,8 @@ public struct ThreadMessage: Codable { var author: Author; var kind: Kind; var t
     public enum Kind: String, Codable { case message, question, answer } }
 
 public struct Comment: Codable, Identifiable { var id: String; var time: Double; var text: String
-    var region: Region?; var state: CommentState; var batchID: String?; var thread: [ThreadMessage] }
+    var region: Region?; var state: CommentState; var batchID: String?; var thread: [ThreadMessage]
+    public var openQuestion: ThreadMessage? }                            // the last question, while no answer follows it
 
 public struct Batch: Codable, Identifiable { var id: String; var sentAt: Date; var commentIDs: [String]; var thread: [ThreadMessage] }
 
@@ -449,6 +453,9 @@ public struct ReviewSession: Codable, Equatable {
     public mutating func setNote(_ text: String)     // trimmed; an empty text takes the note away
     public private(set) var comments: [Comment]      // kept in time order
     public private(set) var batches: [Batch]
+    public private(set) var unheard: Set<String>     // the comments whose last answer no ask was given yet
+    public struct Exchange { var question: ThreadMessage; var answer: ThreadMessage }
+    public enum Place { case comment(String), batch(String) }
 
     public mutating func draft(id: String, time: Double, region: Region?) -> Comment
     public mutating func commit(_ id: String, text: String) throws(ReviewRefusal)         // draft → queued
@@ -458,11 +465,13 @@ public struct ReviewSession: Codable, Equatable {
     public mutating func send(batchID: String, at: Date) throws(ReviewRefusal) -> Batch   // every queued → sent
     public mutating func acknowledge(_ batchID: String, text: String?, at: Date) throws(ReviewRefusal)
     public mutating func setStatus(_ id: String, to: CommentState) throws(ReviewRefusal)  // working, done, failed
-    public mutating func reply(to id: String, text: String, at: Date) throws(ReviewRefusal)       // a comment or a batch
+    public mutating func reply(to id: String, text: String, at: Date) throws(ReviewRefusal) -> Place   // a comment or a batch
     public mutating func ask(_ id: String, question: String, at: Date) throws(ReviewRefusal)
     public mutating func answer(_ id: String, text: String, at: Date) throws(ReviewRefusal)       // needs an open question
+    public mutating func answerHeard(_ id: String)                                         // an ask got the answer
     public mutating func requeue(_ batchID: String)                                        // unfinished → sent
     public func openQuestion(on id: String) -> ThreadMessage?
+    public func unheardAnswer(on id: String) -> Exchange?                                  // the answer an ask still has to get
     public func isFinished(_ batchID: String) -> Bool
     public var queue: [Comment]
 }
@@ -496,7 +505,9 @@ public struct BatchPayload: Codable {          // exactly the spec's shape, see 
 }
 ```
 
-Each ticket adds its own fields and methods. After the batch ticket, `Comment` is `id`, `time`, `text`, `region`, `state` and `batchID`, and `CommentState` has all seven states with `canMove(to:)`, the whole table of allowed moves. `Batch` is `id`, `sentAt` and `commentIDs`. `ReviewSession` has `video`, `comments`, `batches`, `queue`, `comment(_:)`, `batch(_:)`, `isFinished(_:)`, `draft(id:time:region:)`, `commit`, `discard`, `edit`, `delete`, `send(batchID:at:)`, `requeue(_:)` and `written(_:)`, the rule for a comment's text: trimmed, and not empty. `ReviewRefusal` is one line, `reason`. The threads and the note arrive with their tickets.
+Each ticket adds its own fields and methods. After the answers ticket, `Comment` and `Batch` have their `thread`, and `ReviewSession` has everything above but the note: `acknowledge`, `setStatus`, `reply`, `ask`, `answer`, `answerHeard`, `openQuestion(on:)`, `unheardAnswer(on:)` and `unheard`, beside `written(_:)` and `said(_:)`, the rules for a comment's and a thread message's text: trimmed, and not empty. `CommentState` has all seven states with `canMove(to:)`, the whole table of allowed moves. `ReviewRefusal` is one line, `reason`. The note arrives with its ticket.
+
+`unheard` is part of the review, not of the desk that parks an `ask`, so that the store keeps it with the threads: an answer given while no `ask` waited is still owed to the listener after the app starts again. A review, a comment and a batch kept before they had these fields read with none.
 
 `VRReview` depends on nothing, so `Outbox` takes a listener as its holder's `key` and `name`, not as a `Holder` (`VRLease`), and `BatchPayload` has its own `Line` instead of the transcript module's line. `Outbox` itself is not `Codable`: only its parcels are kept (`init(parcels:)`), while the listener, its open waits and the context it already has live for one run of the app. `leave` names the session's key, so a wait of a listener that was replaced closes without changing the new listener's presence. `BatchPayload` encodes every key always, `null` for what is missing; its `init` is the batch assembly, a pure function of the review that the tests run without the app.
 
@@ -569,7 +580,9 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
     private(set) var composing: String?             // the draft the comment box is open on
     private(set) var keyframes: Set<String>         // the comments whose keyframe is on disk
     private(set) var crops: Set<String>             // the comments whose region's crop is on disk
-    private(set) var notices: [Notice]
+    private(set) var notices: [Notice]             // one per agent message, each gone after noticeLifetime (5 s)
+    var posted: (() -> Void)?                      // a batch is in the outbox: ListenerDesk.outboxChanged
+    var answered: ((String) -> Void)?              // a question was answered: ListenerDesk.answered
 
     // what a person and an operator can do
     func open(_ url: URL) async throws(ModelRefusal)
@@ -595,8 +608,11 @@ protocol FrameGrabbing: Sendable {                  // AVAssetImageGenerator in 
     func payload(for parcel: Outbox.Parcel) throws(ModelRefusal) -> BatchPayload
     func acknowledge(_ batchID: String, text: String?) throws(ModelRefusal)
     func setStatus(_ commentID: String, to: CommentState) throws(ModelRefusal)
-    func reply(to id: String, text: String) throws(ModelRefusal)
+    func reply(to id: String, text: String) throws(ModelRefusal) -> ReviewSession.Place
     func ask(_ commentID: String, question: String) throws(ModelRefusal)
+    func unheardAnswer(on commentID: String) -> ReviewSession.Exchange?
+    func answerHeard(_ commentID: String)
+    func dismissNotice(_ id: UUID)
 }
 ```
 
@@ -608,7 +624,9 @@ The video's length has one source, `VideoFile.info.duration` (the asset's, round
 
 The region's gestures are `beginDrawing()` (a drag started: pause; false while the comment box is open or no video is) and `compose(region:)` (the drag ended: the comment box on the rectangle). The geometry between the stage's points and a `Region` is not the model's: `FrameFit`, in `RegionOverlay.swift`, is a value the tests use without a window.
 
-Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over. The outbox is in memory for the run too (`ReviewModel.outbox`, changed only through the model's own methods); the persistence ticket keeps its parcels with `Outbox(parcels:)`.
+Until the persistence ticket, `ReviewModel` keeps the reviews of the videos opened in this run in memory, by content hash, so a video opened again in the same run has its comments. `Library` takes that over. The listener's answers and `thread answer` name a comment or a batch by its id alone, and its video needn't be the open one: the model looks the id up in those reviews (`hash(ofComment:)`, `hash(ofBatch:)`), which `Library.videoHash(forComment:)` and `videoHash(forBatch:)` replace once `index.json` keeps the ids.
+
+`setStatus` is where a batch finishes: when every comment of the batch is done or failed, the model calls `outbox.finish`, so the listener has no work of it left and presence goes from `working` to `listening`. `acknowledge` with a text, `reply` and `ask` raise a `Notice`; an `ack` without a text and a status raise none, since they show on the pins and cards. `answer` calls `answered`, which `ControlServer` sets to `ListenerDesk.answered`. The answer box ends in `answerByPerson`, and a click on a notice in `openNotice` (the notice goes, its comment shows). The outbox is in memory for the run too (`ReviewModel.outbox`, changed only through the model's own methods); the persistence ticket keeps its parcels with `Outbox(parcels:)`.
 
 The model takes the time as a closure (`now`), so the tests set when a batch was sent and when a wait closed. `payload(for:)` is not `async`: everything it reads is in memory (the paths of images on disk, the transcript lines known at that moment, the context), so a batch goes to a parked `wait` in the same step it is sent in, with nothing running between. Two private functions feed it: `contextText(of:)` (`ContextSidecar.find` beside the review's video path, read from disk on each call, plus the review's note; `Outbox.context` sends the text once per listener session and when it changed) and `transcript(around:of:)`, which asks `TranscriptService` for the lines it knows at that moment.
 
@@ -667,6 +685,8 @@ Times are accepted as seconds (`10`, `10.5`) or `mm:ss` (`0:10`, `1:02.5`), also
 
 `batch send` with nothing queued is refused with exit 1 (`there's nothing to send: no comment is queued`). It says `sent b1 with 1 comment` for one. `wait --timeout` takes whole seconds from 0 to 86400; `--timeout 0` answers at once. A `wait` whose time ran out prints `no batch came within 5 seconds` on standard error and exits 3. The payload is one JSON object on one line, keys sorted, with or without `--json`.
 
+`ack`, `status`, `reply` and `ask` take ids as the payload gave them, and a text as one argument (a second word is refused with exit 2 and the advice to quote it). An empty text is refused with exit 2; `ack` takes no text at all instead. `status` takes exactly `working`, `done` or `failed`, anything else is exit 2. `reply` takes a comment's id or a batch's: ids don't collide (`c1`, `b1`), so the app finds which it is. `ask --wait` takes whole seconds from 0 to 86400; `--wait 0` asks and answers at once. An `ask` whose time ran out prints `no answer came within 5 seconds` on standard error and exits 3, and its question stays open. A refusal (`there's no comment c9`, `c1 is done; it can't be set to working`, `c3 wasn't sent yet; it can't be replied on`, `c1 has no question to answer`) is exit 1. `thread answer` reaches a comment of any video of this run, as the listener does.
+
 `screenshot` captures the window from this process's own shareable content, which needs no Screen Recording permission. When the capture fails, the app draws the window's views itself, writes that, and says `captured by rendering: <why>` on standard error with exit 0; the video's frame is missing from such a file. One screenshot runs at a time, since each sets the app's appearance.
 
 NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's contract has `status <comment-id> working|done|failed` instead. This build follows the spec.
@@ -689,13 +709,14 @@ NOTE: ADR 0001 lists the listener commands as `done` and `fail`. The spec's cont
      "region": null, "keyframePath": "/abs/…/frames/c1.png", "cropPath": null,
      "thread": [{"author": "agent", "kind": "question", "text": "…", "at": "2026-10-04T12:00:00Z"}]}
   ],
-  "batches": [{"id": "b1", "sentAt": "…", "commentIds": ["c1", "c2"], "delivery": "taken", "finished": true, "thread": []}]
+  "batches": [{"id": "b1", "sentAt": "…", "commentIds": ["c1", "c2"], "delivery": "taken", "finished": true, "thread": []}],
+  "notices": [{"commentId": "c1", "batchId": "b1", "kind": "question", "text": "…"}]
 }
 ```
 
 The player's time is in two places with the same value: `player.time`, and a top-level `time` for a script that reads one field. Both are rounded to the millisecond.
 
-Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; the region ticket adds `region` and `cropPath`; the batch ticket adds `batchId` (`null` before the comment is sent), `listener` and `batches`, each batch as `{id, sentAt, commentIds, delivery, finished}`; `thread` arrives with its ticket. `listener.name` is the last listener session's name, `null` before any `wait`. A batch's `delivery` is `pending` until a `wait` took it, then `taken`; a batch that went back in the queue is `pending` again. `batches` holds the open video's batches, oldest first. As lines, `state` adds `batches: 1` and one line per batch (`  b1 pending: c2, c1`) when there are some.
+Each key arrives with the ticket that builds what it reports. The first build ticket gives `app`, `lease`, `video`, `player` and `time`. The comment ticket gives `queue` and `comments`, each comment as `{id, time, text, state, keyframePath}`; the region ticket adds `region` and `cropPath`; the batch ticket adds `batchId` (`null` before the comment is sent), `listener` and `batches`, each batch as `{id, sentAt, commentIds, delivery, finished}`; the answers ticket adds `thread` to each comment and each batch, as `{author, kind, text, at}` oldest first (`at` in ISO 8601, UTC), and `notices`. `listener.name` is the last listener session's name, `null` before any `wait`. A batch's `delivery` is `pending` until a `wait` took it, then `taken`; a batch that went back in the queue is `pending` again. `batches` holds the open video's batches, oldest first. As lines, `state` adds `batches: 1` and one line per batch (`  b1 pending: c2, c1`, `  b1 finished: c2, c1`) when there are some, and under each comment and each batch one line per thread message (`    agent question: which part?`). `notices` holds the notices the stage shows at that moment, oldest first, each as `{commentId, batchId, kind, text}` with `commentId` `null` for a message for a full batch: it's how an operator sees a toast, which is gone after 5 s, without a screenshot. `comment add --json` prints the comment with its (empty) `thread` too.
 
 The transcript ticket gives `transcript`, the open video's: `source` is `voiceover`, `subtitles` or `speech`; `ready` is `false` only while speech is still being recognized; `lines` counts the lines known now, over the whole video; `failure` is why speech gave no transcript, else `null`. It is `null` with no video. As lines, `state` adds `transcript: voiceover, 3 lines`, `transcript: speech, transcribing` or `transcript: speech, failed: <why>` under the player's line.
 
@@ -846,8 +867,10 @@ A queued `control take` is held the way Shipyard holds it, without the heartbeat
 - `ControlServer.Answer` names what hangs on its reply being written: the lease a `take` grants, and the `batch` a `wait` delivers with the `listener` key it goes to. `SocketListener` reports how the write went for such an answer (`written(_:delivered:)`).
 - The client's read gives up after 10 s without a byte, so a `wait` never outlives an app that died.
 - `wait` without `--timeout` waits until a batch comes. `ask` without `--wait` waits until the answer comes.
+- A parked `ask` is not the listener's presence: only a `wait` is. An `ask` whose client went away is dropped from the desk, and its question stays open.
+- `ControlServer.Answer.heard` names the comment whose answer an `ask`'s reply carries. Once the reply is written, the answer counts as heard (`ReviewSession.answerHeard`); a reply that couldn't be written leaves it for the next `ask`.
 - A `wait` from another listener session than the last one ends that one's parked waits (`another listener, <name>, took over`): one listener at a time.
-- When the app quits, every parked `wait` is refused with `video-review is quitting`.
+- When the app quits, every parked `wait` and `ask` is refused with `video-review is quitting`.
 
 ### The rules that carry the logic
 
@@ -858,9 +881,12 @@ rank: draft 0, queued 1, sent 2, acknowledged 3, working 4, done 5, failed 5
 
 commit:        draft → queued
 send:          queued → sent                       (every queued comment of the video, one batch)
-acknowledge:   sent → acknowledged                 (every comment of the batch still sent)
+acknowledge:   sent → acknowledged                 (every comment of the batch still sent; one that
+                                                   moved on stays; a second ack changes no state)
 setStatus(s):  s ∈ {working, done, failed}; from sent, acknowledged or working; rank must not go down
-               done and failed are final
+               done and failed are final           refused: "c1 is done; it can't be set to working"
+               the state it already has            done again, with no change (a listener's retry)
+               a comment not sent yet              refused: "c3 wasn't sent yet; it can't be given a status"
 requeue:       acknowledged, working → sent        (the only move backward)
 edit, delete:  queued only                         refused: "c1 was sent; it can't be edited"
                                                    a draft: "c1 is still being written; it can't be edited"
@@ -876,15 +902,22 @@ A status may skip forward (`acknowledged → done`), because the acceptance scen
 **Questions and answers** (`ReviewSession.swift`)
 
 ```text
-ask(id, question):   appends agent/question. Refused when a question on that comment is still open.
-answer(id, text):    appends person/answer. Refused when no question is open.
-ListenerDesk.ask:    session.ask → park the connection → on answer: reply with the answer's text.
+open question:       a comment's last question, while no answer follows it (messages between don't count).
+reply(id, text):     appends agent/message to the thread of the comment, or of the batch when id is one.
+                     Refused for a comment not sent yet. Allowed on a done or failed comment.
+ask(id, question):   appends agent/question. Refused when another question on that comment is still open.
+                     The open question asked again in the same words adds nothing: the same question.
+answer(id, text):    appends person/answer, and marks the comment unheard. Refused when no question is open.
+any of them:         the text is trimmed; refused when empty: "a message needs its text".
+ListenerDesk.ask:    an unheard answer on the comment → reply with it at once; nothing is asked.
+                     else session.ask → park the connection → on answer: reply with the answer's text.
                      Time ran out → ok with empty output (exit 3); the question stays open.
-                     ask again on a comment whose question was answered after the time ran out
-                     → the answer comes back at once, and is given once.
+                     The reply was written → answerHeard: the answer is given once.
 ```
 
-The person and `thread answer` both end in `ReviewModel.answer`, which resumes the parked `ask`.
+The person and `thread answer` both end in `ReviewModel.answer`, which resumes every `ask` parked on that comment.
+
+So a listener whose `ask` ran out has two ways on, both the same command again: while the question is still open, the same `ask` waits on it with no second question and no second notice; once the person answered, the next `ask` on that comment gets the answer at once, whatever it asks, with the question that was answered in its `--json`. An answer counts as given only when its reply was written, so a listener that was cut off while it waited gets it from the next `ask`.
 
 **The outbox** (`Outbox.swift`)
 
@@ -1074,6 +1107,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | The transport bar has a comment button beside the video's length. | The same action as C, for the mouse. |
 | Markers are pins above the scrubber track. A click seeks, pauses and selects the comment's card. | Pins do not hide the played part of the track. The card and the frame show together. |
 | A pin is its comment's state glyph in the state's colour, the one on its card: a grey ring while queued, a blue arrow once sent. The selected pin is larger, with an accent ring. | A marker shows its status without a hover, and not by colour alone. |
+| While the agent's question on a comment is open, its pin is an orange question mark instead of its state. | The one pin the person has to act on stands out on the timeline; the state is still on the card. |
 | The comment box and its text field are opaque, in the window's and the text field's own colours, with a hairline edge. | Over the black stage a material goes grey in light appearance, and the text and the hint on it go faint. |
 | A click on a card does what a click on its marker does. | One way to see a comment's moment, from either place. |
 | A draft has no marker and no card; the open comment box stands for it. | A marker is feedback that exists. The draft still shows in `state --json`, so an operator sees the box is open. |
@@ -1081,9 +1115,12 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | Each state has a colour and a glyph: queued (grey ring), sent (blue arrow), acknowledged (blue check), working (orange dots, pulsing), done (green check), failed (red cross). | Status reads at a glance and does not depend on colour alone. |
 | A region comment's rectangle shows on the frame only while its card is selected or the playhead is within 0.5 s of it. | The frame stays clean while watching. |
 | The sidebar lists comments in time order, with the keyframe (or crop) as a thumbnail. | Time order matches the timeline. The thumbnail shows what the comment is about. |
-| A thread shows inside its comment's card. An open question turns the card's edge orange and shows an answer box in it. | Answers stay next to the feedback, and a waiting agent is hard to miss. |
-| A batch shows as a header card above its comments' first one, with its own thread. | The spec's message for the full batch needs a place that is not one comment. |
-| An agent message raises a toast at the top right of the stage for 5 s. A click selects its comment. | Seen while watching, gone without a click, and it never pauses the video. |
+| A thread shows inside its comment's card, under a divider: each message with a glyph and a word for who wrote it and what it is (`Agent`, `Agent asks`, `You answered`). | Answers stay next to the feedback. Author and kind read without colour. |
+| An open question turns the card's edge orange and shows an answer box in it: one text field and an Answer button. Return answers, and the field grows to four lines. | A waiting agent is hard to miss, and the answer is one line and a key away. |
+| A batch shows as a header card above its comments' first one: its id, its comment count, where it is (`Waiting for a listener`, `With the agent`, `Finished`) and its own thread. It is outlined, not filled, and can't be selected. | The spec's message for the full batch needs a place that is not one comment, and the header must not read as one more comment. |
+| An agent message raises a toast at the top right of the stage for 5 s: `Agent · 0:10`, `Agent asks · 0:10` or `Agent · batch b1` over up to three lines of the text. At most three show, the newest. A click shows its comment (pause, seek, select) and dismisses it. | Seen while watching, gone without a click, and it never pauses the video. |
+| An `ack` without a text and a status change raise no toast. | They are not messages: the pins and cards show them. A toast per status would be noise while watching. |
+| The toast is opaque, in the window's background colour with a hairline edge and a shadow. | Over the black stage a material goes grey, as for the comment box. |
 | The send bar at the bottom of the sidebar shows the queued count, the Send button and the presence chip (`No listener`, `Listening`, `Working`). | The person sees whether the batch will reach someone at the moment of sending. |
 | Sending with no listener is allowed; the bar then says the batch waits for the next listener. | The spec's story 15. No dialog in the way. |
 | The presence chip is a word with a glyph in a tinted capsule: grey `No listener`, green `Listening`, orange `Working`. | Read at a glance beside the Send button, and not by colour alone. |
@@ -1113,7 +1150,7 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | #7 | `Batch`, `Outbox` (in memory), `BatchPayload`, `ListenerDesk`, long polls with the heartbeat, `wait` (`ListenerCommand`), `batch send` (`BatchCommand`), `Library.nextBatchID`, `SendBar`, Cmd+Enter (`SendKey`), presence, `listener`, `batches` and `batchId` in `state`, the requeue for a listener that started again |
 | #8 | `VRTranscript`, `TranscriptService`, `SpeechSource`, `TranscriptCache` |
 | #9 | `ContextSidecar`, the note, `ContextPopover`, `context set`, `Outbox.context` |
-| #10 | `ack`, `status`, `reply`, `ask`, `thread answer`, threads in cards, `BatchCard`, the toast |
+| #10 | `ThreadMessage`, the threads and their rules in `ReviewSession`, `ack`, `status`, `reply`, `ask` (`ListenerCommand`), `thread answer` (`ThreadCommand`), the parked `ask` in `ListenerDesk`, a batch finishing (`Outbox.finish`), `thread` and `notices` in `state`, `Notice`, `ThreadView` and `AnswerBox` in `CommentCard`, `BatchCard`, `NoticeToast`, the question on a pin |
 | #11 | The rest of `VRStore`: `review.json`, `outbox.json`, `index.json`, `ContentHash`, reload on open |
 | #12 | `.agents/skills/video-review-mate/SKILL.md` |
 | #13 | `scripts/acceptance.sh`, `assets/screenshots/` |

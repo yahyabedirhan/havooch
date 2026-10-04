@@ -11,6 +11,8 @@ struct Timeline: View {
         var time: Double
         var state: CommentState
         var isSelected: Bool
+        /// Whether the agent's question on it waits for an answer.
+        var hasOpenQuestion = false
     }
 
     let time: Double
@@ -63,18 +65,19 @@ struct Timeline: View {
     private func pin(_ marker: Marker) -> some View {
         let size = marker.isSelected ? Theme.selectedPinSize : Theme.pinSize
         // The state's glyph in its colour, as on the card: the status reads
-        // without colour too.
-        return Image(systemName: Theme.glyph(for: marker.state))
+        // without colour too. An open question shows instead, since the
+        // agent waits for the person there.
+        return Image(systemName: marker.hasOpenQuestion ? "questionmark.circle.fill" : Theme.glyph(for: marker.state))
             .resizable()
-            .foregroundStyle(Theme.colour(for: marker.state))
+            .foregroundStyle(marker.hasOpenQuestion ? Theme.question : Theme.colour(for: marker.state))
             .background(Circle().fill(.background).padding(0.5))
             .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: marker.isSelected ? 1.5 : 0).padding(-2))
             .frame(width: size, height: size)
             .frame(width: Self.pinArea + 2, height: Self.pinArea + 2)
             .contentShape(Rectangle())
             .onTapGesture { show(marker.id) }
-            .help("\(marker.id) at \(TimeText.short(marker.time)), \(marker.state.rawValue)")
-            .accessibilityLabel("Comment \(marker.id) at \(TimeText.short(marker.time))")
+            .help("\(marker.id) at \(TimeText.short(marker.time)), \(marker.state.rawValue)\(marker.hasOpenQuestion ? ", the agent asks" : "")")
+            .accessibilityLabel("Comment \(marker.id) at \(TimeText.short(marker.time)), \(marker.state.rawValue)")
     }
 
     /// How far along `time` is, from 0 to 1; 0 for a video with no length.
@@ -83,8 +86,11 @@ struct Timeline: View {
         return min(max(0, time / duration), 1)
     }
 
-    /// The pins for `comments`, with the selected comment's marked.
+    /// The pins for `comments`, with the selected comment's marked, and
+    /// those whose last question has no answer yet.
     nonisolated static func markers(for comments: [Comment], selection: String?) -> [Marker] {
-        comments.map { Marker(id: $0.id, time: $0.time, state: $0.state, isSelected: $0.id == selection) }
+        comments.map {
+            Marker(id: $0.id, time: $0.time, state: $0.state, isSelected: $0.id == selection, hasOpenQuestion: $0.openQuestion != nil)
+        }
     }
 }

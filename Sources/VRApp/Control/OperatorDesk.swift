@@ -97,6 +97,14 @@ struct OperatorDesk {
         }
     }
 
+    /// `thread answer <comment-id> <text>`: `answered c1`, or `{id}`.
+    func answer(_ commentID: String, text: String, json: Bool) async -> ControlReply {
+        await answer { () throws(ModelRefusal) in
+            try model.answer(commentID, text: text)
+            return json ? JSONLine.string(Named(id: commentID)) : "answered \(commentID)\n"
+        }
+    }
+
     /// `{id}`: what a change to one comment prints with `--json`.
     private struct Named: Encodable {
         var id: String
