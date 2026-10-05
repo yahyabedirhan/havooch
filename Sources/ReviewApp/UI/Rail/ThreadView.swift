@@ -28,6 +28,7 @@ struct ThreadView: View {
     /// Sends the person's answer to the open question; false when it wasn't
     /// taken. Nil where there's nothing to answer (a batch's messages).
     var answer: ((String) -> Bool)?
+    @Environment(\.palette) private var palette
 
     @State private var words = ""
 
@@ -57,11 +58,11 @@ struct ThreadView: View {
             HStack(spacing: 8) {
                 Text("↩ to answer")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(palette[.textTertiary])
                 Spacer()
                 Button("Answer", action: send)
                     .buttonStyle(.borderedProminent)
-                    .tint(Theme.question)
+                    .tint(palette[.question])
                     .controlSize(.small)
                     .disabled(!AppModel.hasWords(words))
             }
@@ -80,7 +81,7 @@ struct ThreadRow: View {
     let agent: String
     var isOpen = false
 
-    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.palette) private var palette
 
     private static let badge: CGFloat = 18
     /// Where a row's words start, which the answer box lines up with.
@@ -91,7 +92,7 @@ struct ThreadRow: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: heading.symbol)
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(Theme.onTint)
+                .foregroundStyle(palette[.textOnAccent])
                 .frame(width: Self.badge, height: Self.badge)
                 .background(tint, in: Circle())
                 .accessibilityHidden(true)
@@ -99,16 +100,16 @@ struct ThreadRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(heading.title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(isQuestion ? AnyShapeStyle(Theme.question) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(isQuestion ? palette[.question] : palette[.textSecondary])
                     if isOpen {
                         Text("waiting for you")
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(Theme.question)
+                            .foregroundStyle(palette[.question])
                     }
                     Spacer(minLength: 4)
                     Text(message.at.formatted(.dateTime.hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits)))
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(palette[.textTertiary])
                 }
                 Text(message.text)
                     .font(.callout)
@@ -130,18 +131,18 @@ struct ThreadRow: View {
     /// for the person.
     private var tint: Color {
         switch (message.author, message.kind) {
-        case (.agent, .question): Theme.question
-        case (.agent, _): Theme.agent
-        case (.person, _): Theme.tint(.sent)
+        case (.agent, .question): palette[.question]
+        case (.agent, _): palette[.agent]
+        case (.person, _): palette.state(.sent)
         }
     }
 
     /// The bubble behind the words: no stroke, only a light fill.
     private var bubble: Color {
         switch (message.author, message.kind) {
-        case (.agent, .question): Theme.questionBubble(contrast)
-        case (.agent, _): Theme.agentBubble(contrast)
-        case (.person, _): Theme.personBubble(contrast)
+        case (.agent, .question): palette[.bubbleQuestion]
+        case (.agent, _): palette[.bubbleAgent]
+        case (.person, _): palette[.bubblePerson]
         }
     }
 }

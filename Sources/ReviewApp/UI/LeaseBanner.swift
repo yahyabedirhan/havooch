@@ -60,6 +60,7 @@ struct AgentControlButton: View {
     /// Set once the sign is in the toolbar, for its one bounce.
     @State private var hasArrived = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let banner = indicator.shown(at: now).map { LeaseBanner($0) }
@@ -70,7 +71,7 @@ struct AgentControlButton: View {
                 Text(banner?.title ?? "Agent control")
             } icon: {
                 Image(systemName: "cursorarrow.rays")
-                    .foregroundStyle(Theme.control)
+                    .foregroundStyle(palette[.control])
                     .symbolEffect(.bounce, value: hasArrived)
             }
         }
@@ -104,6 +105,7 @@ private struct AgentControlPopover: View {
     let stop: () -> Void
 
     static let width: CGFloat = 300
+    @Environment(\.palette) private var palette
 
     var body: some View {
         // Each second, so the countdown ticks.
@@ -119,12 +121,13 @@ private struct AgentControlPopover: View {
             HStack(spacing: 10) {
                 Image(systemName: "cursorarrow.rays")
                     .font(.title3)
-                    .foregroundStyle(Theme.control)
+                    .foregroundStyle(palette[.control])
                     .frame(width: 32, height: 32)
-                    .background(Theme.control.opacity(0.16), in: Circle())
+                    .background(palette[.control].opacity(0.16), in: Circle())
                     .accessibilityHidden(true)
                 Text(banner.title)
                     .font(.headline)
+                    .foregroundStyle(palette[.textPrimary])
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -138,14 +141,14 @@ private struct AgentControlPopover: View {
                 }
             }
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette[.textSecondary])
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(palette[.well], in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(LeaseBanner.stopHelp)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(palette[.textTertiary])
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 Button(LeaseBanner.stop, role: .destructive, action: stop)
@@ -155,6 +158,7 @@ private struct AgentControlPopover: View {
         }
         .padding(16)
         .frame(width: Self.width)
+        .foregroundStyle(palette[.textPrimary])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(banner.text)
     }

@@ -34,6 +34,10 @@ protocol AppControlling: AnyObject {
     func sendBatch() async throws(AppRefusal) -> StateReport.Batch
     /// Answers the open question of a comment, as the answer box does.
     func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment
+    /// Every theme, and the files left out.
+    func themeList() -> StateReport.ThemeList
+    /// Pins the theme called `name`, or follows the system for `system`.
+    func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -261,6 +265,12 @@ final class ControlServer {
             case .threadAnswer(let commentID, let text):
                 let comment = try app.answer(commentID, text: text)
                 return done("\(comment.id) answered", Output(comment: comment), json)
+            case .themeList:
+                let list = app.themeList()
+                return done(json ? StateReport.json(list) : list.lines)
+            case .themeSet(let name):
+                let theme = try app.setTheme(name)
+                return done(theme.setLine, Output(theme: theme), json)
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -280,6 +290,7 @@ final class ControlServer {
         var batch: StateReport.Batch?
         var message: StateReport.Message?
         var answer: StateReport.Message?
+        var theme: StateReport.Theme?
     }
 
     /// What the app shows, with the lease and the listener as they are now.

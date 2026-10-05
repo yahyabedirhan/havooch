@@ -12,6 +12,8 @@ struct SupportLayoutTests {
 
         #expect(layout.outboxFile.path == "/support/outbox.json")
         #expect(layout.recentFile.path == "/support/recent.json")
+        #expect(layout.settingsFile.path == "/support/settings.json")
+        #expect(layout.themesFolder.path == "/support/Themes")
         #expect(layout.videosFolder.path == "/support/videos")
         #expect(layout.folder("abc").path == "/support/videos/abc")
         #expect(layout.reviewFile("abc").path == "/support/videos/abc/review.json")

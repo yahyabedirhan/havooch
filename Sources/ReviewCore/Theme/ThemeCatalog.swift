@@ -1,0 +1,162 @@
+import Foundation
+
+/// A theme with every token it could resolve.
+public struct ResolvedTheme: Equatable, Sendable {
+    public var name: String
+    public var kind: ThemeKind
+    /// Every token, unless no theme in its chain nor its kind's default
+    /// sets it (a catalog without the default themes).
+    public var colors: [ThemeToken: ThemeColor]
+
+    public init(name: String, kind: ThemeKind, colors: [ThemeToken: ThemeColor]) {
+        self.name = name
+        self.kind = kind
+        self.colors = colors
+    }
+
+    public subscript(_ token: ThemeToken) -> ThemeColor? {
+        colors[token]
+    }
+}
+
+/// Why a theme can't be used.
+public enum ThemeRefusal: Error, Equatable, Sendable {
+    /// No theme in the catalog has the name.
+    case unknown(String)
+
+    /// The refusal as the one line the command prints.
+    public var line: String {
+        switch self {
+        case .unknown(let name): "no theme \(name); video-review theme list names them"
+        }
+    }
+}
+
+/// The themes the app knows, and how a theme resolves to every token.
+///
+/// A theme's token comes from the first of: the theme itself, the themes
+/// up its `extends` chain, the default theme of its kind (`Default Light`
+/// or `Default Dark`). Overrides apply on top. A token name the app doesn't
+/// know is ignored, and a colour that doesn't read counts as missing.
+/// A pure value: the files are read by the store.
+public struct ThemeCatalog: Equatable, Sendable {
+    public static let defaultLight = "Default Light"
+    public static let defaultDark = "Default Dark"
+
+    /// Where a theme comes from.
+    public enum Source: String, Equatable, Sendable {
+        /// Shipped in the app bundle.
+        case builtIn = "built-in"
+        /// A file in the support folder's `Themes/`.
+        case user
+    }
+
+    public struct Entry: Equatable, Sendable {
+        public var file: ThemeFile
+        public var source: Source
+
+        public var name: String { file.name }
+    }
+
+    /// The themes that can be used, by name.
+    public private(set) var entries: [Entry]
+    /// The themes left out, each with its reason, as a line.
+    public private(set) var problems: [String] = []
+    /// The built-in default themes, the last fallback even when a user
+    /// theme replaces one of them.
+    private var builtInDefaults: [ThemeKind: ThemeFile] = [:]
+
+    /// `user` themes replace the `builtIn` ones of the same name (without
+    /// regard to case); of two user themes with one name, the later one
+    /// wins. A theme whose `extends` names no theme, or loops back, is
+    /// left out with its reason in `problems`.
+    public init(builtIn: [ThemeFile], user: [ThemeFile]) {
+        var byKey: [String: Entry] = [:]
+        for file in builtIn { byKey[Self.key(file.name)] = Entry(file: file, source: .builtIn) }
+        for kind in ThemeKind.allCases {
+            builtInDefaults[kind] = builtIn.last { Self.key($0.name) == Self.key(Self.defaultName(of: kind)) }
+        }
+        for file in user { byKey[Self.key(file.name)] = Entry(file: file, source: .user) }
+        entries = []
+        for entry in byKey.values {
+            do throws(Broken) {
+                _ = try Self.chain(of: entry, in: byKey)
+                entries.append(entry)
+            } catch {
+                problems.append("theme \(entry.name) is left out: \(error.reason)")
+            }
+        }
+        entries.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        problems.sort()
+    }
+
+    /// The names of the themes that can be used, in order.
+    public var names: [String] { entries.map(\.name) }
+
+    /// The theme called `name`, without regard to case.
+    public func entry(named name: String) -> Entry? {
+        entries.first { Self.key($0.name) == Self.key(name) }
+    }
+
+    /// The theme called `name` with every token resolved and `overrides`
+    /// (token name to colour text) on top.
+    public func resolve(_ name: String, overrides: [String: String] = [:]) throws(ThemeRefusal) -> ResolvedTheme {
+        guard let entry = entry(named: name) else { throw .unknown(name) }
+        let byKey = Dictionary(uniqueKeysWithValues: entries.map { (Self.key($0.name), $0) })
+        // The catalog only keeps themes whose chain resolves.
+        var files = ((try? Self.chain(of: entry, in: byKey)) ?? [entry]).map(\.file)
+        if let base = byKey[Self.key(Self.defaultName(of: entry.file.kind))], let baseChain = try? Self.chain(of: base, in: byKey) {
+            files += baseChain.map(\.file)
+        }
+        if let builtIn = builtInDefaults[entry.file.kind] { files.append(builtIn) }
+        var colors: [ThemeToken: ThemeColor] = [:]
+        for token in ThemeToken.allCases {
+            colors[token] = files.lazy.compactMap { $0.tokens[token.rawValue].flatMap(ThemeColor.init) }.first
+        }
+        for (name, text) in overrides {
+            guard let token = ThemeToken(rawValue: name), let color = ThemeColor(text) else { continue }
+            colors[token] = color
+        }
+        return ResolvedTheme(name: entry.name, kind: entry.file.kind, colors: colors)
+    }
+
+    /// The name of the theme the app shows: the pinned one while it
+    /// exists, else the default of the system's `appearance`.
+    public func active(pinned: String?, appearance: ThemeKind) -> String {
+        if let pinned, let entry = entry(named: pinned) { return entry.name }
+        return Self.defaultName(of: appearance)
+    }
+
+    /// `Default Light` or `Default Dark`.
+    public static func defaultName(of kind: ThemeKind) -> String {
+        kind == .light ? defaultLight : defaultDark
+    }
+
+    // MARK: - The chain
+
+    private struct Broken: Error {
+        var reason: String
+    }
+
+    /// `entry`, then each theme it extends, in order.
+    private static func chain(of entry: Entry, in byKey: [String: Entry]) throws(Broken) -> [Entry] {
+        var chain = [entry]
+        var seen: Set<String> = [key(entry.name)]
+        var current = entry
+        while let parent = current.file.extends {
+            guard let next = byKey[key(parent)] else {
+                throw Broken(reason: "\(current.name) extends \(parent), and no theme has that name")
+            }
+            guard seen.insert(key(next.name)).inserted else {
+                throw Broken(reason: "its `extends` loops back to \(next.name)")
+            }
+            chain.append(next)
+            current = next
+        }
+        return chain
+    }
+
+    private static func key(_ name: String) -> String {
+        name.lowercased()
+    }
+}

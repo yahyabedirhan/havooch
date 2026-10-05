@@ -20,6 +20,7 @@ struct VideoReviewApp: App {
                     .keyboardShortcut("o")
             }
             PlaybackCommands(model: delegate.model)
+            ThemeMenu(model: delegate.model)
         }
     }
 }
@@ -55,6 +56,37 @@ private struct PlaybackCommands: Commands {
     }
 }
 
+/// View > Theme: follow the system appearance, or pin one theme. The
+/// same choice as `video-review theme set`.
+private struct ThemeMenu: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Picker("Theme", selection: selection) {
+                Text("Follow the System").tag(ThemeDesk.system)
+                Divider()
+                ForEach(model.themes.catalog.names, id: \.self) { name in
+                    Text(name).tag(name)
+                }
+            }
+        }
+    }
+
+    private var selection: Binding<String> {
+        Binding(
+            get: { model.themes.pinned ?? ThemeDesk.system },
+            set: { name in
+                do throws(AppRefusal) {
+                    _ = try model.setTheme(name)
+                } catch {
+                    model.problem = AppModel.Problem(title: "The theme didn't change", reason: error.reason)
+                }
+            }
+        )
+    }
+}
+
 /// Owns what lives as long as the app: the model and the control server.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel(environment: ProcessInfo.processInfo.environment)
@@ -66,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
         Shortcuts.install(for: model)
+        model.themes.followSystemAppearance()
         let server = ControlServer(
             socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,
             screenshotter: Screenshotter(indicator: lease),
@@ -77,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do throws(SocketListener.Failure) {
             try server.start()
             self.server = server
+            // A theme file or settings.json edited by hand shows at once.
+            model.themes.startWatching()
             // Only the one copy that has the socket touches the data.
             server.ready = Task { await model.openRecent() }
         } catch {

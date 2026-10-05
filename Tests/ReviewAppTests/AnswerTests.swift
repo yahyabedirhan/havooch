@@ -504,6 +504,6 @@ struct ThreadWordsTests {
 
     @Test("every state the agent sets has its glyph on the pin, and an open question comes before an unread message")
     func pins() throws {
-        #expect(CommentState.allCases.map(Theme.pinGlyph) == [nil, nil, nil, "checkmark", "ellipsis", "checkmark", "xmark"])
+        #expect(CommentState.allCases.map(StateLook.pinGlyph) == [nil, nil, nil, "checkmark", "ellipsis", "checkmark", "xmark"])
     }
 }

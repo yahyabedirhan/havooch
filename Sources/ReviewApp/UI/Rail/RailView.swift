@@ -49,7 +49,7 @@ struct RailView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let groups = Self.groups(comments: model.comments, batches: model.batches)
@@ -104,7 +104,8 @@ struct RailView: View {
                 CommentRow(model: model, comment: card.comment, number: card.number)
                     .id(card.id)
                 if card.id != group.cards.last?.id {
-                    Divider()
+                    palette[.separator]
+                        .frame(height: 1)
                         .padding(.leading, CommentRow.textInset)
                 }
             }
@@ -117,10 +118,10 @@ struct RailView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             content()
         }
-        .padding(.horizontal, Theme.railPadding)
+        .padding(.horizontal, Metrics.railPadding)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sectionBand(contrast))
+        .background(palette[.sidebarSection])
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -133,7 +134,7 @@ struct RailView: View {
         if count > 0 {
             Text("\(count) comment\(count == 1 ? "" : "s")")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette[.textSecondary])
         }
     }
 
@@ -144,7 +145,7 @@ struct RailView: View {
         let waits = model.listeners.outbox.pending.contains { $0.batchID == batch.id }
         Image(systemName: waits ? "clock" : "paperplane")
             .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette[.textSecondary])
             .accessibilityHidden(true)
         // Two digits for the hour: "Sent at 00:13" can't be read as a
         // time in the video.
@@ -153,7 +154,7 @@ struct RailView: View {
         Spacer(minLength: 8)
         Text(waits ? "\(Self.progress(of: comments)) · waiting for an agent" : Self.progress(of: comments))
             .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette[.textSecondary])
             .lineLimit(1)
     }
 
@@ -161,7 +162,7 @@ struct RailView: View {
     /// chat bubbles.
     private func batchMessages(_ batch: Batch) -> some View {
         ThreadView(messages: batch.messages, agent: model.agentName)
-            .padding(.horizontal, Theme.railPadding)
+            .padding(.horizontal, Metrics.railPadding)
             .padding(.vertical, 12)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("The agent's messages about the whole batch")
@@ -170,9 +171,9 @@ struct RailView: View {
     private var nothingQueued: some View {
         Text("Nothing queued. Press C to comment on the moment you're watching.")
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(palette[.textSecondary])
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Theme.railPadding)
+            .padding(.horizontal, Metrics.railPadding)
             .padding(.vertical, 12)
     }
 
@@ -180,13 +181,13 @@ struct RailView: View {
         VStack(spacing: 8) {
             Image(systemName: "text.bubble")
                 .font(.system(size: 26, weight: .light))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(palette[.textTertiary])
                 .padding(.bottom, 2)
             Text("No comments yet")
                 .font(.headline)
             Text("Press C to comment on the moment you're watching, or drag on the frame to comment on a part of it. Comments queue here, then go to your agent as one batch.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette[.textSecondary])
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 28)

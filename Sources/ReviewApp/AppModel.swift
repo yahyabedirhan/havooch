@@ -54,6 +54,8 @@ final class AppModel: AppControlling {
     let listeners: ListenerQueue
     /// The transcripts of the videos opened in this run.
     let transcripts: TranscriptDesk
+    /// The active theme, the pin and the overrides.
+    let themes: ThemeDesk
     /// Where this run keeps its data: the person's own, or a demo's.
     let support: URL
     /// Whether this run is on demo data (`app open --demo`).
@@ -99,6 +101,7 @@ final class AppModel: AppControlling {
         desk = ReviewDesk(library: Library(layout: layout))
         listeners = ListenerQueue(desk: desk, layout: layout)
         transcripts = TranscriptDesk(layout: layout, speech: speech)
+        themes = ThemeDesk(layout: layout)
         listeners.transcripts = transcripts
         listeners.announce = { [weak self] notice in self?.raise(notice) }
     }
@@ -294,6 +297,7 @@ final class AppModel: AppControlling {
             batches: batches.map(report)
         )
         report.transcript = transcript
+        report.theme = themes.report
         return report
     }
 

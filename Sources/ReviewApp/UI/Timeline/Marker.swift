@@ -34,6 +34,7 @@ struct MarkerPin: View {
     var badge: Badge?
 
     static let size: CGFloat = 18
+    @Environment(\.palette) private var palette
     /// How far a badge or a state glyph stands out from the pin.
     static let overhang: CGFloat = 4
 
@@ -41,22 +42,22 @@ struct MarkerPin: View {
         Text("\(number)")
             .font(.system(size: number > 99 ? 8 : 10.5, weight: .bold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(isHollow ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.onTint))
+            .foregroundStyle(isHollow ? palette[.textPrimary] : palette[.textOnAccent])
             .frame(width: Self.size, height: Self.size)
-            .background(isHollow ? Color(nsColor: .windowBackgroundColor) : Theme.tint(state), in: Circle())
+            .background(isHollow ? palette[.bar] : palette.state(state), in: Circle())
             .overlay {
                 Circle().strokeBorder(
-                    isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(isHollow ? .secondary : Theme.tint(state)),
+                    isSelected ? palette[.accent] : (isHollow ? palette[.textSecondary] : palette.state(state)),
                     lineWidth: isSelected ? 2 : 1.5
                 )
             }
             .background {
                 if isSelected {
-                    Circle().fill(.tint.opacity(0.28)).padding(-4)
+                    Circle().fill(palette[.accent].opacity(0.28)).padding(-4)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if let glyph = Theme.pinGlyph(state) {
+                if let glyph = StateLook.pinGlyph(state) {
                     stateGlyph(glyph).offset(x: Self.overhang, y: Self.overhang)
                 }
             }
@@ -72,10 +73,10 @@ struct MarkerPin: View {
     private func stateGlyph(_ glyph: String) -> some View {
         Image(systemName: glyph)
             .font(.system(size: 7, weight: .black))
-            .foregroundStyle(Theme.tint(state))
+            .foregroundStyle(palette.state(state))
             .frame(width: 11, height: 11)
-            .background(Color(nsColor: .windowBackgroundColor), in: Circle())
-            .overlay { Circle().strokeBorder(Theme.tint(state), lineWidth: 1) }
+            .background(palette[.bar], in: Circle())
+            .overlay { Circle().strokeBorder(palette.state(state), lineWidth: 1) }
             .accessibilityHidden(true)
     }
 
@@ -85,16 +86,16 @@ struct MarkerPin: View {
         case .question:
             Text("?")
                 .font(.system(size: 8, weight: .black, design: .rounded))
-                .foregroundStyle(Theme.onTint)
+                .foregroundStyle(palette[.textOnAccent])
                 .frame(width: 11, height: 11)
-                .background(Theme.question, in: Circle())
-                .overlay { Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 1) }
+                .background(palette[.question], in: Circle())
+                .overlay { Circle().strokeBorder(palette[.bar], lineWidth: 1) }
                 .accessibilityLabel("The agent asks a question")
         case .unread:
             Circle()
-                .fill(.tint)
+                .fill(palette[.agent])
                 .frame(width: 8, height: 8)
-                .overlay { Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 1) }
+                .overlay { Circle().strokeBorder(palette[.bar], lineWidth: 1) }
                 .accessibilityLabel("A new message from the agent")
         }
     }
@@ -113,6 +114,7 @@ struct MarkerLayer: View {
     /// The comments with an agent message the person hasn't looked at.
     var unread: Set<ItemID> = []
     let select: (ItemID) -> Void
+    @Environment(\.palette) private var palette
 
     /// The stem's length: from the pin down to the track.
     let stem: CGFloat
@@ -134,9 +136,9 @@ struct MarkerLayer: View {
                     }
                     .buttonStyle(.plain)
                     .help(comment.text)
-                    .accessibilityLabel("Comment \(index + 1), \(Theme.name(comment.state))")
+                    .accessibilityLabel("Comment \(index + 1), \(StateLook.name(comment.state))")
                     Capsule()
-                        .fill(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        .fill(isSelected ? palette[.accent] : palette[.textSecondary])
                         .frame(width: 1.5, height: stem)
                         .allowsHitTesting(false)
                 }

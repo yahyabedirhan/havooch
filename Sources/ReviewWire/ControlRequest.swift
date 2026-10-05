@@ -73,6 +73,13 @@ public enum ControlRequest: Equatable, Sendable {
     /// otherwise. The agent-control indicator shows as the person sees it,
     /// unless `hideAgentIndicator` leaves it out.
     case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false)
+    /// `video-review theme list`: every theme the app knows, and which one
+    /// is active and pinned.
+    case themeList
+    /// `video-review theme set <name>`: the theme called `name` pinned, or
+    /// the pin cleared for `system`, so the theme follows the system
+    /// appearance again.
+    case themeSet(name: String)
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -121,7 +128,8 @@ public enum ControlRequest: Equatable, Sendable {
     /// requests take the lease without a table.
     public var role: Role {
         switch self {
-        case .appStatus, .state, .controlTake, .controlRelease: .free
+        case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
+        case .themeSet: .operator
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentEdit, .commentDelete, .batchSend: .operator

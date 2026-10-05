@@ -105,7 +105,7 @@ struct Command: Sendable {
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
     static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
-        + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands
+        + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

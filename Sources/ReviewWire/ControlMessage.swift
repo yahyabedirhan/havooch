@@ -54,6 +54,8 @@ public struct ControlMessage: Equatable, Sendable {
         case .ask(let commentID, let question, let waitSeconds):
             wire = Wire(command: "ask", waitSeconds: waitSeconds, id: commentID, text: question)
         case .threadAnswer(let commentID, let text): wire = Wire(command: "thread.answer", id: commentID, text: text)
+        case .themeList: wire = Wire(command: "theme.list")
+        case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
         }
         wire.holder = holder
         wire.json = json
@@ -157,6 +159,8 @@ public struct ControlMessage: Equatable, Sendable {
             )
         case "thread.answer":
             return .threadAnswer(commentID: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+        case "theme.list": return .themeList
+        case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -202,5 +206,6 @@ public struct ControlMessage: Equatable, Sendable {
         var region: ControlRequest.Rectangle?
         var timeoutSeconds: Int?
         var state: String?
+        var name: String?
     }
 }

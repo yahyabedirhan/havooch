@@ -36,23 +36,24 @@ private struct Toast: View {
     let notice: Notice
     let number: Int?
     let open: () -> Void
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: open) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: symbol)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Theme.onTint)
+                    .foregroundStyle(palette[.textOnAccent])
                     .frame(width: 22, height: 22)
                     .background(tint, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(notice.title(number: number))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(palette[.noticeText])
                     Text(notice.text)
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette[.textSecondary])
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
                     if let hint = notice.hint {
@@ -67,9 +68,9 @@ private struct Toast: View {
             .padding(12)
             .frame(width: Toasts.width)
             // A solid surface, as the comment box: words over a video stay readable.
-            .background(Color(nsColor: .windowBackgroundColor), in: shape)
-            .overlay { shape.strokeBorder(notice.kind == .question ? AnyShapeStyle(tint.opacity(0.7)) : AnyShapeStyle(.white.opacity(0.16)), lineWidth: notice.kind == .question ? 1.5 : 1) }
-            .shadow(color: .black.opacity(0.45), radius: 14, y: 5)
+            .background(palette[.notice], in: shape)
+            .overlay { shape.strokeBorder(notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder], lineWidth: notice.kind == .question ? 1.5 : 1) }
+            .shadow(color: palette[.shadow], radius: 14, y: 5)
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -90,6 +91,6 @@ private struct Toast: View {
     }
 
     private var tint: Color {
-        notice.kind == .question ? Theme.question : Theme.agent
+        notice.kind == .question ? palette[.question] : palette[.agent]
     }
 }

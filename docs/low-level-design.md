@@ -151,7 +151,7 @@ AppModel ──owns──▶ ListenerQueue ──holds──▶ Outbox ──ref
                         ├──changes reviews through──▶ ReviewDesk
                         └──reads──▶ ContextReader, SupportLayout (image paths)
 AppModel ──owns──▶ TranscriptDesk ──asks──▶ TranscriptSources        (read at send time, not at delivery)
-AppModel ──owns──▶ ThemeDesk ──resolves with──▶ ThemeCatalog; ──reads──▶ ThemeFiles, Library (settings)
+AppModel ──owns──▶ ThemeDesk ──resolves with──▶ ThemeCatalog; ──reads──▶ ThemeFiles, Settings
 SocketListener ──hands bytes to──▶ ControlServer ──holds──▶ ControlLease
 ControlServer ──calls──▶ AppModel (operator and free), ListenerQueue (listener)
 UI views ──read──▶ AppModel, ReviewDesk, ListenerQueue, PlayerEngine, ThemeDesk (as Palette)   ──call──▶ AppModel
@@ -270,8 +270,8 @@ Sources/
     ContentHash.swift              SHA-256 of the file, streamed
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
-    ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values
-    Settings.swift                 the pinned theme, the overrides, the sidebar width
+    ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
+    Settings.swift                 the pinned theme, the overrides, the sidebar width; settings.json load and save
   ReviewApp/
     VideoReviewApp.swift           @main; the one window; the menu commands
     AppModel.swift                 the orchestrator; every action a person or an operator can take
@@ -279,7 +279,7 @@ Sources/
     ReviewDesk.swift               change a review, save it, publish it
     ListenerQueue.swift            open waits and asks; delivery; payload assembly; presence; the listener's answers
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
-    ThemeDesk.swift                the active theme, pin and overrides; watches Themes/ and settings.json
+    ThemeDesk.swift                the active theme, pin and overrides; watches Themes/ and settings.json; AppModel's theme actions
     ContextReader.swift            the sidecar context file plus the note
     Notice.swift                   one notice: its thread, the agent's name, the words, when it fades
     Player/
@@ -292,11 +292,12 @@ Sources/
       ControlServer.swift          decode, the lease gate, dispatch, held takes; the written/undelivered outcome
       LeaseIndicator.swift         the lease as the agent-control icon shows it
       StateReport.swift            `state` and `app status` as JSON and as lines
+      ThemeReport.swift            the theme in `state`, `theme list` and `theme set`
       Screenshotter.swift          the app window through ScreenCaptureKit, in an appearance
     UI/
       RootView.swift               stage, player bar, sidebar, header; injects the Palette
-      Palette.swift                the resolved tokens as SwiftUI colours; the only way a view gets a colour
-      Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits
+      Palette.swift                the resolved tokens as SwiftUI colours, in the environment; the only way a view gets a colour; the window's appearance for a pinned theme
+      Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
       QuietButtonStyle.swift       hover and press feedback for symbol buttons
       MessageEditor.swift          the one text view messages are written in, and its keys
       EmptyState.swift             the drop target, "Open a video", "Try the demo"
@@ -334,7 +335,8 @@ Tests/
   ReviewTranscriptTests/           the window cut, the source order, srt, vtt, voiceover (fixtures/sample)
   ReviewStoreTests/                SupportLayout, round trips, a renamed copy's hash, the hash-prefix index, theme files (Packaging/Themes)
   ReviewAppTests/                  macOS only: the server over the real socket, the heartbeat, the lease gate, AppModel on the fixture
-                                   (threads, popover close rules, send), region crops at several window sizes, restarts
+                                   (threads, popover close rules, send), region crops at several window sizes, restarts,
+                                   ThemeDesk (pin, overrides, reload on a file change), the raw-colour check of every view
 ```
 
 A module and a type never share a name. `ReviewThread` is not called `Thread`, which is Foundation's.
@@ -373,8 +375,8 @@ As proto-2, with the spec's names and outputs:
 | `comment delete <message-id>` | `m-f92cbb2a-3 deleted` | `{"deleted": "m-…"}` |
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
-| `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}]}` |
-| `theme set <name>` | `theme Dimmed pinned` or `theme follows the system` for `system` | `{"theme": {…}}` as in `state` |
+| `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks; then `left out: <reason>` per file left out | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}], "problems": ["…"]}` |
+| `theme set <name>` | `theme Dimmed pinned`, or `theme follows the system (Default Dark)` for `system`; names match without regard to case | `{"theme": {…}}` as in `state` |
 | `wait [--timeout]` | the payload JSON, with or without `--json` | same |
 | `ack <send-id> [<text>]` | `s-f92cbb2a-1 acknowledged, 3 messages` | `{"send": {…}}` |
 | `status <message-id> working\|done\|failed` | `m-f92cbb2a-3 working` | `{"message": {…}}` |
@@ -485,28 +487,28 @@ proto-2's `Outbox`, with `BatchRef` renamed `SendRef`: `pending` and `taken` lis
 public enum ThemeToken: String, CaseIterable, Codable { … }        // the semantic tokens below
 public struct ThemeColor: Codable, Equatable { r, g, b, a }        // reads and writes "#rrggbb" and "#rrggbbaa"
 public struct ThemeFile: Codable, Equatable {
-    public let name: String; public let kind: Kind; public let extends: String?   // Kind: light | dark
+    public let name: String; public let kind: ThemeKind; public let extends: String?   // ThemeKind: light | dark
     public let tokens: [String: String]                            // token name → colour text, as written
 }
 public struct ThemeCatalog: Equatable {
     public init(builtIn: [ThemeFile], user: [ThemeFile])           // a user theme with a built-in's name replaces it
     public var names: [String] { get }
     public func resolve(_ name: String, overrides: [String: String]) throws(ThemeRefusal) -> ResolvedTheme
-    public func active(pinned: String?, appearance: Kind) -> String // pinned when it exists, else "Default Light" or "Default Dark"
+    public func active(pinned: String?, appearance: ThemeKind) -> String // pinned when it exists, else "Default Light" or "Default Dark"
 }
-public struct ResolvedTheme: Equatable { public let name: String; public let kind: Kind; public let colors: [ThemeToken: ThemeColor] }
+public struct ResolvedTheme: Equatable { public let name: String; public let kind: ThemeKind; public let colors: [ThemeToken: ThemeColor] }
 ```
 
-`resolve` walks the `extends` chain first, then the default theme of the theme's kind, then applies the overrides (D 5.2, D 5.5). A token name the catalog does not know is ignored, and a colour text that does not parse counts as missing. A chain that loops, or names a theme that does not exist, is a `ThemeRefusal` and the catalog leaves that theme out. The two default themes must define every token; a test proves it.
+`resolve` walks the `extends` chain first, then the default theme of the theme's kind, then applies the overrides (D 5.2, D 5.5). A token name the catalog does not know is ignored, and a colour text that does not parse counts as missing. A chain that loops, or names a theme that does not exist, leaves that theme out of the catalog, with its reason in `problems`; resolving a name the catalog does not have is `ThemeRefusal.unknown`. Names match without regard to case. A user theme named `Default Dark` replaces the built-in one, but the built-in defaults stay the last fallback, so a partial replacement still resolves every token. The two default themes must define every token; a test proves it.
 
-The tokens of 0.1.0 (the theme ticket may add more; each addition is one case and one value in each default theme):
+The tokens of 0.1.0 (each addition is one case and one value in each default theme). A token may carry an alpha (`#rrggbbaa`): the hover and press fills, the region's dim and the shadow do.
 
 | Group | Tokens |
 |---|---|
-| surfaces | `window`, `stage`, `letterbox`, `bar`, `sidebar`, `sidebarRowHover`, `sidebarRowSelected`, `header`, `popover`, `field` |
+| surfaces | `window`, `stage`, `letterbox`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected`, `header`, `popover`, `popoverBorder`, `field`, `well`, `track`, `knob`, `shadow`, `controlHover`, `controlPressed` |
 | text | `textPrimary`, `textSecondary`, `textTertiary`, `textOnAccent` |
 | accent | `accent`, `control` (the agent-control icon), `separator` |
-| messages | `bubblePerson`, `bubbleAgent`, `bubbleQuestion` |
+| messages | `person`, `agent`, `question`, `bubblePerson`, `bubbleAgent`, `bubbleQuestion` |
 | frame | `regionOutline`, `regionDim`, `badge`, `badgeText`, `sizeLabel` |
 | states | `stateQueued`, `stateSent`, `stateAcknowledged`, `stateWorking`, `stateDone`, `stateFailed` |
 | presence | `presenceListening`, `presenceWorking`, `presenceAbsent` |
@@ -552,8 +554,8 @@ public struct SupportLayout: Sendable {
 - `Library(layout:)` only loads and saves: reviews, the outbox (through `Outbox.reconcile` with the unfinished sends on disk), `recent.json` and `settings.json`. Its `init` reads every `review.json` once for the hash-prefix index (`contentHash(prefix:)`) and the unfinished sends. It writes nothing until the first save.
 - Every save is atomic, pretty-printed, sorted keys, ISO 8601 with milliseconds, with `schemaVersion`. `review.json` starts at schema 1 again for this product (L9); the prototypes' files are never read, since they live in other support folders.
 - A file from a newer schema, or one that does not read, is never written over (proto-2 D140).
-- `ThemeFiles.builtIn(at:)` reads `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests); `ThemeFiles.user(layout)` reads `Themes/`. A file that does not read is skipped with its reason.
-- `Settings` is `{ theme: String?, overrides: [String: String], sidebarWidth: Double? }`. A missing file is the defaults.
+- `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); `ThemeFiles.user(layout)` reads `Themes/`. A file that does not read is skipped with its reason.
+- `Settings` is `{ theme: String?, overrides: [String: String], sidebarWidth: Double? }`, with its own `load(layout)` and `save(layout)` beside `Library`: a file the person edits by hand has no `schemaVersion`, and every key may be left out. A missing file is the defaults. A file that does not read is never written over: `theme set` is refused until it reads.
 
 ### ReviewApp
 
@@ -581,7 +583,7 @@ public struct SupportLayout: Sendable {
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
 - `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `undelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s; a question stays until answered or clicked). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or expands General in the sidebar.
-- `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. A `DispatchSource` on `Themes/` and on `settings.json` rebuilds the catalog when a file changes (D 5.6). `Palette` turns the resolved tokens into `Color`s and is the only colour source a view has (D 5.1); a raw colour in a view is a review finding. The letterbox is a token too.
+- `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. The system appearance is `NSApp.effectiveAppearance`, observed, so a screenshot in the other appearance shows that appearance's default theme. `DispatchSource`s on the support folder, `Themes/`, each theme file and `settings.json` reload the themes 150 ms after a change (D 5.6); the watches are made again after each reload, since an editor that saves by replacing a file makes a new one. `startWatching` makes `Themes/`, so a person finds where their themes go. A theme or settings problem is written to standard error once. `Palette` turns the resolved tokens into `Color`s, reaches every view through the environment (`@Environment(\.palette)`), and is the only colour source a view has (D 5.1); a test in `ReviewAppTests` fails on a raw colour anywhere in `Sources/ReviewApp` outside `Palette.swift`. The letterbox is a token too. While a theme is pinned, the window takes its kind's appearance, so the title bar and the system's controls match; with no pin it inherits the app's. The View menu's Theme picker pins a theme or follows the system, as `theme set` does.
 - `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that cannot be written goes back to the server as `undelivered`. The `written` outcome comes with the in-flight rule (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
 - `ControlServer` only decodes, checks the lease, dispatches and keeps the queued `take`s. It owns the one `ControlLease` and settles it on a timer. It depends on the `AppControlling` protocol, which `AppModel` implements and the tests fake.
 - `LeaseIndicator` is the lease as the agent-control icon shows it. `AgentControl` is the icon, left of Context, only while an agent holds the lease, and its popover: who, where, time left, how many wait, Stop (D 4.7). The icon shows in screenshots unless `--hide-agent-indicator` (L10).

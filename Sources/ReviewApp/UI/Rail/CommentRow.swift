@@ -22,14 +22,14 @@ struct CommentRow: View {
     /// The text being edited; nil while the row only shows its comment.
     @State private var edited: String?
     @State private var isHovered = false
-    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.palette) private var palette
 
     private static let thumbnailSize = CGSize(width: 96, height: 54)
     /// The space between the pin and the time, which the text lines up with.
     static let pinSpacing: CGFloat = 8
     /// How far a row's words start from its leading edge, where the
     /// hairline between rows starts.
-    static let textInset: CGFloat = Theme.railPadding + MarkerPin.size + pinSpacing
+    static let textInset: CGFloat = Metrics.railPadding + MarkerPin.size + pinSpacing
 
     private var isSelected: Bool { model.selection == comment.id }
 
@@ -68,7 +68,7 @@ struct CommentRow: View {
                 }
             }
         }
-        .padding(.horizontal, Theme.railPadding)
+        .padding(.horizontal, Metrics.railPadding)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fill)
@@ -85,8 +85,8 @@ struct CommentRow: View {
 
     /// The selected row's fill; a fainter one under the pointer.
     private var fill: Color {
-        if isSelected { return Theme.selectedRow(contrast) }
-        return isHovered ? Color.primary.opacity(contrast == .increased ? 0.06 : 0.025) : .clear
+        if isSelected { return palette[.sidebarRowSelected] }
+        return isHovered ? palette[.sidebarRowHover] : .clear
     }
 
     private var header: some View {
@@ -100,7 +100,7 @@ struct CommentRow: View {
             if comment.region != nil {
                 Image(systemName: "rectangle.dashed")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette[.textSecondary])
                     .help("On a region of the frame")
                     .accessibilityLabel("On a region of the frame")
             }
@@ -122,18 +122,18 @@ struct CommentRow: View {
             HStack(spacing: 6) {
                 Image(systemName: isUnread ? "bubble.left.fill" : "bubble.left")
                     .font(.caption)
-                    .foregroundStyle(isUnread ? AnyShapeStyle(Theme.agent) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(isUnread ? palette[.agent] : palette[.textTertiary])
                     .accessibilityHidden(true)
                 Text("\(last.author == .agent ? model.agentName : "You"): \(last.text)")
                     .font(.caption.weight(isUnread ? .semibold : .regular))
-                    .foregroundStyle(isUnread ? .primary : .secondary)
+                    .foregroundStyle(isUnread ? palette[.textPrimary] : palette[.textSecondary])
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
                 if comment.thread.count > 1 {
                     Text("\(comment.thread.count)")
                         .font(.caption2.weight(.medium).monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(palette[.textTertiary])
                         .accessibilityLabel("\(comment.thread.count) messages")
                 }
             }
@@ -142,7 +142,7 @@ struct CommentRow: View {
 
     private var keyframe: some View {
         ZStack {
-            Theme.letterbox
+            palette[.letterbox]
             if let thumbnail {
                 Image(decorative: thumbnail, scale: 2)
                     .resizable()
@@ -155,7 +155,7 @@ struct CommentRow: View {
         // dark rail.
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                .strokeBorder(palette[.separator], lineWidth: 0.5)
         }
         .accessibilityHidden(true)
     }
@@ -189,15 +189,16 @@ struct CommentRow: View {
 /// only has to be read.
 struct StateChip: View {
     let state: CommentState
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: Theme.glyph(state))
+            Image(systemName: StateLook.glyph(state))
                 .imageScale(.small)
-            Text(Theme.name(state))
+            Text(StateLook.name(state))
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(Theme.tint(state))
+        .foregroundStyle(palette.state(state))
         .accessibilityElement(children: .combine)
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 /// scrubber with its ruler, the time, and the transport buttons.
 struct TimelineLane: View {
     let model: AppModel
+    @Environment(\.palette) private var palette
 
     /// The room above the track that the markers' pins stand in. It's
     /// there with no marker too, so the first comment doesn't move the lane.
@@ -34,10 +35,12 @@ struct TimelineLane: View {
             }
             .padding(.top, 4)
         }
-        .padding(.horizontal, Theme.gutter + Theme.laneInset)
+        .padding(.horizontal, Metrics.gutter + Metrics.laneInset)
         // The rail's foot has this height too, so the stage's lower edge
         // and the line over the rail's foot are one line.
-        .frame(height: Theme.footerHeight)
+        .frame(height: Metrics.footerHeight)
+        .foregroundStyle(palette[.textPrimary])
+        .background(palette[.bar])
     }
 
     private var commentButton: some View {
@@ -53,11 +56,11 @@ struct TimelineLane: View {
     private var timeReadout: some View {
         HStack(spacing: 5) {
             Text(Self.clock(model.engine.time))
-                .foregroundStyle(.primary)
+                .foregroundStyle(palette[.textPrimary])
             Text("/")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(palette[.textTertiary])
             Text(Self.clock(model.engine.duration))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette[.textSecondary])
         }
         .font(.callout.monospacedDigit().weight(.medium))
         .accessibilityElement(children: .combine)
@@ -132,6 +135,7 @@ private struct Scrubber: View {
     /// Whether the pointer holds the scrubber.
     @GestureState private var isHeld = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     private static let trackHeight: CGFloat = 6
     private static let heldTrackHeight: CGFloat = 8
@@ -149,14 +153,14 @@ private struct Scrubber: View {
             let knob = isHeld ? Self.heldKnob : Self.knob
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.quaternary)
+                    .fill(palette[.track])
                     .frame(height: track)
                 Capsule()
-                    .fill(.tint)
+                    .fill(palette[.accent])
                     .frame(width: max(played, track), height: track)
                 Circle()
-                    .fill(.white)
-                    .shadow(color: .black.opacity(isHeld ? 0.32 : 0.28), radius: isHeld ? 3 : 1.5, y: isHeld ? 1 : 0.5)
+                    .fill(palette[.knob])
+                    .shadow(color: palette[.shadow], radius: isHeld ? 3 : 1.5, y: isHeld ? 1 : 0.5)
                     .frame(width: knob, height: knob)
                     .offset(x: min(max(played - knob / 2, 0), width - knob))
             }
@@ -191,6 +195,7 @@ private struct Scrubber: View {
 /// The ruler under the track: a tick and a time at even steps.
 private struct TimeRuler: View {
     let duration: Double
+    @Environment(\.palette) private var palette
 
     /// The steps a ruler may use, in seconds.
     private static let steps: [Double] = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
@@ -203,11 +208,11 @@ private struct TimeRuler: View {
             ForEach(Self.marks(duration: duration, width: width), id: \.self) { mark in
                 HStack(alignment: .top, spacing: 4) {
                     Rectangle()
-                        .fill(.tertiary)
+                        .fill(palette[.textTertiary])
                         .frame(width: 1, height: 5)
                     Text(TimeCode.text(mark))
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(palette[.textTertiary])
                 }
                 .offset(x: width * mark / duration)
             }

@@ -224,6 +224,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// Whether an agent listens for batches. The control server, which
     /// answers the listener, fills it in.
     var listener = Listener.absent
+    /// The active theme; the app's model fills it in.
+    var theme: Theme?
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
@@ -262,7 +264,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, lease, listener, video, player, draft, comments, queue, batches
-        case transcript
+        case transcript, theme
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -270,6 +272,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(app, forKey: .app)
         try container.encode(lease, forKey: .lease)
         try container.encode(listener, forKey: .listener)
+        try container.encode(theme, forKey: .theme)
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
         try container.encode(transcript, forKey: .transcript)
@@ -293,7 +296,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
-        comments: \(commentLines)
+        \(theme.map { $0.line + "\n" } ?? "")comments: \(commentLines)
 
         """
     }

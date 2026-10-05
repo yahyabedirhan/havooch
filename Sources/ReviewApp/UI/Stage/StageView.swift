@@ -10,6 +10,7 @@ struct StageView: View {
     /// beside a region.
     @State private var boxSize = CGSize(width: Composer.width, height: 150)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     /// How far the comment box travels as it comes and goes.
     private static let arrivalDistance: CGFloat = 8
@@ -18,7 +19,7 @@ struct StageView: View {
         GeometryReader { proxy in
             let geometry = VideoFrameGeometry(stage: proxy.size, video: model.engine.videoSize)
             ZStack(alignment: .topLeading) {
-                Theme.letterbox
+                palette[.letterbox]
                 PlayerSurface(player: model.engine.player)
                 // Above the picture, which takes no events itself.
                 RegionOverlay(model: model, geometry: geometry)
@@ -30,8 +31,8 @@ struct StageView: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.2), value: model.draft == nil)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.stageCorner, style: .continuous))
-        .padding([.top, .horizontal], Theme.gutter)
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
+        .padding([.top, .horizontal], Metrics.gutter)
         .accessibilityLabel("Video")
     }
 

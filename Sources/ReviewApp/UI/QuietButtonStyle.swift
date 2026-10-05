@@ -14,11 +14,12 @@ struct QuietButtonStyle: ButtonStyle {
         @State private var isHovered = false
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.palette) private var palette
 
         var body: some View {
             let isLit = isEnabled && (isHovered || configuration.isPressed)
             configuration.label
-                .foregroundStyle(isLit ? .primary : .secondary)
+                .foregroundStyle(isLit ? palette[.textPrimary] : palette[.textSecondary])
                 .background(fill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
                 .opacity(isEnabled ? 1 : 0.4)
@@ -29,8 +30,8 @@ struct QuietButtonStyle: ButtonStyle {
 
         private var fill: Color {
             guard isEnabled else { return .clear }
-            if configuration.isPressed { return Color.primary.opacity(0.12) }
-            return isHovered ? Color.primary.opacity(0.06) : .clear
+            if configuration.isPressed { return palette[.controlPressed] }
+            return isHovered ? palette[.controlHover] : .clear
         }
     }
 }

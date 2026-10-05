@@ -37,6 +37,7 @@ struct PresencePill: Equatable {
 /// carries on the stage's lower edge across the window.
 struct SendBar: View {
     let model: AppModel
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 10) {
@@ -46,10 +47,10 @@ struct SendBar: View {
             }
             sendButton
         }
-        .padding(.horizontal, Theme.railPadding)
+        .padding(.horizontal, Metrics.railPadding)
         .frame(maxWidth: .infinity)
-        .frame(height: Theme.footerHeight)
-        .overlay(alignment: .top) { Divider() }
+        .frame(height: Metrics.footerHeight)
+        .background(palette[.bar])
     }
 
     /// Whether an agent is there, as a quiet dot and words: no capsule.
@@ -61,13 +62,13 @@ struct SendBar: View {
             PresenceDot(presence: presence)
             Text(pill.title)
                 .font(.callout.weight(.medium))
-                .foregroundStyle(presence == .absent ? .secondary : .primary)
+                .foregroundStyle(presence == .absent ? palette[.textSecondary] : palette[.textPrimary])
                 .lineLimit(1)
                 .fixedSize()
             if !pill.detail.isEmpty {
                 Text("· \(pill.detail)")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette[.textSecondary])
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -92,22 +93,13 @@ struct SendBar: View {
                     .opacity(0.7)
             }
             .frame(maxWidth: .infinity)
+            .foregroundStyle(palette[.textOnAccent])
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .disabled(count == 0)
         .help(count == 0 ? "Nothing is queued" : "Send the queue to your agent as one batch (Cmd+Return)")
         .accessibilityLabel(count == 0 ? "Send" : "Send \(count) comment\(count == 1 ? "" : "s")")
-    }
-
-    /// The dot's colour: the pastels of a done and a working comment, and
-    /// no colour for no agent.
-    static func tint(_ presence: Presence) -> Color {
-        switch presence {
-        case .listening: Theme.tint(.done)
-        case .working: Theme.tint(.working)
-        case .absent: .secondary
-        }
     }
 
     private static func help(_ presence: Presence) -> String {
@@ -123,6 +115,7 @@ struct SendBar: View {
 /// that listens, half for one that works, hollow for none.
 private struct PresenceDot: View {
     let presence: Presence
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
@@ -133,7 +126,7 @@ private struct PresenceDot: View {
             }
         }
         .font(.system(size: 8, weight: .bold))
-        .foregroundStyle(SendBar.tint(presence))
+        .foregroundStyle(palette.presence(presence))
         .accessibilityHidden(true)
     }
 }

@@ -10,6 +10,7 @@ struct RootView: View {
     let stopLease: () -> Void
 
     var body: some View {
+        let palette = Palette(theme: model.themes.theme)
         Group {
             if model.video == nil {
                 EmptyState(model: model)
@@ -21,16 +22,20 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 480)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(palette[.stage])
         .inspector(isPresented: railShown) {
             RailView(model: model)
+                .background(palette[.sidebar])
                 .inspectorColumnWidth(
-                    min: Theme.railWidthRange.lowerBound, ideal: Theme.railWidth, max: Theme.railWidthRange.upperBound
+                    min: Metrics.railWidthRange.lowerBound, ideal: Metrics.railWidth, max: Metrics.railWidthRange.upperBound
                 )
         }
-        // The soft slate blue in place of the system's bright one, for the
-        // scrubber, a selection and a prominent button.
-        .tint(Theme.accent)
+        // The theme's accent in place of the system's, for a selection and
+        // a prominent button.
+        .tint(palette[.accent])
+        .foregroundStyle(palette[.textPrimary])
+        .background(palette[.window])
+        .background(WindowAppearance(kind: model.themes.pinned == nil ? nil : palette.theme.kind))
         .navigationTitle(model.video?.title ?? AppIdentity.appName)
         .navigationSubtitle(subtitle)
         .toolbar {
@@ -63,6 +68,8 @@ struct RootView: View {
         } message: {
             Text(model.problem?.reason ?? "")
         }
+        // Last, so the toolbar and every popover read it too.
+        .environment(\.palette, palette)
     }
 
     /// Whether an agent's sign is in the toolbar: while it holds the lease,

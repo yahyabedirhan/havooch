@@ -77,6 +77,7 @@ private struct RegionFrame: View {
     /// a queued comment's, which is there to be looked at.
     let isDraft: Bool
     var pin: (number: Int, state: CommentState)?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -84,13 +85,13 @@ private struct RegionFrame: View {
                 path.addRect(within)
                 path.addRect(rect)
             }
-            .fill(.black.opacity(isDraft ? 0.5 : 0.38), style: FillStyle(eoFill: true))
+            .fill(palette[.regionDim].opacity(isDraft ? 1 : 0.76), style: FillStyle(eoFill: true))
             Rectangle()
-                .strokeBorder(.black.opacity(0.45), lineWidth: 1)
+                .strokeBorder(palette[.shadow], lineWidth: 1)
                 .frame(width: rect.width + 6, height: rect.height + 6)
                 .offset(x: rect.minX - 3, y: rect.minY - 3)
             Rectangle()
-                .strokeBorder(.tint, lineWidth: 2)
+                .strokeBorder(palette[.regionOutline], lineWidth: 2)
                 .frame(width: rect.width + 4, height: rect.height + 4)
                 .offset(x: rect.minX - 2, y: rect.minY - 2)
             if let pin {

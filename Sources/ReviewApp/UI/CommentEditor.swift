@@ -46,7 +46,8 @@ struct CommentEditor: NSViewRepresentable {
         view.allowsUndo = true
         view.drawsBackground = false
         view.font = .systemFont(ofSize: NSFont.systemFontSize)
-        view.textColor = .labelColor
+        view.textColor = context.environment.palette.nsColor(.textPrimary)
+        view.insertionPointColor = context.environment.palette.nsColor(.textPrimary)
         view.textContainerInset = Self.inset
         view.string = text
         view.setAccessibilityLabel("Comment")
@@ -62,7 +63,14 @@ struct CommentEditor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.parent = self
-        guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
+        guard let view = scroll.documentView as? NSTextView else { return }
+        // The theme may change while the editor is open.
+        let ink = context.environment.palette.nsColor(.textPrimary)
+        if view.textColor != ink {
+            view.textColor = ink
+            view.insertionPointColor = ink
+        }
+        guard view.string != text else { return }
         view.string = text
     }
 
@@ -106,22 +114,23 @@ struct CommentField: View {
     var takesFocus = true
     let commit: () -> Void
     let cancel: () -> Void
+    @Environment(\.palette) private var palette
 
     var body: some View {
         CommentEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(palette[.textTertiary])
                         // The text container's own 5 pt of line padding.
                         .padding(.leading, CommentEditor.inset.width + 5)
                         .padding(.top, CommentEditor.inset.height)
                         .allowsHitTesting(false)
                 }
             }
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.7), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(palette[.field], in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.tint.opacity(0.55), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(palette[.accent].opacity(0.55), lineWidth: 1.5)
             }
     }
 }

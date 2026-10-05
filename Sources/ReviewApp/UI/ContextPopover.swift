@@ -41,6 +41,7 @@ struct ContextButton: View {
     /// no event.
     @State private var transcript: TranscriptChip?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let words = ContextPopover.words(for: model)
@@ -54,7 +55,7 @@ struct ContextButton: View {
         .help(isTranscribing ? "\(words.help). \(transcript?.title ?? "")" : words.help)
         .popover(isPresented: $model.isContextShown, arrowEdge: .bottom) {
             ContextPopover(model: model)
-                .tint(Theme.accent)
+                .tint(palette[.accent])
         }
         .task {
             // Ends when the button leaves the toolbar with the video.
@@ -80,8 +81,7 @@ struct ContextPopover: View {
     /// The sidecar's text scrolls in a box of one height, so the popover
     /// doesn't change size with the file.
     static let sidecarHeight: CGFloat = 140
-    /// The quiet fill behind a part of the popover, in place of a border.
-    private static let partFill = Color.primary.opacity(0.04)
+    @Environment(\.palette) private var palette
     private static let partShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
     static func words(for model: AppModel) -> ContextWords {
@@ -100,7 +100,7 @@ struct ContextPopover: View {
                     .font(.headline)
                 Text("Sent with the first batch of a listening agent, and again when it changes.")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette[.textSecondary])
                     .fixedSize(horizontal: false, vertical: true)
             }
             sidecar(words)
@@ -108,10 +108,10 @@ struct ContextPopover: View {
             transcriptPart
             HStack(spacing: 8) {
                 Image(systemName: model.contextText == nil ? "circle.dashed" : (model.isContextDue ? "arrow.up.circle" : "checkmark.circle"))
-                    .foregroundStyle(model.contextText != nil && !model.isContextDue ? Theme.tint(.done) : Color.secondary)
+                    .foregroundStyle(model.contextText != nil && !model.isContextDue ? palette.state(.done) : palette[.textSecondary])
                 Text(words.delivery)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette[.textSecondary])
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -125,6 +125,7 @@ struct ContextPopover: View {
         }
         .padding(16)
         .frame(width: Self.width)
+        .foregroundStyle(palette[.textPrimary])
         .onAppear {
             model.readSidecar()
             note = model.contextNote
@@ -143,30 +144,30 @@ struct ContextPopover: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: model.sidecar == nil ? "doc.badge.ellipsis" : "doc.text")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(palette[.textSecondary])
                 Text(words.source)
                     .font(.callout.weight(.medium))
-                    .foregroundStyle(model.sidecar == nil ? .secondary : .primary)
+                    .foregroundStyle(model.sidecar == nil ? palette[.textSecondary] : palette[.textPrimary])
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
                 if model.sidecar != nil {
                     Text("Read-only")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(palette[.textTertiary])
                 }
             }
             if let sidecar = model.sidecar {
                 ScrollView {
                     Text(sidecar.text.isEmpty ? "The file is empty." : sidecar.text)
                         .font(.callout)
-                        .foregroundStyle(sidecar.text.isEmpty ? .tertiary : .primary)
+                        .foregroundStyle(sidecar.text.isEmpty ? palette[.textTertiary] : palette[.textPrimary])
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(9)
                 }
                 .frame(height: Self.sidecarHeight)
-                .background(Self.partFill, in: Self.partShape)
+                .background(palette[.well], in: Self.partShape)
                 .help((sidecar.file.path as NSString).abbreviatingWithTildeInPath)
             }
         }
@@ -177,13 +178,13 @@ struct ContextPopover: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "square.and.pencil")
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(palette[.accent])
                 Text("Your note")
                     .font(.callout.weight(.medium))
                 Spacer(minLength: 0)
                 Text("↩ saves · ⇧↩ new line")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(palette[.textTertiary])
             }
             CommentField(
                 text: $note, placeholder: "Add a note for the agent…",
@@ -201,7 +202,7 @@ struct ContextPopover: View {
                 let chip = TranscriptChip(transcript)
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: chip.symbol)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette[.textSecondary])
                         .frame(width: 16)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
@@ -209,7 +210,7 @@ struct ContextPopover: View {
                             .font(.callout.weight(.medium))
                         Text(chip.help)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(palette[.textSecondary])
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
@@ -220,7 +221,7 @@ struct ContextPopover: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Self.partFill, in: Self.partShape)
+                .background(palette[.well], in: Self.partShape)
                 .accessibilityElement(children: .combine)
             }
         }
