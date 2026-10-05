@@ -233,9 +233,9 @@ final class ControlServer {
                 let send = try await app.sendQueue()
                 let messages = send.messageIds.count
                 let threads = send.threadIds.count
-                let taken = listeners.outbox.taken.contains { $0.sendID.text == send.id }
+                let delivered = listeners.isDelivered(send.id)
                 let line = "\(send.id) sent: \(messages) message\(messages == 1 ? "" : "s") on \(threads) thread\(threads == 1 ? "" : "s"), "
-                    + (taken ? "taken by the listener" : "waiting for a listener")
+                    + (delivered ? "taken by the listener" : "waiting for a listener")
                 return done(line, Output(send: send), json)
             case .wait(let timeout):
                 switch await listeners.wait(by: message.holder, timeout: timeout, connection: connection) {
@@ -400,6 +400,12 @@ final class ControlServer {
         _ = lease.release(by: granted.holder, at: now())
     }
 
+    /// A reply was written to its client: a send it carried is taken from
+    /// now on.
+    func written(_ answer: Answer) {
+        if let ref = answer.delivered { listeners.written(ref) }
+    }
+
     /// The client of `connection` closed its socket while its request was
     /// held: a `wait` or an `ask` on it is over.
     func connectionClosed(_ connection: UUID) {
@@ -460,6 +466,8 @@ final class ControlServer {
         guard listener == nil else { return }
         listener = try SocketListener.open(at: socket, heartbeat: heartbeat) { [weak self] data, connection in
             await self?.reply(to: data, connection: connection) ?? Answer(reply: .refused("\(AppIdentity.appName) is quitting"))
+        } written: { [weak self] answer in
+            self?.written(answer)
         } undelivered: { [weak self] answer in
             self?.undelivered(answer)
         } hungUp: { [weak self] connection in

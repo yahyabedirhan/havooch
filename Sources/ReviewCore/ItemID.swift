@@ -88,3 +88,20 @@ public enum ThreadRef: Equatable, Sendable {
         }
     }
 }
+
+/// An id as a key of a JSON object: its text, so a map by thread reads
+/// `{ "t-f92cbb2a-1": … }`.
+extension ItemID: CodingKeyRepresentable {
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    public var codingKey: any CodingKey { Key(stringValue: text) }
+
+    public init?<T: CodingKey>(codingKey: T) {
+        self.init(codingKey.stringValue)
+    }
+}

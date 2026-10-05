@@ -4,7 +4,7 @@ import Foundation
 /// a renamed or moved file is the same video.
 public struct VideoInfo: Codable, Equatable, Sendable {
     public var contentHash: String
-    /// The file's name without its extension.
+    /// The file's name with its extension, as the header shows it.
     public var title: String
     /// The length in seconds.
     public var duration: TimeInterval
@@ -206,9 +206,13 @@ public struct VideoReview: Codable, Equatable, Sendable {
     }
 
     /// Sends every queued message as one send: each moves to `sent` and
-    /// names the send. Refused when nothing is queued.
+    /// names the send. `transcript` gives each thread with a frame its
+    /// window as it is now; the send keeps those lines, so a delivery again
+    /// gives the same ones. Refused when nothing is queued.
     @discardableResult
-    public mutating func send(at now: Date) throws(ReviewRefusal) -> Send {
+    public mutating func send(
+        at now: Date, transcript: (ReviewThread) -> [SendPayload.Line] = { _ in [] }
+    ) throws(ReviewRefusal) -> Send {
         let queued = threads.indices.flatMap { thread in
             threads[thread].messages.indices
                 .filter { threads[thread].messages[$0].isWork && threads[thread].messages[$0].state == .queued }
@@ -220,7 +224,14 @@ public struct VideoReview: Codable, Equatable, Sendable {
             threads[thread].messages[index].state = .sent
             threads[thread].messages[index].sendID = id
         }
-        let send = Send(id: id, sentAt: Self.kept(now), messageIDs: queued.map { threads[$0.thread].messages[$0.index].id })
+        var transcripts: [ThreadID: [SendPayload.Line]] = [:]
+        for thread in Set(queued.map(\.thread)) where !threads[thread].isGeneral {
+            transcripts[threads[thread].id] = transcript(threads[thread])
+        }
+        let send = Send(
+            id: id, sentAt: Self.kept(now), messageIDs: queued.map { threads[$0.thread].messages[$0.index].id },
+            transcripts: transcripts
+        )
         sends.append(send)
         return send
     }

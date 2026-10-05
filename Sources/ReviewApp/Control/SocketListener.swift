@@ -17,6 +17,7 @@ import ReviewWire
 /// declared `Sendable`.
 nonisolated final class SocketListener: @unchecked Sendable {
     typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
+    typealias Written = @MainActor @Sendable (ControlServer.Answer) -> Void
     typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
     typealias HungUp = @MainActor @Sendable (UUID) -> Void
 
@@ -32,6 +33,7 @@ nonisolated final class SocketListener: @unchecked Sendable {
     private let source: any DispatchSourceRead
     private let heartbeat: Duration
     private let respond: Respond
+    private let written: Written
     private let undelivered: Undelivered
     private let hungUp: HungUp
     private let quit: @MainActor @Sendable () -> Void
@@ -41,12 +43,13 @@ nonisolated final class SocketListener: @unchecked Sendable {
     private static let connectionTimeout: TimeInterval = 5
 
     private init(
-        path: String, descriptor: Int32, heartbeat: Duration, respond: @escaping Respond, undelivered: @escaping Undelivered,
-        hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
+        path: String, descriptor: Int32, heartbeat: Duration, respond: @escaping Respond, written: @escaping Written,
+        undelivered: @escaping Undelivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.path = path
         self.heartbeat = heartbeat
         self.respond = respond
+        self.written = written
         self.undelivered = undelivered
         self.hungUp = hungUp
         self.quit = quit
@@ -60,11 +63,12 @@ nonisolated final class SocketListener: @unchecked Sendable {
     /// its folder when it's missing. A socket file nothing answers on (left
     /// by an app that crashed) is replaced; one another app answers on is
     /// left alone, and this one doesn't listen. `respond` answers each
-    /// request; a reply that can't be written goes to `undelivered`; a
+    /// request; a reply that was written goes to `written`, one that can't
+    /// be written to `undelivered`; a
     /// client gone while its request is held goes to `hungUp`; `quit` runs
     /// once a reply that says so is written.
     static func open(
-        at socket: URL, heartbeat: Duration = SocketListener.heartbeat, respond: @escaping Respond,
+        at socket: URL, heartbeat: Duration = SocketListener.heartbeat, respond: @escaping Respond, written: @escaping Written,
         undelivered: @escaping Undelivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) throws(Failure) -> SocketListener {
         let path = socket.path
@@ -89,8 +93,8 @@ nonisolated final class SocketListener: @unchecked Sendable {
             throw Failure(description: "couldn't listen on \(path): \(why)")
         }
         return SocketListener(
-            path: path, descriptor: descriptor, heartbeat: heartbeat, respond: respond, undelivered: undelivered,
-            hungUp: hungUp, quit: quit
+            path: path, descriptor: descriptor, heartbeat: heartbeat, respond: respond, written: written,
+            undelivered: undelivered, hungUp: hungUp, quit: quit
         )
     }
 
@@ -133,6 +137,7 @@ nonisolated final class SocketListener: @unchecked Sendable {
             return
         }
         let respond = respond
+        let written = written
         let heartbeat = heartbeat
         let undelivered = undelivered
         let hungUp = hungUp
@@ -156,7 +161,8 @@ nonisolated final class SocketListener: @unchecked Sendable {
             await beating.value
             let delivered = !answer.silent && UnixSocket.writeAll(connection, answer.reply.encoded())
             Darwin.close(connection)
-            if !delivered { await undelivered(answer) }
+            // A send the reply carried is the listener's only once it's written.
+            if delivered { await written(answer) } else { await undelivered(answer) }
             if answer.quits { await quit() }
         }
     }

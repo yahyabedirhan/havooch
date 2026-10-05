@@ -71,9 +71,6 @@ final class ListenerQueue {
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
-    /// Where a thread's transcript lines come from; with none, a thread
-    /// gets no lines. The app's model sets it.
-    @ObservationIgnored var transcripts: TranscriptDesk?
 
     /// It starts from the outbox the last run left in the desk's library,
     /// and keeps it there.
@@ -161,11 +158,27 @@ final class ListenerQueue {
         for (id, ask) in asks where ask.connection == connection { closeAsk(id, ask.ticket, .gone) }
     }
 
+    /// The reply that carried `ref` was written: the listener has the
+    /// send, which is taken from now on. One the listener finished before
+    /// this was heard leaves the line.
+    func written(_ ref: SendRef) {
+        outbox.written(ref)
+        if desk.review(of: ref.contentHash)?.isFinished(ref.sendID) ?? true { outbox.finished(ref) }
+        // A send that stayed in line (its session ended meanwhile) is free for the next `wait`.
+        deliver()
+    }
+
     /// The reply that carried `ref` couldn't be written: the send is first
     /// in line again, for the next `wait`.
     func undelivered(_ ref: SendRef) {
         outbox.undelivered(ref)
         deliver()
+    }
+
+    /// Whether the listener has the send `id` or is being handed it:
+    /// taken, or in flight.
+    func isDelivered(_ id: String) -> Bool {
+        outbox.taken.contains { $0.sendID.text == id } || outbox.inFlight.keys.contains { $0.sendID.text == id }
     }
 
     /// The app quits: the open `wait` ends with no answer, so its command
@@ -289,19 +302,20 @@ final class ListenerQueue {
         waiting.answer.resume(returning: outcome)
     }
 
-    /// Takes the first send in line for the open `wait`, as its payload,
-    /// assembled now. A send with nothing left to deliver (it has no review
-    /// that reads, or every message in it is finished) leaves the line
-    /// instead.
+    /// Hands the first send in line that isn't in flight to the open
+    /// `wait`, as its payload, assembled now. It's taken once the reply is
+    /// written (`written`). A send with nothing left to deliver (it has no
+    /// review that reads, or every message in it is finished) leaves the
+    /// line instead.
     private func takeNext() -> Outcome? {
-        while outbox.isWaitOpen, let first = outbox.pending.first {
+        while outbox.isWaitOpen, let first = outbox.pending.first(where: { outbox.inFlight[$0] == nil }) {
             guard let review = desk.review(of: first.contentHash), let send = review.send(first.sendID),
                   !review.isFinished(first.sendID)
             else {
                 outbox.discard(first)
                 continue
             }
-            guard let ref = outbox.deliverNext(at: now()) else { return nil }
+            guard let ref = outbox.handOut(at: now()) else { return nil }
             return .send(ref, payload: payload(of: send, in: review).json)
         }
         return nil
@@ -309,21 +323,16 @@ final class ListenerQueue {
 
     /// The payload of `send`, read at the moment the `wait` takes it. The
     /// context is in it when this listener session hasn't had it for the
-    /// video, or it changed. Each thread gets the transcript lines that
-    /// exist then.
+    /// video, or it changed. Each thread's transcript is the one the send
+    /// kept.
     private func payload(of send: Send, in review: VideoReview) -> SendPayload {
         let hash = review.video.contentHash
         return SendPayload.assemble(
             review: review, send: send, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
-            transcript: { [transcripts] thread in
-                thread.time.map { transcripts?.lines(around: $0, of: review.video) ?? [] } ?? []
-            },
-            images: { [layout] message, thread in
-                SendPayload.Images(
-                    keyframe: thread.isGeneral ? nil : layout.keyframe(thread.id, of: hash).path,
-                    crop: message.region.map { _ in layout.crop(message.id, of: hash).path }
-                )
-            }
+            images: SendPayload.Images(
+                keyframe: { [layout] in layout.keyframe($0.id, of: hash).path },
+                crop: { [layout] in layout.crop($0.id, of: hash).path }
+            )
         )
     }
 }

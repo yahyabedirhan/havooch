@@ -11,10 +11,11 @@ import Testing
 /// The transcript window in the payload: the app's model on the fixture
 /// video and on copies of it with fewer sidecars, and the control server in
 /// front of it. No window, no socket, and no real speech recognition.
-@Suite("The transcript window of each comment", .serialized)
+@Suite("The transcript window of each thread", .serialized)
 struct TranscriptDeliveryTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
     nonisolated static let listener = Holder(key: "listener-1", name: "Claude Code", place: "/shop")
+    nonisolated static let restarted = Holder(key: "listener-2", name: "Claude Code", place: "/shop")
 
     static let pause: [String: AnyHashable] = [
         "start": 0, "end": 6.067, "text": "This is Video Review. Pause any video, or draw a box on the frame, and write a comment.",
@@ -71,15 +72,15 @@ struct TranscriptDeliveryTests {
         }
     }
 
-    /// Sends the queue and takes it as the listener: each comment's
+    /// Sends the queue and takes it as the listener: each thread's
     /// transcript in the payload `wait` prints, in time order.
-    private func delivered(_ server: ControlServer) async throws -> [[[String: AnyHashable]]] {
+    private func delivered(_ server: ControlServer, as listener: Holder = listener) async throws -> [[[String: AnyHashable]]] {
         let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         #expect(sent.reply.ok)
-        let wait = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let wait = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: listener))
         #expect(wait.reply.ok)
-        let messages = try #require(try object(wait.reply.output)["messages"] as? [[String: Any]])
-        return try messages.map { try #require($0["transcript"] as? [[String: AnyHashable]]) }
+        let threads = try #require(try object(wait.reply.output)["threads"] as? [[String: Any]])
+        return try threads.map { try #require($0["transcript"] as? [[String: AnyHashable]]) }
     }
 
     private func transcriptState(_ server: ControlServer) async throws -> [String: AnyHashable]? {
@@ -146,17 +147,35 @@ struct TranscriptDeliveryTests {
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 1, "problem": NSNull()])
 
         // A send made now and taken only once the transcript is whole gets
-        // every line of its window: the window is read when a wait takes it.
+        // the lines of its window as they were when it was sent: the window
+        // is cut at send time and kept.
         _ = try await model.addMessage(text: "Taken later", at: 5)
         _ = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         speech.say(TranscriptLine(start: 6.4, end: 13.4, text: "Your comments queue up."))
         speech.say(TranscriptLine(start: 20.5, end: 21, text: "The end."))
         speech.finish()
         await eventually { model.transcript?.complete == true }
-        let wait = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
-        let comment = try #require((try object(wait.reply.output)["messages"] as? [[String: Any]])?.first)
-        #expect((comment["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Video Review.", "Your comments queue up."])
+        let wait = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let thread = try #require((try object(wait.reply.output)["threads"] as? [[String: Any]])?.first)
+        #expect((thread["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Video Review."])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": true, "lines": 3, "problem": NSNull()])
+
+        // A new listener session gets the three unfinished sends again, each
+        // with the lines it kept.
+        var kept: [[[String: AnyHashable]]] = []
+        for _ in 0..<3 {
+            let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
+            let redelivered = try #require((try object(again.reply.output)["threads"] as? [[String: Any]])?.first)
+            kept.append(try #require(redelivered["transcript"] as? [[String: AnyHashable]]))
+        }
+        #expect(kept == [[], [["start": 0.2, "end": 5.1, "text": "This is Video Review."]], try #require(thread["transcript"] as? [[String: AnyHashable]])])
+
+        // The next send cuts its window from the whole transcript.
+        _ = try await model.addMessage(text: "Sent once it's whole", at: 6)
+        #expect(try await delivered(server, as: Self.restarted) == [[
+            ["start": 0.2, "end": 5.1, "text": "This is Video Review."], ["start": 6.4, "end": 13.4, "text": "Your comments queue up."],
+            ["start": 20.5, "end": 21, "text": "The end."],
+        ]])
     }
 
     @Test("a finished speech transcript is kept under the video's content hash, and the next run reads it instead of transcribing again")

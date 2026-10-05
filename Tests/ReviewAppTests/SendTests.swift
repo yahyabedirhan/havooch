@@ -46,7 +46,7 @@ struct SendDeliveryTests {
 
     /// A listener's `wait`, held by the server until it's answered.
     private func waiting(_ server: ControlServer, as holder: Holder = listener, timeout: Int? = nil) -> Task<ControlServer.Answer, Never> {
-        Task { await server.reply(to: ControlRequest.wait(timeoutSeconds: timeout).sent(by: holder)) }
+        Task { await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: timeout).sent(by: holder)) }
     }
 
     /// Two queued messages: one on the frame at 10 s (#1), one on a region
@@ -84,31 +84,36 @@ struct SendDeliveryTests {
         #expect(answer.delivered == SendRef(sendID: send.id, contentHash: try #require(model.video?.contentHash)))
 
         let payload = try object(answer.reply.output)
-        #expect(Set(payload.keys) == ["send", "video", "context", "messages"])
+        #expect(Set(payload.keys) == ["send", "video", "context", "threads"])
         let sendPart = try #require(payload["send"] as? [String: String])
         #expect(sendPart["id"] == send.id.text)
         #expect(ItemID(send.id.text)?.kind == .send)
         #expect(ISO8601DateFormatter().date(from: try #require(sendPart["sentAt"])) != nil)
         #expect(payload["video"] as? [String: AnyHashable] == [
             "path": MessageTests.fixture.standardizedFileURL.path, "contentHash": try #require(model.video?.contentHash),
-            "duration": 21.233, "title": "sample",
+            "duration": 21.233, "title": "sample.mp4",
         ])
         // The fixture's sidecar, on this session's first send.
         #expect(payload["context"] as? String == ContextReader.sidecar(beside: MessageTests.fixture)?.text)
-        let messages = try #require(payload["messages"] as? [[String: Any]])
-        #expect(messages.count == 2)
-        #expect(messages[0].filter { $0.key != "transcript" } as? [String: AnyHashable] == [
-            "id": first.message.id, "threadId": first.thread.id, "threadNumber": 1, "time": 10, "text": "Too fast here",
-            "keyframePath": try #require(first.thread.keyframePath), "region": NSNull(), "cropPath": NSNull(),
+        // One entry per thread, in time order; General has nothing in this send.
+        let threads = try #require(payload["threads"] as? [[String: Any]])
+        #expect(threads.map { $0["id"] as? String } == [first.thread.id, second.thread.id])
+        #expect(threads[0].filter { !["transcript", "messages"].contains($0.key) } as? [String: AnyHashable] == [
+            "id": first.thread.id, "number": 1, "time": 10, "keyframePath": try #require(first.thread.keyframePath),
+            "history": [] as [String],
         ])
-        // The fixture's narration, from its voiceover.json.
-        #expect((messages[0]["transcript"] as? [[String: Any]])?.count == 3)
-        #expect(messages[1]["id"] as? String == second.message.id)
-        #expect(messages[1]["threadNumber"] as? Int == 2)
-        #expect(messages[1]["time"] as? Double == 12.5)
-        #expect(messages[1]["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
-        #expect(messages[1]["keyframePath"] as? String == second.thread.keyframePath)
-        #expect(messages[1]["cropPath"] as? String == second.message.cropPath)
+        #expect(threads[0]["messages"] as? [[String: AnyHashable]] == [
+            ["id": first.message.id, "text": "Too fast here", "region": NSNull(), "cropPath": NSNull()],
+        ])
+        // The fixture's narration, from its voiceover.json, cut at send time.
+        #expect((threads[0]["transcript"] as? [[String: Any]])?.count == 3)
+        #expect(threads[1]["number"] as? Int == 2)
+        #expect(threads[1]["time"] as? Double == 12.5)
+        #expect(threads[1]["keyframePath"] as? String == second.thread.keyframePath)
+        let boxed = try #require((threads[1]["messages"] as? [[String: Any]])?.first)
+        #expect(boxed["id"] as? String == second.message.id)
+        #expect(boxed["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
+        #expect(boxed["cropPath"] as? String == second.message.cropPath)
         for path in [first.thread.keyframePath, second.thread.keyframePath, second.message.cropPath] {
             let path = try #require(path)
             #expect(path.hasPrefix(support.path + "/"))
@@ -166,11 +171,11 @@ struct SendDeliveryTests {
             "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0,
         ])
 
-        let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
 
         let payload = try object(answer.reply.output)
         #expect((payload["send"] as? [String: String])?["id"] == send.id.text)
-        #expect((payload["messages"] as? [[String: Any]])?.count == 2)
+        #expect((payload["threads"] as? [[String: Any]])?.count == 2)
         state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
             "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1,
@@ -191,11 +196,11 @@ struct SendDeliveryTests {
 
         var got: [String?] = []
         for _ in 0..<2 {
-            let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+            let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
             got.append((try object(answer.reply.output)["send"] as? [String: String])?["id"])
         }
         #expect(got == ids)
-        #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
+        #expect(await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
     }
 
     @Test("a send with nothing queued is refused, and no send is made")
@@ -315,15 +320,15 @@ struct SendDeliveryTests {
         _ = try await queueTwo(model)
         _ = try await model.sendQueue()
         let send = try #require(model.sends.first)
-        let first = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let first = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(first.delivered?.sendID == send.id)
 
         // The same session waits again before it works on the send: nothing for it.
-        #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
+        #expect(await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
         #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
 
         // The listener restarts: another holder key.
-        let again = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
+        let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
 
         #expect(again.delivered == first.delivered)
         #expect(again.reply.output == first.reply.output)
@@ -345,8 +350,32 @@ struct SendDeliveryTests {
 
         #expect(model.listeners.outbox.taken.isEmpty)
         #expect(model.listeners.outbox.pending == [try #require(lost.delivered)])
-        let again = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(again.reply.output == lost.reply.output)
+    }
+
+    @Test("a send is taken only once its reply is written: until then it stays in line and no other wait gets it")
+    func takenOnceWritten() async throws {
+        defer { cleanUp() }
+        let (model, server) = try await app()
+        _ = try await queueTwo(model)
+        let send = try await model.sendQueue()
+        let ref = SendRef(sendID: try #require(ItemID(send.id)), contentHash: try #require(model.video?.contentHash))
+
+        let handed = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+
+        #expect(handed.delivered == ref)
+        #expect(model.listeners.outbox.pending == [ref])
+        #expect(model.listeners.outbox.taken.isEmpty)
+        #expect(model.listeners.isDelivered(send.id))
+        // A second wait while the reply is written gets nothing.
+        #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
+
+        server.written(handed)
+
+        #expect(model.listeners.outbox.pending.isEmpty)
+        #expect(model.listeners.outbox.taken == [ref])
+        #expect(model.listeners.outbox.inFlight.isEmpty)
     }
 
     // MARK: - Over the socket
@@ -380,7 +409,10 @@ struct SendDeliveryTests {
         #expect(try sent.get().ok)
         #expect(reply.ok)
         #expect((try object(reply.output)["send"] as? [String: String])?["id"] == model.sends.first?.id.text)
+        // Taken once the socket wrote the reply.
+        await eventually { model.listeners.outbox.taken.count == 1 }
         #expect(model.listeners.outbox.taken.count == 1)
+        #expect(model.listeners.outbox.inFlight.isEmpty)
     }
 
     @Test("a wait whose client goes away is closed: the listener no longer waits, and a send made then waits for the next one")

@@ -7,7 +7,7 @@ let hash = "f92cbb2a0123456789abcdef"
 let now = Date(timeIntervalSince1970: 1_790_000_000)
 
 func newReview() -> VideoReview {
-    VideoReview(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: "/videos/sample.mp4"))
+    VideoReview(video: VideoInfo(contentHash: hash, title: "sample.mp4", duration: 21.233, path: "/videos/sample.mp4"))
 }
 
 func thread(_ number: Int) -> ThreadID { ItemID("t-f92cbb2a-\(number)")! }

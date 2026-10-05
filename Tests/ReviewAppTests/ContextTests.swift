@@ -67,7 +67,7 @@ struct ContextDeliveryTests {
 
     /// The `context` of the payload the next `wait` gets, nil for `null`.
     private func contextOfWait(_ server: ControlServer, as holder: Holder = listener) async throws -> String? {
-        let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: holder))
+        let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: holder))
         let payload = try object(answer.reply.output)
         #expect(payload.keys.contains("context"))
         return payload["context"] as? String

@@ -103,7 +103,6 @@ final class AppModel: AppControlling {
         listeners = ListenerQueue(desk: desk, layout: layout)
         transcripts = TranscriptDesk(layout: layout, speech: speech)
         themes = ThemeDesk(layout: layout)
-        listeners.transcripts = transcripts
         listeners.announce = { [weak self] notice in self?.raise(notice) }
     }
 
@@ -146,7 +145,8 @@ final class AppModel: AppControlling {
         }
         // Before the player changes: a history that doesn't read keeps the
         // video shut, and the one that was open stays open.
-        let title = url.deletingPathExtension().lastPathComponent
+        // The file's name with its extension, the same in the header, the state and the payload.
+        let title = url.lastPathComponent
         let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
         try await engine.load(url)
         // The review as it is now, not as it was before the load: a
@@ -305,7 +305,11 @@ final class AppModel: AppControlling {
                 throw error
             }
         }
-        let send = try desk.change { review throws(ReviewRefusal) in try review.send(at: Date()) }
+        guard let info = desk.review?.video else { throw Self.noVideo }
+        // Each thread's transcript window is cut now and kept with the send.
+        let send = try desk.change { [transcripts] review throws(ReviewRefusal) in
+            try review.send(at: Date()) { thread in thread.time.map { transcripts.lines(around: $0, of: info) } ?? [] }
+        }
         guard let video, let review = desk.review else { throw Self.noVideo }
         listeners.enqueue(SendRef(sendID: send.id, contentHash: video.contentHash))
         return StateReport.Send(send, in: review)

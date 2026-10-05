@@ -46,7 +46,7 @@ struct AnswerTests {
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
         let send = try await model.sendQueue()
-        let wait = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
+        let wait = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(wait.reply.ok)
         return Taken(
             model: model, server: server, send: send.id, one: first.thread.id, two: second.thread.id,
@@ -66,7 +66,7 @@ struct AnswerTests {
     }
 
     private func listen(_ request: ControlRequest, _ app: Taken, json: Bool = false) async -> ControlReply {
-        await app.server.reply(to: request.sent(by: Self.listener, json: json)).reply
+        await app.server.replyWritten(to: request.sent(by: Self.listener, json: json)).reply
     }
 
     private func operate(_ request: ControlRequest, _ app: Taken, json: Bool = false) async -> ControlReply {
@@ -154,7 +154,7 @@ struct AnswerTests {
         // Nothing is left of the send: the listener isn't working any more.
         #expect(app.model.listeners.outbox.taken.isEmpty)
         let listening = app.server
-        let wait = Task { await listening.reply(to: ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)) }
+        let wait = Task { await listening.replyWritten(to: ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)) }
         await eventually { app.model.listeners.outbox.isWaitOpen }
         #expect(app.model.listeners.presence(at: Date()) == .listening)
         app.server.stop()

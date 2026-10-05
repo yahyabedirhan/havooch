@@ -246,7 +246,7 @@ struct LibraryTests {
         outbox.enqueue(waiting)
         outbox.enqueue(alsoWaiting)
         outbox.waitOpened(by: ListenerSession(key: "listener-1", name: "Mate", place: "/shop"), at: at(0))
-        #expect(outbox.deliverNext(at: at(0)) == taken)
+        #expect(outbox.deliver(at: at(0)) == taken)
         #expect(outbox.context(for: Self.hash, text: "The topic") == "The topic")
         try Library(layout: SupportLayout(root: scratch.folder)).save(outbox)
 
@@ -322,5 +322,14 @@ struct LibraryTests {
         #expect(library.recent() == nil)
         try Data("{ \"schemaVersion\": 1, \"path\": \"relative.mp4\" }".utf8).write(to: library.layout.recentFile)
         #expect(library.recent() == nil)
+    }
+}
+
+extension Outbox {
+    /// Hands the next send to the open `wait` and has its reply written.
+    fileprivate mutating func deliver(at now: Date) -> SendRef? {
+        guard let ref = handOut(at: now) else { return nil }
+        written(ref)
+        return ref
     }
 }

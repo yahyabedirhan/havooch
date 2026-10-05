@@ -31,17 +31,25 @@ public enum Presence: String, Codable, Sendable, CaseIterable {
 /// (`pending`), the sends a listener took and hasn't finished (`taken`),
 /// who the listener is (`session`), and whether it's there (`presence`).
 ///
-/// A send goes `enqueue → deliverNext → finished`. A `wait` from another
+/// A send goes `enqueue → handOut → written → finished`: it's handed to
+/// the open `wait` and stays in line, in flight, until the reply that
+/// carries it is written; only then is it taken. A reply that can't be
+/// written leaves it first in line. A `wait` from another
 /// holder key is a new listener session: what the last one took and didn't
 /// finish goes back to the front of the line, and it gets each video's
 /// context again (`contextSent`). `pending`, `taken`, `session` and
-/// `contextSent` are what's kept on disk; whether a `wait` is open and when
-/// the listener was last heard belong to one run of the app.
+/// `contextSent` are what's kept on disk; whether a `wait` is open, what's
+/// in flight and when the listener was last heard belong to one run of the
+/// app.
 public struct Outbox: Codable, Equatable, Sendable {
     /// Sent and not yet delivered, first in, first out.
     public private(set) var pending: [SendRef] = []
     /// Delivered and not finished.
     public private(set) var taken: [SendRef] = []
+    /// The sends handed to a `wait` whose reply is being written, each with
+    /// the key of the listener session it went to. They stay in `pending`
+    /// and no other `wait` gets them.
+    public private(set) var inFlight: [SendRef: String] = [:]
     /// The listener of the last `wait`; nil until the first one.
     public private(set) var session: ListenerSession?
     /// Whether a `wait` is open now.
@@ -132,24 +140,33 @@ public struct Outbox: Codable, Equatable, Sendable {
         lastHeard = now
     }
 
-    /// The send the open `wait` gets: the first in line, which is taken
-    /// from now on. The `wait` is answered, so it's no longer open. Nil
-    /// while no `wait` is open or nothing is in line.
-    public mutating func deliverNext(at now: Date) -> SendRef? {
-        guard isWaitOpen, !pending.isEmpty else { return nil }
-        let ref = pending.removeFirst()
-        taken.append(ref)
+    /// The send the open `wait` gets: the first in line that isn't in
+    /// flight, which is in flight from now on. The `wait` is answered, so
+    /// it's no longer open. Nil while no `wait` is open or nothing is in
+    /// line.
+    public mutating func handOut(at now: Date) -> SendRef? {
+        guard isWaitOpen, let session, let ref = pending.first(where: { inFlight[$0] == nil }) else { return nil }
+        inFlight[ref] = session.key
         isWaitOpen = false
         lastHeard = now
         return ref
     }
 
+    /// The reply that carried `ref` was written: the listener has it, so
+    /// it's taken. A listener session that ended meanwhile (another key
+    /// opened a `wait`) took nothing: the send stays in line for the
+    /// session there is.
+    public mutating func written(_ ref: SendRef) {
+        guard let key = inFlight.removeValue(forKey: ref), key == session?.key,
+              let index = pending.firstIndex(of: ref) else { return }
+        pending.remove(at: index)
+        taken.append(ref)
+    }
+
     /// The reply that carried `ref` couldn't be written: the listener never
-    /// got it, so it's first in line again.
+    /// got it. It never left the line, so it's first in line again.
     public mutating func undelivered(_ ref: SendRef) {
-        guard let index = taken.firstIndex(of: ref) else { return }
-        taken.remove(at: index)
-        pending.insert(ref, at: 0)
+        inFlight[ref] = nil
         // The context that payload may have carried was lost with it.
         contextSent[ref.contentHash] = nil
     }
@@ -159,9 +176,12 @@ public struct Outbox: Codable, Equatable, Sendable {
         pending.removeAll { $0 == ref }
     }
 
-    /// The listener has nothing left to do on `ref`.
+    /// The listener has nothing left to do on `ref`: it leaves the line
+    /// and the taken sends.
     public mutating func finished(_ ref: SendRef) {
         taken.removeAll { $0 == ref }
+        pending.removeAll { $0 == ref }
+        inFlight[ref] = nil
     }
 
     // MARK: - The video context

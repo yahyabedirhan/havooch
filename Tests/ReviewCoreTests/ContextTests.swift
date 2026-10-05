@@ -88,7 +88,7 @@ struct ContextTests {
         var outbox = Outbox()
         outbox.enqueue(Self.send)
         outbox.waitOpened(by: Self.one, at: at(0))
-        #expect(outbox.deliverNext(at: at(0)) == Self.send)
+        #expect(outbox.deliver(at: at(0)) == Self.send)
         _ = outbox.context(for: "abc", text: "About the sample")
         _ = outbox.context(for: "def", text: "About the other")
 

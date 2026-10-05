@@ -60,7 +60,7 @@ struct PersistenceTests {
     }
 
     private func listen(_ request: ControlRequest, _ server: ControlServer, as holder: Holder = listener) async -> ControlReply {
-        await server.reply(to: request.sent(by: holder, json: true)).reply
+        await server.replyWritten(to: request.sent(by: holder, json: true)).reply
     }
 
     private func eventually(_ condition: () -> Bool) async {
@@ -183,7 +183,7 @@ struct PersistenceTests {
         }
         let video = try #require(after["video"] as? [String: Any])
         #expect(video["path"] as? String == renamed.path)
-        #expect(video["title"] as? String == "renamed take 2")
+        #expect(video["title"] as? String == "renamed take 2.mov")
         #expect(video["contextNote"] as? String == "Look at the pricing page")
         #expect(video["contentHash"] as? String == (before["video"] as? [String: Any])?["contentHash"] as? String)
         // One folder for the one content, and its review names the new path.
@@ -191,7 +191,7 @@ struct PersistenceTests {
         let hash = try #require(again.video?.contentHash)
         let kept = try #require(try Library(layout: SupportLayout(root: support)).load(hash))
         #expect(kept.video.path == renamed.path)
-        #expect(kept.video.title == "renamed take 2")
+        #expect(kept.video.title == "renamed take 2.mov")
 
         // The history goes on under the new name.
         #expect(await listen(.status(messageID: ids.first, state: .done), later).ok)
@@ -274,19 +274,20 @@ struct PersistenceTests {
         #expect((payload["send"] as? [String: Any])?["id"] as? String == send.id)
         let about = try #require(payload["video"] as? [String: Any])
         #expect(about["path"] as? String == video.path)
-        #expect(about["title"] as? String == "sample")
+        #expect(about["title"] as? String == "sample.mp4")
         #expect(about["duration"] as? Double == 21.233)
         let context = try #require(payload["context"] as? String)
         let sidecar = try String(contentsOf: video.deletingLastPathComponent().appendingPathComponent("sample.context.md"), encoding: .utf8)
         #expect(context.hasPrefix(sidecar.trimmingCharacters(in: .whitespacesAndNewlines)))
         #expect(context.hasSuffix("## Note from the reviewer\n\nLook at the pricing page"))
-        let comments = try #require(payload["messages"] as? [[String: Any]])
+        let threads = try #require(payload["threads"] as? [[String: Any]])
+        let comments = threads.flatMap { ($0["messages"] as? [[String: Any]]) ?? [] }
         #expect(comments.map { $0["id"] as? String } == [first.message.id, second.message.id])
-        for comment in comments {
-            let keyframe = try #require(comment["keyframePath"] as? String)
+        for thread in threads {
+            let keyframe = try #require(thread["keyframePath"] as? String)
             #expect(FileManager.default.fileExists(atPath: keyframe))
-            // The voiceover's scene times, at the frame rate kept with the review.
-            let lines = try #require(comment["transcript"] as? [[String: AnyHashable]])
+            // The voiceover's scene times, as the send cut them.
+            let lines = try #require(thread["transcript"] as? [[String: AnyHashable]])
             #expect(lines == [TranscriptDeliveryTests.pause, TranscriptDeliveryTests.send, TranscriptDeliveryTests.answer])
         }
         #expect(comments[0]["cropPath"] is NSNull)
@@ -304,7 +305,7 @@ struct PersistenceTests {
         #expect(third.threads[2].messages.map(\.text) == ["This box", "Looking"])
     }
 
-    @Test("a video with no sidecar: the speech transcript an earlier run finished is in a send a later run delivers without opening the video")
+    @Test("a video with no sidecar: the speech lines a send kept are in it when a later run delivers it, with no transcription")
     func keptSpeech() async throws {
         defer { cleanUp() }
         let video = try copy(to: "videos")
@@ -321,8 +322,8 @@ struct PersistenceTests {
         let later = SlowRecognizer()
         let (_, server) = await run(speech: later)
         let payload = try object(await listen(.wait(timeoutSeconds: 0), server).output)
-        let comments = try #require(payload["messages"] as? [[String: Any]])
-        #expect(comments.first?["transcript"] as? [[String: AnyHashable]] == [["start": 0.2, "end": 5.1, "text": "This is Video Review."]])
+        let threads = try #require(payload["threads"] as? [[String: Any]])
+        #expect(threads.first?["transcript"] as? [[String: AnyHashable]] == [["start": 0.2, "end": 5.1, "text": "This is Video Review."]])
         #expect(later.runs == 0)
     }
 
@@ -348,7 +349,8 @@ struct PersistenceTests {
         let payload = try object(reply.output)
         #expect((payload["send"] as? [String: Any])?["id"] as? String == ids.send)
         // Only the message that wasn't finished, and the context again.
-        #expect((payload["messages"] as? [[String: Any]])?.map { $0["id"] as? String } == [ids.first])
+        let threads = try #require(payload["threads"] as? [[String: Any]])
+        #expect(threads.flatMap { ($0["messages"] as? [[String: Any]]) ?? [] }.map { $0["id"] as? String } == [ids.first])
         #expect((payload["context"] as? String)?.contains("Look at the pricing page") == true)
         again.listeners.stop()
 

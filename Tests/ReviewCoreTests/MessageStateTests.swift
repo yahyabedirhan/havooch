@@ -159,31 +159,3 @@ struct ListenerAnswerTests {
         #expect(review.thread(thread(1))?.messages.map(\.state) == [.done, .sent, .queued])
     }
 }
-
-@Suite("The send payload (interim shape)")
-struct SendPayloadTests {
-    @Test("the payload names the send, the video and each unfinished message with its thread, keyframe and crop")
-    func assemble() throws {
-        var review = newReview()
-        try review.write(text: "Moment", at: 10, now: now)
-        try review.write(text: "Box", at: 10, region: Region(x: 0.1, y: 0.1, w: 0.2, h: 0.2), now: now)
-        try review.write(text: "General", at: nil, now: now)
-        let sent = try review.send(at: now)
-        try review.setState(message(1), .done)
-        let payload = SendPayload.assemble(
-            review: review, send: sent, context: "ctx",
-            transcript: { _ in [SendPayload.Line(start: 6, end: 14, text: "Press command enter")] },
-            images: { message, thread in
-                SendPayload.Images(keyframe: thread.time == nil ? nil : "/k/\(thread.id).png", crop: message.region == nil ? nil : "/c/\(message.id).png")
-            }
-        )
-        #expect(payload.send.id == sent.id)
-        #expect(payload.context == "ctx")
-        #expect(payload.messages.map(\.id) == [message(3), message(2)])
-        #expect(payload.messages[0].threadNumber == 0 && payload.messages[0].keyframePath == nil && payload.messages[0].transcript.isEmpty)
-        #expect(payload.messages[1].threadId == thread(1))
-        #expect(payload.messages[1].keyframePath == "/k/t-f92cbb2a-1.png")
-        #expect(payload.messages[1].cropPath == "/c/m-f92cbb2a-2.png")
-        #expect(payload.json.contains(#""keyframePath" : null"#))
-    }
-}

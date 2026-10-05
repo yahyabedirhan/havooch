@@ -255,9 +255,8 @@ Sources/
     Send.swift                     id, sentAt, message ids, the transcript lines cut per thread; SendRef
     VideoReview.swift              one video's review: every rule about threads, messages and sends; the counters
     ReviewRefusal.swift            why a change is refused, as the line the CLI prints
-    Outbox.swift                   the listener outbox: pending, taken, session, context sent, presence
-    SendPayload.swift              the JSON `wait` prints, and how it is assembled (#24 left an interim flat
-                                   shape, one entry per message with its thread; #25 groups it by thread)
+    Outbox.swift                   the listener outbox: pending, in flight, taken, session, context sent, presence
+    SendPayload.swift              the JSON `wait` prints, grouped by thread, and how it is assembled
     Theme/
       ThemeToken.swift             every semantic colour token, by name
       ThemeColor.swift             a colour as "#rrggbb" or "#rrggbbaa": parse and print
@@ -403,7 +402,7 @@ public struct VideoReview: Codable, Equatable {          // one video's review
                                                           // joins the thread at that frame time, or starts one; time nil and thread nil: General
     mutating func edit(_ id: MessageID, text:) throws(ReviewRefusal) -> Message          // queued only
     mutating func delete(_ id: MessageID) throws(ReviewRefusal) -> Message               // queued only; an empty thread goes, its number is not reused
-    mutating func send(at now:, transcripts: (ReviewThread) -> [TranscriptLine]) throws(ReviewRefusal) -> Send
+    mutating func send(at now:, transcript: (ReviewThread) -> [SendPayload.Line]) throws(ReviewRefusal) -> Send
                                                           // every queued person message → sent; the window cut per thread; refused when nothing is queued
     mutating func answer(_ thread: ThreadID, text:, now:) throws(ReviewRefusal) -> Message   // needs an open question
     mutating func setPopoverFrame(_ thread: ThreadID, _ frame: PopoverFrame) throws(ReviewRefusal)
@@ -440,20 +439,20 @@ public struct Send: Codable, Equatable {
     public let id: SendID                                  // s-<hash8>-<n>
     public let sentAt: Date
     public let messageIDs: [MessageID]                     // threads in time order, General first; written order within a thread
-    public let transcripts: [ThreadID: [TranscriptLine]]   // cut at send time (D A.4); General has none
-}
+    public let transcripts: [ThreadID: [SendPayload.Line]] // cut at send time (D A.4); General has none
+}                                                          // kept in review.json as { "t-…-1": [lines] }; a send kept without it reads as none
 public struct SendRef: Codable, Hashable { public let id: SendID; public let contentHash: String }
 ```
 
-`AppModel.send()` queues the open popover's text first (as proto-2 did with a draft), then calls `VideoReview.send` with a closure that reads `TranscriptDesk.lines(around: thread.time)` for each thread in the send, and hands the `SendRef` to `ListenerQueue`. The lines are the ones the source has at that moment; a redelivery uses the kept lines and needs no transcriber (D A.4). `ReviewCore` stores `TranscriptLine` as its own small value (`start`, `end`, `text`), so it still does not import `ReviewTranscript`.
+`AppModel.send()` queues the open popover's text first (as proto-2 did with a draft), then calls `VideoReview.send` with a closure that reads `TranscriptDesk.lines(around: thread.time)` for each thread in the send with a frame, and hands the `SendRef` to `ListenerQueue`. The lines are the ones the source has at that moment; every delivery, the first included, uses the kept lines and needs no transcriber (D A.4). `ReviewCore` keeps a line as its own small value, `SendPayload.Line` (`start`, `end`, `text`), so it still does not import `ReviewTranscript`; `ItemID` is `CodingKeyRepresentable`, so the map by thread is a JSON object.
 
 ### ReviewCore: the outbox
 
-proto-2's `Outbox`, with `BatchRef` renamed `SendRef`: `pending` and `taken` lists, `session` (holder key, name, place), `contextSent` (content hash → digest), `isWaitOpen`, `openAsks`, `lastHeard`; `enqueue`, `waitOpened(by:at:)` (a new key: taken → front of pending, `contextSent` emptied), `deliverNext`, `undelivered`, `discard`, `finished`, `context(for:text:)`, `heard`, `askOpened`, `askClosed`, `presence(at:)` (`listening` | `working` | `absent`), `reconcile(unfinished:)`. Its rules do not change (D A.11).
+proto-2's `Outbox`, with `BatchRef` renamed `SendRef`: `pending` and `taken` lists, `session` (holder key, name, place), `contextSent` (content hash → digest), `isWaitOpen`, `openAsks`, `lastHeard`; `enqueue`, `waitOpened(by:at:)` (a new key: taken → front of pending, `contextSent` emptied), `handOut`, `written`, `undelivered`, `discard`, `finished`, `context(for:text:)`, `heard`, `askOpened`, `askClosed`, `presence(at:)` (`listening` | `working` | `absent`), `reconcile(unfinished:)`. Its rules do not change (D A.11), with one addition from proto-1 (L16): `handOut` gives the open `wait` the first pending send that is not in flight and marks it in flight (`inFlight`, send → the session key, never saved), so it stays in `pending` and no other `wait` gets it. `written` moves it from `pending` to `taken` once the reply is written, unless another session started meanwhile: then it stays in line for that session. `undelivered` only clears the mark and forgets the video's context digest, so the send keeps its place first in line. `finished` removes a send from all three.
 
 ### ReviewCore: the send payload
 
-`SendPayload.assemble(review, send, context:, images:)` builds the spec's JSON. `images` is a closure that gives the absolute keyframe and crop paths from `SupportLayout`, so `ReviewCore` needs no `ReviewStore`.
+`SendPayload.assemble(review, send, context:, images:)` builds the spec's JSON. `images` (`SendPayload.Images`) holds two closures, a thread's keyframe path and a message's crop path, which the app answers from `SupportLayout`, so `ReviewCore` needs no `ReviewStore`.
 
 - `threads[]` has one entry for each thread with an unfinished message in the send, General first, then in time order. A send delivered again carries only its unfinished messages.
 - `transcript[]` is the send's kept lines for the thread.
@@ -585,10 +584,10 @@ public struct SupportLayout: Sendable {
 - `Draft` is view state only: `thread` (an id, or the number a new thread will take), `time`, `region`, `text`. It is never saved (D 1.4). `state --json` reports it as `popover`.
 - **Frame time** (L2): `PlayerEngine.frameTime(of: t)` is the start of the frame shown at `t` (from the track's nominal frame rate), raised to the next millisecond, as proto-2 raised a comment's time (D46). Every thread time goes through it, from the UI and from `--at`. The frame length comes from the nominal rate snapped to a whole or an NTSC rate (L20).
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
-- `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `undelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
+- `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `written`, `undelivered`, `isDelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s; a question stays until answered or clicked). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or expands General in the sidebar.
 - `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. The system appearance is `NSApp.effectiveAppearance`, observed, so a screenshot in the other appearance shows that appearance's default theme. `DispatchSource`s on the support folder, `Themes/`, each theme file and `settings.json` reload the themes 150 ms after a change (D 5.6); the watches are made again after each reload, since an editor that saves by replacing a file makes a new one. `startWatching` makes `Themes/`, so a person finds where their themes go. A theme or settings problem is written to standard error once. `Palette` turns the resolved tokens into `Color`s, reaches every view through the environment (`@Environment(\.palette)`), and is the only colour source a view has (D 5.1); a test in `ReviewAppTests` fails on a raw colour anywhere in `Sources/ReviewApp` outside `Palette.swift`. The letterbox is a token too. While a theme is pinned, the window takes its kind's appearance, so the title bar and the system's controls match; with no pin it inherits the app's. The View menu's Theme picker pins a theme or follows the system, as `theme set` does.
-- `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that cannot be written goes back to the server as `undelivered`. The `written` outcome comes with the in-flight rule (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
+- `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that was written goes to the server as `written` (a send it carried is taken), and one that cannot be written as `undelivered` (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
 - `ControlServer` only decodes, checks the lease, dispatches and keeps the queued `take`s. It owns the one `ControlLease` and settles it on a timer. It depends on the `AppControlling` protocol, which `AppModel` implements and the tests fake.
 - `LeaseIndicator` is the lease as the agent-control icon shows it. `AgentControl` is the icon, left of Context, only while an agent holds the lease, and its popover: who, where, time left, how many wait, Stop (D 4.7). The icon shows in screenshots unless `--hide-agent-indicator` (L10).
 - `StateReport` builds `state --json`:
@@ -685,7 +684,7 @@ Sending and delivering:
 ```text
 AppModel.send()
   closePopover(.clickOutside)                                         // the open text is queued first
-  send = desk.change { try $0.send(at: now, transcripts: { transcripts.lines(around: $0.time, of: video) }) }
+  send = desk.change { try $0.send(at: now, transcript: { transcripts.lines(around: $0.time, of: video) }) }
   listeners.enqueue(SendRef(send.id, hash))
 
 ListenerQueue.wait(holder, timeout, connection) async -> Outcome
@@ -701,9 +700,9 @@ ListenerQueue.takeNext()
     review unreadable, or nothing unfinished: outbox.discard; next
     context = outbox.context(for: ref.hash, text: ContextReader.text(for: review))   // nil when sent unchanged
     payload = SendPayload.assemble(review, send, context, images: layout paths)
-    mark in flight; return .send(ref, payload)
+    outbox.handOut (in flight); return .send(ref, payload)
 
-SocketListener   writes the payload → server.written(ref) → outbox.deliverNext (pending → taken)
+SocketListener   writes the payload → server.written(ref) → outbox.written (pending → taken)
                  the write fails   → server.undelivered(ref) → back in line, the video's digest forgotten
 ```
 
@@ -784,7 +783,7 @@ Start: after Trace 1, the person seeks to 0:15 and draws a region; thread #2 sta
 ReviewApp/Player/Shortcuts.swift         Cmd+Return → AppModel.send()
 ReviewApp/AppModel.swift                 closePopover(.clickOutside): no draft
 ReviewApp/TranscriptDesk.swift           lines(around: 10.017) → 2 voiceover lines; lines(around: 15.015) → 2 lines
-ReviewApp/ReviewDesk.swift               change { send(at: 19:02:11Z, transcripts:) }
+ReviewApp/ReviewDesk.swift               change { send(at: 19:02:11Z, transcript:) }
 ReviewCore/VideoReview.swift               m-1, m-2, m-3 queued → sent, sendID s-f92cbb2a-1; transcripts kept for #1 and #2
 ReviewStore/Library.swift                  review.json written
                                          state: queue = []; both pins the sent colour; footer "0 queued"
@@ -794,7 +793,7 @@ ReviewApp/ContextReader.swift              sample.context.md (+ the note)
 ReviewCore/SendPayload.swift               threads: #1 (history [], messages m-1, m-2), #2 (history [], messages m-3);
                                            keyframes and crops as absolute paths; transcript as kept
 ReviewApp/Control/SocketListener.swift   the held wait resumes; payload written → written(s-1)
-ReviewCore/Outbox.swift                    deliverNext: pending = [], taken = [s-1]      state: presence working; pill "Working"
+ReviewCore/Outbox.swift                    written: pending = [], taken = [s-1]          state: presence working; pill "Working"
 ReviewCommand/ListenerCommands.swift     prints the payload, exit 0
 ```
 

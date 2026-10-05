@@ -9,11 +9,29 @@ public struct Send: Codable, Equatable, Sendable, Identifiable {
     /// The send's messages: threads in time order, General first, and the
     /// order written within a thread.
     public let messageIDs: [MessageID]
+    /// Each thread's transcript window, cut when the send was made and
+    /// kept, so a delivery again gives the same lines and needs no
+    /// transcriber. General has none.
+    public let transcripts: [ThreadID: [SendPayload.Line]]
 
-    public init(id: SendID, sentAt: Date, messageIDs: [MessageID]) {
+    public init(id: SendID, sentAt: Date, messageIDs: [MessageID], transcripts: [ThreadID: [SendPayload.Line]] = [:]) {
         self.id = id
         self.sentAt = sentAt
         self.messageIDs = messageIDs
+        self.transcripts = transcripts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sentAt, messageIDs, transcripts
+    }
+
+    /// A send kept with no transcripts reads as one with no lines.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(SendID.self, forKey: .id)
+        sentAt = try container.decode(Date.self, forKey: .sentAt)
+        messageIDs = try container.decode([MessageID].self, forKey: .messageIDs)
+        transcripts = try container.decodeIfPresent([ThreadID: [SendPayload.Line]].self, forKey: .transcripts) ?? [:]
     }
 }
 
