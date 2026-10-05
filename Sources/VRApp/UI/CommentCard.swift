@@ -5,8 +5,9 @@ import VRReview
 
 /// One comment in the sidebar: its time, its state, its picture, its text
 /// and its thread. A click shows its moment. While it's queued it can be
-/// edited in place or deleted. While the agent's question on it is open,
-/// its edge is orange and it holds the answer box.
+/// edited in place or deleted. Selection shows as a soft accent fill. While
+/// the agent's question on it is open, its edge is a soft orange and it holds
+/// the answer box.
 struct CommentCard: View {
     let comment: Comment
     /// The file of the crop of its region, else of its keyframe, or nil
@@ -24,14 +25,17 @@ struct CommentCard: View {
 
     @State private var editing: String?
     @FocusState private var isEditorFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: Theme.glyph(for: comment.state))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(Theme.colour(for: comment.state))
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: comment.state == .working && !reduceMotion)
                 Text(TimeText.short(comment.time))
-                    .font(Theme.timeFont)
+                    .font(Theme.cardTimeFont)
                 Text(Theme.label(for: comment.state))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -43,23 +47,22 @@ struct CommentCard: View {
                 }
                 Spacer()
                 if comment.state == .queued, editing == nil {
-                    Button {
+                    Button("Edit", systemImage: "pencil") {
                         editing = comment.text
                         isEditorFocused = true
-                    } label: {
-                        Image(systemName: "pencil")
                     }
+                    .labelStyle(.iconOnly)
                     .help("Edit")
-                    Button(role: .destructive, action: delete) {
-                        Image(systemName: "trash")
-                    }
-                    .help("Delete")
+                    Button("Delete", systemImage: "trash", role: .destructive, action: delete)
+                        .labelStyle(.iconOnly)
+                        .help("Delete")
                 }
             }
             .buttonStyle(.borderless)
 
             HStack(alignment: .top, spacing: 8) {
                 Thumbnail(file: picture)
+                    .accessibilityHidden(true)
                 if let editing {
                     editor(editing)
                 } else {
@@ -77,13 +80,24 @@ struct CommentCard: View {
             }
         }
         .padding(10)
-        .background(.quaternary.opacity(isSelected ? 0.9 : 0.4), in: RoundedRectangle(cornerRadius: Theme.cardCorner))
+        .background(fill, in: RoundedRectangle(cornerRadius: Theme.cardCorner))
         .overlay(
+            // Only an open question gets an edge: it asks for the person's action.
             RoundedRectangle(cornerRadius: Theme.cardCorner)
-                .strokeBorder(hasOpenQuestion ? Theme.question : isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                .strokeBorder(hasOpenQuestion ? Theme.question.opacity(0.7) : .clear, lineWidth: 1)
         )
+        .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: isSelected)
         .contentShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
         .onTapGesture(perform: show)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { show() }
+    }
+
+    /// The card's surface: a soft accent tint while selected, else the quiet
+    /// grey every card shares.
+    private var fill: AnyShapeStyle {
+        isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.4))
     }
 
     private func editor(_ text: String) -> some View {

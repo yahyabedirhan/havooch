@@ -21,14 +21,24 @@ enum Theme {
     static let cardCorner: CGFloat = 8
     /// Times, in digits that don't shift as they change.
     static let timeFont = Font.system(.callout, design: .rounded).monospacedDigit()
+    /// A comment's time at the head of its card: the transport's digits, not
+    /// rounded, a little heavier than the text under it.
+    static let cardTimeFont = Font.callout.monospacedDigit().weight(.medium)
+
+    /// A hue made soft: mixed toward grey, so a state shows without being
+    /// the loudest thing on screen.
+    static func soft(_ colour: Color) -> Color {
+        colour.mix(with: .gray, by: 0.35)
+    }
 
     /// A comment state's colour. Never the only sign: `glyph` says the same.
+    /// Only a failure stays fully red.
     static func colour(for state: CommentState) -> Color {
         switch state {
         case .draft, .queued: .gray
-        case .sent, .acknowledged: .blue
-        case .working: .orange
-        case .done: .green
+        case .sent, .acknowledged: soft(.blue)
+        case .working: soft(.orange)
+        case .done: soft(.green)
         case .failed: .red
         }
     }
@@ -52,11 +62,11 @@ enum Theme {
     }
 
     /// The colour of an open question: the agent waits for the person.
-    static let question = Color.orange
+    static let question = soft(.orange)
 
     /// The tint of the toolbar's sign that an agent controls the app: a
     /// soft orange, so it shows without shouting.
-    static let agent = Color.orange.mix(with: .gray, by: 0.3)
+    static let agent = soft(.orange)
 
     /// Who wrote a thread message and what it is, as a word in a card.
     static func label(for message: ThreadMessage) -> String {
@@ -78,7 +88,7 @@ enum Theme {
 
     static func colour(for message: ThreadMessage) -> Color {
         switch message.kind {
-        case .message: .accentColor
+        case .message: soft(.accentColor)
         case .question: question
         case .answer: .secondary
         }
@@ -104,8 +114,8 @@ enum Theme {
     static func colour(for presence: Outbox.Presence) -> Color {
         switch presence {
         case .absent: .secondary
-        case .listening: .green
-        case .working: .orange
+        case .listening: soft(.green)
+        case .working: soft(.orange)
         }
     }
 }

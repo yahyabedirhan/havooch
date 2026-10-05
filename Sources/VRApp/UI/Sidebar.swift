@@ -2,11 +2,13 @@ import SwiftUI
 import VRReview
 
 /// The review beside the video: the open video's comments as cards, in time
-/// order, each batch as a header card above the first of its comments, with
+/// order, each batch as a quiet header above the first of its comments, with
 /// the send bar under them. The selected comment's card is scrolled into
 /// view.
 struct Sidebar: View {
     let model: ReviewModel
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One card of the list.
     enum Row: Equatable, Identifiable {
@@ -44,13 +46,13 @@ struct Sidebar: View {
     var body: some View {
         let comments = model.comments
         VStack(spacing: 0) {
-            HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Comments")
-                    .font(.headline)
-                Spacer()
+                    .font(.subheadline.weight(.semibold))
                 Text("\(comments.count)")
-                    .font(.callout)
+                    .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
+                Spacer()
             }
             .padding(.horizontal, Theme.edge)
             .frame(height: 40)
@@ -84,7 +86,7 @@ struct Sidebar: View {
                     }
                     .onChange(of: model.selection) { _, selected in
                         guard let selected else { return }
-                        withAnimation { scroll.scrollTo(selected) }
+                        withAnimation(reduceMotion ? nil : .smooth) { scroll.scrollTo(selected, anchor: .center) }
                     }
                 }
             }

@@ -1,9 +1,10 @@
 import SwiftUI
 import VRReview
 
-/// One batch in the sidebar, as a header above the first of its comments:
-/// its id, how many comments it took, where it is, and the thread of the
-/// agent's messages for the full batch.
+/// One batch in the sidebar, as a quiet section header above the first of
+/// its comments: its id, how many comments it took, where it is, and the
+/// thread of the agent's messages for the full batch. It has no surface of
+/// its own; only the comment cards are filled.
 struct BatchCard: View {
     let batch: Batch
     let progress: Progress
@@ -49,13 +50,10 @@ struct BatchCard: View {
                 ThreadView(messages: batch.thread)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardCorner)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
         .accessibilityElement(children: .combine)
     }
 }

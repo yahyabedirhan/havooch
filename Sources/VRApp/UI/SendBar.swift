@@ -57,15 +57,20 @@ struct SendBar: View {
     }
 }
 
-/// Whether an agent is listening, as a word with a glyph and a colour.
+/// Whether an agent is listening, as a word with a glyph and a soft colour.
+/// The glyph pulses while the agent works, unless motion is reduced.
 struct PresenceChip: View {
     let presence: Outbox.Presence
     /// The listener session's name, for the tooltip.
     let name: String?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Label(Theme.label(for: presence), systemImage: Theme.glyph(for: presence))
             .font(.callout.weight(.medium))
+            .symbolRenderingMode(.hierarchical)
+            .symbolEffect(.variableColor.iterative, options: .repeating, isActive: presence == .working && !reduceMotion)
             .foregroundStyle(Theme.colour(for: presence))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)

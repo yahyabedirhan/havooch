@@ -12,6 +12,7 @@ struct ThreadView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: Theme.glyph(for: message))
                         .font(.caption)
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(Theme.colour(for: message))
                         .frame(width: 14)
                     VStack(alignment: .leading, spacing: 1) {
