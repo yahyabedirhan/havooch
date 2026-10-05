@@ -25,7 +25,7 @@ struct Composer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: pointsAtRegion ? "rectangle.dashed" : "bubble.left.fill").foregroundStyle(Color.accentColor)
+                Image(systemName: pointsAtRegion ? "rectangle.dashed" : "bubble.left").foregroundStyle(.secondary)
                 Text(pointsAtRegion ? "Region at \(TimeText.short(time))" : "Comment at \(TimeText.short(time))")
                     .font(.callout.weight(.semibold).monospacedDigit())
                 Spacer()
@@ -49,7 +49,7 @@ struct Composer: View {
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-        .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
         .onAppear { focused = true }
     }
 

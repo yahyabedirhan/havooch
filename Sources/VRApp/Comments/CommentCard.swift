@@ -2,11 +2,12 @@ import ImageIO
 import SwiftUI
 import VRReview
 
-/// One comment in the sidebar: its keyframe with its region outlined, its
-/// state, its time and its text, and under them its thread. A click goes
-/// to its moment. A queued comment is edited in place (a double click or
-/// the pencil; Return keeps the new text, Escape the old) and deleted with
-/// the bin.
+/// One comment in the sidebar, as a plain row: its keyframe with its region
+/// outlined, its state, its time and its text, and under them its thread.
+/// Only the selected row has a fill, as in a source list. A click goes to
+/// its moment. A queued comment is edited in place (a double click or the
+/// pencil; Return keeps the new text, Escape the old) and deleted with the
+/// bin.
 struct CommentCard: View {
     let model: AppModel
     let comment: Comment
@@ -30,10 +31,11 @@ struct CommentCard: View {
                     Text(TimeText.short(comment.time))
                         .font(.callout.weight(.semibold).monospacedDigit())
                     if comment.state != .queued {
-                        // A sent comment says where it stands in a word, beside its mark.
+                        // A sent comment says where it stands in a word, beside its
+                        // mark; the mark carries the colour, the word stays grey.
                         Text(style.label)
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(style.color)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                     if comment.state == .queued, !editing {
@@ -51,7 +53,7 @@ struct CommentCard: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        // Always there for the layout and for accessibility; seen on the card in use.
+                        // Always there for the layout and for accessibility; seen on the row in use.
                         .opacity(hovering || selected ? 1 : 0)
                     }
                 }
@@ -75,16 +77,11 @@ struct CommentCard: View {
         }
         }
         .padding(8)
-        .background(
-            selected ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(hovering ? 1 : 0.5)),
-            in: RoundedRectangle(cornerRadius: 8)
-        )
-        .overlay {
+        .background {
             if selected {
-                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.6))
-            } else if comment.openQuestion != nil {
-                // A question that waits is seen without the card in focus.
-                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.purple.opacity(0.5))
+                RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.12))
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04))
             }
         }
         .contentShape(Rectangle())
@@ -135,7 +132,7 @@ private struct Keyframe: View {
         .task(id: file) { image = await Self.small(file) }
     }
 
-    /// The PNG at `file`, no larger than the card shows it on a Retina display.
+    /// The PNG at `file`, no larger than the row shows it on a Retina display.
     nonisolated private static func small(_ file: URL) async -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(file as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [

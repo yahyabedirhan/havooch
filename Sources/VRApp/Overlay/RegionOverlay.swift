@@ -115,10 +115,10 @@ private struct RegionFrame: View {
                     path.addRect(frame)
                     path.addRect(rect)
                 }
-                .fill(Color.black.opacity(0.45), style: FillStyle(eoFill: true))
+                .fill(Color.black.opacity(0.35), style: FillStyle(eoFill: true))
             }
             // Dark under light, so the edge reads on any picture.
-            Path(rect.insetBy(dx: -1, dy: -1)).stroke(Color.black.opacity(0.55), lineWidth: 1)
+            Path(rect.insetBy(dx: -1, dy: -1)).stroke(Color.black.opacity(0.35), lineWidth: 1)
             Path(rect).stroke(dims ? Color.white : Color.accentColor, lineWidth: dims ? 1.5 : 2)
             if let label {
                 Text(label)
@@ -126,7 +126,7 @@ private struct RegionFrame: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
                     .fixedSize()
                     .offset(x: rect.minX, y: rect.maxY + 6)
             }

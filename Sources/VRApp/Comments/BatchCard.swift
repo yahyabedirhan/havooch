@@ -11,20 +11,19 @@ struct BatchHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text("BATCH \(batch.id.number.map(String.init) ?? batch.id.rawValue)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Batch \(batch.id.number.map(String.init) ?? batch.id.rawValue)")
+                    .font(.headline)
                 Spacer()
                 Text(batch.sentAt, style: .time)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
             Label(Self.words(standing, comments: comments), systemImage: Self.symbol(standing))
                 .font(.caption)
-                .foregroundStyle(standing == .pending ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                .foregroundStyle(standing == .pending ? AnyShapeStyle(Theme.apricot) : AnyShapeStyle(.secondary))
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
     }
 
@@ -56,23 +55,22 @@ struct BatchHeader: View {
 }
 
 /// The agent's messages for a whole batch, at the head of the batch's
-/// group, above the comments they are about.
+/// group, above the comments they are about: chat bubbles under a small
+/// label, with no box around them.
 struct BatchCard: View {
     let batch: Batch
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("For the whole batch", systemImage: "tray.full")
-                .font(.caption.weight(.medium))
+                .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(Array(batch.thread.enumerated()), id: \.offset) { _, message in
                 MessageRow(message: message)
             }
         }
-        .padding(8)
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor.opacity(0.25)))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Messages for the whole batch")
     }

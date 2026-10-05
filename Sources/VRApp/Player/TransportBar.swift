@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The fixed bar under the frame: play or pause, the time, the timeline
-/// and the speed. It never floats over the video.
+/// and the speed. It never floats over the video, and it sits on the
+/// window's background like the sidebar's send bar beside it.
 struct TransportBar: View {
     let model: AppModel
 
@@ -53,10 +54,11 @@ struct TransportBar: View {
             .fixedSize()
             .help("Playback speed")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.edge)
+        // As tall as the sidebar's send bar, on the same window background,
+        // so the two bars line up across the window.
+        .frame(height: Theme.footerHeight)
         .disabled(player.video == nil)
-        .background(.bar)
     }
 
     /// `1×`, `1.25×`.

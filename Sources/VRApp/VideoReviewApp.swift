@@ -112,61 +112,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The window's content: the lease banner while an agent controls the app,
-/// then the frame above the transport bar, under the overlay that draws
-/// regions and holds the comment box, with the notice for an agent message
-/// at its bottom right, and the sidebar on the trailing edge.
+/// The window's content: the frame above the transport bar, under the
+/// overlay that draws regions and holds the comment box, with the notice
+/// for an agent message at its bottom right, and the sidebar on the
+/// trailing edge. Both columns sit on the window's background under one
+/// toolbar, which holds the agent's lease while an agent controls the app.
 struct MainView: View {
     let model: AppModel
     let lease: LeaseIndicator
     @State private var sidebar = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            LeaseBanner(indicator: lease)
-            ZStack {
-                // Black around a video in both appearances, as players do.
-                Color.black
-                if let video = model.player.video {
-                    PlayerSurface(player: model.player.player)
-                    RegionOverlay(model: model, video: video)
-                } else {
-                    EmptyState(model: model)
-                        .background(.background)
-                }
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                stage
+                Divider()
+                TransportBar(model: model)
             }
-            // An agent message, briefly, away from the frame's centre.
-            .overlay(alignment: .bottomTrailing) {
-                if let notice = model.notice {
-                    NoticeToast(model: model, notice: notice)
-                        .padding(14)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .id(notice.id)
-                }
+            .frame(minWidth: 480)
+            if sidebar {
+                Divider()
+                Sidebar(model: model)
+                    .frame(width: Theme.sidebarWidth)
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
             }
-            .animation(.easeOut(duration: 0.2), value: model.notice?.id)
-            Divider()
-            TransportBar(model: model)
         }
         .frame(minWidth: 640, minHeight: 420)
-        .inspector(isPresented: $sidebar) {
-            Sidebar(model: model)
-                .inspectorColumnWidth(min: 240, ideal: 300, max: 440)
-        }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                PresencePill(listener: model.listener)
-            }
             ToolbarItem(placement: .primaryAction) {
                 ContextNote(model: model)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    sidebar.toggle()
+                    // Critically damped: the column settles without a bounce.
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 1)) {
+                        sidebar.toggle()
+                    }
                 } label: {
                     Label("Comments", systemImage: "sidebar.trailing")
                 }
                 .help(sidebar ? "Hide the comments" : "Show the comments")
+            }
+            // Only while an agent holds the lease, at the toolbar's far end.
+            if lease.lease.nextEnd(after: Date()) != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    LeaseButton(indicator: lease)
+                }
             }
         }
         .navigationTitle(model.player.video?.url.lastPathComponent ?? Identity.appName)
@@ -181,6 +173,31 @@ struct MainView: View {
             Text(model.failure ?? "")
         }
         .background(WindowReader { model.window = $0 })
+    }
+
+    /// The frame, or the way in while no video is open.
+    private var stage: some View {
+        ZStack {
+            // Black around a video in both appearances, as players do.
+            Color.black
+            if let video = model.player.video {
+                PlayerSurface(player: model.player.player)
+                RegionOverlay(model: model, video: video)
+            } else {
+                EmptyState(model: model)
+                    .background(.background)
+            }
+        }
+        // An agent message, briefly, away from the frame's centre.
+        .overlay(alignment: .bottomTrailing) {
+            if let notice = model.notice {
+                NoticeToast(model: model, notice: notice)
+                    .padding(14)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
+                    .id(notice.id)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.notice?.id)
     }
 }
 

@@ -40,7 +40,7 @@ struct NoticeToast: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: asks ? "questionmark.bubble.fill" : "sparkles")
                     .font(.callout)
-                    .foregroundStyle(asks ? Color.purple : Color.accentColor)
+                    .foregroundStyle(asks ? Theme.honey : Color.secondary)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(notice.title)
@@ -56,10 +56,10 @@ struct NoticeToast: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(maxWidth: 300, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(asks ? AnyShapeStyle(Color.purple.opacity(0.6)) : AnyShapeStyle(.separator)))
-            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.bubbleCorner))
+            .overlay(RoundedRectangle(cornerRadius: Theme.bubbleCorner).strokeBorder(.separator, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: Theme.bubbleCorner))
         }
         .buttonStyle(.plain)
         .fixedSize(horizontal: true, vertical: true)

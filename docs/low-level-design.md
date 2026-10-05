@@ -57,7 +57,7 @@ The 54 user stories of the spec are the requirements. They are grouped here into
 9. **Context**: `<base name>.context.md` beside the video, else `context.md`, plus an in-app note per video. (25, 26)
 10. **Transcript**: from `voiceover.json`, else a `.srt` or `.vtt` sidecar, else on-device SpeechAnalyzer in the background, behind one interface. (27, 28, 54)
 11. **Agent control**: every action above has a CLI command; operator commands need the lease; `state --json` and `screenshot` let an agent check the UI; demo mode keeps tests off the person's data. (44 to 52)
-12. **The person wins**: a banner shows while an agent holds the lease, and Stop ends it. (29, 30)
+12. **The person wins**: an icon at the toolbar's trailing end shows while an agent holds the lease; its popover says who and how long, and its Stop ends the lease. (29, 30)
 13. **Agent-side code builds and tests without the app.** (53)
 
 ### Rules and completion
@@ -215,7 +215,7 @@ Packaging/
 Sources/
   VRLease/                            ── agent side ──
     Holder.swift                      who sends a request; Holder.find from the session id, the ancestor process or the key variable
-    ProcessTable.swift                the process table Holder.find walks (sysctl), and its protocol for tests
+    ProcessTable.swift                the process table Holder.find walks (sysctl on macOS, /proc on Linux), and its protocol for tests
     ControlLease.swift                the lease rules: use, take, release, stop, settle, giveUp, status
   VRWire/
     Identity.swift                    the build setting and the names made from it
@@ -269,6 +269,7 @@ Sources/
 
   VRApp/                              ── the app ──
     VideoReviewApp.swift              @main: the one Window, the menus, the composition root
+    Theme.swift                       the pastel colours, one per meaning, and the shared sizes (both footers' height, the sidebar's width)
     AppModel.swift                    the orchestrator; one method per action
     Player/
       PlayerEngine.swift              AVPlayer: open, play, pause, exact seek, time, rate, duration
@@ -286,26 +287,26 @@ Sources/
     Comments/
       ReviewDesk.swift                the reviews, read at launch; each change saved and its images written
       FrameGrabber.swift              the keyframe and the crop as PNG files
-      Sidebar.swift                   the queue with the Send button, the sent comments grouped by batch
-      CommentCard.swift               one comment: keyframe, time, text, status, thread, edit, delete
+      Sidebar.swift                   the queue, the sent comments grouped by batch, and the send bar at its foot
+      CommentCard.swift               one comment as a plain row: keyframe, time, text, status, thread, edit, delete
       ThreadView.swift                a comment's thread: MessageRow for each message, and the answer box while a question waits
       BatchCard.swift                 BatchHeader, the head of a batch's group, and BatchCard, the messages for a whole batch
-      StatusStyle.swift               one colour and symbol per comment state, and one for a question that waits, for markers and cards
+      StatusStyle.swift               one colour and symbol per comment state, and one for a question that waits, for markers and rows
       ContextNote.swift               the in-app note and the sidecar it found
     Mate/
-      ListenerQueue.swift             open waits and asks; delivery; what the pill and `state` show of the listener
+      ListenerQueue.swift             open waits and asks; delivery; what the presence indicator and `state` show of the listener
       ContextSource.swift             reads the context sidecar of a video
-      PresencePill.swift              listening, working, absent in the toolbar; PresenceStyle, its words and colours
+      PresencePill.swift              listening, working, absent as a dot and a word in the sidebar's send bar; PresenceStyle, its words and colours
       NoticeToast.swift               Notice, an agent message as the window announces it, and the brief notice that shows it
     Control/
       ControlServer.swift             decode, lease, route to AppModel, reply
       SocketListener.swift            the listening socket off the main actor; heartbeat on a waiting connection
       StateSnapshot.swift             what `state --json` and `app status` print
       Screenshotter.swift             the app's own window as a PNG, in an appearance
-      LeaseBanner.swift               who controls the app, time left, Stop; LeaseIndicator, the lease as the window shows it
+      LeaseBanner.swift               LeaseButton, the toolbar icon while an agent holds the lease, with who, time left and Stop in its popover; LeaseIndicator, the lease as the window shows it
 
 Tests/
-  VRLeaseTests/                       ControlLeaseTests (time-driven tables), HolderTests
+  VRLeaseTests/                       ControlLeaseTests (time-driven tables), HolderTests, SystemProcessTableTests (the real table: this process, its parent, a pid nobody has)
   VRWireTests/                        ControlMessageTests (round trip, version refusal), DemoPointerTests
   VRCommandTests/                     CommandTableTests, TimeArgumentTests, RegionArgumentTests, AppCommandTests, Doubles (fake transport, launcher)
   VRReviewTests/                      ReviewTests (state machine), ReviewAnswerTests (statuses as a table, threads, questions), BatchPayloadTests, ListenerLedgerTests, RegionTests
@@ -334,7 +335,7 @@ public struct Holder: Codable, Hashable, Sendable {
     public var key: String      // "CLAUDE_CODE_SESSION_ID=…" | "process:<pid>@<start µs>" | the value of VIDEO_REVIEW_CONTROL_KEY
     public var name: String     // "Claude Code", or the process's name
     public var place: String    // "Herdr pane <id>", else the working folder
-    public static func find(variables: [String: String], workingDirectory: URL, processes: any ProcessTable) -> Holder
+    public static func find(variables: [String: String], workingDirectory: URL, processes: some ProcessTable) -> Holder
 }
 
 public struct ControlLease: Equatable, Sendable {
@@ -366,7 +367,7 @@ public struct ControlLease: Equatable, Sendable {
     public mutating func take(by: Holder, at: Date, waitingUntil: Date?) -> Decision   // control take [--wait]
     public mutating func giveUp(by: Holder, waited: Int, at: Date) -> Decision         // a wait in line ran out
     public mutating func release(by: Holder, at: Date) -> [Transition]                 // control release
-    public mutating func stop(at: Date) -> [Transition]                                // the banner's Stop
+    public mutating func stop(at: Date) -> [Transition]                                // the lease button's Stop
 }
 ```
 
@@ -1120,7 +1121,7 @@ The desk reads every review once, as it is made, and keeps them by content hash;
 - `enqueue` and `wait` both end in the same step, `deliverIfPossible`: while there is a pending delivery that isn't in flight and an open wait, build the payload, mark the batch in flight and resume the oldest wait with it. `delivered` and `undelivered` take the batch out of flight and run the step again.
 - A delivery whose batch is finished, or whose review this run doesn't have, is taken out of the ledger there instead of being sent with no comment.
 - A `wait` ends in one place, `end(ticket, with:)`, whoever ends it: the delivery, its timeout, its cancelled connection (`.gone`), or the quit. The waiter is removed first, so only the first of them answers it.
-- Presence is not stored: `presence(at:)` asks the ledger with whether a `wait` or an `ask` is open, since either is a connection the listener holds. Both are observed, so the pill follows them. Only the 120 s rule changes by time alone; while `presenceRunsOut` says it can, the pill redraws every second, and `state` asks at the request's time.
+- Presence is not stored: `presence(at:)` asks the ledger with whether a `wait` or an `ask` is open, since either is a connection the listener holds. Both are observed, so the presence indicator follows them. Only the 120 s rule changes by time alone; while `presenceRunsOut` says it can, the pill redraws every second, and `state` asks at the request's time.
 - `ask` without `--wait` waits without limit, as the spec says the command exits with the answer. An `ask` with the same text as the comment's last question attaches to that question: when it is already answered, it returns the answer at once, so a listener that timed out can ask again and lose nothing.
 - The ledger changes in one place, `record`: the change is applied to a copy, and a ledger that differs is saved to `listener.json` through the desk's store. A ledger that can't be saved is logged and goes on in memory. `delivered` records only after the reply was written, so a batch whose reply never reached its listener is still pending on disk.
 - `init` takes up where the last run stopped: it reads the ledger, runs `ledger.reconcile(with: desk.all)`, and gives every pending delivery's unfinished comments the state `sent` again (`review.requeue`), which covers a quit between a new listener's `attach` and the requeue of its comments. A batch a listener had taken stays taken by that session: the same key goes on with it after the restart, and gets no context twice; another key starts a new session, and `admit` requeues the batch, as in one run.
@@ -1134,24 +1135,24 @@ Shipyard's server, with this app's routes.
     struct Answer { var reply: ControlReply; var quits = false; var granted: ControlLease.Term?; var delivery: ListenerQueue.Handed?
                     var handsOver: Bool }           // a lease or a batch: the server must hear how the write went
     private(set) var lease: ControlLease                // every change runs leaseChanged()
-    let indicator: LeaseIndicator                       // what the banner reads
+    let indicator: LeaseIndicator                       // what the lease button reads
     func start() throws;  func stop()
     func reply(to data: Data) async -> Answer
     func written(_ answer: Answer);  func undelivered(_ answer: Answer)
-    func stopLease()                                    // the banner's Stop
+    func stopLease()                                    // the lease button's Stop
     func settleLease()                                  // the timer at the lease's end
 }
 ```
 
 The server owns the one `ControlLease`. Every change to it runs `leaseChanged`, the one place a change is applied:
 
-1. The lease is copied to `LeaseIndicator`, so the banner follows it.
+1. The lease is copied to `LeaseIndicator`, so the toolbar's lease button follows it.
 2. Each waiting `take` of the holder that now has the lease is answered, and its timeout cancelled.
 3. A timer is set for `lease.nextEnd(after:)` and replaces the last one. When it fires, `settleLease` ends the lease and hands it to the first waiter, with no request.
 
 A `take` in line is a `Waiter` in the server: its holder, its wait, whether it wants JSON, its continuation and its timeout task. The timeout calls `lease.giveUp`, never before the deadline the take was given. `stop()` answers every waiter with `video-review is quitting`. The server takes its time from a `now` closure and its zone from `timeZone`, so `VRAppTests` drives it with a clock of its own.
 
-The person's Stop is `stopLease()`, which only calls `lease.stop(at:)`. The server puts it in `LeaseIndicator.stop`, and the banner's button calls that closure. So the Stop path is the pure rule plus one call, and tests reach it without a click.
+The person's Stop is `stopLease()`, which only calls `lease.stop(at:)`. The server puts it in `LeaseIndicator.stop`, and the Stop button in the lease button's popover calls that closure. So the Stop path is the pure rule plus one call, and tests reach it without a click.
 
 ```text
 reply(to data):
@@ -1209,39 +1210,37 @@ The app listens on `demo.sock` when `VIDEO_REVIEW_SUPPORT_DIR` makes it a demo r
 
 ```text
 ┌─ toolbar ───────────────────────────────────────────────────────────────────┐
-│ sample.mp4                           ● Listening   [Context]   [Sidebar]    │
-├─ lease banner (only while an agent holds the lease) ────────────────────────┤
-│ Claude Code controls Video Review · /repo · 42 s left               [Stop]  │
+│ sample.mp4                          [Context]   [Sidebar]   [⌖ lease only]  │
 ├──────────────────────────────────────────────────┬──────────────────────────┤
-│                                                  │ QUEUE (2)      [Send ⌘↩] │
+│                                                  │ Queue 2                  │
 │                                                  │ ○ 0:04  the title is…    │
 │            the video frame                       │ ▢ 0:10  this box…        │
-│      ┌ ─ ─ ─ ─ ┐  ┌───────────────────┐          │ SENT                     │
+│      ┌ ─ ─ ─ ─ ┐  ┌───────────────────┐          │ ──────────────────────── │
 │        region     │ comment box       │          │ Batch 1 · acknowledged   │
 │      └ ─ ─ ─ ─ ┘  └───────────────────┘          │ ✓ 0:15  done             │
 │                          ┌ notice ─────────┐     │   └ agent: fixed in a1b2 │
 │                          │ agent · 0:15 …  │     │ ? 0:18  question         │
 │                          └─────────────────┘     │   └ [answer…           ] │
-├──────────────────────────────────────────────────┤                          │
-│ ▶  0:10 / 0:21   ──○───▢────●────?──   1×        │                          │
+├──────────────────────────────────────────────────┼──────────────────────────┤
+│ ▶  0:10 / 0:21   ──○───▢────●────?──   1×        │ ● Listening  2 [Send ⌘↩] │
 └──────────────────────────────────────────────────┴──────────────────────────┘
 ```
 
 One `Window` scene. `RegionOverlay` lies over the player's surface and is the only thing the pointer meets there. Its surface takes the press anywhere in the view, with a crosshair pointer over the frame (`pointerStyle(.rectSelection)`), and hands the drag to `AppModel`'s four region methods. It draws one rectangle at most: the one being drawn (white edge, the rest of the frame dimmed, its size in the frame's pixels under it), else the draft's region (the same, without the size), else the selected comment's region (an accent edge, nothing dimmed), which shows only while the video is paused within half a frame of that comment's time, since on any other frame it would point at something else. It also holds the one `Composer` and places it: centred over the frame's foot for a comment without a region, and at `FrameGeometry.origin(ofBox:beside:)` for one with a region, measured again whenever the box grows. One composer for both places keeps what was typed when a region is drawn while the box is open.
 
-The frame and the transport bar are the content; the sidebar is an `inspector` on the trailing edge. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator`, `ControlServer` and `ShortcutMonitor`, starts the monitor at launch, then reopens the last run's video and only then starts the server, and at quit stops the server and calls `model.leaving()`) and `MainView`, the window's content.
+The frame above the transport bar is one column, the sidebar the other, side by side in an `HStack` with a divider between them, both on the window's background under one toolbar. The sidebar is not an `inspector`: an inspector's column has its own glass background that reaches into the title bar, and it looked like another app beside the frame. The transport bar and the sidebar's send bar are both `Theme.footerHeight` tall, so the dividers above them line up across the window. The sidebar toggle animates with a critically damped spring, and with a short fade when Reduce Motion is on. Views read `AppModel` and call its methods; they keep no rule. Closing the window quits the app, since there is only one. `VideoReviewApp.swift` holds the `App`, the `AppDelegate` that is the composition root (it makes `AppModel`, `Screenshotter`, `LeaseIndicator`, `ControlServer` and `ShortcutMonitor`, starts the monitor at launch, then reopens the last run's video and only then starts the server, and at quit stops the server and calls `model.leaving()`) and `MainView`, the window's content.
 
 The server starts after `reopenLastVideo` so that `app open`, which answers once the socket does, is followed by a `state` that already shows the video and its history. A video that takes longer than 4 s to open doesn't hold the server back. A video the person opened the app with (`application(_:open:)`) is opened instead of the last one.
 
-A comment's card (`CommentCard`) is its keyframe, its mark, its time, its state in a word and its text, and under them its thread (`ThreadView`). A thread is one `MessageRow` per message: the agent's on the leading side under `Agent` or, for a question, a purple `Agent asks`, in a grey bubble (purple-tinted for a question); the person's answer on the trailing side under `You`, in a filled accent bubble. The question that waits has a stronger purple edge and the line `Waiting for your answer` under it, and right below it the answer box: a text field and a send button, Return sends. The box is there only while a question waits. A message's clock time is in its tooltip, not in the row, where it would read as a time in the video. A card whose question waits has a purple edge while it isn't the one in focus. `StatusStyle.of(comment)` is what a card's mark and a marker both draw: the question's style while one waits, else the state's.
+A comment's row (`CommentCard`, a plain row with no box: only the selected one has a soft accent fill, as in a source list) is its keyframe, its mark, its time, its state in a word and its text, and under them its thread (`ThreadView`). A thread is one `MessageRow` per message: the agent's on the leading side under `Agent` or, for a question, `Agent asks`, in a grey bubble (honey-tinted for a question); the person's answer on the trailing side under `You`, in a soft accent-tinted bubble. Messages are the one place with boxes, as in a chat. The question that waits has a honey hairline and the line `Waiting for your answer` under it, and right below it the answer box: a text field and a send button, Return sends. The box is there only while a question waits. A message's clock time is in its tooltip, not in the row, where it would read as a time in the video. `StatusStyle.of(comment)` is what a card's mark and a marker both draw: the question's style while one waits, else the state's.
 
-A batch's group in the sidebar is its head (`BatchHeader`: number, time sent, and where it stands: `Waiting for a listener`, `Delivered to the listener`, `Acknowledged`, `Acknowledged · 1 of 2 finished`, `Finished · 1 done, 1 failed`), then `BatchCard` with the messages for the whole batch when there are any, then its comments' cards. The sidebar scrolls the comment in focus into sight, so a click on a marker or on a notice finds its card.
+A batch's group in the sidebar is its head (`BatchHeader`: number, time sent, and where it stands: `Waiting for a listener`, `Delivered to the listener`, `Acknowledged`, `Acknowledged · 1 of 2 finished`, `Finished · 1 done, 1 failed`), then `BatchCard` with the messages for the whole batch when there are any, as bubbles under a small label and no box, then its comments' rows. Groups are parted by space and a thin divider, with sentence-case headers (`Queue`, `Batch 1`). At the sidebar's foot is the send bar: the presence indicator, the queued count and Send. The sidebar scrolls the comment in focus into sight, so a click on a marker or on a notice finds its row.
 
 `NoticeToast` is an overlay at the bottom right of the frame's area, above the region overlay: who speaks and about what (`Agent · 0:10`, `Agent asks · 0:04`, `Agent · Batch 1`), then up to three lines of the message. It is a button: a click calls `openNotice`. It is drawn dark in both appearances, since it always lies over the frame or its black surround.
 
-The lease banner is the one view that doesn't read `AppModel`: the lease belongs to `ControlServer`, not to the model. `Control/LeaseBanner.swift` holds three small things. `LeaseIndicator` is the observable copy of the lease that the server keeps current, with the `stop` closure. `LeaseBannerText` makes the words from a `ControlLease.Status` (`Claude Code controls Video Review (proto-1)`, `/repo · 42 s left · 1 waiting`) and is tested. `LeaseBanner` is the view: the first row of `MainView`, drawn only while a lease is in force, with a `TimelineView` that ticks the seconds and a Stop button. It is part of the window, so `screenshot` shows it.
+The lease button is the one view that doesn't read `AppModel`: the lease belongs to `ControlServer`, not to the model. `Control/LeaseBanner.swift` holds three small things. `LeaseIndicator` is the observable copy of the lease that the server keeps current, with the `stop` closure. `LeaseBannerText` makes the words from a `ControlLease.Status` (`Claude Code controls Video Review (proto-1)`, `/repo · 42 s left · 1 waiting`) and is tested. `LeaseButton` is the view: a toolbar item at the trailing end, an apricot `cursorarrow.rays` icon, there only while a lease is in force. A click opens its popover: the title and the detail, with a `TimelineView` that ticks the seconds, and the Stop button. The icon is part of the window, so `screenshot` shows it; the popover is a window of its own, so it doesn't.
 
-`Comments/ContextNote.swift` is the toolbar's Context button, between the presence pill and the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.typeNote`, which makes the review's `setNote` change as `context set` does and saves it once the typing rests; closing the popover calls `endNote`, which saves at once. So there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
+`Comments/ContextNote.swift` is the toolbar's Context button, before the sidebar button, and its popover. The button is off with no video open; its document icon is filled while the open video has a sidecar or a note, and hovering says which. The popover names the sidecar file that was found beside the video, or says that there is none and which two file names it looks for, and holds the note in a text editor that has the focus as the popover opens. Each change to what is typed goes to `AppModel.typeNote`, which makes the review's `setNote` change as `context set` does and saves it once the typing rests; closing the popover calls `endNote`, which saves at once. So there is no Save button. The popover keeps what is typed in its own state, since the review keeps the note without the blank space around it, and takes the review's note over when it differs from what is typed (another video, or `context set` while it is open). It reads the sidecar when the video changes, when it opens or closes and when the note changes. The popover is a window of its own, so `screenshot` shows the button, not the popover, and the player's keys don't act while the person types in it.
 
 ### The listener skill
 
@@ -1397,7 +1396,7 @@ SocketListener: accept, read the request              Sources/VRApp/Control/Sock
    ├─ ControlMessage.decode: version 1 = 1            Sources/VRWire/ControlMessage.swift
    ├─ isLeased ⇒ lease.use(by: A, at: now)            Sources/VRLease/ControlLease.swift
    │     state: lease free → Term(A, taken: now, ends: now + 60 s); transition .started(A)
-   │     ⇒ LeaseBanner appears                        Sources/VRApp/Control/LeaseBanner.swift
+   │     ⇒ LeaseButton appears in the toolbar         Sources/VRApp/Control/LeaseBanner.swift
    ├─ model.seek(to: 10)                              Sources/VRApp/AppModel.swift
    │  └─ player.seek(to: 10)                          Sources/VRApp/Player/PlayerEngine.swift
    │        AVPlayer.seek, zero tolerance; awaits the completion
@@ -1520,8 +1519,8 @@ The spec fixes the CLI, the payload and the states. Everything below is this pro
 |---|---|---|
 | 1 | One window, one video. Opening another video replaces the current one. | The task is reviewing one video; one window keeps `state` and `screenshot` unambiguous. |
 | 2 | The frame fills the window above a fixed transport bar. The controls never float over the video. | QuickTime's floating controls would cover the frame the person points at, and would hide the markers when they fade. |
-| 3 | The timeline is the app's own, with a marker per comment in a row just above the track: a circle for a comment at a time, a rounded square for one with a region. The mark on a comment's card has the same shape, and the card's keyframe outlines the region. | AVKit's scrubber can't carry markers. The shape tells the two kinds apart before a click. Above the track, a marker is never hidden under the playhead, and a click on it can't be taken for a scrub. |
-| 4 | A marker's colour and symbol show its state: hollow grey queued, plain blue sent, blue with a tick acknowledged, orange with three dots that move working, green with a tick done, red with a cross failed, and a purple question mark while a question waits, whatever the state. The sidebar cards use the same style, with the state in a word beside the mark. | Story 16: one look at the timeline tells which comments are done. One style table serves markers and cards, so they can't disagree. |
+| 3 | The timeline is the app's own, with a pin per comment just above the track: a mark (a circle for a comment at a time, a rounded square for one with a region) and a thin stem in its colour down to its moment on the track. Small, quiet time labels sit under the track, at a round step that leaves each its room. The mark on a comment's row has the same shape, and the row's keyframe outlines the region. | AVKit's scrubber can't carry markers. The shape tells the two kinds apart before a click. Above the track, a marker is never hidden under the playhead, and a click on it can't be taken for a scrub. |
+| 4 | A marker's colour and symbol show its state: hollow grey queued, plain sky sent, sky with a tick acknowledged, apricot with three dots that move (unless Reduce Motion is on) working, sage with a tick done, coral with a cross failed, and a honey question mark while a question waits, whatever the state. The colours are pastel (`Theme`), each with a light and a dark variant, and the symbol is a dark ink, since white is faint on them. The sidebar rows use the same style, with the state in a grey word beside the mark. | Story 16: one look at the timeline tells which comments are done. One style table serves markers and rows, so they can't disagree. The maintainer asked for pastel colours, not flashy ones, and no pink: the question was system purple, which shows as magenta. |
 | 5 | Playback keys follow QuickTime and editors: Space plays and pauses, Left and Right move 5 s, `,` and `.` pause and step one frame, J and L move 10 s back and forward, K plays and pauses, a click on the frame plays or pauses. | Story 2: nothing to learn. Frame steps let the person land on the exact frame before commenting. J K L are the web players' keys, not an editor's shuttle: a review needs jumps, not reverse playback. |
 | 6 | Return or C opens the comment box and pauses; so does the comment button in the transport bar. The box sits over the foot of the frame, names the time it comments on, and has the focus at once. | Story 3: one key from watching to typing. The time in the box tells the person which moment the comment keeps. |
 | 7 | Dragging on the frame draws a region, pauses, and opens the comment box next to the rectangle. The pointer is a crosshair over the frame. While drawing, the rest of the frame is dimmed and the rectangle's size in the frame's pixels shows under it. A drag under 8 points counts as a click. A drag may start on the bars beside the frame or run over them: only what is on the frame is kept. | Stories 6 and 7: the same gesture as Cmd+Shift+4, with no mode to enter first. The video pauses the moment the rectangle begins, so the person draws on a still frame. |
@@ -1532,18 +1531,18 @@ The spec fixes the CLI, the payload and the states. Everything below is this pro
 | 10 | The comment box is a standard text field. | Story 8: Wispr Flow dictates into any standard field, so dictation needs no code. |
 | 11 | Player keys act only while no text field has the focus, and no plain key is a menu shortcut. | The ticket's rule that typing must never trigger a player shortcut, held by one question (is the first responder a text view?), not by a list of exceptions. |
 | 12 | Cmd+Return sends the queue from anywhere. Typed text in an open comment box is queued first, then sent. | Story 11: one keystroke, and nothing the person typed is left behind. |
-| 13 | The sidebar is an inspector on the right: the queue on top with its count and the Send button, sent comments below, grouped by batch with the newest batch first, in time order inside a batch. A batch's head has its number, the time it was sent and where it stands. A sent comment's card has its mark in the sent colour and the word `Sent`. It can be hidden. | The queue is what the person acts on next; the frame keeps the larger share. The newest batch is the one the person just sent. |
-| 14 | A queued comment is edited in place in its card (double-click or the pencil; Return keeps the new text, Escape the old) and deleted with the trash button, or with Delete while it is the comment in focus. Each card shows its keyframe, small. | Story 10, without a separate editor. The keyframe shows which frame the agent will get. |
-| 15 | Clicking a marker or a card seeks to the comment's time, pauses, selects it in both places and draws its region on the frame. The region shows only while the video is paused at that time. | Story 13: the marker, the card and the region are one selection. |
-| 16 | A thread shows under its comment's card, as a conversation: the agent's messages on the left under its name, the person's answers on the right in the accent colour, a question tinted purple. The question that waits says `Waiting for your answer`, and the answer box sits right under it, only while it waits. The card of a waiting question has a purple edge. | Stories 18 and 20: the answer goes where the question is. A person's message with no question has no command to deliver it, so the box isn't offered. |
-| 17 | Messages for a whole batch show in a tinted card, `For the whole batch`, at the head of that batch's group. The batch's head says where it stands in words: `Acknowledged`, `Acknowledged · 1 of 2 finished`, `Finished · 1 done, 1 failed`. | Story 21: the overall result sits above the comments it is about. |
-| 18 | An agent message shows as a notice at the bottom right of the frame for 5 s, with the comment's time, or the batch's number for a message about the whole batch. A question's notice has a purple edge and says `Agent asks`. A click selects the comment, which brings its card into sight. A later message replaces the notice. A status change shows no notice. The notice is dark in both appearances. | Story 19: seen while watching, away from the centre of the frame, and gone by itself. A status is on the marker already, and a notice per status would triple the interruptions of a batch. Over a frame and its black surround, a light notice turned grey and hid its title. |
+| 13 | The sidebar is a plain column on the right, on the window's background like the frame's column: the queue on top with its count, sent comments below, grouped by batch with the newest batch first, in time order inside a batch. A batch's head has its number, the time it was sent and where it stands. A sent comment's row has its mark in the sent colour and the word `Sent`. Rows have no box; groups are parted by space and dividers. The send bar (presence, queued count, Send) is at its foot, as tall as the transport bar. It can be hidden. | The queue is what the person acts on next; the frame keeps the larger share. The newest batch is the one the person just sent. The maintainer found the inspector's glass column detached from the frame, and a card around everything too heavy; proto-3's plain columns parted by background were the direction he liked. |
+| 14 | A queued comment is edited in place in its row (double-click or the pencil; Return keeps the new text, Escape the old) and deleted with the trash button, or with Delete while it is the comment in focus. Each card shows its keyframe, small. | Story 10, without a separate editor. The keyframe shows which frame the agent will get. |
+| 15 | Clicking a marker or a row seeks to the comment's time, pauses, selects it in both places and draws its region on the frame. The region shows only while the video is paused at that time. | Story 13: the marker, the card and the region are one selection. |
+| 16 | A thread shows under its comment's row, as a conversation in soft bubbles: the agent's messages on the left under its name, the person's answers on the right tinted with the accent colour, a question tinted honey. The question that waits says `Waiting for your answer`, and the answer box sits right under it, only while it waits. | Stories 18 and 20: the answer goes where the question is. A person's message with no question has no command to deliver it, so the box isn't offered. |
+| 17 | Messages for a whole batch show as bubbles under a small `For the whole batch` label, at the head of that batch's group. The batch's head says where it stands in words: `Acknowledged`, `Acknowledged · 1 of 2 finished`, `Finished · 1 done, 1 failed`. | Story 21: the overall result sits above the comments it is about. |
+| 18 | An agent message shows as a notice at the bottom right of the frame for 5 s, with the comment's time, or the batch's number for a message about the whole batch. A question's notice has a honey icon and says `Agent asks`. A click selects the comment, which brings its row into sight. A later message replaces the notice. A status change shows no notice. The notice is dark in both appearances. | Story 19: seen while watching, away from the centre of the frame, and gone by itself. A status is on the marker already, and a notice per status would triple the interruptions of a batch. Over a frame and its black surround, a light notice turned grey and hid its title. |
 | 18a | An `ack` without text shows no notice: the markers turn to acknowledged and the batch's head says `Acknowledged`. With text it is a message for the batch, and shows as one. | Story 17 without an empty notice. |
 | 18b | A thread message's clock time is in its tooltip, not beside its author. | Beside the comments' video times (`0:10`), a clock time (`00:25`) read as one of them. |
-| 19 | Presence is a pill in the toolbar: green Listening, orange Working, grey No listener. Hovering names the listener and its folder. | Story 14: the answer to "will my batch reach someone" is always in sight. |
+| 19 | Presence is a dot and a word at the left of the sidebar's send bar: sage Listening, apricot Working, grey No listener. Hovering names the listener and its folder. | Story 14: the answer to "will my batch reach someone" sits next to Send, where the person asks it. It hides with the sidebar, which keeps the toolbar quiet. |
 | 20 | Sending with no listener works. The batch's head says "Waiting for a listener" in orange, then "Delivered to the listener" once a `wait` took it. | Story 15: the person isn't blocked, and knows why nothing answers yet. |
 | 20a | The Send button and the menu item are off while nothing is queued and nothing is typed in the comment box. | Cmd+Return with nothing to send does nothing, in place of an alert. |
-| 21 | While an agent holds the lease, a banner under the toolbar names it, its folder, the seconds left and how many agents wait, with a Stop button. Stop ends the lease and refuses that agent for 5 minutes; an agent in line gets the lease at once. The person's own clicks and keys always work. A screenshot shows the banner, since it is in the window. | Stories 29 and 30. The person never needs the lease. A screenshot is what the window shows, and the contract has no option to hide a part of it. |
+| 21 | While an agent holds the lease, an apricot icon sits at the toolbar's trailing end. Its popover names the agent, its folder, the seconds left and how many agents wait, with a Stop button. Stop ends the lease and refuses that agent for 5 minutes; an agent in line gets the lease at once. The person's own clicks and keys always work. A screenshot shows the icon, since it is in the window, but not the popover. | Stories 29 and 30, which ask for a banner: the maintainer chose an icon instead, since a banner took too much room just to say that an agent controls the app. The person never needs the lease. |
 | 22 | The context note is a popover from a toolbar button. It also names the sidecar file that was found, or says that there is none. The button's icon is filled while there is a context to send. The note is kept as it is typed. | Story 26: rarely used, so out of the way, and it shows what the agent will get. |
 | 23 | The app follows the Mac's appearance with system colours and materials. The frame's surround is black in both. | Story 31. Black around a video is what players do, and it keeps the frame's colours honest. |
 | 24 | The app reopens the last video, paused where it was, when it starts. | Stories 22 and 23, and the acceptance scenario's restart step: the history is there without a click. |

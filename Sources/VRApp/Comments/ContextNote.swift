@@ -48,7 +48,7 @@ struct ContextNote: View {
                 .font(.headline)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: sidecar == nil ? "doc.badge.ellipsis" : "doc.text.fill")
-                    .foregroundStyle(sidecar == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
+                    .foregroundStyle(sidecar == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.sage))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(sidecar?.url.lastPathComponent ?? "No context file beside this video")
                         .font(.callout.weight(.medium))

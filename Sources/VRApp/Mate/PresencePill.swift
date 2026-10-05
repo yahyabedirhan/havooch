@@ -1,23 +1,23 @@
 import SwiftUI
 import VRReview
 
-/// The words and colour of the presence pill, one per presence.
+/// The words and colour of the presence indicator, one per presence.
 struct PresenceStyle: Equatable {
     var label: String
     var color: Color
 
     static func of(_ presence: Presence) -> PresenceStyle {
         switch presence {
-        case .listening: PresenceStyle(label: "Listening", color: .green)
-        case .working: PresenceStyle(label: "Working", color: .orange)
-        case .absent: PresenceStyle(label: "No listener", color: .gray)
+        case .listening: PresenceStyle(label: "Listening", color: Theme.sage)
+        case .working: PresenceStyle(label: "Working", color: Theme.apricot)
+        case .absent: PresenceStyle(label: "No listener", color: .secondary)
         }
     }
 }
 
-/// Whether a listener is there, always in sight in the toolbar: green
-/// Listening, orange Working, grey No listener. Hovering names the
-/// listener and its folder.
+/// Whether a listener is there, always in sight at the foot of the
+/// sidebar, as a quiet dot and a word: sage Listening, apricot Working,
+/// grey No listener. Hovering names the listener and its folder.
 struct PresencePill: View {
     let listener: ListenerQueue
 
@@ -37,14 +37,11 @@ struct PresencePill: View {
         return HStack(spacing: 6) {
             Circle()
                 .fill(style.color)
-                .frame(width: 8, height: 8)
+                .frame(width: 7, height: 7)
             Text(style.label)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(presence == .absent ? .secondary : .primary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(style.color.opacity(0.16), in: Capsule())
         .help(hint(presence))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Listener: \(style.label)")

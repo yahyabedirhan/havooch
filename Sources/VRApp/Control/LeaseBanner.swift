@@ -4,7 +4,7 @@ import VRWire
 
 /// What the person sees of the lease. The control server, which owns the
 /// lease, writes each change here and settles it when it runs out, so the
-/// banner follows its start and end with no request. Of the person's
+/// toolbar's lease button follows its start and end with no request. Of the person's
 /// clicks only Stop reaches the lease; the view only reads it.
 @MainActor @Observable
 final class LeaseIndicator {
@@ -33,48 +33,71 @@ struct LeaseBannerText: Equatable {
     }
 }
 
-/// The banner under the title bar while an agent holds the lease: who, where,
-/// how long, and Stop, which takes the app back. It draws nothing while
-/// the lease is free.
-struct LeaseBanner: View {
+/// The toolbar's sign that an agent holds the lease: an icon at the
+/// toolbar's far end whose popover says who, where and how long, with
+/// Stop, which takes the app back. The window shows it only while the
+/// lease is held.
+struct LeaseButton: View {
     let indicator: LeaseIndicator
+    @State private var shown = false
 
     var body: some View {
-        // The countdown ticks only while there's a lease to count down.
-        if indicator.lease.nextEnd(after: Date()) != nil {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                if let text = indicator.banner(at: context.date) {
-                    row(text)
-                }
+        let title = indicator.banner(at: Date())?.title ?? "An agent controls \(Identity.appName)"
+        Button {
+            shown.toggle()
+        } label: {
+            Label {
+                Text("Agent in control")
+            } icon: {
+                Image(systemName: "cursorarrow.rays")
+                    .foregroundStyle(Theme.apricot)
             }
+        }
+        .help(title)
+        .accessibilityLabel(title)
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            details
         }
     }
 
-    private func row(_ text: LeaseBannerText) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "cursorarrow.rays")
-                    .foregroundStyle(.orange)
-                    .accessibilityHidden(true)
-                Text(text.title)
-                    .fontWeight(.medium)
-                Text(text.detail)
+    private var details: some View {
+        // The countdown ticks only while there's a lease to count down.
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let text = indicator.banner(at: context.date) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "cursorarrow.rays")
+                            .foregroundStyle(Theme.apricot)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(text.title)
+                                .font(.headline)
+                            Text(text.detail)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(text.title), \(text.detail)")
+                    HStack {
+                        Spacer()
+                        Button("Stop") {
+                            shown = false
+                            indicator.stop()
+                        }
+                        .help("Take the app back. The agent is refused for 5 minutes.")
+                    }
+                }
+                .padding(14)
+                .frame(width: 300)
+            } else {
+                Text("No agent controls \(Identity.appName)")
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 12)
-                Button("Stop") { indicator.stop() }
-                    .controlSize(.small)
-                    .help("Take the app back. The agent is refused for 5 minutes.")
+                    .padding(14)
             }
-            .font(.callout)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
-            .background(Color.orange.opacity(0.16))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(text.title), \(text.detail)")
-            Divider()
         }
     }
 }
