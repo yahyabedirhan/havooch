@@ -43,13 +43,29 @@ enum Theme {
     /// deeper light-mode tones, near-black on the lighter dark-mode ones.
     static let onTint = dynamic(light: NSColor.white, dark: NSColor(white: 0.1, alpha: 1))
 
-    /// A message bubble's fill in the rail: the person's and the agent's.
-    static let personBubble = Color.primary.opacity(0.06)
-    static let agentBubble = agent.opacity(0.12)
+    // The surfaces told apart by a fill alone. Each fill is faint, so it
+    // deepens when the person asks for more contrast and the edge it makes
+    // stays visible.
+
+    /// A message bubble's fill in the rail: the person's, the agent's and
+    /// a question's.
+    static func personBubble(_ contrast: ColorSchemeContrast) -> Color {
+        Color.primary.opacity(contrast == .increased ? 0.12 : 0.06)
+    }
+    static func agentBubble(_ contrast: ColorSchemeContrast) -> Color {
+        agent.opacity(contrast == .increased ? 0.24 : 0.12)
+    }
+    static func questionBubble(_ contrast: ColorSchemeContrast) -> Color {
+        question.opacity(contrast == .increased ? 0.26 : 0.14)
+    }
     /// The fill of the selected row in the rail.
-    static let selectedRow = accent.opacity(0.12)
+    static func selectedRow(_ contrast: ColorSchemeContrast) -> Color {
+        accent.opacity(contrast == .increased ? 0.24 : 0.12)
+    }
     /// The fill of a section header band in the rail.
-    static let sectionBand = Color.primary.opacity(0.035)
+    static func sectionBand(_ contrast: ColorSchemeContrast) -> Color {
+        Color.primary.opacity(contrast == .increased ? 0.09 : 0.035)
+    }
 
     /// The glyph on a marker's pin for a state the agent set; nil for a
     /// state before the agent has the comment.

@@ -35,6 +35,7 @@ struct EmptyState: View {
                     in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
         }
+        .animation(.smooth(duration: 0.15), value: isTargeted)
         .padding(24)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }

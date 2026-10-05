@@ -80,6 +80,8 @@ struct ThreadRow: View {
     let agent: String
     var isOpen = false
 
+    @Environment(\.colorSchemeContrast) private var contrast
+
     private static let badge: CGFloat = 18
     /// Where a row's words start, which the answer box lines up with.
     static let indent: CGFloat = badge + 8
@@ -137,9 +139,9 @@ struct ThreadRow: View {
     /// The bubble behind the words: no stroke, only a light fill.
     private var bubble: Color {
         switch (message.author, message.kind) {
-        case (.agent, .question): Theme.question.opacity(0.14)
-        case (.agent, _): Theme.agentBubble
-        case (.person, _): Theme.personBubble
+        case (.agent, .question): Theme.questionBubble(contrast)
+        case (.agent, _): Theme.agentBubble(contrast)
+        case (.person, _): Theme.personBubble(contrast)
         }
     }
 }

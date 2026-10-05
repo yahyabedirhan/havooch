@@ -22,6 +22,7 @@ struct CommentRow: View {
     /// The text being edited; nil while the row only shows its comment.
     @State private var edited: String?
     @State private var isHovered = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private static let thumbnailSize = CGSize(width: 96, height: 54)
     /// The space between the pin and the time, which the text lines up with.
@@ -84,8 +85,8 @@ struct CommentRow: View {
 
     /// The selected row's fill; a fainter one under the pointer.
     private var fill: Color {
-        if isSelected { return Theme.selectedRow }
-        return isHovered ? Color.primary.opacity(0.025) : .clear
+        if isSelected { return Theme.selectedRow(contrast) }
+        return isHovered ? Color.primary.opacity(contrast == .increased ? 0.06 : 0.025) : .clear
     }
 
     private var header: some View {
@@ -220,8 +221,7 @@ private struct RowButton: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .buttonStyle(QuietButtonStyle())
         .help(title)
         .accessibilityLabel(title)
     }

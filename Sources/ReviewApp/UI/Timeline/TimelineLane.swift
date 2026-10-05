@@ -115,22 +115,28 @@ private struct LaneButton: View {
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .buttonStyle(QuietButtonStyle())
         .help(title)
         .accessibilityLabel(title)
     }
 }
 
 /// The scrubber: the track, how far the video is, and the playhead. A click
-/// or a drag moves the player there.
+/// or a drag moves the player there. It answers on the press: the knob grows
+/// and the track thickens while it's held, and it follows the pointer 1:1.
 private struct Scrubber: View {
     let time: Double
     let duration: Double
     let seek: (Double) -> Void
 
+    /// Whether the pointer holds the scrubber.
+    @GestureState private var isHeld = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private static let trackHeight: CGFloat = 6
+    private static let heldTrackHeight: CGFloat = 8
     private static let knob: CGFloat = 14
+    private static let heldKnob: CGFloat = 18
     private static let height: CGFloat = 20
     /// How far below the scrubber's top its track starts.
     static let trackTop = (height - trackHeight) / 2
@@ -139,23 +145,29 @@ private struct Scrubber: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let played = duration > 0 ? width * min(max(time / duration, 0), 1) : 0
+            let track = isHeld ? Self.heldTrackHeight : Self.trackHeight
+            let knob = isHeld ? Self.heldKnob : Self.knob
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.quaternary)
-                    .frame(height: Self.trackHeight)
+                    .frame(height: track)
                 Capsule()
                     .fill(.tint)
-                    .frame(width: max(played, Self.trackHeight), height: Self.trackHeight)
+                    .frame(width: max(played, track), height: track)
                 Circle()
                     .fill(.white)
-                    .shadow(color: .black.opacity(0.28), radius: 1.5, y: 0.5)
-                    .frame(width: Self.knob, height: Self.knob)
-                    .offset(x: min(max(played - Self.knob / 2, 0), width - Self.knob))
+                    .shadow(color: .black.opacity(isHeld ? 0.32 : 0.28), radius: isHeld ? 3 : 1.5, y: isHeld ? 1 : 0.5)
+                    .frame(width: knob, height: knob)
+                    .offset(x: min(max(played - knob / 2, 0), width - knob))
             }
             .frame(height: proxy.size.height)
+            // Only the press and the release animate; the playhead itself
+            // follows the pointer and the video with no lag.
+            .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHeld)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($isHeld) { _, held, _ in held = true }
                     .onChanged { value in
                         guard width > 0 else { return }
                         seek(Double(min(max(value.location.x / width, 0), 1)) * duration)
@@ -166,6 +178,13 @@ private struct Scrubber: View {
         .accessibilityElement()
         .accessibilityLabel("Timeline")
         .accessibilityValue("\(TimelineLane.clock(time)) of \(TimelineLane.clock(duration))")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: seek(min(time + Shortcuts.skip, duration))
+            case .decrement: seek(max(time - Shortcuts.skip, 0))
+            @unknown default: break
+            }
+        }
     }
 }
 

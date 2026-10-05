@@ -49,6 +49,7 @@ struct RailView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let groups = Self.groups(comments: model.comments, batches: model.batches)
@@ -119,7 +120,7 @@ struct RailView: View {
         .padding(.horizontal, Theme.railPadding)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sectionBand)
+        .background(Theme.sectionBand(contrast))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

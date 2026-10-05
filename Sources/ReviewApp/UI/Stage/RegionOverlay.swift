@@ -24,17 +24,26 @@ struct RegionOverlay: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(draw)
-            if let drag, model.isDrawingRegion {
-                RegionFrame(rect: geometry.rect(from: drag.start, to: drag.current), within: geometry.frame, isDraft: true)
-            } else if let shown = model.shownRegion {
-                RegionFrame(
-                    rect: geometry.rect(of: shown.region), within: geometry.frame, isDraft: shown.number == nil,
-                    pin: shown.number.map { ($0, shown.state) }
-                )
-                .transition(.opacity)
+            // One frame for the rectangle being drawn and the region shown,
+            // so letting go hands the rectangle to the comment box in place
+            // instead of fading one frame out and another in.
+            if let shown = drawn {
+                RegionFrame(rect: shown.rect, within: geometry.frame, isDraft: shown.isDraft, pin: shown.pin)
+                    .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: model.shownRegion)
+        // Only a change of the shown region animates; the rectangle being
+        // drawn follows the pointer as it moves.
+        .animation(.smooth(duration: 0.15), value: model.shownRegion)
+    }
+
+    /// The rectangle to draw: the one being drawn, else the shown region.
+    private var drawn: (rect: CGRect, isDraft: Bool, pin: (number: Int, state: CommentState)?)? {
+        if let drag, model.isDrawingRegion {
+            return (geometry.rect(from: drag.start, to: drag.current), true, nil)
+        }
+        guard let shown = model.shownRegion else { return nil }
+        return (geometry.rect(of: shown.region), shown.number == nil, shown.number.map { (number: $0, state: shown.state) })
     }
 
     private var draw: some Gesture {
