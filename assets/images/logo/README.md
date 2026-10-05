@@ -54,4 +54,27 @@ python3 assets/images/logo/build_logo.py   # the SVGs, from one set of geometry
 python3 assets/images/logo/export.py       # png/, AppIcon.icns and the test sheet (needs rsvg-convert and iconutil)
 ```
 
+## Second option: Havuç (v2)
+
+A second logo, kept beside the first as a separate option in `v2-havuc/`. It does not replace the files above. It is drawn from a photo of Havuç, used as a reference and made cute, not traced.
+
+![v1 and v2 side by side](v2-havuc/compare-v1-v2.png)
+
+- **Head**: a wider, rounder ellipse with big upright ears set wide, soft round tips and peach inner ears.
+- **The white**: a narrow stripe starts mid-forehead and runs down the nose. Below the eyes it opens into a round white muzzle and chin, an inverted Y like a candle flame. An orange rim stays under the chin, so the head keeps its outline on white.
+- **Eyes**: big, round and dark, with one white catchlight each. A thin orange ring wraps each eye where the muzzle meets it.
+- **Details at large sizes only**: a small pink nose, a small ink "w" mouth and three faint tabby marks on the forehead.
+- **Small cut** (16 to 32 px): head, ears, a wider stripe, the muzzle and larger dark eyes. It drops the inner ears, tabby marks, catchlights, nose and mouth.
+- **One colour**: the white and the eyes are holes; the catchlights and the nose are islands.
+- **Dropped**: the play sign. Havuç's white is a stripe that opens into a muzzle, not a triangle. The whiskers are dropped too.
+
+Extra colours, beside carrot, white, ink and night: peach `#F7B9A4` (inner ears), pink `#EE8E92` (nose) and tabby `#D9601A` (forehead marks). The wordmark paths are the same as in v1: `v2-havuc/build_logo.py` imports them from `build_logo.py`.
+
+`v2-havuc/` has the same files as v1 and keeps the same names, plus `compare-v1-v2.png`: both app icons and both lockups at 1024, 128, 32 and 16 px.
+
+```sh
+python3 assets/images/logo/v2-havuc/build_logo.py
+python3 assets/images/logo/v2-havuc/export.py   # png/, AppIcon.icns, the test sheet and compare-v1-v2.png
+```
+
 NOTE: The name and the mark have not had a trademark search.
