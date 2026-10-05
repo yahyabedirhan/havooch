@@ -16,7 +16,7 @@ struct NoticeStack: View {
                 NoticeToast(notice: notice)
                     .onTapGesture { open(notice) }
                     // With reduced motion a notice fades in and out in place.
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                    .transition(reduceMotion ? AnyTransition.opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
         .padding(Theme.edge)
