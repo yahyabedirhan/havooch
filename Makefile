@@ -67,7 +67,7 @@ bundle: build
 	@printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	@# The built-in themes, as plain files beside the code (Contents/Resources/Themes).
 	@mkdir -p "$(CONTENTS)/Resources/Themes"
-	cp Packaging/Themes/*.json "$(CONTENTS)/Resources/Themes/"
+	cp Packaging/Themes/*.json Packaging/Themes/NOTICE.md "$(CONTENTS)/Resources/Themes/"
 	@# The demo the empty screen's "Try the demo" opens (Contents/Resources/Demo).
 	@mkdir -p "$(CONTENTS)/Resources/Demo"
 	cp fixtures/sample/* "$(CONTENTS)/Resources/Demo/"

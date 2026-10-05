@@ -108,12 +108,16 @@ struct ThemeDeskTests {
 
         let lines = await send(.themeList, server)
         #expect(lines.ok)
-        #expect(lines.output.contains("Default Light  light  built-in  active"))
+        let defaultLine = lines.output.split(separator: "\n").first { $0.hasPrefix("Default Light ") }
+        #expect(defaultLine?.split(separator: " ") == ["Default", "Light", "light", "built-in", "active"])
         #expect(lines.output.contains("left out: "))
 
         let reply = await send(.themeList, server, json: true)
         let themes = try #require(try object(reply.output)["themes"] as? [[String: Any]])
-        #expect(themes.map { $0["name"] as? String } == ["Brown", "Default Dark", "Default Light", "Dimmed"])
+        #expect(themes.map { $0["name"] as? String } == [
+            "Atom One Light", "Brown", "Catppuccin Latte", "Catppuccin Mocha", "Default Dark", "Default Light", "Dimmed",
+            "Dracula", "GitHub Dark", "GitHub Light", "One Dark Pro", "Tokyo Night",
+        ])
         #expect(themes.first { $0["name"] as? String == "Dimmed" }?["source"] as? String == "user")
         #expect(themes.first { $0["name"] as? String == "Default Dark" }?["source"] as? String == "built-in")
         #expect(themes.first { $0["name"] as? String == "Default Light" }?["active"] as? Bool == true)

@@ -207,7 +207,7 @@ What changed from proto-2, in short:
 Package.swift                      targets below; macOS 26; no dependencies; ReviewApp and its tests under #if os(macOS)
 Makefile                           test, build, bundle, install, acceptance, clean; reads VERSION from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle)
-Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json; copied to Contents/Resources/Themes/
+Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
 scripts/acceptance.sh              the 0.1.0 acceptance scenario, CLI only (#33)
 scripts/screenshots.sh             the scene of the pictures in assets/screenshots/0.1.0/
 .agents/skills/video-review-mate/  the listener skill (#27)
