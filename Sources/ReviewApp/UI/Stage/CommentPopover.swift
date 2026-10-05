@@ -2,7 +2,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The popover, for a new message and for a thread alike: one component
+/// The comment popover, for a new message and for a thread alike: one component
 /// for a new message and for an existing thread (D 2.7, D 2.9). For a
 /// message on a moment it floats at the foot of the stage, above the
 /// playhead, with a notch that points at the moment. For a message on a
@@ -16,7 +16,7 @@ import SwiftUI
 /// (L14), and the popover stays on its thread; the × and Escape drop them.
 /// A click outside and a change of the moment close it through
 /// `AppModel.closePopover`, which owns the rules.
-struct Composer: View {
+struct CommentPopover: View {
     let model: AppModel
     let draft: AppModel.Draft
     /// Where the notch points, from the box's leading edge; nil for a box

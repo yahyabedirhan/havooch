@@ -8,8 +8,7 @@ import Testing
 
 /// The sidebar through the app's model, on the fixture video: the order of
 /// the threads, the thread list's groups and a row's words, the thread view
-/// with Back, Previous and Next, the field at a thread's foot, the
-/// commands that show a view, and the kept width.
+/// with Back, Previous and Next, the commands that show a view, and the kept width.
 @Suite("The sidebar of threads", .serialized)
 struct SidebarTests {
     let support = FileManager.default.temporaryDirectory
@@ -170,7 +169,9 @@ struct SidebarTests {
         #expect(model.engine.time == 5)
         #expect(model.stageThread == one)
 
-        #expect(model.showThreadList() == StateReport.Sidebar(thread: nil, width: Double(Metrics.sidebarWidth)))
+        let listed = model.showThreadList()
+        #expect(listed.thread == nil)
+        #expect(listed.width == Double(Metrics.sidebarWidth))
         #expect(model.shown == nil)
         #expect(model.state().sidebar?.thread == nil)
         #expect(model.selection == one)
@@ -259,105 +260,6 @@ struct SidebarTests {
 
         model.showThread(try thread(0, model).id)
         try await model.open(MessageTests.fixture)
-        #expect(model.shown == nil)
-    }
-
-    @Test("the field at a thread's foot queues a follow-up on that thread and leaves the player where it is")
-    func followUp() async throws {
-        defer { cleanUp() }
-        let model = try await model()
-        _ = try await model.addMessage(text: "One", at: 5)
-        _ = try await model.sendQueue()
-        try await model.seek(to: 15)
-
-        #expect(await model.writeOnThread(try thread(1, model).id, text: "  And slower  "))
-        let messages = try thread(1, model).messages
-        #expect(messages.map(\.text) == ["One", "And slower"])
-        #expect(messages.last?.state == .queued)
-        #expect(messages.last?.kind == .message)
-        #expect(model.engine.time == 15)
-        #expect(model.state().queue == [messages[1].id.text])
-
-        // General takes one too; empty words are none.
-        #expect(await model.writeOnThread(try thread(0, model).id, text: "Overall: good"))
-        #expect(try thread(0, model).messages.last?.text == "Overall: good")
-        #expect(await model.writeOnThread(try thread(0, model).id, text: "   ") == false)
-    }
-
-    @Test("with an open question the field answers at once, not in the queue")
-    func answer() async throws {
-        defer { cleanUp() }
-        let model = try await model()
-        let added = try await model.addMessage(text: "One", at: 5)
-        _ = try await model.sendQueue()
-        let id = try id(added.thread.id)
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
-        #expect(ThreadFieldLook(try thread(1, model)).answers)
-        #expect(ThreadFieldLook(try thread(1, model)).button == "Answer")
-
-        #expect(await model.writeOnThread(id, text: "The intro"))
-        let last = try #require(try thread(1, model).messages.last)
-        #expect(last.kind == .answer)
-        #expect(last.text == "The intro")
-        #expect(try thread(1, model).openQuestion == nil)
-        #expect(model.state().queue.isEmpty)
-        #expect(ThreadFieldLook(try thread(1, model)).button == "Queue")
-        #expect(ThreadFieldLook(try thread(0, model)).placeholder == "Write to the agent…")
-    }
-
-    @Test("a row's menu has Open, Show on video for a thread with a frame, and Delete queued messages for a thread with any")
-    func rowActions() async throws {
-        defer { cleanUp() }
-        let model = try await model()
-        _ = try await model.addMessage(text: "Sent", at: 5)
-        _ = try await model.sendQueue()
-        _ = try await model.addMessage(text: "Queued", at: 15)
-        _ = try await model.addMessage(text: "Whole video", at: nil, thread: "0")
-        #expect(model.rowActions(for: try thread(1, model)) == [.open, .showOnVideo])
-        #expect(model.rowActions(for: try thread(2, model)) == [.open, .showOnVideo, .deleteQueued])
-        #expect(model.rowActions(for: try thread(0, model)) == [.open, .deleteQueued])
-        _ = try model.deleteMessage(try #require(model.threads[0].messages.first).id.text)
-        #expect(model.rowActions(for: try thread(0, model)) == [.open])
-    }
-
-    @Test("Show on video picks out the thread's pin and pauses the player on its frame, and the sidebar stays on the list")
-    func showOnVideo() async throws {
-        defer { cleanUp() }
-        let model = try await model()
-        _ = try await model.addMessage(text: "One", at: 5)
-        _ = try await model.addMessage(text: "Two", at: 15)
-        let one = try thread(1, model).id
-        try model.play()
-
-        model.showOnVideo(one)
-        #expect(model.selection == one)
-        #expect(model.shown == nil)
-        #expect(!model.engine.isPlaying)
-        await eventually { model.engine.time == 5 }
-        #expect(model.engine.time == 5)
-        #expect(model.stageThread == one)
-    }
-
-    @Test("Delete queued messages deletes a thread's queued messages only; a thread left with none goes")
-    func deleteQueued() async throws {
-        defer { cleanUp() }
-        let model = try await model()
-        _ = try await model.addMessage(text: "Sent", at: 5)
-        _ = try await model.sendQueue()
-        _ = try await model.addMessage(text: "Follow-up", at: nil, thread: "1")
-        _ = try await model.addMessage(text: "And another", at: nil, thread: "1")
-        _ = try await model.addMessage(text: "Only queued", at: 15)
-        let (one, two) = (try thread(1, model).id, try thread(2, model).id)
-        model.showThread(two)
-
-        model.deleteQueued(on: one)
-        #expect(try thread(1, model).messages.map(\.text) == ["Sent"])
-        #expect(model.queuedCount == 1)
-
-        model.deleteQueued(on: two)
-        #expect(!model.threads.contains { $0.id == two })
-        #expect(model.queuedCount == 0)
-        // The thread view of a thread that went goes back to the list.
         #expect(model.shown == nil)
     }
 

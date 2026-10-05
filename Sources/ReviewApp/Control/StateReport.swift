@@ -238,15 +238,57 @@ nonisolated struct StateReport: Encodable, Equatable {
         var thread: String?
         /// The sidebar's width in points, as it is kept in the settings.
         var width: Double
+        /// The composer at the sidebar's foot (L41); `null` with no video.
+        var composer: Composer? = nil
+
+        /// Where the composer's words go, and what it holds.
+        struct Composer: Encodable, Equatable {
+            /// What the composer says it writes to, as it shows it: "New
+            /// thread at 0:12", "Reply on #3", "Reply on General", "Follow
+            /// up on #3", "Answer #3 · goes at once".
+            var target: String
+            /// `new` (a new thread at the frame), `reply` (from the thread
+            /// list), `follow-up` (from a thread view) or `answer` (at once).
+            var kind: String
+            /// The id of the thread the words go on; `null` for a new thread.
+            var thread: String?
+            /// The thread's number, or the number a new thread will take.
+            var number: Int
+            /// The frame the words are on; `null` for General.
+            var time: Double?
+            /// Whether the General toggle is on.
+            var general: Bool
+            /// The words in the field: the target's draft.
+            var text: String
+            /// The region chip that goes with the words; `null` for none.
+            var region: Region?
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(target, forKey: .target)
+                try container.encode(kind, forKey: .kind)
+                try container.encode(thread, forKey: .thread)
+                try container.encode(number, forKey: .number)
+                try container.encode(time, forKey: .time)
+                try container.encode(general, forKey: .general)
+                try container.encode(text, forKey: .text)
+                try container.encode(region, forKey: .region)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case target, kind, thread, number, time, general, text, region
+            }
+        }
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(thread, forKey: .thread)
             try container.encode(width, forKey: .width)
+            try container.encode(composer, forKey: .composer)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case thread, width
+            case thread, width, composer
         }
     }
 
