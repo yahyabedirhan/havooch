@@ -1,7 +1,7 @@
 scripts/acceptance.sh "/Applications/Video Review (proto-1).app/Contents/Helpers/video-review"
 video-review acceptance: the v1 scenario of the spec, through the command line
 command line: /Applications/Video Review (proto-1).app/Contents/Helpers/video-review
-run's folder: /var/folders/qm/y1qzyq1n53s2wz7r13k1l9f40000gp/T/video-review-acceptance.0A5frx
+run's folder: /var/folders/qm/y1qzyq1n53s2wz7r13k1l9f40000gp/T/video-review-acceptance.UaQTSk
 
 Step 1: open the app in demo mode
   PASS  `app open --demo <folder>` exits 0
