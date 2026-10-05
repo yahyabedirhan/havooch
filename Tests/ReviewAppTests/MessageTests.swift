@@ -182,7 +182,7 @@ struct MessageTests {
         await #expect(throws: AppRefusal.self) { try await empty.addMessage(text: "no video", at: nil) }
     }
 
-    @Test("a message from the popover goes the same way, and the popover closes")
+    @Test("a message from the popover goes the same way, and the popover stays open on its thread with an empty field")
     func draft() async throws {
         defer { cleanUp() }
         let model = try await model()
@@ -197,16 +197,16 @@ struct MessageTests {
 
         model.draft?.text = "From the popover"
         model.commitDraft()
-        #expect(model.draft == nil)
+        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
         await eventually { model.state().queue.count == 1 }
         let thread = try #require(model.state().threads.last)
         #expect(thread.time == 12.5)
         #expect(thread.messages.map(\.text) == ["From the popover"])
         #expect(try size(of: #require(thread.keyframePath)).width > 0)
 
-        // The popover on the same frame names the thread it joins.
-        model.startDraft()
+        // The popover still open names the thread it now continues.
         #expect(model.state().popover?.thread == 1)
+        #expect(model.draftThread?.messages.map(\.text) == ["From the popover"])
         model.draft?.text = "never mind"
         model.closePopover(.discard)
         #expect(model.draft == nil)

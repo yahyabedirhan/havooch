@@ -335,7 +335,10 @@ final class AppModel: AppControlling {
         try needVideo()
         // A message whose pictures are still being written joins the send.
         await committing?.value
-        if let draft, Self.hasWords(draft.text) {
+        if let draft, Self.hasWords(draft.text), desk.review?.thread(atFrame: draft.time)?.openQuestion != nil {
+            // Words to an open question are an answer, never in the queue.
+            closePopover(.clickOutside)
+        } else if let draft, Self.hasWords(draft.text) {
             self.draft = nil
             do throws(AppRefusal) {
                 _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil)
@@ -594,7 +597,20 @@ final class AppModel: AppControlling {
         guard let draft else { return }
         self.draft = nil
         guard reason != .discard, Self.hasWords(draft.text) else { return }
-        queue(draft)
+        deliver(draft)
+    }
+
+    /// The popover's words go on their thread: an answer at once while the
+    /// thread has an open question (L14), else into the queue.
+    private func deliver(_ draft: Draft) {
+        guard let thread = desk.review?.thread(atFrame: draft.time), thread.openQuestion != nil else {
+            queue(draft)
+            return
+        }
+        // The words aren't lost: the popover holds them again.
+        if !answerQuestion(thread.id, text: draft.text), self.draft?.text.isEmpty != false {
+            self.draft = draft
+        }
     }
 
     /// A click on the frame: plays or pauses. While the popover is open it
@@ -636,12 +652,66 @@ final class AppModel: AppControlling {
         return true
     }
 
-    /// Return in the popover and its Queue button: queues the words on the
-    /// thread of the popover's frame, and the popover closes. A popover
-    /// with no words stays open.
+    /// Return in the popover and its Queue or Answer button: the words go
+    /// on the thread of the popover's frame, as an answer at once when the
+    /// thread has an open question, else into the queue (L14). The popover
+    /// stays open on its thread with an empty field, so the message shows
+    /// in its conversation; a follow-up is on the whole frame. A popover
+    /// with no words does nothing.
     func commitDraft() {
         guard let draft, Self.hasWords(draft.text) else { return }
-        closePopover(.clickOutside)
+        self.draft = Draft(time: draft.time, text: "", region: nil)
+        deliver(draft)
+    }
+
+    /// The thread the popover writes to, once it has one: the thread of
+    /// its frame. Nil for a popover that will start a thread, and while
+    /// it's closed.
+    var draftThread: ReviewThread? {
+        guard let draft else { return nil }
+        return desk.review?.thread(atFrame: draft.time)
+    }
+
+    /// A click on a thread's pin or its badge: the player pauses on the
+    /// thread's frame, and the thread popover opens there, at the frame the
+    /// person left it at (D 2.6 to D 2.10). The move to the frame is a
+    /// change of the moment for a popover open on another frame; one open
+    /// on this thread stays as it is. General has no frame to open on.
+    func openThread(_ id: ThreadID) {
+        guard let time = startThread(id) else { return }
+        Task { await engine.seek(to: time) }
+    }
+
+    /// `thread open`: the thread popover opens as a click on the thread's
+    /// pin opens it, once the player is on its frame. With `frame`, the
+    /// popover is first kept at that frame, as a drag and a resize leave it.
+    func openThread(_ ref: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
+        try needVideo()
+        let (id, hash) = try desk.threadID(ref)
+        guard hash == video?.contentHash else { throw AppRefusal(ReviewRefusal.otherVideo(id.text).line) }
+        guard desk.review?.thread(id)?.isGeneral == false else {
+            throw AppRefusal("General has no frame to open a popover on; its messages are in the sidebar")
+        }
+        if let frame { try movePopover(id, to: frame) }
+        guard let time = startThread(id) else { throw Self.noVideo }
+        await committing?.value
+        await engine.seek(to: time)
+        guard let popover = state().popover else { throw Self.noVideo }
+        return popover
+    }
+
+    /// Opens the popover on thread `id`'s frame and pauses: the frame time
+    /// the player goes to, or nil for General or a thread that's gone.
+    private func startThread(_ id: ThreadID) -> Double? {
+        guard let thread = desk.review?.thread(id), let time = thread.time else { return nil }
+        selection = id
+        unread.remove(id)
+        engine.pause()
+        if draft?.time != time {
+            closePopover(.momentChanged)
+            draft = Draft(time: time, text: "", region: nil)
+        }
+        return time
     }
 
     /// `comment open`: the popover opens at the player's frame, on
@@ -668,8 +738,8 @@ final class AppModel: AppControlling {
             do throws(AppRefusal) {
                 _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil)
             } catch {
-                // The words aren't lost: the popover opens again with them.
-                if self.draft == nil { self.draft = draft }
+                // The words aren't lost: the popover holds them again.
+                if self.draft?.text.isEmpty != false { self.draft = draft }
                 problem = Problem(title: "The message wasn't queued", reason: error.reason)
             }
         }

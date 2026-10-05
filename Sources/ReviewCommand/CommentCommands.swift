@@ -56,6 +56,23 @@ enum CommentCommands {
             let words = try arguments.exactly(["<thread>", "<text>"])
             return .send(.threadAnswer(thread: words[0], text: words[1]))
         },
+        Command(
+            name: "thread open", synopsis: "thread open <thread> [--frame x,y,w,h]",
+            summary: "open a thread's popover on its frame, as a click on its pin or its badge does; --frame first keeps the popover there, 0 to 1 of the video area from its top-left corner, as a drag and a resize leave it",
+            valuedOptions: ["--frame"]
+        ) { arguments, _ throws(UsageError) in
+            let thread = try arguments.one("<thread>")
+            var frame: ControlRequest.Rectangle?
+            if let numbers = arguments.options["--frame"] {
+                guard let rectangle = ControlRequest.Rectangle(numbers) else {
+                    throw UsageError(
+                        "`\(numbers)` isn't a frame; write x,y,w,h as four numbers from 0 to 1, from the video area's top-left corner (`0.55,0.1,0.4,0.5`)"
+                    )
+                }
+                frame = rectangle
+            }
+            return .send(.threadOpen(thread: thread, frame: frame))
+        },
     ]
 
     /// The `--region x,y,w,h` written, if any.

@@ -4,7 +4,7 @@ import SwiftUI
 /// The threads on the frame on screen (D 2.6): each one's region outlines,
 /// and one number badge per thread at its first region's top-left corner,
 /// or the picture's top-left corner for a thread on the whole frame. A
-/// click on a badge selects its thread. Nothing opens by itself (D 2.11).
+/// click on a badge opens its thread popover. Nothing opens by itself (D 2.11).
 struct FrameMarks: View {
     let model: AppModel
     let geometry: VideoFrameGeometry
@@ -23,7 +23,7 @@ struct FrameMarks: View {
             }
             ForEach(Array(marks.enumerated()), id: \.element.thread) { index, mark in
                 let corner = anchor(of: mark, index: index, in: marks)
-                FrameBadge(number: mark.number, hasRegion: !mark.regions.isEmpty) { model.select(mark.thread) }
+                FrameBadge(number: mark.number, hasRegion: !mark.regions.isEmpty) { model.openThread(mark.thread) }
                     .offset(x: corner.x - Self.badgeSize / 2, y: corner.y - Self.badgeSize / 2)
             }
         }

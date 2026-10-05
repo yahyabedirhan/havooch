@@ -76,6 +76,13 @@ public enum ControlRequest: Equatable, Sendable {
     /// `video-review thread answer <thread> <text>`: the answer to a
     /// thread's open question, as the person gives it in the app.
     case threadAnswer(thread: String, text: String)
+    /// `video-review thread open <thread> [--frame x,y,w,h]`: the thread
+    /// popover opened on the thread's frame, as a click on its pin or its
+    /// badge opens it. With `frame` (0 to 1 of the video area, from its
+    /// top-left corner) the popover is first kept there, as a drag and a
+    /// resize leave it. An addition to the spec's contract: the CLI can't
+    /// click, drag or resize.
+    case threadOpen(thread: String, frame: Rectangle? = nil)
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--hide-agent-indicator]`: the app's window written as a PNG at the
     /// absolute `path`, in `appearance` when it's set, as the Mac shows it
@@ -142,7 +149,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentEdit, .commentDelete, .send: .operator
-        case .threadAnswer: .operator
+        case .threadAnswer, .threadOpen: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }
     }

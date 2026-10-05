@@ -107,6 +107,14 @@ struct ControlServerTests {
             return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
         }
 
+        func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
+            let place = frame.map { " at \($0.x),\($0.y),\($0.w),\($0.h)" } ?? ""
+            try record("thread open \(thread)\(place)")
+            let id = try self.id(thread)
+            guard let time = review.thread(id)?.time else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
+            return StateReport.Popover(thread: id.number, time: time, text: "", region: nil)
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }
@@ -303,6 +311,23 @@ struct ControlServerTests {
         let outside = ControlRequest.Rectangle(x: 0.9, y: 0, w: 0.5, h: 0.5)
         #expect(await answer(.commentOpen(text: "", region: outside)).reply.ok == false)
         #expect(app.calls == ["comment open ", "comment open This box on 0.25,0.2,0.3,0.25", "comment open Again"])
+    }
+
+    @Test("`thread open` opens a thread's popover, kept at a frame when it names one; a frame outside the video area is refused first")
+    func threadOpen() async throws {
+        _ = try await app.addMessage(text: "Here", at: 12.5, region: nil, thread: nil)
+        #expect(await answer(.threadOpen(thread: "t-abcdef01-1")).reply == .done("popover open on #1 at 0:12.5\n"))
+        let frame = ControlRequest.Rectangle(x: 0.55, y: 0.1, w: 0.4, h: 0.5)
+        let opened = try object(await answer(.threadOpen(thread: "t-abcdef01-1", frame: frame), json: true).reply.output)
+        let popover = try #require(opened["popover"] as? [String: Any])
+        #expect(popover["thread"] as? Int == 1)
+        #expect(popover["time"] as? Double == 12.5)
+        let outside = ControlRequest.Rectangle(x: 0.8, y: 0, w: 0.4, h: 0.5)
+        #expect(await answer(.threadOpen(thread: "t-abcdef01-1", frame: outside)).reply.ok == false)
+        #expect(await answer(.threadOpen(thread: "t-abcdef01-9")).reply.ok == false)
+        #expect(app.calls.dropFirst() == [
+            "thread open t-abcdef01-1", "thread open t-abcdef01-1 at 0.55,0.1,0.4,0.5", "thread open t-abcdef01-9",
+        ])
     }
 
     @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")

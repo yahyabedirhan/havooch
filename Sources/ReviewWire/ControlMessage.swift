@@ -55,6 +55,7 @@ public struct ControlMessage: Equatable, Sendable {
         case .ask(let thread, let question, let waitSeconds):
             wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
         case .threadAnswer(let thread, let text): wire = Wire(command: "thread.answer", text: text, thread: thread)
+        case .threadOpen(let thread, let frame): wire = Wire(command: "thread.open", thread: thread, frame: frame)
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
         }
@@ -162,6 +163,8 @@ public struct ControlMessage: Equatable, Sendable {
             )
         case "thread.answer":
             return .threadAnswer(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
+        case "thread.open":
+            return .threadOpen(thread: try field(wire.thread, "thread", of: wire), frame: wire.frame)
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
         default: throw .unknownCommand(wire.command)
@@ -211,5 +214,7 @@ public struct ControlMessage: Equatable, Sendable {
         var state: String?
         var name: String?
         var thread: String?
+        /// `thread open --frame`: where the thread's popover is kept.
+        var frame: ControlRequest.Rectangle?
     }
 }

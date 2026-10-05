@@ -47,6 +47,7 @@ struct ControlMessageTests {
         .ask(thread: "1", question: "Which part?", waitSeconds: 0),
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 600),
         .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro"),
+        .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
@@ -187,7 +188,7 @@ struct ControlMessageTests {
         ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
-        .commentOpen(text: "a"), .contextSet(text: "a"),
+        .commentOpen(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),
     ])
     func operatorRole(request: ControlRequest) {
         #expect(request.role == .operator)

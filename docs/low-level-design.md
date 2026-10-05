@@ -317,9 +317,11 @@ Sources/
         RegionOverlay.swift        draw a rectangle with its size label; takes the mouse; the popover's region
         FrameMarks.swift           each thread's region outlines and number badge on the current frame
         OutsideClicks.swift        a click in the window outside the stage closes the popover as a click outside
-        Composer.swift             the comment popover (#29): `#3 · 0:12`, ×, a field that fills it, quiet hints;
-                                   where it opens beside a region or above the bar's playhead (pure)
-        ThreadPopover.swift        the popover: number, time, conversation, field; drag and resize (#31, from Composer)
+        Composer.swift             the one popover, for a new message and a thread (#29, #31): `#3 · 0:12`, ×, the
+                                   conversation, a field that fills it, quiet hints; the header drags it, the corner
+                                   grip resizes it; where it opens beside a region or above the bar's playhead (pure)
+        ThreadPopover.swift        a thread's kept popover frame on the stage, fitted to it (pure); the conversation
+                                   above the field (#31)
         Notices.swift              the brief notices that name the thread
       PlayerBar/
         PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button
@@ -382,6 +384,7 @@ As proto-2, with the spec's names and outputs:
 | `comment open [<text>] [--region]` (L22) | `popover open on #1 at 0:12.5` (`… on the region 0.25,0.2,0.3,0.25`) | `{"popover": {"thread", "time", "text", "region"}}` |
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
+| `thread open <thread> [--frame x,y,w,h]` (L29) | `popover open on #3 at 0:12.5` | `{"popover": {"thread", "time", "text", "region"}}` |
 | `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks; then `left out: <reason>` per file left out | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}], "problems": ["…"]}` |
 | `theme set <name>` | `theme Dimmed pinned`, or `theme follows the system (Default Dark)` for `system`; names match without regard to case | `{"theme": {…}}` as in `state` |
 | `wait [--timeout]` | the payload JSON, with or without `--json` | same |
@@ -576,10 +579,10 @@ public struct SupportLayout: Sendable {
 | `startDraft(region?)` | C, the Comment button, the end of a drag: pause, fix the frame time, open the popover on the thread at that frame (or the next number) with an empty draft. C over an open popover does nothing; a new region closes it as a click outside (L24) | no video |
 | `closePopover(reason)` | `.clickOutside`: queue the text; `.discard` (× or Escape): drop it; `.momentChanged`: queue text at its own time and region, drop an empty draft and its region. An empty draft is only closed in every case (D 1.4). A click on the frame, the start of a drag, and `OutsideClicks` are clicks outside | |
 | `openPopover(text, region?)` | `comment open` (L22): an open popover closes as a click outside, then `startDraft(region)` with `text` in the field | no video |
-| `submitDraft()` | Return in the field: on a thread with an open question the text is an `answer` at once (D 2.16), else it is queued; the popover stays open on its thread | empty text |
+| `commitDraft()` | Return in the field and Queue (Answer): on a thread with an open question the text is an `answer` at once (D 2.16, L14), else it is queued; the popover stays open on its thread with an empty field and no region. A click outside, a change of the moment and Cmd+Enter answer an open question the same way (L31) | empty text |
 | `addMessage(text, at?, region?, thread?)` | the CLI's path: pause, seek to `at`, snap to the frame, write the images, write the message | no video; empty text; bad time, region or thread |
 | `editMessage`, `deleteMessage` | through `ReviewDesk`; delete removes the crop, and the keyframe when the thread goes | not queued; unknown id |
-| `openThread(id)` | a pin, a badge, a notice, a row's frame button: seek to the thread's frame (a moment change), pause, open its popover at its kept frame | |
+| `openThread(id)` | a pin, a badge, a notice, a row's frame button, `thread open` (L29): seek to the thread's frame (a moment change for a popover open on another frame; one open on this thread keeps its words), pause, select the thread, open its popover at its kept frame | General; with `thread open`, no video, an unknown thread, another video's thread |
 | `expandThread(id)` | the sidebar's one expanded thread | |
 | `movePopover(id, frame)` | the end of a drag or a resize: saves the `PopoverFrame` | |
 | `send()` | queue the open draft's text, then `ReviewDesk.change { $0.send(…) }`, then `ListenerQueue.enqueue`; does nothing while a send is under way | nothing queued (`send` exits 1) |
@@ -630,7 +633,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 | Region | proto-2's drag selection with proto-1's live `412 × 236` size label in frame pixels; the popover header names the thread number it writes to. | D 2.1, D 2.4 |
 | Comment popover (#29) | proto-2's `Composer` with 8 pt padding, a field across its whole width, `#3 · 0:12` (whole seconds, as the bar) and ×, quiet `textTertiary` key hints. On a moment its notch points at the player bar's playhead (`trackArea`, L25); on a region it sits beside the rectangle. | D 1.2, D 1.7, D 1.8 |
 | Frame marks | On the current frame, while paused or playing: each thread's region outlines and one number badge per thread (at its first region's corner, or the frame's top-left corner for a thread without a region). A badge click is `openThread`. Nothing opens by itself. | D 2.6, D 2.11 |
-| Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame. Opens at its kept frame, else at `PopoverPlacement` beside the region or above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |
+| Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame (only on an existing thread, L30). Opens at its kept frame, fitted to the stage (L32), else beside the draft's region or the thread's first region, else above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |
 | Sidebar | General first, then threads in time order. A collapsed `ThreadRow`: number, keyframe thumbnail, state, the start of the last message. One expanded thread at a time: keyframe header, `MessageBubble`s in order (avatar, name, time, bubble; a region message shows its crop), edit and delete on queued messages, a field at the bottom (answer at once when a question is open, else queue). Resizable between `Metrics.sidebarMin` and `sidebarMax`, width kept in settings, proto-1's animation for open and close. | D 3.1 to D 3.7, D 4.5, D 5.10 |
 | Footer | proto-3's line: presence pill (`Listening`, `Working`, `No listener`; hover names the agent), the queued count, Send. Same height as the player bar. | D 4.8, D 4.9 |
 | Header | Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `header` token (L26). | D 4.1 to D 4.4, D 4.7 |
@@ -656,7 +659,7 @@ whole send    `reply t-<hash8>-0` (General) with one line
 
 ### The methods that carry the logic
 
-Writing a message (the UI and `comment add` meet in `AppModel.addMessage` and `submitDraft`):
+Writing a message (the UI and `comment add` meet in `AppModel.addMessage` and `commitDraft`):
 
 ```text
 AppModel.addMessage(text, at, region, thread)
@@ -904,3 +907,7 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L26 | The `header` token paints the window's toolbar band (`toolbarBackground`), behind the title and the floating group. | The token was in the palette with no view; the header is a surface of its own, and a theme may set it apart from `window` (the built-in themes keep them equal). |
 | L27 | "Try the demo" on a run on the person's data starts a new copy of the app on `<temporary folder>/Video Review Demo`, with `VIDEO_REVIEW_OPEN_VIDEO` naming the bundled `Contents/Resources/Demo/sample.mp4`, records the demo pointer, and quits. A demo run opens the video itself. | The support folder is fixed for a run, and demo data must never mix with the person's (L17). The pointer lets `video-review` reach the demo copy as after `app open --demo`. |
 | L28 | Every notice fades after 5 s, a question's too. The question stays open on its thread and in `state`. | D 4.10 says a notice fades; a question that stayed over the video had no way to close but a click (the 0.1.0 acceptance run). |
+| L29 | `thread open <thread> [--frame x,y,w,h]` opens a thread's popover on its frame, as a click on its pin or badge does; `--frame` first keeps the popover at that rectangle of the video area, as a drag and a resize leave it. An operator command, an addition to the contract. | The CLI cannot click, drag or resize. Without it the thread popover, its kept frame and its persistence can't be shown, checked or screenshotted in the real app. |
+| L30 | Only a popover on an existing thread drags and resizes. A popover that will start a thread opens at its placement and gets the handles once its first message is queued. | The frame is kept per thread (D 2.10); before the first message there is no thread to keep it on, and a frame held in the draft would be lost on every close. |
+| L31 | Words in the popover on a thread with an open question are an answer however they leave it: Return, a click outside, a change of the moment, Cmd+Enter. | L14 names one field; a click outside that queued the words instead would leave the agent's question waiting while the words sit in the queue. |
+| L32 | The video area of a `PopoverFrame` is the stage (the video with its letterbox). A kept frame is fitted on screen: at least 280 × 190 pt, at most the stage, 8 pt inside its edges. | The popover moves over the whole stage, not only the picture; normalized to the stage, it lands in the same place at any window size and is never lost off screen or too small to use. |

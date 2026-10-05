@@ -39,6 +39,9 @@ protocol AppControlling: AnyObject {
     func sendQueue() async throws(AppRefusal) -> StateReport.Send
     /// Answers the open question on a thread, as the answer field does.
     func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
+    /// Opens a thread's popover on its frame, as a click on its pin does,
+    /// first keeping it at `frame` when there is one.
+    func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover
     /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
@@ -271,6 +274,12 @@ final class ControlServer {
             case .threadAnswer(let thread, let text):
                 let answered = try app.answer(thread, text: text)
                 return done("#\(answered.number) answered", Output(message: answered.message), json)
+            case .threadOpen(let thread, let rectangle):
+                // A frame is a rectangle of the video area, checked as a region is.
+                let frame = try Self.region(rectangle).map { PopoverFrame(x: $0.x, y: $0.y, w: $0.w, h: $0.h) }
+                let popover = try await app.openThread(thread, frame: frame)
+                let number = popover.thread.map { "#\($0)" } ?? thread
+                return done("popover open on \(number) at \(TimeCode.text(popover.time))", Output(popover: popover), json)
             case .themeList:
                 let list = app.themeList()
                 return done(json ? StateReport.json(list) : list.lines)

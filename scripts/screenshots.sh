@@ -182,11 +182,14 @@ pair threads --hide-agent-indicator
 #   operator thread expand "$(thread "$keys")"
 pending sidebar "#30" "no command expands a thread in the sidebar yet"
 
-# PENDING (#31 thread popover): open thread #3's popover, then
-#   pair thread-popover --hide-agent-indicator
-# with the command #31 adds to open it, for example
-#   operator thread open "$(thread "$keys")"
-pending thread-popover "#31" "no command opens a thread's popover yet"
+# Thread #3's popover, as a click on its pin opens it: its conversation with
+# the agent's open question above the field, beside its region.
+operator thread open "$(thread "$keys")" >/dev/null
+sleep 1
+echo "a thread's popover on the video:"
+pair thread-popover --hide-agent-indicator
+# A seek closes the empty popover, as a change of the moment does.
+operator player seek 12.5 >/dev/null
 
 # The header and the footer of #32: the agent-control icon shows while this
 # script holds the lease; the footer shows the listener and the queued count.

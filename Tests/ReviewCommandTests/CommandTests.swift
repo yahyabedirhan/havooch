@@ -52,6 +52,9 @@ struct CommandTests {
         (["ask", "t-f92cbb2a-1", "Which part?", "--wait", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
         (["ask", "--wait", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
         (["thread", "answer", "t-f92cbb2a-1", "The intro"], .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro")),
+        (["thread", "open", "3"], .threadOpen(thread: "3")),
+        (["thread", "open", "t-f92cbb2a-3", "--frame", "0.55,0.1,0.4,0.5"],
+         .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -175,6 +178,7 @@ struct CommandTests {
         ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "-1"],
         ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5"],
         ["thread"], ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
+        ["thread", "open"], ["thread", "open", "1", "2"], ["thread", "open", "1", "--frame"], ["thread", "open", "1", "--frame", "1,2"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }

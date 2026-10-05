@@ -1,14 +1,20 @@
+import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The comment popover. For a message on a moment it floats at the foot of
-/// the stage, above the playhead, with a notch that points at the moment.
-/// For a message on a region it sits beside the rectangle, with no notch.
-/// Its header names the thread it writes to and the frame's time as the
-/// bar shows it; the field fills the rest (D 1.2, D 1.7, D 1.8, D 2.1).
+/// The comment popover, which is also the thread popover: one component
+/// for a new message and for an existing thread (D 2.7, D 2.9). For a
+/// message on a moment it floats at the foot of the stage, above the
+/// playhead, with a notch that points at the moment. For a message on a
+/// region it sits beside the rectangle, with no notch. Its header names the
+/// thread it writes to and the frame's time as the bar shows it; the
+/// thread's conversation shows above the field. On a thread, the header
+/// drags it and the corner grip resizes it, and the thread keeps where it
+/// was left (D 2.8, D 2.10; `ThreadPopover`).
 ///
-/// Return and Queue queue the words; the × and Escape drop them. A click
-/// outside and a change of the moment close it through
+/// Return and Queue queue the words, or answer an open question at once
+/// (L14), and the popover stays on its thread; the × and Escape drop them.
+/// A click outside and a change of the moment close it through
 /// `AppModel.closePopover`, which owns the rules.
 struct Composer: View {
     let model: AppModel
@@ -16,6 +22,16 @@ struct Composer: View {
     /// Where the notch points, from the box's leading edge; nil for a box
     /// beside a region.
     let notch: CGFloat?
+    /// The thread it writes to, whose conversation shows above the field
+    /// (D 2.7, D 2.9); nil for a popover that starts a thread.
+    var thread: ReviewThread? = nil
+    /// The size the person gave it (D 2.8); nil for its own size.
+    var size: CGSize? = nil
+    /// A drag on the header: its translation, and whether it ended. Nil
+    /// for a popover that can't move: one with no thread to keep it.
+    var move: ((CGSize, Bool) -> Void)? = nil
+    /// A drag on the corner grip, as `move`.
+    var resize: ((CGSize, Bool) -> Void)? = nil
 
     static let width: CGFloat = 320
     static let notchHeight: CGFloat = 7
@@ -24,33 +40,50 @@ struct Composer: View {
     static let padding: CGFloat = 8
     @Environment(\.palette) private var palette
 
+    /// Whether the field answers the agent's open question (L14).
+    private var answers: Bool { thread?.openQuestion != nil }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             header
-            CommentField(text: text, commit: { model.commitDraft() }, cancel: { model.escape() })
+            if let thread, !thread.messages.isEmpty {
+                PopoverConversation(thread: thread, agent: model.agentName, fills: size != nil)
+            }
+            CommentField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
                 .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
             HStack(spacing: 8) {
-                KeyHint(key: "↩", does: "queue")
+                KeyHint(key: "↩", does: answers ? "answer" : "queue")
                 KeyHint(key: "⌘↩", does: "send")
                 KeyHint(key: "esc", does: "discard")
                 Spacer(minLength: 4)
-                Button("Queue") { model.commitDraft() }
+                Button(answers ? "Answer" : "Queue") { model.commitDraft() }
                     .buttonStyle(.borderedProminent)
-                    .tint(palette[.accent])
+                    .tint(answers ? palette[.question] : palette[.accent])
                     .controlSize(.mini)
                     .disabled(!AppModel.hasWords(draft.text))
+                if resize != nil {
+                    // Room for the grip in the corner.
+                    Spacer().frame(width: 6)
+                }
             }
         }
         .padding(Self.padding)
         .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
-        .frame(width: Self.width)
+        .frame(width: size?.width ?? Self.width, height: size?.height)
+        .overlay(alignment: .bottomTrailing) {
+            if let resize {
+                ResizeGrip()
+                    .padding(2)
+                    .gesture(Self.drag(resize))
+            }
+        }
         // A solid surface: over a video a material takes the picture's
         // colours, and the words on it stop being readable.
         .background(palette[.popover], in: Bubble(notch: notch, notchHeight: Self.notchHeight))
         .overlay { Bubble(notch: notch, notchHeight: Self.notchHeight).stroke(palette[.popoverBorder], lineWidth: 1) }
         .shadow(color: palette[.shadow], radius: 14, y: 5)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(draft.region == nil ? "New message" : "New message on a region")
+        .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
     }
 
     /// `#3 · 0:12`, the kind of message before it and the × after it.
@@ -84,6 +117,23 @@ struct Composer: View {
             .accessibilityLabel("Discard")
         }
         .font(.callout)
+        // The header is the handle the popover is dragged by.
+        .contentShape(Rectangle())
+        .gesture(Self.drag(move ?? { _, _ in }), isEnabled: move != nil)
+        .pointerStyle(move == nil ? nil : .grabIdle)
+    }
+
+    private var placeholder: String {
+        if answers { return "Answer the question…" }
+        return thread == nil ? "Add a comment…" : "Add a follow-up…"
+    }
+
+    /// A drag in the window's coordinates, so the popover moving under the
+    /// pointer doesn't change the translation.
+    private static func drag(_ report: @escaping (CGSize, Bool) -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged { report($0.translation, false) }
+            .onEnded { report($0.translation, true) }
     }
 
     private var text: Binding<String> {

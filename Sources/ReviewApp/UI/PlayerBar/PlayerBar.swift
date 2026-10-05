@@ -32,7 +32,7 @@ struct PlayerBar: View {
 
             Timeline(
                 time: engine.time, duration: engine.duration, threads: model.frameThreads, selection: model.selection,
-                scrub: { model.scrub(to: $0) }, select: { model.select($0) }
+                scrub: { model.scrub(to: $0) }, select: { model.openThread($0) }
             )
             // Where the track is, for the comment popover's notch to point
             // at the playhead from the stage above.
