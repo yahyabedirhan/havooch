@@ -2,11 +2,11 @@
   "name": "Default Light",
   "kind": "light",
   "tokens": {
-    "window": "#f4f1ea",
+    "window": "system",
     "letterbox": "#151412",
-    "popover": "#fdfcf9",
+    "popover": "system",
     "popoverBorder": "#00000014",
-    "field": "#ffffff",
+    "field": "system",
     "well": "#0000000a",
     "track": "#d8d2c6",
     "knob": "#ffffff",
@@ -19,7 +19,7 @@
     "textOnAccent": "#ffffff",
     "accent": "#5b7db1",
     "control": "#b98a45",
-    "separator": "#ddd7cc",
+    "separator": "system",
     "person": "#8a8f98",
     "agent": "#5b7db1",
     "question": "#4a8a88",
@@ -40,7 +40,7 @@
     "presenceListening": "#5e9771",
     "presenceWorking": "#b98a45",
     "presenceAbsent": "#9a948a",
-    "notice": "#fdfcf9",
+    "notice": "system",
     "noticeText": "#2b2925"
   }
 }

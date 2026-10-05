@@ -93,4 +93,14 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
 
     case notice
     case noticeText
+
+    /// The tokens a theme may set to `system`, the native macOS part in
+    /// place of a painted colour: the window's background (and with it the
+    /// native toolbar), the material of a popover and of a notice, a text
+    /// field's background, and the hairline between the parts. Each shipped
+    /// theme sets them all to `system` or none, so its window never mixes
+    /// native and painted surfaces (a test checks it). Nothing stops a
+    /// person's theme from mixing them: one that extends a default and
+    /// paints `window` alone keeps the default's native popovers.
+    public static let systemSurfaces: Set<ThemeToken> = [.window, .popover, .notice, .field, .separator]
 }

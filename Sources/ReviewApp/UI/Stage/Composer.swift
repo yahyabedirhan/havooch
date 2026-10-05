@@ -77,7 +77,7 @@ struct Composer: View {
                     .gesture(Self.drag(resize))
             }
         }
-        .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), fill: palette[.popover], border: palette[.popoverBorder])
+        .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), surface: palette.surface(.popover), border: palette[.popoverBorder])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
     }
@@ -202,25 +202,29 @@ private struct KeyHint: View {
 
 /// A rounded box with a notch on its lower edge.
 extension View {
-    /// The surface the popover and the notices share: a solid fill in
-    /// `shape`, its border and the theme's shadow. Solid, since over a
-    /// video a material takes the picture's colours, and the words on it
-    /// stop being readable.
-    func popoverChrome(_ shape: some Shape, fill: Color, border: Color, lineWidth: CGFloat = 1) -> some View {
-        modifier(PopoverChrome(shape: shape, fill: fill, border: border, lineWidth: lineWidth))
+    /// The surface the popover and the notices share: the palette's
+    /// `surface` in `shape` (a painted colour, or a material under the
+    /// window colour in a native theme), its border and the theme's shadow.
+    func popoverChrome(_ shape: some Shape, surface: Palette.Surface, border: Color, lineWidth: CGFloat = 1) -> some View {
+        modifier(PopoverChrome(shape: shape, surface: surface, border: border, lineWidth: lineWidth))
     }
 }
 
 private struct PopoverChrome<S: Shape>: ViewModifier {
     let shape: S
-    let fill: Color
+    let surface: Palette.Surface
     let border: Color
     let lineWidth: CGFloat
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
-            .background(fill, in: shape)
+            .background {
+                ZStack {
+                    if let material = surface.material { shape.fill(material) }
+                    shape.fill(surface.fill)
+                }
+            }
             .overlay { shape.stroke(border, lineWidth: lineWidth) }
             .shadow(color: palette[.shadow], radius: 14, y: 5)
     }

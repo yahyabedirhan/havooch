@@ -56,6 +56,7 @@ struct ContextButton: View {
         .popover(isPresented: $model.isContextShown, arrowEdge: .bottom) {
             ContextPopover(model: model)
                 .tint(palette[.accent])
+                .popoverSurface(palette)
         }
         .task {
             // Ends when the button leaves the toolbar with the video.

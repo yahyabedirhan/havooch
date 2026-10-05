@@ -41,7 +41,7 @@ struct ThemeTests {
         #expect(theme[.accent] == Self.colour("#333333"))
         #expect(theme[.letterbox] == Self.colour("#222222"))
         #expect(theme[.window] == Self.colour("#000000"))
-        #expect(theme.colors.count == ThemeToken.allCases.count)
+        #expect(theme.isComplete)
     }
 
     @Test("the fallback is the default theme of the theme's own kind, even when it extends a theme of the other kind")
@@ -123,5 +123,74 @@ struct ThemeTests {
         let file = try ThemeFile.decode(Data(json.utf8))
         #expect(file == ThemeFile(name: "Brown", kind: .dark, extends: "Default Dark", tokens: ["accent": "#a0522d"]))
         #expect(throws: ThemeFile.Unreadable.self) { try ThemeFile.decode(Data(#"{"name": "X", "kind": "sepia"}"#.utf8)) }
+    }
+
+    // MARK: - System surfaces
+
+    /// A light default with its surfaces set to `system` and every other
+    /// token painted white.
+    private static let nativeLight = ThemeFile(
+        name: ThemeCatalog.defaultLight, kind: .light,
+        tokens: Dictionary(uniqueKeysWithValues: ThemeToken.allCases.map {
+            ($0.rawValue, ThemeToken.systemSurfaces.contains($0) ? ThemeCatalog.system : "#ffffff")
+        })
+    )
+
+    @Test("a surface token set to system resolves to the native part, with no painted colour, and the theme is still complete")
+    func systemValue() throws {
+        let catalog = ThemeCatalog(builtIn: [Self.nativeLight, Self.dark], user: [])
+        let theme = try catalog.resolve(ThemeCatalog.defaultLight)
+        #expect(theme.system == ThemeToken.systemSurfaces)
+        for token in ThemeToken.systemSurfaces {
+            #expect(theme.isSystem(token))
+            #expect(theme[token] == nil)
+        }
+        #expect(!theme.isSystem(.accent))
+        #expect(theme[.accent] == Self.colour("#ffffff"))
+        #expect(theme.isComplete)
+    }
+
+    @Test("a painted value wins over a system one it extends, and a missing one takes system from the default of its kind")
+    func paintedAndMissingBesideSystem() throws {
+        let paper = ThemeFile(name: "Paper", kind: .light, tokens: ["window": "#fafafa", "popover": "#eeeeee"])
+        let catalog = ThemeCatalog(builtIn: [Self.nativeLight, Self.dark], user: [paper])
+        let theme = try catalog.resolve("Paper")
+        // Painted.
+        #expect(theme[.window] == Self.colour("#fafafa"))
+        #expect(!theme.isSystem(.window))
+        #expect(!theme.isSystem(.popover))
+        // Missing: the default's system value.
+        #expect(theme.isSystem(.notice))
+        #expect(theme[.notice] == nil)
+        #expect(theme.isComplete)
+    }
+
+    @Test("system on a token that is not a surface counts as missing, as a colour that doesn't read does")
+    func systemOnlyOnSurfaces() throws {
+        let odd = ThemeFile(name: "Odd", kind: .light, tokens: ["accent": "system", "textPrimary": "System", "window": "system"])
+        let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [odd])
+        let theme = try catalog.resolve("Odd")
+        #expect(theme.system == [.window])
+        #expect(theme[.accent] == Self.colour("#ffffff"))
+        #expect(theme[.textPrimary] == Self.colour("#ffffff"))
+        #expect(ThemeCatalog.reads("system", for: .popover))
+        #expect(!ThemeCatalog.reads("system", for: .accent))
+        #expect(ThemeCatalog.reads("#123456", for: .accent))
+        #expect(!ThemeCatalog.reads("blue", for: .window))
+    }
+
+    @Test("an override can set a surface to system or paint a system one")
+    func overridesAndSystem() throws {
+        let catalog = ThemeCatalog(builtIn: [Self.nativeLight, Self.dark], user: [])
+        let painted = try catalog.resolve(ThemeCatalog.defaultLight, overrides: ["window": "#101010", "accent": "system"])
+        #expect(painted[.window] == Self.colour("#101010"))
+        #expect(!painted.isSystem(.window))
+        #expect(painted[.accent] == Self.colour("#ffffff"))
+        #expect(painted.isComplete)
+
+        let native = try catalog.resolve(ThemeCatalog.defaultDark, overrides: ["field": "system"])
+        #expect(native.system == [.field])
+        #expect(native[.field] == nil)
+        #expect(native.isComplete)
     }
 }

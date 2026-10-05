@@ -62,7 +62,7 @@ private struct NoticeCard: View {
             .padding(12)
             .frame(width: Notices.width)
             .popoverChrome(
-                shape, fill: palette[.notice],
+                shape, surface: palette.surface(.notice),
                 border: notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder],
                 lineWidth: notice.kind == .question ? 1.5 : 1
             )

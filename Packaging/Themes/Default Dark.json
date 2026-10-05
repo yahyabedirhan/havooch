@@ -2,11 +2,11 @@
   "name": "Default Dark",
   "kind": "dark",
   "tokens": {
-    "window": "#1f1e1c",
+    "window": "system",
     "letterbox": "#000000",
-    "popover": "#2c2b28",
+    "popover": "system",
     "popoverBorder": "#ffffff29",
-    "field": "#1a1918",
+    "field": "system",
     "well": "#ffffff0a",
     "track": "#45423d",
     "knob": "#f2f0eb",
@@ -19,7 +19,7 @@
     "textOnAccent": "#1a1918",
     "accent": "#9db6dd",
     "control": "#e3bf84",
-    "separator": "#3a3834",
+    "separator": "system",
     "person": "#a7acb4",
     "agent": "#9db6dd",
     "question": "#8fc7c3",
@@ -40,7 +40,7 @@
     "presenceListening": "#9ccba8",
     "presenceWorking": "#e3bf84",
     "presenceAbsent": "#7d776e",
-    "notice": "#2c2b28",
+    "notice": "system",
     "noticeText": "#ece9e3"
   }
 }

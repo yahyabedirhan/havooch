@@ -4,18 +4,35 @@ import Foundation
 public struct ResolvedTheme: Equatable, Sendable {
     public var name: String
     public var kind: ThemeKind
-    /// Every token, unless no theme in its chain nor its kind's default
-    /// sets it (a catalog without the default themes).
+    /// The tokens with a painted colour. With `system`, every token,
+    /// unless no theme in its chain nor its kind's default sets it (a
+    /// catalog without the default themes).
     public var colors: [ThemeToken: ThemeColor]
+    /// The tokens set to `system`: the app draws the native macOS part
+    /// for each. Only `ThemeToken.systemSurfaces` can be here.
+    public var system: Set<ThemeToken>
 
-    public init(name: String, kind: ThemeKind, colors: [ThemeToken: ThemeColor]) {
+    public init(name: String, kind: ThemeKind, colors: [ThemeToken: ThemeColor], system: Set<ThemeToken> = []) {
         self.name = name
         self.kind = kind
         self.colors = colors
+        self.system = system
     }
 
+    /// The painted colour of `token`; nil for a `system` token and a
+    /// missing one.
     public subscript(_ token: ThemeToken) -> ThemeColor? {
         colors[token]
+    }
+
+    /// Whether `token` is the native macOS part, not a painted colour.
+    public func isSystem(_ token: ThemeToken) -> Bool {
+        system.contains(token)
+    }
+
+    /// Whether every token has a value, painted or `system`.
+    public var isComplete: Bool {
+        colors.count + system.count == ThemeToken.allCases.count
     }
 }
 
@@ -37,11 +54,16 @@ public enum ThemeRefusal: Error, Equatable, Sendable {
 /// A theme's token comes from the first of: the theme itself, the themes
 /// up its `extends` chain, the default theme of its kind (`Default Light`
 /// or `Default Dark`). Overrides apply on top. A token name the app doesn't
-/// know is ignored, and a colour that doesn't read counts as missing.
+/// know is ignored, and a colour that doesn't read counts as missing. A
+/// surface token may be `system` (`ThemeCatalog.system`) in place of a
+/// colour: the native macOS part; on any other token `system` counts as
+/// missing.
 /// A pure value: the files are read by the store.
 public struct ThemeCatalog: Equatable, Sendable {
     public static let defaultLight = "Default Light"
     public static let defaultDark = "Default Dark"
+    /// The value that makes a surface token the native macOS part.
+    public static let system = "system"
 
     /// Where a theme comes from.
     public enum Source: String, Equatable, Sendable {
@@ -110,14 +132,52 @@ public struct ThemeCatalog: Equatable, Sendable {
         }
         if let builtIn = builtInDefaults[entry.file.kind] { files.append(builtIn) }
         var colors: [ThemeToken: ThemeColor] = [:]
+        var system: Set<ThemeToken> = []
+        func set(_ token: ThemeToken, _ value: Value) {
+            switch value {
+            case .painted(let color):
+                colors[token] = color
+                system.remove(token)
+            case .system:
+                colors[token] = nil
+                system.insert(token)
+            }
+        }
         for token in ThemeToken.allCases {
-            colors[token] = files.lazy.compactMap { $0.tokens[token.rawValue].flatMap(ThemeColor.init) }.first
+            if let value = files.lazy.compactMap({ $0.tokens[token.rawValue].flatMap { Value($0, for: token) } }).first {
+                set(token, value)
+            }
         }
         for (name, text) in overrides {
-            guard let token = ThemeToken(rawValue: name), let color = ThemeColor(text) else { continue }
-            colors[token] = color
+            guard let token = ThemeToken(rawValue: name), let value = Value(text, for: token) else { continue }
+            set(token, value)
         }
-        return ResolvedTheme(name: entry.name, kind: entry.file.kind, colors: colors)
+        return ResolvedTheme(name: entry.name, kind: entry.file.kind, colors: colors, system: system)
+    }
+
+    /// What a token's text in a theme file counts as.
+    private enum Value {
+        case painted(ThemeColor)
+        case system
+
+        /// A colour that reads, or `system` on a surface token; nil
+        /// (missing) for anything else.
+        init?(_ text: String, for token: ThemeToken) {
+            if text == ThemeCatalog.system {
+                guard ThemeToken.systemSurfaces.contains(token) else { return nil }
+                self = .system
+            } else if let color = ThemeColor(text) {
+                self = .painted(color)
+            } else {
+                return nil
+            }
+        }
+    }
+
+    /// Whether `text` is a value `token` takes: a colour that reads, or
+    /// `system` on a surface token.
+    public static func reads(_ text: String, for token: ThemeToken) -> Bool {
+        Value(text, for: token) != nil
     }
 
     /// The name of the theme the app shows: the pinned one while it

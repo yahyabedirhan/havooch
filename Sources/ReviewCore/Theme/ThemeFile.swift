@@ -12,7 +12,7 @@ public enum ThemeKind: String, Codable, Sendable, CaseIterable {
 ///       "name": "Brown",
 ///       "kind": "dark",
 ///       "extends": "Default Dark",
-///       "tokens": { "accent": "#c08a5b", "stage": "#2a2420" }
+///       "tokens": { "accent": "#c08a5b", "window": "#2a2420" }
 ///     }
 ///
 /// `extends` and `tokens` may be left out. Token names and colours stay as
@@ -21,7 +21,7 @@ public struct ThemeFile: Codable, Equatable, Sendable {
     public var name: String
     public var kind: ThemeKind
     public var extends: String?
-    /// Token name to colour text.
+    /// Token name to colour text, or `system` for a native surface.
     public var tokens: [String: String]
 
     public init(name: String, kind: ThemeKind, extends: String? = nil, tokens: [String: String]) {

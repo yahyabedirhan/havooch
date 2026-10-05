@@ -60,8 +60,10 @@ struct RootView: View {
             .sharedBackgroundVisibility(.hidden)
             FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)
         }
+        // A painted theme paints the toolbar band in `window`; a native
+        // one leaves it to the system, so the macOS toolbar shows.
         .toolbarBackground(palette[.window], for: .windowToolbar)
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        .toolbarBackgroundVisibility(palette.isNative ? .automatic : .visible, for: .windowToolbar)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             model.openForPerson(url)
