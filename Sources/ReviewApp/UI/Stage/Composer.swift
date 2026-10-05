@@ -2,7 +2,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The comment popover, which is also the thread popover: one component
+/// The popover, for a new message and for a thread alike: one component
 /// for a new message and for an existing thread (D 2.7, D 2.9). For a
 /// message on a moment it floats at the foot of the stage, above the
 /// playhead, with a notch that points at the moment. For a message on a
@@ -35,8 +35,8 @@ struct Composer: View {
 
     static let width: CGFloat = 320
     static let notchHeight: CGFloat = 7
-    /// The space inside the box's edge: proto-2's 12 was too much around a
-    /// small field (D 1.8).
+    /// The space inside the box's edge, kept small around a small field
+    /// (D 1.8).
     static let padding: CGFloat = 8
     @Environment(\.palette) private var palette
 
@@ -49,7 +49,7 @@ struct Composer: View {
             if let thread, !thread.messages.isEmpty {
                 PopoverConversation(model: model, thread: thread, fills: size != nil)
             }
-            CommentField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
+            MessageField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
                 .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
             HStack(spacing: 8) {
                 KeyHint(key: "↩", does: answers ? "answer" : "queue")
@@ -77,11 +77,7 @@ struct Composer: View {
                     .gesture(Self.drag(resize))
             }
         }
-        // A solid surface: over a video a material takes the picture's
-        // colours, and the words on it stop being readable.
-        .background(palette[.popover], in: Bubble(notch: notch, notchHeight: Self.notchHeight))
-        .overlay { Bubble(notch: notch, notchHeight: Self.notchHeight).stroke(palette[.popoverBorder], lineWidth: 1) }
-        .shadow(color: palette[.shadow], radius: 14, y: 5)
+        .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), fill: palette[.popover], border: palette[.popoverBorder])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
     }
@@ -125,7 +121,7 @@ struct Composer: View {
 
     private var placeholder: String {
         if answers { return "Answer the question…" }
-        return thread == nil ? "Add a comment…" : "Add a follow-up…"
+        return thread == nil ? "Add a message…" : "Add a follow-up…"
     }
 
     /// A drag in the window's coordinates, so the popover moving under the
@@ -168,7 +164,7 @@ struct Composer: View {
     /// between the box and the stage's edge.
     static let gap: CGFloat = 12
 
-    /// Where a box `box` in size sits for a comment on the rectangle
+    /// Where a box `box` in size sits for a message on the rectangle
     /// `rect`, on a stage `stage` in size: its top-left corner. It's to the
     /// right of the rectangle, else to its left, else below it, else above
     /// it, and always inside the stage. Over a rectangle that leaves no
@@ -205,6 +201,31 @@ private struct KeyHint: View {
 }
 
 /// A rounded box with a notch on its lower edge.
+extension View {
+    /// The surface the popover and the notices share: a solid fill in
+    /// `shape`, its border and the theme's shadow. Solid, since over a
+    /// video a material takes the picture's colours, and the words on it
+    /// stop being readable.
+    func popoverChrome(_ shape: some Shape, fill: Color, border: Color, lineWidth: CGFloat = 1) -> some View {
+        modifier(PopoverChrome(shape: shape, fill: fill, border: border, lineWidth: lineWidth))
+    }
+}
+
+private struct PopoverChrome<S: Shape>: ViewModifier {
+    let shape: S
+    let fill: Color
+    let border: Color
+    let lineWidth: CGFloat
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .background(fill, in: shape)
+            .overlay { shape.stroke(border, lineWidth: lineWidth) }
+            .shadow(color: palette[.shadow], radius: 14, y: 5)
+    }
+}
+
 private struct Bubble: Shape {
     /// Where the notch points; nil for a box with none.
     let notch: CGFloat?

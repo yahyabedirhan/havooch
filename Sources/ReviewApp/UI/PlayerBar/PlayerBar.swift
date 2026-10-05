@@ -1,7 +1,7 @@
 import ReviewWire
 import SwiftUI
 
-/// The fixed bar under the stage, as in proto-1: play or pause, the time
+/// The fixed bar under the stage: play or pause, the time
 /// and the duration, the timeline with a pin per thread, the Comment button
 /// and the speed. It never floats over the video, and it is as tall as the
 /// sidebar's footer beside it, so the two meet on one line.
@@ -34,7 +34,7 @@ struct PlayerBar: View {
                 time: engine.time, duration: engine.duration, threads: model.frameThreads, selection: model.selection,
                 scrub: { model.scrub(to: $0) }, select: { model.openThread($0) }
             )
-            // Where the track is, for the comment popover's notch to point
+            // Where the track is, for the popover's notch to point
             // at the playhead from the stage above.
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.trackArea = $0 }
 

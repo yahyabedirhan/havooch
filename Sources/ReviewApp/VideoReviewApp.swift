@@ -12,7 +12,7 @@ struct VideoReviewApp: App {
         Window(AppIdentity.appName, id: "main") {
             RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
         }
-        // A 16:9 video fills the stage beside the rail with no letterbox.
+        // A 16:9 video fills the stage beside the sidebar with no letterbox.
         .defaultSize(width: 1360, height: 730)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -27,7 +27,7 @@ struct VideoReviewApp: App {
 
 /// The Playback menu. Its playback items carry no key equivalents: the
 /// player's keys (`Shortcuts`) have no modifier, and a menu would take them
-/// from a text field. Send Comments shows Cmd+Return, the key `Shortcuts`
+/// from a text field. Send Messages shows Cmd+Return, the key `Shortcuts`
 /// acts on first; both go through `AppModel.send`.
 private struct PlaybackCommands: Commands {
     let model: AppModel
@@ -45,11 +45,11 @@ private struct PlaybackCommands: Commands {
                 Button("Previous Marker") { model.jumpToMarker(forward: false) }
                 Button("Next Marker") { model.jumpToMarker(forward: true) }
                 Divider()
-                Button("Add Comment") { model.startDraft() }
+                Button("Add Message") { model.startDraft() }
             }
             .disabled(model.video == nil)
             // The one item with a key: Cmd+Return is no key a text field takes.
-            Button("Send Comments") { model.send() }
+            Button("Send Messages") { model.send() }
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!model.canSend)
         }
@@ -90,8 +90,8 @@ private struct ThemeMenu: Commands {
 /// Owns what lives as long as the app: the model and the control server.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel(environment: ProcessInfo.processInfo.environment)
-    /// The lease as the banner draws it; the control server writes it.
-    let lease = LeaseIndicator()
+    /// The lease as the agent-control icon draws it; the control server writes it.
+    let lease = AgentControlIcon()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         termination = source
     }
 
-    /// The banner's Stop: the person takes the app back from the agent.
+    /// The agent-control icon's Stop: the person takes the app back from the agent.
     func stopLease() {
         server?.stopLease()
     }

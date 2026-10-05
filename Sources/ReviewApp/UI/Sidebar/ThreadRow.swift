@@ -81,7 +81,7 @@ struct ThreadRow: View {
                     .truncationMode(.tail)
             }
         }
-        .padding(.horizontal, Metrics.railPadding)
+        .padding(.horizontal, Metrics.sidebarPadding)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isHovered ? palette[.sidebarRowHover] : Color.clear)

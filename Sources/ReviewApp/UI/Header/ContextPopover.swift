@@ -70,7 +70,7 @@ struct ContextButton: View {
 
 /// What the agent is told about the video: the sidecar file's text, which
 /// is read-only here, the person's own note under it, and where the
-/// transcript around each comment comes from. Save and Return keep the
+/// transcript around each message comes from. Save and Return keep the
 /// note; Escape closes the popover and drops the change.
 struct ContextPopover: View {
     let model: AppModel
@@ -173,7 +173,7 @@ struct ContextPopover: View {
         }
     }
 
-    /// The person's note, in the same text view a comment is written in.
+    /// The person's note, in the same text view a message is written in.
     private var noteEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -186,7 +186,7 @@ struct ContextPopover: View {
                     .font(.caption)
                     .foregroundStyle(palette[.textTertiary])
             }
-            CommentField(
+            MessageField(
                 text: $note, placeholder: "Add a note for the agent…",
                 commit: { model.saveContextNote(note) }, cancel: { model.isContextShown = false }
             )
@@ -194,7 +194,7 @@ struct ContextPopover: View {
         }
     }
 
-    /// Where the transcript around each comment comes from, and how far it
+    /// Where the transcript around each message comes from, and how far it
     /// is. Read again each second, since speech arrives with no event.
     private var transcriptPart: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in

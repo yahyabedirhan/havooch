@@ -26,8 +26,8 @@ struct ShortcutsTests {
     func commentKeys() {
         #expect(Shortcuts.action(keyCode: 126, modifiers: []) == .marker(forward: false))
         #expect(Shortcuts.action(keyCode: 125, modifiers: []) == .marker(forward: true))
-        #expect(Shortcuts.action(keyCode: 8, modifiers: []) == .startComment)
-        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
+        #expect(Shortcuts.action(keyCode: 8, modifiers: []) == .startMessage)
+        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
     }
 
     /// Return and the keypad's Enter.
@@ -45,7 +45,7 @@ struct ShortcutsTests {
     @Test("Return alone starts a comment, and Cmd with another key isn't a send")
     func returnAlone() {
         // Return alone still starts a comment, and is the text view's while typing.
-        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
+        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
         #expect(Shortcuts.action(keyCode: 36, modifiers: [], isTyping: true) == nil)
         // Cmd with another key isn't a send.
         #expect(Shortcuts.action(keyCode: 49, modifiers: .command, isTyping: true) == nil)
@@ -61,12 +61,12 @@ struct ShortcutsTests {
     @Test("in the comment box Return commits, Shift+Return makes a new line, Escape cancels")
     func editorKeys() {
         let newline = #selector(NSResponder.insertNewline(_:))
-        #expect(CommentEditor.keyAction(for: newline, shift: false) == .commit)
-        #expect(CommentEditor.keyAction(for: newline, shift: true) == .newLine)
-        #expect(CommentEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
+        #expect(MessageEditor.keyAction(for: newline, shift: false) == .commit)
+        #expect(MessageEditor.keyAction(for: newline, shift: true) == .newLine)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
         // Every other command is the text view's own: typing, moving, deleting.
-        #expect(CommentEditor.keyAction(for: #selector(NSResponder.deleteBackward(_:)), shift: false) == nil)
-        #expect(CommentEditor.keyAction(for: #selector(NSResponder.moveLeft(_:)), shift: false) == nil)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.deleteBackward(_:)), shift: false) == nil)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.moveLeft(_:)), shift: false) == nil)
     }
 
     @Test("a key with Command, Option or Control, or any other key, is left alone")

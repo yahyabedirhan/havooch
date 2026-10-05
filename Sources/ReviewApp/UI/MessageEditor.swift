@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The text view a comment is written in: in the comment box and on a card
+/// The text view a message is written in: in the popover and in a message
 /// that's being edited, and an answer under a question. It's a standard
 /// `NSTextView` that takes the focus when it appears, so the player's keys
 /// stand back while the person types and dictation has a normal text view
@@ -9,7 +9,7 @@ import SwiftUI
 /// false): a question arrives while the person does something else.
 ///
 /// Return commits, Shift+Return makes a new line, Escape cancels.
-struct CommentEditor: NSViewRepresentable {
+struct MessageEditor: NSViewRepresentable {
     @Binding var text: String
     var takesFocus = true
     let commit: () -> Void
@@ -50,7 +50,7 @@ struct CommentEditor: NSViewRepresentable {
         view.insertionPointColor = context.environment.palette.nsColor(.textPrimary)
         view.textContainerInset = Self.inset
         view.string = text
-        view.setAccessibilityLabel("Comment")
+        view.setAccessibilityLabel("Message")
         guard takesFocus else { return scroll }
         // Once the view is in its window: the person types at once.
         Task { [weak view] in
@@ -79,9 +79,9 @@ struct CommentEditor: NSViewRepresentable {
     static let inset = NSSize(width: 3, height: 6)
 
     final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: CommentEditor
+        var parent: MessageEditor
 
-        init(_ parent: CommentEditor) {
+        init(_ parent: MessageEditor) {
             self.parent = parent
         }
 
@@ -92,7 +92,7 @@ struct CommentEditor: NSViewRepresentable {
 
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             let shift = NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false
-            switch CommentEditor.keyAction(for: selector, shift: shift) {
+            switch MessageEditor.keyAction(for: selector, shift: shift) {
             case .commit: parent.commit()
             case .newLine: textView.insertNewlineIgnoringFieldEditor(nil)
             case .cancel:
@@ -108,23 +108,23 @@ struct CommentEditor: NSViewRepresentable {
 
 /// The editor with its placeholder, in the field look both of its places
 /// share.
-struct CommentField: View {
+struct MessageField: View {
     @Binding var text: String
-    var placeholder = "Add a comment…"
+    var placeholder = "Add a message…"
     var takesFocus = true
     let commit: () -> Void
     let cancel: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
-        CommentEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
+        MessageEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
                         .foregroundStyle(palette[.textTertiary])
                         // The text container's own 5 pt of line padding.
-                        .padding(.leading, CommentEditor.inset.width + 5)
-                        .padding(.top, CommentEditor.inset.height)
+                        .padding(.leading, MessageEditor.inset.width + 5)
+                        .padding(.top, MessageEditor.inset.height)
                         .allowsHitTesting(false)
                 }
             }

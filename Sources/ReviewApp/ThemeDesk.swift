@@ -35,6 +35,12 @@ final class ThemeDesk {
     @ObservationIgnored private(set) var problems: [String] = []
     /// The problems already written to standard error, so each shows once.
     @ObservationIgnored private var reported: Set<String> = []
+    /// `settings.json` as the last reload found it: a change in the support
+    /// folder reloads only when this differs, so the outbox's and the
+    /// reviews' saves there don't.
+    @ObservationIgnored private var settingsStamp: FileStamp?
+    /// How many times the themes and the settings were read.
+    @ObservationIgnored private(set) var reloads = 0
 
     /// Reads the themes and the settings once. Nothing is watched until
     /// `startWatching`.
@@ -72,6 +78,8 @@ final class ThemeDesk {
     /// active theme. A theme or a settings file that doesn't read is left
     /// out, with a line on standard error.
     func reload() {
+        reloads += 1
+        settingsStamp = FileStamp(layout.settingsFile)
         let builtIn = builtInFolder.map(ThemeFiles.read) ?? ThemeFiles.Reading()
         let user = ThemeFiles.user(layout)
         let catalog = ThemeCatalog(builtIn: builtIn.files, user: user.files)
@@ -163,8 +171,9 @@ final class ThemeDesk {
         }
     }
 
-    /// Watches `Themes/` and each file in it, and the support folder and
-    /// its `settings.json`: a change reloads the themes a moment later.
+    /// Watches `Themes/` and each file in it, and `settings.json`: a change
+    /// reloads the themes a moment later. The support folder is watched for
+    /// a `settings.json` that comes or is replaced, and nothing else in it.
     /// The folder `Themes/` is made, so a person finds where their themes
     /// go.
     func startWatching() {
@@ -185,18 +194,29 @@ final class ThemeDesk {
     /// made again after each reload.
     private func rearm() {
         for watcher in watchers { watcher.cancel() }
-        let targets = [layout.root, layout.themesFolder, layout.settingsFile] + ThemeFiles.jsonFiles(in: layout.themesFolder)
-        watchers = targets.compactMap(watch)
+        let targets = [layout.themesFolder, layout.settingsFile] + ThemeFiles.jsonFiles(in: layout.themesFolder)
+        watchers = targets.compactMap { watch($0) }
+        // The outbox and every review are saved in the support folder too:
+        // only a `settings.json` other than the one last read is a change.
+        let settings = layout.settingsFile
+        let root = watch(layout.root) { [weak self] in
+            self.map { FileStamp(settings) != $0.settingsStamp } ?? false
+        }
+        if let root { watchers.append(root) }
     }
 
-    private func watch(_ url: URL) -> (any DispatchSourceFileSystemObject)? {
+    private func watch(
+        _ url: URL, when isChange: @escaping @MainActor () -> Bool = { true }
+    ) -> (any DispatchSourceFileSystemObject)? {
         let descriptor = open(url.path, O_EVTONLY)
         guard descriptor >= 0 else { return nil }
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: [.write, .extend, .delete, .rename, .attrib], queue: .main
         )
         source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.changed() }
+            MainActor.assumeIsolated {
+                if isChange() { self?.changed() }
+            }
         }
         source.setCancelHandler { close(descriptor) }
         source.resume()
@@ -237,6 +257,22 @@ final class ThemeDesk {
             },
             problems: problems
         )
+    }
+}
+
+/// A file as far as a watch needs it: which file it is and when it was
+/// last written. Nil for a file that isn't there.
+private struct FileStamp: Equatable {
+    var number: Int
+    var modified: Date
+
+    init?(_ url: URL) {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let number = attributes[.systemFileNumber] as? Int,
+              let modified = attributes[.modificationDate] as? Date
+        else { return nil }
+        self.number = number
+        self.modified = modified
     }
 }
 

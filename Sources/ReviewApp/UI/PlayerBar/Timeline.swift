@@ -1,7 +1,7 @@
 import ReviewCore
 import SwiftUI
 
-/// The timeline in the player bar, as in proto-1: the played part of the
+/// The timeline in the player bar: the played part of the
 /// video and the playhead, which a press or a drag moves, with a pin above
 /// the track for each thread and a thin stem down to the thread's frame.
 /// Light time labels with short ticks sit under the track when the bar has

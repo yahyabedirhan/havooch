@@ -6,7 +6,7 @@ import SwiftUI
 /// Video Review", with "video-review · 48s left · 2 waiting". Made from the
 /// lease's status at the moment drawn, so the countdown ticks with the time
 /// it's made at. The toolbar's agent-control sign and its popover say them.
-struct LeaseBanner: Equatable {
+struct AgentControlWords: Equatable {
     /// "Claude Code controls Video Review".
     var title: String
     /// Where the agent runs, short: a working folder's last component, or
@@ -45,11 +45,11 @@ struct LeaseBanner: Equatable {
 
 /// The toolbar's sign that an agent controls the app: one glyph in the
 /// control colour, at the head of the window's buttons. It is in the toolbar
-/// only while `LeaseIndicator.shown(at:)` has a lease, so nothing shows while
+/// only while `AgentControlIcon.shown(at:)` has a lease, so nothing shows while
 /// the lease is free or while a screenshot leaves it out. A click opens who
 /// controls the app, where, the time left, and Stop.
 struct AgentControlButton: View {
-    let indicator: LeaseIndicator
+    let indicator: AgentControlIcon
     /// Takes the app back from the holder (`ControlServer.stopLease`).
     let stop: () -> Void
 
@@ -63,20 +63,20 @@ struct AgentControlButton: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let banner = indicator.shown(at: now).map { LeaseBanner($0) }
+        let words = indicator.shown(at: now).map { AgentControlWords($0) }
         Button {
             isOpen.toggle()
         } label: {
             Label {
-                Text(banner?.title ?? "Agent control")
+                Text(words?.title ?? "Agent control")
             } icon: {
                 Image(systemName: "cursorarrow.rays")
                     .foregroundStyle(palette[.control])
                     .symbolEffect(.bounce, value: hasArrived)
             }
         }
-        .help(banner.map { "\($0.title). Click for the time left and Stop" } ?? "")
-        .accessibilityLabel(banner?.text ?? "")
+        .help(words.map { "\($0.title). Click for the time left and Stop" } ?? "")
+        .accessibilityLabel(words?.text ?? "")
         .popover(isPresented: $isOpen, arrowEdge: .bottom) {
             AgentControlPopover(indicator: indicator) {
                 isOpen = false
@@ -101,7 +101,7 @@ struct AgentControlButton: View {
 /// the time left ticking each second, how many wait, and Stop, which ends
 /// the lease and bars that agent for five minutes.
 private struct AgentControlPopover: View {
-    let indicator: LeaseIndicator
+    let indicator: AgentControlIcon
     let stop: () -> Void
 
     static let width: CGFloat = 300
@@ -111,12 +111,12 @@ private struct AgentControlPopover: View {
         // Each second, so the countdown ticks.
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             if let lease = indicator.shown(at: Date()) {
-                content(LeaseBanner(lease))
+                content(AgentControlWords(lease))
             }
         }
     }
 
-    private func content(_ banner: LeaseBanner) -> some View {
+    private func content(_ words: AgentControlWords) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: "cursorarrow.rays")
@@ -125,18 +125,18 @@ private struct AgentControlPopover: View {
                     .frame(width: 32, height: 32)
                     .background(palette[.control].opacity(0.16), in: Circle())
                     .accessibilityHidden(true)
-                Text(banner.title)
+                Text(words.title)
                     .font(.headline)
                     .foregroundStyle(palette[.textPrimary])
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Label(banner.place, systemImage: "terminal")
+                Label(words.place, systemImage: "terminal")
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Label(banner.timeLeft, systemImage: "timer")
+                Label(words.timeLeft, systemImage: "timer")
                     .monospacedDigit()
-                if let waiting = banner.waiting {
+                if let waiting = words.waiting {
                     Label(waiting, systemImage: "person.2")
                 }
             }
@@ -146,20 +146,20 @@ private struct AgentControlPopover: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(palette[.well], in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(LeaseBanner.stopHelp)
+                Text(AgentControlWords.stopHelp)
                     .font(.caption)
                     .foregroundStyle(palette[.textTertiary])
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Button(LeaseBanner.stop, role: .destructive, action: stop)
+                Button(AgentControlWords.stop, role: .destructive, action: stop)
                     .controlSize(.small)
-                    .help(LeaseBanner.stopHelp)
+                    .help(AgentControlWords.stopHelp)
             }
         }
         .padding(16)
         .frame(width: Self.width)
         .foregroundStyle(palette[.textPrimary])
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(banner.text)
+        .accessibilityLabel(words.text)
     }
 }

@@ -43,7 +43,7 @@ public struct SubtitleSource: Transcriber {
 
     /// `00:00:06,067` (SubRip), `00:00:06.067` or `00:06.067` (WebVTT) as
     /// seconds. A part that isn't a finite number (`inf`, `1e999`) is no
-    /// time: a batch's JSON can't carry it.
+    /// time: a send's JSON can't carry it.
     static func seconds(_ text: String) -> TimeInterval? {
         let parts = text.trimmingCharacters(in: .whitespaces).replacing(",", with: ".").split(separator: ":", omittingEmptySubsequences: false)
         guard (2...3).contains(parts.count) else { return nil }

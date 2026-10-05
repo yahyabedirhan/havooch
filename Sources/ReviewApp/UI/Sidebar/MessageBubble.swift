@@ -18,7 +18,7 @@ struct ThreadHeading: Equatable {
     }
 }
 
-/// One message of a thread, in proto-2's style (D 3.4): an avatar for its
+/// One message of a thread (D 3.4): an avatar for its
 /// author, who said it and when, and the words in a soft bubble. A region
 /// message shows its crop under its words, at its place in the
 /// conversation (D 3.5). A person's message shows its state; a queued one
@@ -34,8 +34,6 @@ struct MessageBubble: View {
     @Environment(\.palette) private var palette
 
     private static let avatar: CGFloat = 20
-    /// Where a message's words start, which the field lines up with.
-    static let indent: CGFloat = avatar + 8
     /// The largest a crop shows in the conversation.
     private static let cropSize = CGSize(width: 220, height: 140)
 
@@ -107,7 +105,7 @@ struct MessageBubble: View {
 
     private func editor(_ text: String) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
-            CommentField(text: binding(text), placeholder: "Message", commit: save, cancel: { edited = nil })
+            MessageField(text: binding(text), placeholder: "Message", commit: save, cancel: { edited = nil })
                 .frame(height: 60)
             HStack(spacing: 8) {
                 Button("Cancel") { edited = nil }

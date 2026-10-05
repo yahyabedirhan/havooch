@@ -96,7 +96,7 @@ Run `video-review ask <thread id> "<question>"` as a background command, like `w
 
 A thread holds one open question: a second `ask` on it is refused until the person answers the first. A `reply` does not close a question.
 
-Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. When the rest of the send is finished, run `video-review state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.
+Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `video-review state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.
 
 ## Refusals
 

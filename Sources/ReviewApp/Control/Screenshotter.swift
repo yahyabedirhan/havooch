@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 protocol Screenshotting: AnyObject {
     /// The app's window written as a PNG at `file`, in `appearance` when
     /// it's set (and back to the app's own afterwards). The agent-control
-    /// indicator (the lease banner) is left out when `hideAgentIndicator` asks.
+    /// icon is left out when `hideAgentIndicator` asks.
     func capture(to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool) async throws(AppRefusal)
 }
 
@@ -17,14 +17,14 @@ protocol Screenshotting: AnyObject {
 /// Screen Recording permission and never shows another app.
 final class Screenshotter: Screenshotting {
     /// How long the window gets to redraw before it's captured: in a new
-    /// appearance, and with the lease banner gone or just come (the
+    /// appearance, and with the agent-control icon gone or just come (the
     /// capture's own request may be the one that took the lease).
     private static let settle = Duration.milliseconds(400)
 
-    /// The banner, hidden for a capture that leaves it out.
-    private let indicator: LeaseIndicator
+    /// The agent-control icon, hidden for a capture that leaves it out.
+    private let indicator: AgentControlIcon
 
-    init(indicator: LeaseIndicator) {
+    init(indicator: AgentControlIcon) {
         self.indicator = indicator
     }
 

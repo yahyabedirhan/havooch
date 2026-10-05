@@ -1,7 +1,7 @@
 import ReviewCore
 import SwiftUI
 
-/// The foot of the sidebar, proto-3's line: whether an agent listens, how
+/// The foot of the sidebar, one line: whether an agent listens, how
 /// many messages are queued, and Send. Sending is safe either way: with no
 /// agent the send waits for the next one.
 ///
@@ -34,7 +34,7 @@ struct SidebarFooter: View {
                 .disabled(!model.canSend)
                 .help(model.canSend ? "Send the queue to your agent at once (⌘↩)" : "Nothing is queued")
         }
-        .padding(.horizontal, Metrics.railPadding)
+        .padding(.horizontal, Metrics.sidebarPadding)
         .frame(maxWidth: .infinity)
         .frame(height: Metrics.barHeight)
         .background(palette[.bar])

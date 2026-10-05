@@ -26,7 +26,7 @@ protocol AppControlling: AnyObject {
     func addMessage(
         text: String, at: Double?, region: Region?, thread: String?
     ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread)
-    /// Opens the comment popover at the player's frame, on `region` when
+    /// Opens the popover at the player's frame, on `region` when
     /// it has one, with `text` in its field, as C or a drawn rectangle does.
     func openPopover(text: String, region: Region?) throws(AppRefusal) -> StateReport.Popover
     func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message
@@ -90,8 +90,8 @@ final class ControlServer {
     private(set) var lease: ControlLease {
         didSet { leaseChanged() }
     }
-    /// The banner, which follows the lease.
-    let indicator: LeaseIndicator
+    /// The agent-control icon, which follows the lease.
+    let indicator: AgentControlIcon
     /// Ends the lease once it runs out, when no request comes to.
     private var settling: Task<Void, Never>?
     /// The `take`s waiting in line, each holding its connection open until
@@ -120,7 +120,7 @@ final class ControlServer {
         listeners: ListenerQueue,
         screenshotter: any Screenshotting,
         lease: ControlLease = ControlLease(),
-        indicator: LeaseIndicator = LeaseIndicator(),
+        indicator: AgentControlIcon = AgentControlIcon(),
         now: @escaping @MainActor () -> Date = { Date() },
         timeZone: TimeZone = .current,
         quit: @escaping @MainActor () -> Void
@@ -440,9 +440,9 @@ final class ControlServer {
 
     // MARK: - The person taking the app back
 
-    /// The banner's Stop: the holder's lease ends and it's barred for five
-    /// minutes (`ControlLease.stop`), and the first waiter in line gets the
-    /// lease, its `take` answered as the lease changes. The person's only
+    /// The agent-control icon's Stop: the holder's lease ends and it's
+    /// barred for five minutes (`ControlLease.stop`), and the first waiter
+    /// in line gets the lease, its `take` answered as the lease changes. The person's only
     /// way into the lease.
     func stopLease() {
         _ = lease.stop(at: now())
@@ -452,8 +452,8 @@ final class ControlServer {
 
     /// Ends the lease if it has run out by now, handing it to the first
     /// waiter in line, and lifts the bars that have ended. A timer calls it
-    /// at the next of those ends, so the banner goes, and the waiter gets
-    /// the lease, with no request.
+    /// at the next of those ends, so the agent-control icon goes, and the
+    /// waiter gets the lease, with no request.
     func settleLease() {
         _ = lease.settle(at: now())
     }

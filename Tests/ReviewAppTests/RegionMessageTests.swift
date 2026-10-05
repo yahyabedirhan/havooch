@@ -264,7 +264,7 @@ struct RegionMessageTests {
         // The key itself: Escape cancels unless a text view has it, where it's the editor's cancel.
         #expect(Shortcuts.action(keyCode: 53, modifiers: []) == .cancel)
         #expect(Shortcuts.action(keyCode: 53, modifiers: [], isTyping: true) == nil)
-        #expect(CommentEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
     }
 
     @Test("a rectangle too small to be a region opens nothing, and a click still plays and pauses")

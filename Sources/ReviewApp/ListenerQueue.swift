@@ -330,8 +330,8 @@ final class ListenerQueue {
         return SendPayload.assemble(
             review: review, send: send, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
             images: SendPayload.Images(
-                keyframe: { [layout] in layout.keyframe($0.id, of: hash).path },
-                crop: { [layout] in layout.crop($0.id, of: hash).path }
+                keyframe: { [layout] in layout.keyframe(of: $0, on: hash)?.path },
+                crop: { [layout] in layout.crop(of: $0, on: hash)?.path }
             )
         )
     }

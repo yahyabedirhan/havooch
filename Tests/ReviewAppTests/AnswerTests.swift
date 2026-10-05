@@ -205,14 +205,11 @@ struct AnswerTests {
         #expect(notice.thread.text == app.one)
         #expect(notice.kind == .message)
         #expect(notice.title == "#1 · Mate")
-        #expect(notice.expires != nil)
-        #expect(app.model.unread == [try #require(ItemID(app.one))])
 
         // A click on the notice: it goes, and the thread's popover opens on its frame.
         app.model.openNotice(notice.id)
         #expect(app.model.notices.isEmpty)
         #expect(app.model.selection == ItemID(app.one))
-        #expect(app.model.unread.isEmpty)
         #expect(app.model.state().popover?.thread == 1)
     }
 
@@ -289,9 +286,8 @@ struct AnswerTests {
         #expect(reply == .done("The left one\n"))
         #expect(app.model.listeners.outbox.openAsks == 0)
         #expect(try thread(app.two, app).openQuestion == nil)
-        // The question's notice goes with its answer, and the thread is read.
+        // The question's notice goes with its answer.
         #expect(app.model.notices.isEmpty)
-        #expect(app.model.unread.isEmpty)
         let messages = try thread(app.two, app).messages
         #expect(messages.map(\.author) == [.person, .agent, .person])
         #expect(messages.map(\.kind) == [.message, .question, .answer])

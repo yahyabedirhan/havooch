@@ -164,6 +164,25 @@ struct ThemeDeskTests {
         #expect(model.themes.theme.name == "Default Light")
     }
 
+    @Test("a save of the outbox in the support folder doesn't read the themes again; a new settings.json does")
+    func ignoresOtherFiles() async throws {
+        defer { cleanUp() }
+        let (model, _) = model()
+        model.themes.startWatching()
+        defer { model.themes.stopWatching() }
+        let before = model.themes.reloads
+
+        // Replaced, as the outbox is saved, then written in place.
+        try Data("{}".utf8).write(to: layout.outboxFile, options: .atomic)
+        try Data("{}".utf8).write(to: layout.outboxFile)
+        try? await Task.sleep(for: .milliseconds(500))
+        #expect(model.themes.reloads == before)
+
+        try Settings(theme: "Default Dark").save(layout)
+        await eventually { model.themes.theme.name == "Default Dark" }
+        #expect(model.themes.reloads > before)
+    }
+
     @Test("no view uses a raw colour: every colour comes from the palette")
     func noRawColours() throws {
         let sources = URL(fileURLWithPath: #filePath)

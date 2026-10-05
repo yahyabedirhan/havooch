@@ -145,8 +145,8 @@ final class PlayerEngine {
     nonisolated static let timescale: CMTimeScale = 60_000
 
     /// `seconds` as the time the player and the frame reader are asked
-    /// for: both take a comment's time, which is in milliseconds, and a
-    /// coarser time could name the frame before the comment's.
+    /// for: both take a thread's time, which is in milliseconds, and a
+    /// coarser time could name the frame before the thread's.
     nonisolated static func exact(_ seconds: Double) -> CMTime {
         CMTime(seconds: seconds, preferredTimescale: timescale)
     }

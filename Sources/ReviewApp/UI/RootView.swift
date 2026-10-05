@@ -7,7 +7,7 @@ import SwiftUI
 struct RootView: View {
     @Bindable var model: AppModel
     /// The lease as the header's agent-control icon draws it, and its Stop.
-    let lease: LeaseIndicator
+    let lease: AgentControlIcon
     let stopLease: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,8 +32,8 @@ struct RootView: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
             }
         }
-        // proto-1's motion, whatever opens or closes the sidebar: the
-        // toggle, a notice, or the operator.
+        // One motion, a spring with no bounce, whatever opens or closes the
+        // sidebar: the toggle, a notice, or the operator.
         .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)
         .frame(minWidth: 760, minHeight: 480)
         // The theme's accent in place of the system's, for a selection and
@@ -77,7 +77,7 @@ struct RootView: View {
 
     /// The sidebar shows beside a video only.
     private var sidebarShown: Bool {
-        model.video != nil && model.isRailVisible
+        model.video != nil && model.isSidebarVisible
     }
 
     private var hasProblem: Binding<Bool> {
@@ -89,7 +89,7 @@ struct RootView: View {
 }
 
 /// The sidebar column: the threads above the footer, resizable from its
-/// leading edge between `Metrics.railWidthRange`'s bounds.
+/// leading edge between `Metrics.sidebarWidthRange`'s bounds.
 struct SidebarColumn: View {
     let model: AppModel
     /// The width while the person drags; nil shows the kept width.
@@ -98,7 +98,7 @@ struct SidebarColumn: View {
     @State private var dragStart: CGFloat?
     @Environment(\.palette) private var palette
 
-    /// proto-1's motion for the column: a critically damped spring, so it
+    /// The column's motion: a critically damped spring, so it
     /// settles without a bounce; a short fade when motion is reduced.
     static func animation(reduceMotion: Bool) -> Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 1)
@@ -129,7 +129,7 @@ struct SidebarColumn: View {
                     .onChanged { drag in
                         let start = dragStart ?? width
                         dragStart = start
-                        let range = Metrics.railWidthRange
+                        let range = Metrics.sidebarWidthRange
                         dragged = min(max(start - drag.translation.width, range.lowerBound), range.upperBound)
                     }
                     .onEnded { _ in

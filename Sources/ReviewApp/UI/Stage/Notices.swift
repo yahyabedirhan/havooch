@@ -2,9 +2,10 @@ import ReviewCore
 import SwiftUI
 
 /// The brief notices in the stage's top-right corner: what the agent just
-/// said, under a line that names the thread (`#3 · Claude Code`). A message
-/// fades by itself after a few seconds; a question stays until it's clicked
-/// or answered. A click opens the thread it's on.
+/// said, under a line that names the thread (`#3 · Claude Code`). Every
+/// notice fades by itself after a few seconds, a question too: the question
+/// stays open on its thread, where the person answers it (L28). A click
+/// opens the thread it's on.
 struct Notices: View {
     let model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,14 +66,15 @@ private struct NoticeCard: View {
             }
             .padding(12)
             .frame(width: Notices.width)
-            // A solid surface, as the comment box: words over a video stay readable.
-            .background(palette[.notice], in: shape)
-            .overlay { shape.strokeBorder(notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder], lineWidth: notice.kind == .question ? 1.5 : 1) }
-            .shadow(color: palette[.shadow], radius: 14, y: 5)
+            .popoverChrome(
+                shape, fill: palette[.notice],
+                border: notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder],
+                lineWidth: notice.kind == .question ? 1.5 : 1
+            )
             .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .help(notice.kind == .question ? "Show the question and answer it" : "Show the comment")
+        .help(notice.kind == .question ? "Show the question and answer it" : "Show the message")
         .accessibilityElement(children: .combine)
     }
 

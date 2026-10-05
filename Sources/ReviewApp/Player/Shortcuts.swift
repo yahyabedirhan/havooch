@@ -3,7 +3,7 @@ import AppKit
 /// The player's keys, as in QuickTime: Space or K plays and pauses, Left and
 /// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
 /// comma and the period move one frame, Up and
-/// Down jump to the marker before and after, C or Return starts a comment,
+/// Down jump to the marker before and after, C or Return starts a message,
 /// Escape drops a rectangle that's being drawn. They're off while a text
 /// view has the focus, so typing never reaches the player. Cmd+Return sends
 /// the queue, also while the person types.
@@ -20,11 +20,11 @@ enum Shortcuts {
         case step(frames: Int)
         /// To the marker after the player's time, or the one before it.
         case marker(forward: Bool)
-        case startComment
-        /// Escape: drops the rectangle being drawn, or the comment box
+        case startMessage
+        /// Escape: drops the rectangle being drawn, or the popover
         /// when its text view lost the focus.
         case cancel
-        /// Cmd+Return: sends the queue, with the words in the comment box.
+        /// Cmd+Return: sends the queue, with the words in the popover.
         case send
     }
 
@@ -47,7 +47,7 @@ enum Shortcuts {
         case 47: return shift ? nil : .step(frames: 1) // period
         case 126: return shift ? nil : .marker(forward: false) // Up
         case 125: return shift ? nil : .marker(forward: true) // Down
-        case 8, 36, 76: return shift ? nil : .startComment // C, Return, Enter
+        case 8, 36, 76: return shift ? nil : .startMessage // C, Return, Enter
         case 53: return .cancel // Escape
         default: return nil
         }
@@ -77,7 +77,7 @@ enum Shortcuts {
         case .skip(let seconds): model.skip(by: seconds)
         case .step(let frames): model.step(frames: frames)
         case .marker(let forward): model.jumpToMarker(forward: forward)
-        case .startComment: model.startDraft()
+        case .startMessage: model.startDraft()
         // With nothing to cancel, Escape stays the window's.
         case .cancel: return model.escape()
         case .send: model.send()

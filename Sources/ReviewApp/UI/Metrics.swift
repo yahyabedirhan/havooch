@@ -2,11 +2,11 @@ import ReviewCore
 import SwiftUI
 
 /// One place for the window's measures, so the stage, the timeline and the
-/// rail line up. Colours are the theme's (`Palette`), never here.
+/// sidebar line up. Colours are the theme's (`Palette`), never here.
 enum Metrics {
-    /// The rail's width, and how far a person can resize it.
-    static let railWidth: CGFloat = 340
-    static let railWidthRange: ClosedRange<CGFloat> = 300...460
+    /// The sidebar's width, and how far a person can resize it.
+    static let sidebarWidth: CGFloat = 340
+    static let sidebarWidthRange: ClosedRange<CGFloat> = 300...460
     /// The space around the stage and beside the timeline.
     static let gutter: CGFloat = 12
     static let stageCorner: CGFloat = 12
@@ -15,8 +15,8 @@ enum Metrics {
     static let barHeight: CGFloat = 52
     /// The space between a bar's content and the window's edge.
     static let barPadding: CGFloat = 16
-    /// The side padding of a row in the rail, and of the rail's headers.
-    static let railPadding: CGFloat = 16
+    /// The side padding of a row in the sidebar, and of the sidebar's headers.
+    static let sidebarPadding: CGFloat = 16
 }
 
 /// How a message state shows besides its colour: a glyph and a name, so a
@@ -45,7 +45,7 @@ enum StateLook {
         }
     }
 
-    /// The state's name as the rail shows it.
+    /// The state's name as the sidebar shows it.
     static func name(_ state: MessageState) -> String {
         switch state {
         case .queued: "Queued"

@@ -452,8 +452,8 @@ struct SendDeliveryTests {
     }
 }
 
-@Suite("The rail's words")
-struct RailWordsTests {
+@Suite("The sidebar's words")
+struct SidebarWordsTests {
     @Test("the presence pill says Listening, Working or No listener, and its hover names the agent")
     func pill() {
         let listening = PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0)

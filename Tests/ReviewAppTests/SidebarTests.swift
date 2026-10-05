@@ -149,14 +149,14 @@ struct SidebarTests {
     @Test("the sidebar's width stays within its limits, and the width a drag ends at is kept in settings.json for the next run")
     func width() async throws {
         defer { cleanUp() }
-        #expect(AppModel.sidebarWidth(kept: nil) == Metrics.railWidth)
+        #expect(AppModel.sidebarWidth(kept: nil) == Metrics.sidebarWidth)
         #expect(AppModel.sidebarWidth(kept: 380) == 380)
-        #expect(AppModel.sidebarWidth(kept: 10) == Metrics.railWidthRange.lowerBound)
-        #expect(AppModel.sidebarWidth(kept: 9000) == Metrics.railWidthRange.upperBound)
-        #expect(AppModel.sidebarWidth(kept: .infinity) == Metrics.railWidth)
+        #expect(AppModel.sidebarWidth(kept: 10) == Metrics.sidebarWidthRange.lowerBound)
+        #expect(AppModel.sidebarWidth(kept: 9000) == Metrics.sidebarWidthRange.upperBound)
+        #expect(AppModel.sidebarWidth(kept: .infinity) == Metrics.sidebarWidth)
 
         let model = try await model()
-        #expect(model.state().sidebar?.width == Double(Metrics.railWidth))
+        #expect(model.state().sidebar?.width == Double(Metrics.sidebarWidth))
         model.keepSidebarWidth(390.4)
         #expect(model.sidebarWidth == 390)
         #expect(model.state().sidebar?.width == 390)
@@ -169,7 +169,7 @@ struct SidebarTests {
 
         // A drag past a limit is kept at the limit.
         model.keepSidebarWidth(9000)
-        #expect(try Settings.load(layout).sidebarWidth == Double(Metrics.railWidthRange.upperBound))
+        #expect(try Settings.load(layout).sidebarWidth == Double(Metrics.sidebarWidthRange.upperBound))
     }
 
     @Test("thread expand expands a thread of the open video by its number or its id, prints it, and stays expanded when asked again")

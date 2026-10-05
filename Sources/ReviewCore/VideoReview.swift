@@ -147,7 +147,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     public mutating func write(
         text: String, at time: Double?, region: Region? = nil, to thread: ThreadID? = nil, now: Date
     ) throws(ReviewRefusal) -> Written {
-        let words = try Self.words(text)
+        let words = try Self.trimmed(text, or: .emptyText)
         var index: Int
         var started = false
         if let thread {
@@ -183,7 +183,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func edit(_ id: MessageID, text: String) throws(ReviewRefusal) -> Message {
         let (thread, index) = try queuedIndex(id)
-        threads[thread].messages[index].text = try Self.words(text)
+        threads[thread].messages[index].text = try Self.trimmed(text, or: .emptyText)
         return threads[thread].messages[index]
     }
 
@@ -242,7 +242,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     public mutating func answer(_ thread: ThreadID, text: String, now: Date) throws(ReviewRefusal) -> Message {
         let index = try threadIndex(thread)
         guard threads[index].openQuestion != nil else { throw .noQuestion(thread) }
-        let message = Message(id: nextID(.message), author: .person, kind: .answer, text: try Self.message(text), at: Self.kept(now))
+        let message = Message(id: nextID(.message), author: .person, kind: .answer, text: try Self.trimmed(text, or: .emptyMessage), at: Self.kept(now))
         threads[index].messages.append(message)
         return message
     }
@@ -292,7 +292,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func reply(on thread: ThreadID, text: String, now: Date) throws(ReviewRefusal) -> Message {
         let index = try answerableIndex(thread)
-        let message = Message(id: nextID(.message), author: .agent, kind: .message, text: try Self.message(text), at: Self.kept(now))
+        let message = Message(id: nextID(.message), author: .agent, kind: .message, text: try Self.trimmed(text, or: .emptyMessage), at: Self.kept(now))
         threads[index].messages.append(message)
         return message
     }
@@ -303,7 +303,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func ask(on thread: ThreadID, question: String, now: Date) throws(ReviewRefusal) -> Message {
         let index = try answerableIndex(thread)
-        let words = try Self.message(question)
+        let words = try Self.trimmed(question, or: .emptyMessage)
         guard threads[index].openQuestion == nil else { throw .questionOpen(thread) }
         let message = Message(id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now))
         threads[index].messages.append(message)
@@ -378,15 +378,10 @@ public struct VideoReview: Codable, Equatable, Sendable {
         return (thread, index)
     }
 
-    private static func message(_ text: String) throws(ReviewRefusal) -> String {
+    /// `text` without the space around it; `refusal` when nothing is left.
+    private static func trimmed(_ text: String, or refusal: ReviewRefusal) throws(ReviewRefusal) -> String {
         let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !words.isEmpty else { throw .emptyMessage }
-        return words
-    }
-
-    private static func words(_ text: String) throws(ReviewRefusal) -> String {
-        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !words.isEmpty else { throw .emptyText }
+        guard !words.isEmpty else { throw refusal }
         return words
     }
 }

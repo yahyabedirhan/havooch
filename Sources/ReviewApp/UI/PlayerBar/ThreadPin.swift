@@ -2,7 +2,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// One thread's pin on the timeline, as in proto-1: a small mark, a rounded
+/// One thread's pin on the timeline: a small mark, a rounded
 /// square when the thread has a region and a circle when it has none, in
 /// the colour of the thread's state. A queued thread is a ring; every later
 /// state fills the mark, and a state the agent set adds its glyph inside,

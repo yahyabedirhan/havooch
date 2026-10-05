@@ -1,6 +1,6 @@
 import AppKit
 
-/// A click in the window outside the stage while the comment popover is
+/// A click in the window outside the stage while the popover is
 /// open: the popover closes as a click outside it (D 1.4), and the click
 /// goes on to what it was on. A click on the stage is the stage's own: on
 /// the popover it's the popover's, on the frame `RegionOverlay` closes the

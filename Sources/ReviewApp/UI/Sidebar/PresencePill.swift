@@ -1,7 +1,7 @@
 import ReviewCore
 import SwiftUI
 
-/// The words of the footer's presence pill, as proto-3 says them: one word
+/// The words of the footer's presence pill: one word
 /// on the pill, and on hover who the agent is and what happens to a send
 /// made now.
 struct PresencePill: Equatable {
@@ -37,7 +37,7 @@ struct PresencePill: Equatable {
     }
 }
 
-/// proto-3's presence chip: a glyph and a word in a soft capsule of the
+/// The presence chip: a glyph and a word in a soft capsule of the
 /// presence's colour. The glyph pulses while the agent works, unless motion
 /// is reduced. Hover names the agent.
 struct PresenceChip: View {

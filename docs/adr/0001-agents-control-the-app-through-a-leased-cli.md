@@ -32,6 +32,19 @@ Shipyard's rules, unchanged:
 - `screenshot <abs.png> [--appearance light|dark]` captures only the app's own window through ScreenCaptureKit.
 - Accessibility and System Events stay closed to agents. The CLI is the only way in.
 
+## Beyond the spec
+
+The 0.1.0 build added these to the commands the spec names, so an agent can reach every state of the UI for a check or a screenshot:
+
+- `comment open [<text>] [--region x,y,w,h]` opens the popover at the player's frame, as C or a drawn rectangle does.
+- `thread open <thread> [--frame x,y,w,h]` opens a thread's popover on its frame, first kept at `--frame` when given.
+- `thread expand <thread>` expands a thread in the sidebar.
+- `screenshot --hide-agent-indicator` leaves the agent-control icon out; by default it shows, as the person sees it.
+- `theme set system` unpins the theme, so it follows the system appearance.
+- A thread is named by its id or by its bare number on the open video (`3`, `0` for General).
+- `wait` keeps reconnecting while the app is not running.
+- Exit code 2 means a timeout ran out (`wait --timeout`, `ask --wait`), with nothing printed.
+
 ## Modules
 
 The code splits by concern. The agent-side modules (command line, wire, lease, listener client) never link the app's rules, and build and test without the app. Only the app target is macOS UI code.

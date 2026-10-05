@@ -47,7 +47,7 @@ struct ThreadConversation: View {
                 }
                 field
             }
-            .padding(.horizontal, Metrics.railPadding)
+            .padding(.horizontal, Metrics.sidebarPadding)
             .padding(.top, 10)
             .padding(.bottom, 14)
         }
@@ -80,7 +80,7 @@ struct ThreadConversation: View {
                 StateChip(state: state)
             }
         }
-        .padding(.horizontal, Metrics.railPadding)
+        .padding(.horizontal, Metrics.sidebarPadding)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette[.sidebarSection])
@@ -97,7 +97,7 @@ struct ThreadConversation: View {
         Button {
             model.openThread(thread.id)
         } label: {
-            SidebarPicture(file: model.keyframe(of: thread), side: Metrics.railWidthRange.upperBound, corner: 8, shape: 16 / 9)
+            SidebarPicture(file: model.keyframe(of: thread), side: Metrics.sidebarWidthRange.upperBound, corner: 8, shape: 16 / 9)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
@@ -112,7 +112,7 @@ struct ThreadConversation: View {
     private var field: some View {
         let look = ThreadFieldLook(thread)
         return VStack(alignment: .trailing, spacing: 6) {
-            CommentField(text: $words, placeholder: look.placeholder, takesFocus: false, commit: write, cancel: { words = "" })
+            MessageField(text: $words, placeholder: look.placeholder, takesFocus: false, commit: write, cancel: { words = "" })
                 .frame(height: 48)
             HStack(spacing: 8) {
                 Text(look.hint)

@@ -17,8 +17,8 @@ import ReviewWire
 /// declared `Sendable`.
 nonisolated final class SocketListener: @unchecked Sendable {
     typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
-    typealias Written = @MainActor @Sendable (ControlServer.Answer) -> Void
-    typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
+    /// What becomes of a reply: it was written, or it couldn't be.
+    typealias Delivered = @MainActor @Sendable (ControlServer.Answer) -> Void
     typealias HungUp = @MainActor @Sendable (UUID) -> Void
 
     /// Why the socket couldn't be listened on.
@@ -33,8 +33,8 @@ nonisolated final class SocketListener: @unchecked Sendable {
     private let source: any DispatchSourceRead
     private let heartbeat: Duration
     private let respond: Respond
-    private let written: Written
-    private let undelivered: Undelivered
+    private let written: Delivered
+    private let undelivered: Delivered
     private let hungUp: HungUp
     private let quit: @MainActor @Sendable () -> Void
     private static let queue = DispatchQueue(label: "video-review.control", attributes: .concurrent)
@@ -43,8 +43,8 @@ nonisolated final class SocketListener: @unchecked Sendable {
     private static let connectionTimeout: TimeInterval = 5
 
     private init(
-        path: String, descriptor: Int32, heartbeat: Duration, respond: @escaping Respond, written: @escaping Written,
-        undelivered: @escaping Undelivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
+        path: String, descriptor: Int32, heartbeat: Duration, respond: @escaping Respond, written: @escaping Delivered,
+        undelivered: @escaping Delivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) {
         self.path = path
         self.heartbeat = heartbeat
@@ -68,8 +68,8 @@ nonisolated final class SocketListener: @unchecked Sendable {
     /// client gone while its request is held goes to `hungUp`; `quit` runs
     /// once a reply that says so is written.
     static func open(
-        at socket: URL, heartbeat: Duration = SocketListener.heartbeat, respond: @escaping Respond, written: @escaping Written,
-        undelivered: @escaping Undelivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
+        at socket: URL, heartbeat: Duration = SocketListener.heartbeat, respond: @escaping Respond, written: @escaping Delivered,
+        undelivered: @escaping Delivered, hungUp: @escaping HungUp, quit: @escaping @MainActor @Sendable () -> Void
     ) throws(Failure) -> SocketListener {
         let path = socket.path
         do {

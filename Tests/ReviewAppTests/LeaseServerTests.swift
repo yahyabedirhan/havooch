@@ -30,7 +30,7 @@ struct LeaseServerTests {
     let app = ControlServerTests.FakeApp()
     let screenshotter = ControlServerTests.FakeScreenshotter()
     let clock = Clock()
-    let indicator = LeaseIndicator()
+    let indicator = AgentControlIcon()
     /// A folder of its own for each test, short enough for a socket's path.
     let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
@@ -194,7 +194,7 @@ struct LeaseServerTests {
         #expect(server.lease.current(at: clock.now)?.holder == Self.agent)
     }
 
-    @Test("when the lease runs out with no request, the first waiting take gets it, and the banner shows the line, then the waiter")
+    @Test("when the lease runs out with no request, the first waiting take gets it, and the agent-control icon shows the line, then the waiter")
     func waiterGetsTheLeaseAtItsEnd() async throws {
         let server = server()
         _ = await server.reply(to: ControlRequest.playerPlay.sent(by: Self.agent))
@@ -346,17 +346,17 @@ struct LeaseServerTests {
         #expect(indicator.lease == ControlLease())
     }
 
-    // MARK: - The banner
+    // MARK: - The agent-control icon
 
-    @Test("the banner follows the lease: shown from the request that takes it, gone once it's settled at its end, with no request")
-    func bannerFollowsTheLease() async {
+    @Test("the agent-control icon follows the lease: shown from the request that takes it, gone once it's settled at its end, with no request")
+    func iconFollowsTheLease() async {
         let server = server()
         #expect(indicator.shown(at: clock.now) == nil)
 
         _ = await server.reply(to: ControlRequest.playerPlay.sent(by: Self.agent))
         move(to: 12.5)
         let shown = indicator.shown(at: clock.now)
-        // A capture that leaves the banner out hides a lease that's held, until the last one ends.
+        // A capture that leaves the agent-control icon out hides a lease that's held, until the last one ends.
         indicator.hideForCapture()
         indicator.hideForCapture()
         let hidden = indicator.shown(at: clock.now)
@@ -377,14 +377,14 @@ struct LeaseServerTests {
         #expect(indicator.shown(at: clock.now) == nil)
     }
 
-    @Test("the banner says who controls the app, where, the time left and how many wait")
-    func bannerWords() {
+    @Test("the agent-control icon says who controls the app, where, the time left and how many wait")
+    func agentControlWords() {
         func status(_ holder: Holder, left: Int, waiting: Int) -> ControlLease.Status {
             ControlLease.Status(holder: holder, taken: clock.now, ends: clock.now, secondsLeft: left, waiting: waiting)
         }
 
-        let short = LeaseBanner(status(Holder(key: "k", name: "Claude Code", place: "/Users/me/video-review"), left: 48, waiting: 0))
-        let long = LeaseBanner(status(Self.other, left: 245, waiting: 2))
+        let short = AgentControlWords(status(Holder(key: "k", name: "Claude Code", place: "/Users/me/video-review"), left: 48, waiting: 0))
+        let long = AgentControlWords(status(Self.other, left: 245, waiting: 2))
 
         #expect(short.title == "Claude Code controls \(Self.name)")
         #expect(short.detail == "video-review · 48s left")
@@ -394,7 +394,7 @@ struct LeaseServerTests {
     }
 
     @Test("a screenshot shows the agent-control indicator unless --hide-agent-indicator asks to leave it out")
-    func screenshotBanner() async {
+    func screenshotAgentControlIcon() async {
         let server = server()
         _ = await server.reply(to: ControlRequest.screenshot(path: "/tmp/a.png", appearance: nil).sent(by: Self.agent))
         _ = await server.reply(to: ControlRequest.screenshot(path: "/tmp/b.png", appearance: .dark, hideAgentIndicator: true).sent(by: Self.agent))
@@ -415,7 +415,7 @@ struct LeaseServerTests {
         #expect(quit == .init(reply: ControlReply(ok: true, output: "\(Self.name) quit\n", lease: term), quits: true))
 
         move(to: 25)
-        let indicator = LeaseIndicator()
+        let indicator = AgentControlIcon()
         let relaunched = ControlServer(
             socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: app, listeners: ControlServerTests.noListeners(),
             screenshotter: screenshotter,

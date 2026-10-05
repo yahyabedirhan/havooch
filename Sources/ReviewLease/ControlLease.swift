@@ -40,7 +40,7 @@ public struct ControlLease: Equatable, Sendable {
         case capped
         /// Its holder gave it up (`control release`).
         case released
-        /// The person took the app back (the banner's Stop).
+        /// The person took the app back (the agent-control icon's Stop).
         case stopped
     }
 

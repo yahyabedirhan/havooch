@@ -51,8 +51,8 @@ final class AppModel: AppControlling {
     private(set) var expanded: ThreadID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
-    /// Whether the rail is shown beside the stage.
-    var isRailVisible = true
+    /// Whether the sidebar is shown beside the stage.
+    var isSidebarVisible = true
     /// Whether the context popover is open.
     var isContextShown = false
     /// The open video's sidecar context file, as it was last read.
@@ -61,8 +61,6 @@ final class AppModel: AppControlling {
     var problem: Problem?
     /// What the agent just said, shown on the stage: the newest last.
     private(set) var notices: [Notice] = []
-    /// The threads with an agent message the person hasn't looked at.
-    private(set) var unread: Set<ThreadID> = []
 
     /// The stage in the window, from its top-left corner, as it was last
     /// laid out. A click on the stage closes the popover by the stage's own
@@ -157,7 +155,6 @@ final class AppModel: AppControlling {
         isDrawingRegion = false
         // They point at threads of the video that was open.
         notices = []
-        unread = []
         isContextShown = false
         sidecar = ContextReader.sidecar(beside: url)
         let frameRate = 1 / engine.frameDuration
@@ -370,8 +367,6 @@ final class AppModel: AppControlling {
         let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.answer(id, text: text, now: Date()) }
         let report = StateReport.Message(message, contentHash: hash, layout: layout)
         listeners.answered(id, with: report)
-        // Whoever answers has read the thread.
-        unread.remove(id)
         notices.removeAll { $0.thread == id && $0.kind == .question }
         return (report, id.number)
     }
@@ -470,15 +465,13 @@ final class AppModel: AppControlling {
 
     /// The keyframe PNG of `thread` on the open video; nil for General.
     func keyframe(of thread: ReviewThread) -> URL? {
-        guard !thread.isGeneral, let video else { return nil }
-        return layout.keyframe(thread.id, of: video.contentHash)
+        video.flatMap { layout.keyframe(of: thread, on: $0.contentHash) }
     }
 
     /// The PNG of `message`'s region on the open video; nil for a message
     /// on the whole frame.
     func crop(of message: Message) -> URL? {
-        guard message.region != nil, let video else { return nil }
-        return layout.crop(message.id, of: video.contentHash)
+        video.flatMap { layout.crop(of: message, on: $0.contentHash) }
     }
 
     /// The threads on the frame on screen, paused or playing: each one's
@@ -713,7 +706,6 @@ final class AppModel: AppControlling {
         selection = id
         // The sidebar shows the same conversation as the popover (L33).
         expanded = id
-        unread.remove(id)
         engine.pause()
         if draft?.time != time {
             closePopover(.momentChanged)
@@ -776,8 +768,6 @@ final class AppModel: AppControlling {
         guard let thread = desk.review?.thread(id) else { return }
         selection = id
         expanded = id
-        // Its conversation shows: the person sees what the agent said.
-        unread.remove(id)
         engine.pause()
         // A move to the thread's frame is a change of the moment.
         if let time = thread.time { move(to: time) }
@@ -796,7 +786,6 @@ final class AppModel: AppControlling {
         } else {
             expanded = id
             selection = id
-            unread.remove(id)
         }
     }
 
@@ -832,10 +821,10 @@ final class AppModel: AppControlling {
     /// default.
     var sidebarWidth: CGFloat { Self.sidebarWidth(kept: themes.settings.sidebarWidth) }
 
-    /// `kept` inside `Metrics.railWidthRange`; the default with none.
+    /// `kept` inside `Metrics.sidebarWidthRange`; the default with none.
     static func sidebarWidth(kept: Double?) -> CGFloat {
-        guard let kept, kept.isFinite else { return Metrics.railWidth }
-        let range = Metrics.railWidthRange
+        guard let kept, kept.isFinite else { return Metrics.sidebarWidth }
+        let range = Metrics.sidebarWidthRange
         return min(max(CGFloat(kept), range.lowerBound), range.upperBound)
     }
 
@@ -868,12 +857,10 @@ final class AppModel: AppControlling {
     /// listener's, or "Agent" before anyone listened.
     var agentName: String { listeners.outbox.session?.name ?? "Agent" }
 
-    /// The agent said something: a notice goes up on the stage, and the
-    /// thread it's on is marked until the person looks at it. Every notice
-    /// goes by itself; a question stays open on its thread.
+    /// The agent said something: a notice goes up on the stage. Every
+    /// notice goes by itself; a question stays open on its thread.
     func raise(_ notice: Notice) {
         notices.append(notice)
-        if notice.thread != selection || !isRailVisible { unread.insert(notice.thread) }
         let expires = notice.expires
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(expires.timeIntervalSinceNow, 0)))
@@ -894,7 +881,7 @@ final class AppModel: AppControlling {
         dismiss(id)
         // General has no frame: its conversation is in the sidebar (L18).
         if notice.thread.number == 0 {
-            isRailVisible = true
+            isSidebarVisible = true
             expanded = notice.thread
         } else {
             openThread(notice.thread)

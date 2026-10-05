@@ -18,11 +18,11 @@ struct TranscriptChip: Equatable {
         case "voiceover":
             title = "Voiceover transcript"
             symbol = "captions.bubble"
-            help = "The agent gets the narration around each comment, from voiceover.json (\(count))"
+            help = "The agent gets the narration around each message, from voiceover.json (\(count))"
         case "subtitles":
             title = "Subtitle transcript"
             symbol = "captions.bubble"
-            help = "The agent gets the subtitles around each comment, from the video's subtitle file (\(count))"
+            help = "The agent gets the subtitles around each message, from the video's subtitle file (\(count))"
         default:
             if let problem = transcript.problem {
                 title = transcript.lines == 0 ? "No transcript" : "Transcript stopped"
@@ -31,16 +31,16 @@ struct TranscriptChip: Equatable {
             } else if !transcript.complete {
                 title = transcript.lines == 0 ? "Transcribing…" : "Transcribing… \(count)"
                 symbol = "waveform"
-                help = "This Mac is transcribing the video's speech. A comment sent now gets the lines that are ready."
+                help = "This Mac is transcribing the video's speech. A message sent now gets the lines that are ready."
                 isWorking = true
             } else if transcript.lines == 0 {
                 title = "No speech"
                 symbol = "waveform.slash"
-                help = "This Mac found no speech in the video, so comments go without a transcript"
+                help = "This Mac found no speech in the video, so messages go without a transcript"
             } else {
                 title = "Speech transcript"
                 symbol = "waveform"
-                help = "The agent gets the speech around each comment, transcribed on this Mac (\(count))"
+                help = "The agent gets the speech around each message, transcribed on this Mac (\(count))"
             }
         }
     }

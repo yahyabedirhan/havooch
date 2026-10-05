@@ -231,7 +231,7 @@ struct MessageTests {
         #expect(FileManager.default.fileExists(atPath: try #require(early.thread.keyframePath)))
 
         // The last message of #1 (at 15 s) goes, and the thread with it.
-        try model.deleteMessage(late.message.id)
+        _ = try model.deleteMessage(late.message.id)
         #expect(model.state().threads.map(\.number) == [0, 2])
         #expect(!FileManager.default.fileExists(atPath: try #require(late.thread.keyframePath)))
         // Its number isn't given again.
@@ -244,7 +244,7 @@ struct MessageTests {
         let model = try await model()
         let first = try await model.addMessage(text: "first", at: 2)
         let second = try await model.addMessage(text: "second", at: 15)
-        try await model.addMessage(text: "general", at: nil, thread: "0")
+        _ = try await model.addMessage(text: "general", at: nil, thread: "0")
         let firstID = try #require(ItemID(first.thread.id))
 
         model.select(firstID)

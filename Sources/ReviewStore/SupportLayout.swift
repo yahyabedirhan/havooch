@@ -59,6 +59,18 @@ public struct SupportLayout: Equatable, Sendable {
         folder(contentHash).appendingPathComponent("crops", isDirectory: true).appendingPathComponent("\(message.text).png")
     }
 
+    /// The keyframe of `thread` on the video with `contentHash`; nil for
+    /// General, which has no frame.
+    public func keyframe(of thread: ReviewThread, on contentHash: String) -> URL? {
+        thread.isGeneral ? nil : keyframe(thread.id, of: contentHash)
+    }
+
+    /// The crop of `message` on the video with `contentHash`; nil for a
+    /// message on the whole frame: only a region message has a crop.
+    public func crop(of message: Message, on contentHash: String) -> URL? {
+        message.region == nil ? nil : crop(message.id, of: contentHash)
+    }
+
     /// Where an image is written before the message it's for has its id:
     /// beside the keyframes, named by `token`, and renamed to its own path
     /// once the message is in the review.

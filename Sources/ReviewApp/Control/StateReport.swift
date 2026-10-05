@@ -87,7 +87,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             number = thread.number
             time = thread.time
             state = thread.state?.rawValue
-            keyframePath = thread.isGeneral ? nil : layout.keyframe(thread.id, of: contentHash).path
+            keyframePath = layout.keyframe(of: thread, on: contentHash)?.path
             popoverFrame = thread.popoverFrame
             messages = thread.messages.map { Message($0, contentHash: contentHash, layout: layout) }
         }
@@ -138,7 +138,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             at = message.at
             state = message.state?.rawValue
             region = message.region
-            cropPath = message.region.map { _ in layout.crop(message.id, of: contentHash).path }
+            cropPath = layout.crop(of: message, on: contentHash)?.path
             sendId = message.sendID?.text
         }
     }

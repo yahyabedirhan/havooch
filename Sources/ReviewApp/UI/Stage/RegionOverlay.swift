@@ -5,7 +5,7 @@ import SwiftUI
 /// pauses, or closes an open popover as a click outside it. A drag draws a
 /// rectangle, as Cmd+Shift+4 does, with no drawing mode: the video pauses,
 /// the rectangle shows its size in the frame's pixels while it's drawn
-/// (D 2.4), and letting go opens the comment popover beside it. The layer
+/// (D 2.4), and letting go opens the popover beside it. The layer
 /// also shows the region of the message in the popover.
 struct RegionOverlay: View {
     let model: AppModel
