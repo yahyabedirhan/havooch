@@ -8,16 +8,19 @@ struct NoticeStack: View {
     let notices: [Notice]
     let open: (Notice) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             ForEach(notices.suffix(Notice.shown)) { notice in
                 NoticeToast(notice: notice)
                     .onTapGesture { open(notice) }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    // With reduced motion a notice fades in and out in place.
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
         .padding(Theme.edge)
-        .animation(.easeOut(duration: 0.2), value: notices)
+        .animation(.spring(duration: 0.35, bounce: 0), value: notices)
     }
 }
 
@@ -41,9 +44,10 @@ private struct NoticeToast: View {
         .frame(width: 280, alignment: .leading)
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.cardCorner))
         .overlay(RoundedRectangle(cornerRadius: Theme.cardCorner).strokeBorder(.separator, lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
         .contentShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
         .help(notice.commentID == nil ? "A message for the full batch" : "Show this comment")
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 }

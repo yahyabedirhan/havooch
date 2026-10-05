@@ -11,6 +11,8 @@ struct Stage: View {
     /// The comment box's size as laid out, for placing it beside a region.
     @State private var box = CGSize(width: Composer.regionWidth, height: 180)
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         GeometryReader { proxy in
             let fit = FrameFit(video: model.video?.size ?? .zero, stage: proxy.size)
@@ -29,18 +31,45 @@ struct Stage: View {
                     // A new draft is a new box: empty, and focused again.
                     .id(draft)
                     if let region = comment.region {
+                        let rect = fit.rect(for: region)
+                        let centre = ComposerPlacement.centre(of: box, beside: rect, in: proxy.size)
                         composer
+                            .transition(appearing(from: Self.anchor(of: box, at: centre, beside: rect)))
                             .onGeometryChange(for: CGSize.self) { $0.size } action: { box = $0 }
-                            .position(ComposerPlacement.centre(of: box, beside: fit.rect(for: region), in: proxy.size))
+                            .position(centre)
                     } else {
-                        composer.padding(Theme.edge)
+                        composer
+                            .transition(appearing(from: .bottom))
+                            .padding(Theme.edge)
                     }
                 }
             }
+            .animation(.spring(duration: 0.25, bounce: 0), value: model.composing)
             .overlay(alignment: .topTrailing) {
                 NoticeStack(notices: model.notices) { model.openNotice($0) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// How the comment box comes and goes: a slight grow from the side it
+    /// opens from, or only a fade with reduced motion.
+    private func appearing(from anchor: UnitPoint) -> AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97, anchor: anchor))
+    }
+
+    /// The side of a box centred at `centre` that faces `rect`: its leading
+    /// edge when it stands right of the rectangle, its trailing edge when
+    /// left of it, its top when below it, else its bottom.
+    private static func anchor(of box: CGSize, at centre: CGPoint, beside rect: CGRect) -> UnitPoint {
+        if centre.x - box.width / 2 >= rect.maxX {
+            .leading
+        } else if centre.x + box.width / 2 <= rect.minX {
+            .trailing
+        } else if centre.y - box.height / 2 >= rect.maxY {
+            .top
+        } else {
+            .bottom
+        }
     }
 }

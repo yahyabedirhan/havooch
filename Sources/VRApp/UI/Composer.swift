@@ -79,7 +79,7 @@ struct Composer: View {
         .frame(maxWidth: isOnRegion ? Self.regionWidth : 480)
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.cardCorner + 2))
         .overlay(RoundedRectangle(cornerRadius: Theme.cardCorner + 2).strokeBorder(Color(nsColor: .separatorColor)))
-        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
         .onAppear { isFocused = true }
     }
 }
