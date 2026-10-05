@@ -643,7 +643,8 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 ```text
 on a send     `ack <send-id> "<line>"`, then a new background `wait`
 per thread    read the keyframe, the crops, the transcript, history[] and the context
-per message   `status working` → the work → one commit when files changed → `reply <thread-id>` with the short SHA → `status done`
+per message   `status working` → the work → one commit when files changed, its body ending `Video-Review-Message: <message-id>`
+              → `reply <thread-id>` with the short SHA → `status done`
               cannot be done: `reply <thread-id>` with the reason → `status failed`
 unclear       `ask <thread-id>` in the background; the next thread goes on
 whole send    `reply t-<hash8>-0` (General) with one line
