@@ -191,6 +191,8 @@ app side:     VRApp ──▶ VRWire, VRLease          (the socket's server side
 
 Agent-side modules (`VRLease`, `VRWire`, `VRCommand`) never import an app-side module. `VRCommand` is a library and `VRCLI` is a thin executable so the command table tests without a process, as in Shipyard. `VRCommand` imports AppKit only for `NSWorkspace` (to launch the app); it has no UI code.
 
+On Linux, `VRLease`, `VRWire`, `VRCommand`, `VRCLI`, `VRReview` and `VRTranscript` build, and their tests pass: the Darwin-only calls sit behind `#if canImport(Darwin)`, with Glibc's socket calls beside them, the process table finds no process and the launcher refuses with `launching the app needs macOS`. `VRStore` (CryptoKit) and `VRApp` are macOS only. `swift test` in this package builds every test target, so on Linux the agent-side tests run from a package that names only those targets.
+
 Test targets, all run by `make test` without the app:
 
 | Target | Tests |
@@ -201,7 +203,7 @@ Test targets, all run by `make test` without the app:
 | `VRReviewTests` | the state machine, batch assembly, the outbox (delivery, requeue, presence, context once, an app restart), the payload's JSON, the threads (ack, each status, replies, questions and answers, the answer no `ask` heard yet, owed to the same question and not to another) |
 | `VRTranscriptTests` | the window cut, the source order, `voiceover.json` scene times, `.srt` and `.vtt` parsing, against `fixtures/sample/` |
 | `VRStoreTests` | in a temporary folder: a review and the outbox's parcels saved and read back, a draft not kept, the index's id → video lookup, images of no comment removed, two libraries sharing nothing; the content hash of a renamed copy, id counters, the transcript cache, the last open video |
-| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and moves (`FakeClock`, which is also the app's `Later`, so no test waits for real seconds) and a temporary library: lease gate, takes in line, a take's wait and the lease running out, Stop, the banner's words, dispatch, comments, a parked `wait` and its time running out, the listener's answers (`ack`, `status`, `reply`), a parked `ask` answered by `thread answer` and by the answer box's model call, a new question not answered by an old answer, notices and their going, the sidebar's rows; the context (`ContextTests`): the sidecar found beside the video and its fallback, the note set, cleared and kept per video, the context in the payload once per listener session and again when the sidecar or the note changed, `context` in `state`, the toolbar button's tooltip; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`); the transcript in the payload and in `state` with a recognizer the test holds back (`TranscriptTests`): the fixture's voiceover, a copy with only the `.srt`, a copy with no sidecar sent before and after speech is ready, the cache, a failure; an app started again on the same library (`PersistenceTests`): the same `state` after a restart with no `player open` (the last open video is open again, paused at 0), a last video that is gone or changed (no video, no error), a renamed copy, each change on disk before its command answers, a pending and a taken batch delivered after a restart, an answer still owed, an open question, a parcel a crash left, a review that can't be read |
+| `VRAppTests` | `ControlServer.reply(to:)` with a fake player, a fake frame grabber, a clock the test sets and moves (`FakeClock`, which is also the app's `Later`, so no test waits for real seconds) and a temporary library: lease gate, takes in line, a take's wait and the lease running out, Stop, the lease button's words, the person's scrub (`ScrubTests`: one seek on its way, the latest target, pause and play around a drag), dispatch, comments, a parked `wait` and its time running out, the listener's answers (`ack`, `status`, `reply`), a parked `ask` answered by `thread answer` and by the answer box's model call, a new question not answered by an old answer, notices and their going, the sidebar's rows; the context (`ContextTests`): the sidecar found beside the video and its fallback, the note set, cleared and kept per video, the context in the payload once per listener session and again when the sidecar or the note changed, `context` in `state`, the toolbar button's tooltip; the command against the server over a real socket; `FrameGrabber` (keyframes and crops) against `fixtures/sample/sample.mp4`; the key routing; the region's geometry without a window: `FrameFit` at several stage sizes, a drag to a region, which regions show (`RegionMark`), where the comment box goes (`ComposerPlacement`); the transcript in the payload and in `state` with a recognizer the test holds back (`TranscriptTests`): the fixture's voiceover, a copy with only the `.srt`, a copy with no sidecar sent before and after speech is ready, the cache, a failure; an app started again on the same library (`PersistenceTests`): the same `state` after a restart with no `player open` (the last open video is open again, paused at 0), a last video that is gone or changed (no video, no error), a renamed copy, each change on disk before its command answers, a pending and a taken batch delivered after a restart, an answer still owed, an open question, a parcel a crash left, a review that can't be read |
 
 The tests that wait for work they can't await (a task a gesture started, a frame written off the main actor, a command on a real socket) share one helper, `settle(until:)` in `Tests/VRAppTests/Settle.swift`. It looks every millisecond and records an issue at the caller's line after 5 seconds, so a wait that timed out never passes as one that settled. Nothing else in the tests sleeps.
 
@@ -272,7 +274,7 @@ Sources/
     TranscriptCache.swift           a video's speech transcript on disk
     JSONFile.swift                  atomic read and write of one Codable file
   VRApp/
-    VideoReviewApp.swift            @main, the window scene with the lease banner over it, the menu commands
+    VideoReviewApp.swift            @main, the window scene, the menu commands
     AppServices.swift               composition root: reads the environment, builds and wires everything
     ReviewModel.swift               the orchestrator the views and the desks call
     Notice.swift                    a brief notice of one agent message, shown over the stage
@@ -295,26 +297,26 @@ Sources/
       OperatorDesk.swift            operator requests → ReviewModel calls → reply text
       ListenerDesk.swift            listener requests: ack, status, reply; parked wait and ask connections
       StateReport.swift             app status and state as text and JSON
-      LeaseIndicator.swift          the lease as the banner reads it, and the banner's words
+      LeaseIndicator.swift          the lease as the toolbar's button reads it, and its words (Summary)
       Screenshotter.swift           the window as a PNG (PNGFile) through ScreenCaptureKit, in an appearance
     UI/
-      MainWindow.swift              stage and sidebar laid out
+      MainWindow.swift              stage and sidebar laid out; the toolbar: the context button and the lease button
       EmptyState.swift              no video open: drop, open, the demo folder's videos
       Stage.swift                   the video, the overlay, the composer, the notices
       RegionOverlay.swift           drawing and showing rectangles in frame coordinates: FrameFit (the frame inside the stage), RegionMark (which regions show), ComposerPlacement (the box beside a region), the overlay view
       Composer.swift                the comment box
-      TransportBar.swift            play, time, the timeline
-      Timeline.swift                the scrubber track and the marker pins
+      TransportBar.swift            back and forward 5 s, play, time, the timeline, the comment button
+      Timeline.swift                the scrubber track (1:1 while dragged) and the marker pins
       Sidebar.swift                 batch cards and comment cards in time order (Sidebar.rows)
       CommentCard.swift             one comment: time, status, text, thumbnail, thread, answer box
       BatchCard.swift               one batch: its header, where it is (BatchCard.Progress) and its thread
       ThreadView.swift              a thread's messages inside a card; AnswerBox, the box under an open question
       NoticeToast.swift             the notices of agent messages at the stage's top right
       SendBar.swift                 queued count, Send, the presence chip
-      LeaseBanner.swift             who controls the app, time left, Stop
+      LeaseButton.swift             the toolbar's sign of the lease; its popover: who controls the app, time left, Stop
       ContextPopover.swift          ContextButton (the toolbar's button and its tooltip) and the popover: the sidecar's text and the editable note
       Shortcuts.swift               the player's keys (PlayerKey, Escape among them), Cmd+Enter (SendKey) and where the focus is (KeyFocus): given up in a panel, under a sheet and while a text view has focus
-      Theme.swift                   state colours and glyphs, spacing, fonts
+      Theme.swift                   state colours (soft hues, `Theme.soft`) and glyphs, spacing, fonts, the footer height
 Tests/
   VRLeaseTests/  VRWireTests/  VRCommandTests/  VRReviewTests/
   VRTranscriptTests/  VRStoreTests/  VRAppTests/
@@ -658,7 +660,8 @@ The video's length has one source, `VideoFile.info.duration` (the asset's, round
 | Gesture | From | Ends in |
 |---|---|---|
 | `openByPerson` | Cmd+O, a drop, the Finder, the demo list | `open`; a refusal lands in `openFailure` for the window's alert |
-| `togglePlay`, `scrub`, `skip`, `step` | the player's keys, the transport bar, the timeline | `play`, `pause`, `seek` |
+| `togglePlay`, `scrub`, `skip`, `step` | the player's keys, the transport bar, the timeline | `play`, `pause`, `seek`; `scrub` keeps one seek on its way and the latest target, and `shownTime` is that target until it lands; `skip` and `step` count from `shownTime` |
+| `beginScrub`, `endScrub` | a drag on the timeline starts and ends | `pause` if it played; `play` again once the last seek has landed |
 | `beginDrawing` | a drag on the frame starts | `pause`; false while the comment box is open or no video is |
 | `compose` | C, the comment button, a drag's end (with its region) | `beginComment`; the comment box opens |
 | `commitComposer`, `cancelComposer` | Enter and Escape in the comment box | `commitComment`, `discardComment` |
@@ -833,7 +836,7 @@ VRApp/Control/SocketListener.serve       reads the request to its end
   ├ ControlMessage.decode                version 1 = 1, holder present
   ├ request.role == .operator
   │ └ lease.use(by: holder, at: now)     free → Term(ends: now + 60) + [.started]
-  │   └ LeaseIndicator                   the banner appears
+  │   └ LeaseIndicator                   the toolbar's lease button appears
   └ OperatorDesk.seek(10)
     └ ReviewModel.seek(to: 10)           video open? 0 ≤ 10 ≤ duration?
       └ PlayerController.seek(to: 10)    AVPlayer.seek, zero tolerance, awaited
@@ -1030,12 +1033,12 @@ control.take:    lease.take(by: holder, at: now, waitingUntil: now + wait)
 control.release: lease.release(by: holder, at: now)
 
 every change of the lease (leaseChanged):
-    LeaseIndicator.lease = lease                          // the banner redraws
+    LeaseIndicator.lease = lease                          // the toolbar's lease button redraws
     a parked take whose holder now has the lease → answered "you hold video-review until …"
     a timer for lease.nextEnd(after: now) → lease.settle(at: now)
 ```
 
-The banner's Stop calls `ControlServer.stopLease`, which calls `lease.stop(at:)`: the lease ends, its holder is barred for 5 min, and the first waiter gets it. Stop is the person's only way into the lease and has no CLI command, since it is the person's override of agents. The timer's `settle` makes the banner go and hands the lease to the next waiter with no request. `LeaseBanner` also redraws each second from the lease's value and the time, so the countdown ticks and the strip goes at the end by itself.
+The lease popover's Stop calls `ControlServer.stopLease`, which calls `lease.stop(at:)`: the lease ends, its holder is barred for 5 min, and the first waiter gets it. Stop is the person's only way into the lease and has no CLI command, since it is the person's override of agents. The timer's `settle` makes the button go and hands the lease to the next waiter with no request. `LeaseButton` also redraws each second from the lease's value and the time, so the countdown ticks and the glyph goes at the end by itself.
 
 `app status` and `state` are free: any holder gets them, they renew nothing, and they report `lease.status(at: now)`.
 
@@ -1129,7 +1132,7 @@ the review                   the open one when this video is open already, else 
                              its video's path and title are the file's; a history whose file moved is saved again
 Library.removeImages         the PNGs of no comment of the review: what a draft left at a quit
 findImages                   the comments whose keyframe and crop are on disk
-Library.keep(lastVideo:)     its path and content hash, for the next launch; a failure is one line on standard error
+Library.keep(lastVideo:)     its path and content hash, for the next launch; a failure is one line on standard error and in the unified log (`os.Logger`)
 TranscriptService.start      in the background
 ```
 
@@ -1156,7 +1159,7 @@ reopening = Task: VideoFile.read(last.path)    no file, or one the player can't 
 
 - The `wait` that took a batch ended with the app that held it, so the batch is given again to the next `wait`, also one of the same listener session. `arrive` alone would not do that: it requeues only what another session took.
 - A parcel of a finished or a missing batch is what a crash between two writes left (a status and the outbox, or the outbox and a send).
-- An outbox that can't be read starts empty, with a line on standard error. A review that can't be read keeps its parcel.
+- An outbox that can't be read starts empty, with a line on standard error and in the unified log. A review that can't be read keeps its parcel.
 - The video that was open last is open again after a launch, so the window and `state` show its comments, threads and statuses with no `player open`. `ControlServer.reply(to:)` awaits the reopening (`ReviewModel.launched()`) before it answers any request, so the first `state` after `app open` already has the review. The player is paused at 0: where the playhead was is not kept, since a review is about its comments and each one seeks to its own moment.
 - A last video whose file is gone, can't be played or has other content (its hash differs) is not opened. The app starts with no video and says nothing: no alert, nothing in `openFailure`. `last-video.json` stays as it is until another video is opened, so a file on a disk that comes back is opened at the next launch. The history is not lost either way: it is kept by content hash, and shows when the video is opened from wherever it is now.
 - A video the person opens while the reopening still reads its file stays: the reopening gives way.
@@ -1270,32 +1273,35 @@ The CLI contract, the payload and the item states are the spec's. Everything bel
 | Escape also cancels the open comment box when the focus is on the player, not in the box. With no box open, Escape is left to the window. | A click on the stage takes the focus out of the box; Escape must still cancel the region. |
 | Cmd+Enter sends from anywhere, also from inside the comment box (it queues the open comment first). | One keystroke delivers the feedback, as the spec asks, with no need to leave the box. |
 | Player keys are ignored while a text view has focus. | Typing "k" in a comment must not pause the video. |
-| The transport bar has a comment button beside the video's length. | The same action as C, for the mouse. |
+| The transport bar has back and forward 5 s buttons around play, and a labelled Comment button beside the video's length. | The same actions as ←, → and C, for the mouse, and the main action named in words. |
+| A drag on the track moves the thumb 1:1 with the pointer, pauses a playing video and plays it again at the end. The track thickens under the pointer and the thumb grows while held. | The scrubber answers the hand at once, as QuickTime's does. |
+| The transport bar and the send bar are one height, `Theme.footerHeight`; the send bar's note goes above it. | The two footers line up as one band along the window's bottom. |
 | Markers are pins above the scrubber track. A click seeks, pauses and selects the comment's card. | Pins do not hide the played part of the track. The card and the frame show together. |
-| A pin is its comment's state glyph in the state's colour, the one on its card: a grey ring while queued, a blue arrow once sent. The selected pin is larger, with an accent ring. | A marker shows its status without a hover, and not by colour alone. |
+| A pin is a button, its comment's state glyph in the state's colour, the one on its card: a grey ring while queued, a blue arrow once sent. It takes clicks in 22 points and gives a little under a press. The selected pin is larger, with no ring. | A marker shows its status without a hover, and not by colour alone. |
 | While the agent's question on a comment is open, its pin is an orange question mark instead of its state. | The one pin the person has to act on stands out on the timeline; the state is still on the card. |
 | The comment box and its text field are opaque, in the window's and the text field's own colours, with a hairline edge. | Over the black stage a material goes grey in light appearance, and the text and the hint on it go faint. |
 | A click on a card does what a click on its marker does. | One way to see a comment's moment, from either place. |
 | A draft has no marker and no card; the open comment box stands for it. | A marker is feedback that exists. The draft still shows in `state --json`, so an operator sees the box is open. |
 | A queued card has an edit and a delete button. Edit turns the card's text into a text box with Save and Cancel. Delete asks nothing. | The fix happens where the mistake shows. A queued comment is cheap to write again. |
-| Each state has a colour and a glyph: queued (grey ring), sent (blue arrow), acknowledged (blue check), working (orange dots, pulsing), done (green check), failed (red cross). | Status reads at a glance and does not depend on colour alone. |
+| Each state has a colour and a glyph: queued (grey ring), sent (blue arrow), acknowledged (blue check), working (orange dots, pulsing), done (green check), failed (red cross). The colours are soft, mixed toward grey (`Theme.soft`); only failed is fully red. Pulses, fades and springs stop or become fades with Reduce Motion. | Status reads at a glance and does not depend on colour alone, and no state is the loudest thing on screen. |
+| A selected card has a soft accent fill; only a card with an open question has an edge. | The sidebar is segmented by fills, not outlines; an edge is kept for the one card that asks for action. |
 | A region comment's rectangle shows on the frame only while its card is selected or the playhead is within 0.5 s of it. | The frame stays clean while watching. |
 | The sidebar lists comments in time order, with the keyframe (or crop) as a thumbnail. | Time order matches the timeline. The thumbnail shows what the comment is about. |
 | A thread shows inside its comment's card, under a divider: each message with a glyph and a word for who wrote it and what it is (`Agent`, `Agent asks`, `You answered`). | Answers stay next to the feedback. Author and kind read without colour. |
-| An open question turns the card's edge orange and shows an answer box in it: one text field and an Answer button. Return answers, and the field grows to four lines. | A waiting agent is hard to miss, and the answer is one line and a key away. |
-| A batch shows as a header card above its comments' first one: its id, its comment count, where it is (`Waiting for a listener`, `With the agent`, `Finished`) and its own thread. It is outlined, not filled, and can't be selected. | The spec's message for the full batch needs a place that is not one comment, and the header must not read as one more comment. |
+| An open question turns the card's edge soft orange and shows an answer box in it: one text field and an Answer button. Return answers, and the field grows to four lines. | A waiting agent is hard to miss, and the answer is one line and a key away. |
+| A batch shows as a quiet section header above its comments' first one: its id, its comment count, where it is (`Waiting for a listener`, `With the agent`, `Finished`) and its own thread. It has no fill and no outline, and can't be selected. | The spec's message for the full batch needs a place that is not one comment, and the header must not read as one more comment. |
 | An agent message raises a toast at the top right of the stage for 5 s: `Agent · 0:10`, `Agent asks · 0:10` or `Agent · batch b1` over up to three lines of the text. At most three show, the newest. A click shows its comment (pause, seek, select) and dismisses it. | Seen while watching, gone without a click, and it never pauses the video. |
 | An `ack` without a text and a status change raise no toast. | They are not messages: the pins and cards show them. A toast per status would be noise while watching. |
 | The toast is opaque, in the window's background colour with a hairline edge and a shadow. | Over the black stage a material goes grey, as for the comment box. |
 | The send bar at the bottom of the sidebar shows the queued count, the Send button and the presence chip (`No listener`, `Listening`, `Working`). | The person sees whether the batch will reach someone at the moment of sending. |
 | Sending with no listener is allowed; the bar then says the batch waits for the next listener. | The spec's story 15. No dialog in the way. |
-| The presence chip is a word with a glyph in a tinted capsule: grey `No listener`, green `Listening`, orange `Working`. | Read at a glance beside the Send button, and not by colour alone. |
+| The presence chip is a word with a glyph in a tinted capsule: grey `No listener`, soft green `Listening`, soft orange `Working`. | Read at a glance beside the Send button, and not by colour alone. |
 | A send that is refused (nothing queued) says why in red under the send bar, until a comment is queued or a send works. | The reason shows where the person pressed, with no dialog. |
 | Cmd+Enter has no menu item; it is watched for beside the player's keys, and ignored in a panel or under a sheet. | It must work while the comment box has the focus, which a player's key never does. |
 | The sidebar's header counts the comments; the queued count is in the send bar. | The number beside Send is the number Send sends. |
-| The lease banner is a one-line strip under the title bar, over whatever the window shows (the empty state too): "Claude Code controls this app", the place (a folder's last component), the time left, how many wait, Stop. It is tinted orange. | Always visible while an agent drives, and it takes one line. |
-| Stop is a button in the banner only: no menu item, no key, no CLI command. A stopped agent is told to ask the person; nothing in the window lists it. | Stop is the person's override, so an agent can't reach it. A bar ends by itself after 5 min. |
-| Screenshots show the window as it is, banner included. | A screenshot is evidence of what the person sees. The contract has no flag to hide it. |
+| While an agent holds the lease, a terminal glyph in soft orange is the toolbar's last item, at the window's top right, whatever the window shows (the empty state too). Its tooltip is "Claude Code controls this app · shop · 4m 05s". A click opens a popover: who controls the app, where it runs, the time left, how many wait, Stop. | Visible while an agent drives, and it takes no room from the video or the comments. The maintainer found the strip too large for what it says. |
+| Stop is a button in the lease popover only: no menu item, no key, no CLI command. A stopped agent is told to ask the person; nothing in the window lists it. | Stop is the person's override, so an agent can't reach it. A bar ends by itself after 5 min. |
+| Screenshots show the window as it is, the lease button included. | A screenshot is evidence of what the person sees. The contract has no flag to hide it. |
 | The context note is a popover from a toolbar button, with the sidecar's text above it, read-only. | Context is set once per video, so it should not take sidebar space. |
 | The context button's glyph is filled when the video has a sidecar or a note, and its tooltip names them. | Whether the agent gets a context shows without opening the popover. |
 | The popover keeps the note when it closes, not on every key. | The note is trimmed when kept, which would fight typing; and the listener gets a note once it is written, not half of it. |
