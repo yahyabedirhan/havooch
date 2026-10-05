@@ -407,9 +407,9 @@ UI roles (built theme):
 
 ### 3.7 How the picks map onto Video Review's tokens
 
-The files are `Packaging/Themes/<name>.json`, credited in `Packaging/Themes/NOTICE.md`. Each one sets every token but `letterbox`, `popoverBorder`, `well`, `knob`, `shadow`, `controlHover`, `controlPressed`, `regionDim` and `sizeLabel`, which come from the default theme of its kind.
+The files are `Packaging/Themes/<name>.json`, credited in `Packaging/Themes/NOTICE.md`. Each one sets every token but `letterbox`, `popoverBorder`, `well`, `knob`, `shadow`, `controlHover`, `regionDim` and `sizeLabel`, which come from the default theme of its kind.
 
-0.2.0 put the whole window on `window` and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header` (`docs/low-level-design.md`, L36). The files keep the editor background on `window`; the rows below for the removed tokens are the 0.1.0 mapping.
+0.2.0 put the whole window on `window` and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header` (`docs/low-level-design.md`, L36), and later `controlPressed`, which no view drew (L43). The files keep the editor background on `window`; the rows below for the removed tokens are the 0.1.0 mapping.
 
 | Token | Taken from |
 |---|---|

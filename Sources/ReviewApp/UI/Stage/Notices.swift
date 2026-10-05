@@ -68,7 +68,9 @@ private struct NoticeCard: View {
             )
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        // A native borderless button: the card dims while pressed and
+        // takes the focus ring under keyboard navigation.
+        .buttonStyle(.borderless)
         .help(notice.kind == .question ? "Show the question and answer it" : "Show the message")
         .accessibilityElement(children: .combine)
     }

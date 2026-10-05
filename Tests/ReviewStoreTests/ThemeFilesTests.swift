@@ -113,8 +113,9 @@ struct ThemeFilesTests {
         #expect(reading.problems.first?.contains("a.json") == true)
     }
 
-    /// The surface tokens 0.1.0 had and the one-surface window removed.
-    static let removedSurfaces = ["stage", "bar", "sidebar", "sidebarSection", "sidebarRowHover", "sidebarRowSelected", "header"]
+    /// The surface tokens 0.1.0 had and the one-surface window removed, and
+    /// `controlPressed`, which the native buttons left with no view.
+    static let removedSurfaces = ["stage", "bar", "sidebar", "sidebarSection", "sidebarRowHover", "sidebarRowSelected", "header", "controlPressed"]
 
     @Test("the window is one surface: no token or built-in theme names a surface of its own for the header, the stage, the bar or the sidebar")
     func oneSurface() {

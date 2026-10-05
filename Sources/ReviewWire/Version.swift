@@ -2,7 +2,7 @@
 public enum Version {
     /// The app's version, under semantic versioning. `video-review --version`
     /// prints it.
-    public static let app = "0.1.0"
+    public static let app = "0.2.0"
 
     /// The control protocol's version, a number of its own. A request of
     /// another version is refused with both numbers, never misread. 2 since

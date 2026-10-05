@@ -66,8 +66,8 @@ private struct ThreadViewBar: View {
             HStack(spacing: 0) {
                 back(others)
                 Spacer(minLength: 8)
-                step("Previous thread", symbol: "chevron.up", forward: false)
-                step("Next thread", symbol: "chevron.down", forward: true)
+                step("Previous thread", key: "↑", symbol: "chevron.up", forward: false)
+                step("Next thread", key: "↓", symbol: "chevron.down", forward: true)
             }
             title
         }
@@ -122,7 +122,7 @@ private struct ThreadViewBar: View {
         .allowsHitTesting(false)
     }
 
-    private func step(_ title: String, symbol: String, forward: Bool) -> some View {
+    private func step(_ title: String, key: String, symbol: String, forward: Bool) -> some View {
         Button {
             model.showNeighbour(forward: forward)
         } label: {
@@ -136,7 +136,7 @@ private struct ThreadViewBar: View {
         // disabled, and takes the focus ring with keyboard navigation.
         .buttonStyle(.borderless)
         .disabled(model.neighbour(forward: forward) == nil)
-        .help(title)
+        .help("\(title) (\(key))")
         .accessibilityLabel(title)
     }
 }

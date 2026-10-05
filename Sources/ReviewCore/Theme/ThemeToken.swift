@@ -30,10 +30,8 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     case knob
     /// The shadow under a floating surface.
     case shadow
-    /// A symbol button or a sidebar row under the pointer.
+    /// A sidebar row or a message under the pointer.
     case controlHover
-    /// A symbol button being pressed.
-    case controlPressed
 
     // Text.
 
