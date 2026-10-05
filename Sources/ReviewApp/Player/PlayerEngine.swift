@@ -17,6 +17,16 @@ final class PlayerEngine {
     private(set) var videoSize = CGSize.zero
     /// One frame's length in seconds.
     private(set) var frameDuration: Double = 1.0 / 30
+    /// The speed playback runs at, one of `speeds`.
+    var speed: Double = 1 {
+        didSet {
+            player.defaultRate = Float(speed)
+            if isPlaying { player.rate = Float(speed) }
+        }
+    }
+
+    /// The speeds the player bar offers.
+    static let speeds: [Double] = [0.5, 1, 1.25, 1.5, 2]
     /// The open video, for reading its frames; nil with no video.
     @ObservationIgnored private(set) var asset: AVURLAsset?
 

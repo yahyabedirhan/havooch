@@ -5,8 +5,8 @@ import SwiftUI
 /// hollow; every later state fills the pin with its
 /// colour, and a state the agent set adds its glyph at the pin's foot. A
 /// badge at its head says the agent waits for an answer, or said something
-/// the person hasn't looked at. The same pin heads the thread in the rail,
-/// which ties the two.
+/// the person hasn't looked at. It heads the thread in the rail and its
+/// region on the frame; the player bar's timeline has `ThreadPin`.
 struct MarkerPin: View {
     /// What the agent left on a thread for the person.
     enum Badge: Equatable {
@@ -102,52 +102,5 @@ struct MarkerPin: View {
 
     private var isHollow: Bool {
         state == .queued
-    }
-}
-
-/// The markers above the timeline's track: one pin per thread at its frame,
-/// with a stem down to the track. A click on a pin selects its thread.
-struct MarkerLayer: View {
-    /// The threads on a frame, in time order.
-    let threads: [ReviewThread]
-    let duration: Double
-    let selection: ThreadID?
-    /// The threads with an agent message the person hasn't looked at.
-    var unread: Set<ThreadID> = []
-    let select: (ThreadID) -> Void
-    @Environment(\.palette) private var palette
-
-    /// The stem's length: from the pin down to the track.
-    let stem: CGFloat
-
-    var height: CGFloat { MarkerPin.size + stem }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ForEach(threads) { thread in
-                let isSelected = thread.id == selection
-                let state = thread.state ?? .queued
-                VStack(spacing: 0) {
-                    Button {
-                        select(thread.id)
-                    } label: {
-                        MarkerPin(
-                            number: thread.number, state: state, isSelected: isSelected,
-                            badge: MarkerPin.Badge(thread, unread: unread)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .help(thread.messages.last?.text ?? "")
-                    .accessibilityLabel("Thread \(thread.number), \(StateLook.name(state))")
-                    Capsule()
-                        .fill(isSelected ? palette[.accent] : palette[.textSecondary])
-                        .frame(width: 1.5, height: stem)
-                        .allowsHitTesting(false)
-                }
-                .position(x: duration > 0 ? proxy.size.width * min(max((thread.time ?? 0) / duration, 0), 1) : 0, y: height / 2)
-                .zIndex(isSelected ? 1 : 0)
-            }
-        }
-        .frame(height: height)
     }
 }

@@ -33,14 +33,14 @@ struct PresencePill: Equatable {
 /// how many messages it sends. Sending is safe either way: with no agent
 /// the send waits for the next one.
 ///
-/// It is as tall as the timeline lane under the stage, so the line over it
-/// carries on the stage's lower edge across the window.
+/// One line, as tall as the player bar under the stage, so the two meet on
+/// one line across the window.
 struct SendBar: View {
     let model: AppModel
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 10) {
             // Each second: an agent that stops answering turns absent with no event.
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 presence(at: context.date)
@@ -49,7 +49,7 @@ struct SendBar: View {
         }
         .padding(.horizontal, Metrics.railPadding)
         .frame(maxWidth: .infinity)
-        .frame(height: Metrics.footerHeight)
+        .frame(height: Metrics.barHeight)
         .background(palette[.bar])
     }
 
@@ -92,11 +92,10 @@ struct SendBar: View {
                 Text("⌘↩")
                     .opacity(0.7)
             }
-            .frame(maxWidth: .infinity)
             .foregroundStyle(palette[.textOnAccent])
         }
         .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .fixedSize()
         .disabled(count == 0)
         .help(count == 0 ? "Nothing is queued" : "Send the queue to your agent at once (Cmd+Return)")
         .accessibilityLabel(count == 0 ? "Send" : "Send \(count) message\(count == 1 ? "" : "s")")

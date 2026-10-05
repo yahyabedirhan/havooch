@@ -485,15 +485,20 @@ final class AppModel: AppControlling {
         if engine.isPlaying { engine.pause() } else { engine.play() }
     }
 
-    /// Left and Right: `seconds` back or forward, kept inside the video.
+    /// Left, Right, J and L: `seconds` back or forward, kept inside the video.
     func skip(by seconds: Double) {
         move(to: engine.time + seconds)
     }
 
-    /// Shift+Left and Shift+Right: `frames` back or forward.
+    /// Shift+Left, Shift+Right, comma and period: `frames` back or forward.
     func step(frames: Int) {
         engine.pause()
         move(to: engine.time + Double(frames) * engine.frameDuration)
+    }
+
+    /// The player bar's speed menu.
+    func setSpeed(_ speed: Double) {
+        engine.speed = speed
     }
 
     /// A drag on the scrubber, to `seconds`.

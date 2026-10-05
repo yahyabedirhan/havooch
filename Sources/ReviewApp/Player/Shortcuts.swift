@@ -1,7 +1,8 @@
 import AppKit
 
 /// The player's keys, as in QuickTime: Space or K plays and pauses, Left and
-/// Right move 5 seconds, Shift+Left and Shift+Right move one frame, Up and
+/// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
+/// comma and the period move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a comment,
 /// Escape drops a rectangle that's being drawn. They're off while a text
 /// view has the focus, so typing never reaches the player. Cmd+Return sends
@@ -9,6 +10,8 @@ import AppKit
 enum Shortcuts {
     /// The seconds Left and Right move.
     static let skip: Double = 5
+    /// The seconds J and L move.
+    static let longSkip: Double = 10
 
     /// What a key does to the player.
     enum Action: Equatable {
@@ -38,6 +41,10 @@ enum Shortcuts {
         case 49, 40: return shift ? nil : .togglePlay // Space, K
         case 123: return shift ? .step(frames: -1) : .skip(seconds: -skip) // Left
         case 124: return shift ? .step(frames: 1) : .skip(seconds: skip) // Right
+        case 38: return shift ? nil : .skip(seconds: -longSkip) // J
+        case 37: return shift ? nil : .skip(seconds: longSkip) // L
+        case 43: return shift ? nil : .step(frames: -1) // comma
+        case 47: return shift ? nil : .step(frames: 1) // period
         case 126: return shift ? nil : .marker(forward: false) // Up
         case 125: return shift ? nil : .marker(forward: true) // Down
         case 8, 36, 76: return shift ? nil : .startComment // C, Return, Enter

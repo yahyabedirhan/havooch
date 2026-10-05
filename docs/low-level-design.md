@@ -613,7 +613,7 @@ public struct SupportLayout: Sendable {
 }
 ```
 
-- `Screenshotter`, `PlayerEngine`, `PlayerSurface`, `FrameGrabber` (keyframe at the thread's time, crop cut from it in memory), `Shortcuts`, `ContextReader`, `TranscriptDesk` and `FrameGeometry` keep proto-2's rules. proto-1's region-crop tests at several window sizes come with `FrameGeometry`.
+- `Screenshotter`, `PlayerEngine`, `PlayerSurface`, `FrameGrabber` (keyframe at the thread's time, crop cut from it in memory), `Shortcuts`, `ContextReader`, `TranscriptDesk` and `FrameGeometry` keep proto-2's rules. `Shortcuts` adds proto-1's J and L (10 s back and forward) and the comma and the period (one frame), and `PlayerEngine` adds proto-1's speeds (0.5× to 2×, through `defaultRate`). proto-1's region-crop tests at several window sizes come with `FrameGeometry`.
 
 ### The UI
 
@@ -621,7 +621,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 
 | Part | Design | From |
 |---|---|---|
-| Player bar | proto-1's bar: play/pause, `m:ss / m:ss`, speed, the timeline with ticks and labels, the Comment button. One `ThreadPin` per thread (not General): a rounded square when any message has a region, else a circle; the colour is the thread state's token; hover shows `#3 · 0:12 · 2 regions · Working`. Its height is `Metrics.barHeight`. | D 1.1, D 1.3, D 1.6 |
+| Player bar | proto-1's bar: play/pause, `m:ss / m:ss`, speed, the timeline with ticks and labels, the Comment button. One `ThreadPin` per thread (not General): a rounded square when any message has a region, else a circle; the colour is the thread state's token; hover shows `#3 · 0:12 · 2 regions · Working` (`1 region`, `no region`). A queued pin is a ring; a later state fills it, with the state's glyph in `textOnAccent`. A click calls `select`. Its height is `Metrics.barHeight`, which the sidebar footer shares. | D 1.1, D 1.3, D 1.6 |
 | Region | proto-2's drag selection with proto-1's live `412 × 236` size label in frame pixels; the popover header names the thread number it writes to. | D 2.1, D 2.4 |
 | Frame marks | On the current frame, while paused or playing: each thread's region outlines and one number badge per thread (at its first region's corner, or the frame's top-left corner for a thread without a region). A badge click is `openThread`. Nothing opens by itself. | D 2.6, D 2.11 |
 | Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame. Opens at its kept frame, else at `PopoverPlacement` beside the region or above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |

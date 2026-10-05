@@ -14,6 +14,14 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 124, modifiers: .shift) == .step(frames: 1))
     }
 
+    @Test("J and L move 10 s, the comma and the period one frame")
+    func quickTimeKeys() {
+        #expect(Shortcuts.action(keyCode: 38, modifiers: []) == .skip(seconds: -10))
+        #expect(Shortcuts.action(keyCode: 37, modifiers: []) == .skip(seconds: 10))
+        #expect(Shortcuts.action(keyCode: 43, modifiers: []) == .step(frames: -1))
+        #expect(Shortcuts.action(keyCode: 47, modifiers: []) == .step(frames: 1))
+    }
+
     @Test("Up and Down jump between markers, C and Return start a comment")
     func commentKeys() {
         #expect(Shortcuts.action(keyCode: 126, modifiers: []) == .marker(forward: false))
@@ -43,7 +51,7 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 49, modifiers: .command, isTyping: true) == nil)
     }
 
-    @Test("while the person types, no key reaches the player", arguments: [49, 40, 123, 124, 125, 126, 8, 36, 76] as [UInt16])
+    @Test("while the person types, no key reaches the player", arguments: [49, 40, 38, 37, 43, 47, 123, 124, 125, 126, 8, 36, 76] as [UInt16])
     func typing(keyCode: UInt16) {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != nil)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true) == nil)

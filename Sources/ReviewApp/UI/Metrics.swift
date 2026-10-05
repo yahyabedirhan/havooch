@@ -9,13 +9,14 @@ enum Metrics {
     static let railWidthRange: ClosedRange<CGFloat> = 300...460
     /// The space around the stage and beside the timeline.
     static let gutter: CGFloat = 12
-    /// How far the timeline's track is inset from the stage's sides.
+    /// How far the composer's pointer is inset from the stage's sides.
     static let laneInset: CGFloat = 4
     static let stageCorner: CGFloat = 12
-    /// The height of the timeline lane under the stage and of the rail's
-    /// foot, so the stage's lower edge and the line over the rail's foot
-    /// are one line across the window.
-    static let footerHeight: CGFloat = 116
+    /// The height of the player bar under the stage and of the sidebar's
+    /// footer, so the two meet on one line across the window (D 4.9).
+    static let barHeight: CGFloat = 52
+    /// The space between a bar's content and the window's edge.
+    static let barPadding: CGFloat = 16
     /// The side padding of a row in the rail, and of the rail's headers.
     static let railPadding: CGFloat = 16
 }
@@ -23,7 +24,7 @@ enum Metrics {
 /// How a message state shows besides its colour: a glyph and a name, so a
 /// state is never told by colour alone. Its colour is `Palette.state`.
 enum StateLook {
-    /// The glyph on a marker's pin for a state the agent set; nil for a
+    /// The glyph on a pin for a state the agent set; nil for a
     /// state before the agent has the message.
     static func pinGlyph(_ state: MessageState) -> String? {
         switch state {

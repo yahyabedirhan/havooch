@@ -1,7 +1,7 @@
 import ReviewWire
 import SwiftUI
 
-/// The window: the stage with the timeline lane under it, and the rail at
+/// The window: the stage with the player bar under it, and the rail at
 /// the side. With no video, a place to open one.
 struct RootView: View {
     @Bindable var model: AppModel
@@ -17,7 +17,7 @@ struct RootView: View {
             } else {
                 VStack(spacing: 0) {
                     StageView(model: model)
-                    TimelineLane(model: model)
+                    PlayerBar(model: model)
                 }
             }
         }
