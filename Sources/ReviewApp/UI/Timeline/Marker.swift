@@ -5,8 +5,8 @@ import SwiftUI
 /// queued comment is hollow; every later state fills the pin with its
 /// colour, and a state the agent set adds its glyph at the pin's foot. A
 /// badge at its head says the agent waits for an answer, or said something
-/// the person hasn't looked at. The same pin heads the comment's card,
-/// which ties the two.
+/// the person hasn't looked at. The same pin heads the comment's row in
+/// the rail, which ties the two.
 struct MarkerPin: View {
     /// What the agent left on a comment for the person.
     enum Badge: Equatable {
@@ -41,7 +41,7 @@ struct MarkerPin: View {
         Text("\(number)")
             .font(.system(size: number > 99 ? 8 : 10.5, weight: .bold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(isHollow ? AnyShapeStyle(.primary) : AnyShapeStyle(.white))
+            .foregroundStyle(isHollow ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.onTint))
             .frame(width: Self.size, height: Self.size)
             .background(isHollow ? Color(nsColor: .windowBackgroundColor) : Theme.tint(state), in: Circle())
             .overlay {
@@ -85,7 +85,7 @@ struct MarkerPin: View {
         case .question:
             Text("?")
                 .font(.system(size: 8, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.onTint)
                 .frame(width: 11, height: 11)
                 .background(Theme.question, in: Circle())
                 .overlay { Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 1) }

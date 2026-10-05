@@ -52,7 +52,7 @@ struct CommentEditor: NSViewRepresentable {
         view.setAccessibilityLabel("Comment")
         guard takesFocus else { return scroll }
         // Once the view is in its window: the person types at once.
-        DispatchQueue.main.async { [weak view] in
+        Task { @MainActor [weak view] in
             guard let view, let window = view.window else { return }
             window.makeFirstResponder(view)
             view.setSelectedRange(NSRange(location: view.string.utf16.count, length: 0))

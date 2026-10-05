@@ -35,8 +35,9 @@ struct TimelineLane: View {
             .padding(.top, 4)
         }
         .padding(.horizontal, Theme.gutter + Theme.laneInset)
-        .padding(.top, 6)
-        .padding(.bottom, 12)
+        // The rail's foot has this height too, so the stage's lower edge
+        // and the line over the rail's foot are one line.
+        .frame(height: Theme.footerHeight)
     }
 
     private var commentButton: some View {

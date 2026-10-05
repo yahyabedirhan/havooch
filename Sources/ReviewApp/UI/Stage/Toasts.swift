@@ -6,6 +6,7 @@ import SwiftUI
 /// until it's clicked or answered. A click selects the comment it's about.
 struct Toasts: View {
     let model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let width: CGFloat = 300
     /// The most notices shown at once: the newest ones.
@@ -15,12 +16,12 @@ struct Toasts: View {
         VStack(alignment: .trailing, spacing: 8) {
             ForEach(model.notices.suffix(Self.most)) { notice in
                 Toast(notice: notice, number: number(of: notice)) { model.openNotice(notice.id) }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .animation(.spring(duration: 0.3), value: model.notices)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.3), value: model.notices)
     }
 
     /// The number of the comment a notice is about, as on its marker.
@@ -41,7 +42,7 @@ private struct Toast: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: symbol)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onTint)
                     .frame(width: 22, height: 22)
                     .background(tint, in: Circle())
                     .accessibilityHidden(true)
