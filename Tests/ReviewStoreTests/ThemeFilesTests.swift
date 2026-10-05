@@ -76,7 +76,7 @@ struct ThemeFilesTests {
         }
     }
 
-    @Test("in every shipped theme the text reads on each surface, and each state stands apart from the surfaces, its glyph and the other states")
+    @Test("in every shipped theme the text reads on each surface, and each state stands apart from the surfaces, its glyph and the other states, and the question from every state and the bar")
     func everyThemeReads() throws {
         let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: [])
         let states: [ThemeToken] = [.stateQueued, .stateSent, .stateAcknowledged, .stateWorking, .stateDone, .stateFailed]
@@ -96,6 +96,14 @@ struct ThemeFilesTests {
                 }
                 let glyph = Self.contrast(try colour(.textOnAccent), try colour(token))
                 #expect(glyph >= 3, "\(name): textOnAccent on \(token) is \(glyph):1")
+            }
+            // The question's pin on the player bar stands apart from every
+            // state's pin, and shows on the bar as a mark should (3:1).
+            let questionOnBar = Self.contrast(try colour(.question), try colour(.bar))
+            #expect(questionOnBar >= 3, "\(name): question on bar is \(questionOnBar):1")
+            for state in states {
+                let distance = Self.distance(try colour(.question), try colour(state))
+                #expect(distance >= 10, "\(name): question and \(state) are \(distance) apart")
             }
             for (index, one) in states.enumerated() {
                 for other in states[(index + 1)...] {

@@ -115,9 +115,8 @@ struct Timeline: View {
     private func stems(width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(threads) { thread in
-                let state = thread.state ?? .queued
                 Rectangle()
-                    .fill(palette.state(state).opacity(thread.id == selection ? 0.8 : 0.45))
+                    .fill(ThreadPin.Look(thread).color(in: palette).opacity(thread.id == selection ? 0.8 : 0.45))
                     .frame(width: 1, height: Self.trackCentre - Self.markCentre)
                     .position(
                         x: Self.place(of: thread.time ?? 0, in: duration, width: width),

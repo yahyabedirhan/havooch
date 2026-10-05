@@ -16,6 +16,11 @@ struct PlayerBarTests {
         ReviewThread(id: ItemID(.thread, hash8: "f92cbb2a", number: number), time: time, messages: messages)
     }
 
+    /// A palette with the question colour and the working colour apart.
+    private static let palette = Palette(theme: ResolvedTheme(name: "Test", kind: .light, colors: [
+        .question: ThemeColor("#00aaaa")!, .stateWorking: ThemeColor("#aa8800")!,
+    ]))
+
     @Test("a thread with any region has a rounded square pin, one without has a circle")
     func shape() throws {
         let region = try Region(x: 0.1, y: 0.1, w: 0.2, h: 0.2)
@@ -39,6 +44,41 @@ struct PlayerBarTests {
     func state() {
         let thread = Self.thread(1, at: 4, [Self.message(1, state: .done), Self.message(2, state: .sent)])
         #expect(ThreadPin.Look(thread).state == .sent)
+    }
+
+    @Test("while the agent waits for an answer the pin is a question mark in the question colour; the answer gives the state back")
+    func openQuestion() throws {
+        let region = try Region(x: 0.1, y: 0.1, w: 0.2, h: 0.2)
+        let work = Self.message(1, region: region, state: .working)
+        let question = Message(
+            id: ItemID(.message, hash8: "f92cbb2a", number: 2), author: .agent, kind: .question, text: "Which take?",
+            at: Date(timeIntervalSince1970: 1)
+        )
+        let asked = ThreadPin.Look(Self.thread(3, at: 12.48, [work, question, Self.message(3, region: region, state: .working)]))
+        #expect(asked.waitsForAnswer)
+        #expect(asked.isSquare)
+        #expect(!asked.isRing)
+        #expect(asked.glyph == "questionmark")
+        #expect(asked.help == "#3 · 0:12 · 2 regions · Question waiting")
+        #expect(asked.color(in: Self.palette) == Self.palette[.question])
+
+        let answer = Message(
+            id: ItemID(.message, hash8: "f92cbb2a", number: 4), author: .person, kind: .answer, text: "The second",
+            at: Date(timeIntervalSince1970: 2)
+        )
+        let answered = ThreadPin.Look(Self.thread(3, at: 12.48, [work, question, answer]))
+        #expect(!answered.waitsForAnswer)
+        #expect(answered.glyph == StateLook.pinGlyph(.working))
+        #expect(answered.help == "#3 · 0:12 · 1 region · Working")
+        #expect(answered.color(in: Self.palette) == Self.palette[.stateWorking])
+        #expect(answered.color(in: Self.palette) != Self.palette[.question])
+
+        // A question on a thread whose work is still queued fills the ring.
+        let queued = ThreadPin.Look(Self.thread(5, at: 1, [Self.message(5), question]))
+        #expect(!queued.isSquare)
+        #expect(!queued.isRing)
+        #expect(queued.help == "#5 · 0:01 · no region · Question waiting")
+        #expect(ThreadPin.Look(Self.thread(5, at: 1, [Self.message(5)])).isRing)
     }
 
     @Test("the speed menu reads 0.5×, 1×, 1.25×, 1.5×, 2×")

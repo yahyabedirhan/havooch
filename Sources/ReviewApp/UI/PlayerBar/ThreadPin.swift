@@ -6,8 +6,11 @@ import SwiftUI
 /// square when the thread has a region and a circle when it has none, in
 /// the colour of the thread's state. A queued thread is a ring; every later
 /// state fills the mark, and a state the agent set adds its glyph inside,
-/// so a state is never told by colour alone. The thread in focus gets a
-/// ring in the accent colour.
+/// so a state is never told by colour alone. While the agent waits for the
+/// person's answer on the thread, the pin is filled in the question colour
+/// with a question mark instead, so the person sees it from the timeline
+/// alone; the answer gives the pin its state colour back. The thread in
+/// focus gets a ring in the accent colour.
 struct ThreadPin: View {
     let look: Look
     var isSelected = false
@@ -22,6 +25,9 @@ struct ThreadPin: View {
         let time: Double
         let regions: Int
         let state: MessageState
+        /// Whether the thread has an open question: the agent waits for
+        /// the person's answer.
+        let waitsForAnswer: Bool
 
         init(_ thread: ReviewThread) {
             number = thread.number
@@ -30,33 +36,52 @@ struct ThreadPin: View {
             // A frame thread always has a person message; queued is the
             // state before anything happened to it.
             state = thread.state ?? .queued
+            waitsForAnswer = thread.openQuestion != nil
+        }
+
+        /// The SF Symbol inside the mark: a question mark while the agent
+        /// waits for an answer, else the state's glyph, if it has one.
+        var glyph: String? {
+            waitsForAnswer ? "questionmark" : StateLook.pinGlyph(state)
+        }
+
+        /// A ring rather than a filled mark: a queued thread with no open
+        /// question.
+        var isRing: Bool { state == .queued && !waitsForAnswer }
+
+        /// The mark's colour, also its stem's: the question colour while the
+        /// agent waits for an answer, else the state's.
+        func color(in palette: Palette) -> Color {
+            waitsForAnswer ? palette[.question] : palette.state(state)
         }
 
         /// A rounded square when any message has a region.
         var isSquare: Bool { regions > 0 }
 
-        /// The hover line: `#3 · 0:12 · 2 regions · Working`.
+        /// The hover line: `#3 · 0:12 · 2 regions · Working`, with
+        /// `Question waiting` in place of the state while the agent waits
+        /// for an answer.
         var help: String {
             let regionWords = switch regions {
             case 0: "no region"
             case 1: "1 region"
             default: "\(regions) regions"
             }
-            return "#\(number) · \(PlayerBar.clock(time)) · \(regionWords) · \(StateLook.name(state))"
+            return "#\(number) · \(PlayerBar.clock(time)) · \(regionWords) · \(waitsForAnswer ? "Question waiting" : StateLook.name(state))"
         }
     }
 
     var body: some View {
         let shape = PinShape(isSquare: look.isSquare)
-        let color = palette.state(look.state)
+        let color = look.color(in: palette)
         ZStack {
-            if look.state == .queued {
+            if look.isRing {
                 // Filled with the bar's colour, so the track doesn't show through the ring.
                 shape.fill(palette[.bar])
                 shape.strokeBorder(color, lineWidth: size / 5)
             } else {
                 shape.fill(color)
-                if let glyph = StateLook.pinGlyph(look.state) {
+                if let glyph = look.glyph {
                     Image(systemName: glyph)
                         .font(.system(size: size * 0.55, weight: .heavy))
                         .foregroundStyle(palette[.textOnAccent])
