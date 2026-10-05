@@ -469,6 +469,10 @@ final class ControlServer {
 /// server answer it, writes the reply and closes. A reply that can't be
 /// written goes back to the server (`undelivered`), and so does the news
 /// that a client closed its socket while its request was held (`hungUp`).
+/// Its reads block, up to the connection timeout, so they run on a
+/// dispatch queue and not on the concurrency pool's few threads. It has no
+/// mutable state: `@unchecked` only because the dispatch source isn't
+/// declared `Sendable`.
 private final class Listener: @unchecked Sendable {
     typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
     typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
@@ -588,7 +592,9 @@ private final class Listener: @unchecked Sendable {
 
 /// Looks at a connection whose answer is awaited, and says once when its
 /// client has closed its socket. A request answered at once is never
-/// looked at: the first look comes after one interval.
+/// looked at: the first look comes after one interval. Its one property
+/// is a `let`: `@unchecked` only because the timer source isn't declared
+/// `Sendable`.
 private final class HangUpWatch: @unchecked Sendable {
     private let timer: any DispatchSourceTimer
 

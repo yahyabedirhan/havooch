@@ -23,17 +23,20 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
     }
 
-    @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app")
-    func sendKey() {
-        // Return and the keypad's Enter.
-        for keyCode in [36, 76] as [UInt16] {
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command) == .send)
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isTyping: true) == .send)
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .numericPad, .capsLock], isTyping: true) == .send)
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .shift]) == nil)
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .option]) == nil)
-            #expect(Shortcuts.action(keyCode: keyCode, modifiers: .control, isTyping: true) == nil)
-        }
+    /// Return and the keypad's Enter.
+    @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app",
+          arguments: [36, 76] as [UInt16])
+    func sendKey(keyCode: UInt16) {
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command) == .send)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isTyping: true) == .send)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .numericPad, .capsLock], isTyping: true) == .send)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .shift]) == nil)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [.command, .option]) == nil)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .control, isTyping: true) == nil)
+    }
+
+    @Test("Return alone starts a comment, and Cmd with another key isn't a send")
+    func returnAlone() {
         // Return alone still starts a comment, and is the text view's while typing.
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startComment)
         #expect(Shortcuts.action(keyCode: 36, modifiers: [], isTyping: true) == nil)

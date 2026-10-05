@@ -37,6 +37,7 @@ enum FrameGrabber {
     /// The keyframe written as a PNG at `file`, and the crop of `region`
     /// at `cropFile` when the comment has one, off the main actor. When
     /// either can't be written, neither is left behind.
+    @concurrent
     nonisolated static func writeImages(
         of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double,
         keyframe file: URL, region: Region?, crop cropFile: URL

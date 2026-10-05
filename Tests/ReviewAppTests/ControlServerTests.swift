@@ -377,12 +377,12 @@ struct ControlServerTests {
         #expect(status.st_mode & 0o777 == 0o600)
 
         let client = ControlClient(socket: socket, holder: Self.holder, transport: UnixSocketTransport())
-        let reply = await Task.detached { client.send(.playerSeek(seconds: 10)) }.value
+        let reply = await LeaseServerTests.sending { client.send(.playerSeek(seconds: 10)) }
         #expect(reply == .success(.done("0:10\n")))
         #expect(app.calls == ["seek 10.0"])
 
         server.stop()
-        let gone = await Task.detached { client.send(.state) }.value
+        let gone = await LeaseServerTests.sending { client.send(.state) }
         #expect(gone == .failure(.notRunning))
     }
 }

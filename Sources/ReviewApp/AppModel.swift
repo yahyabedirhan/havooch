@@ -135,7 +135,7 @@ final class AppModel: AppControlling {
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
             throw AppRefusal("no video file at \(url.path)")
         }
-        guard let contentHash = await Task.detached(operation: { ContentHash.of(url) }).value else {
+        guard let contentHash = await Self.contentHash(of: url) else {
             throw AppRefusal("can't read \(url.path)")
         }
         // Before the player changes: a history that doesn't read keeps the
@@ -164,6 +164,13 @@ final class AppModel: AppControlling {
         desk.open(review)
         desk.library.saveRecent(url)
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
+    }
+
+    /// The hash of the file at `url`, read off the main actor: it reads the
+    /// whole file, and a long video would hold the window still.
+    @concurrent
+    private nonisolated static func contentHash(of url: URL) async -> String? {
+        ContentHash.of(url)
     }
 
     /// At launch: the video that was open last opens again, paused at its
