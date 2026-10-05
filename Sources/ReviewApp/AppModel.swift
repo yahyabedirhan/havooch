@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import ReviewCore
+import ReviewLease
 import ReviewStore
 import ReviewTranscript
 import ReviewWire
@@ -203,7 +204,7 @@ final class AppModel: AppControlling {
     /// At launch: the video the launch names (`DemoRun.openVariable`, a
     /// demo started from the empty screen), else the last one.
     func openAtLaunch(environment: [String: String]) async {
-        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else {
+        guard let path = AppVariable.value(DemoRun.openVariable, in: environment), path.hasPrefix("/") else {
             await openRecent()
             return
         }
@@ -528,7 +529,7 @@ final class AppModel: AppControlling {
 
     // MARK: - What an action needs
 
-    private static let noVideo = AppRefusal("no video is open; open one with `video-review player open <path>`")
+    private static let noVideo = AppRefusal("no video is open; open one with `havooch player open <path>`")
 
     private func needVideo() throws(AppRefusal) {
         guard video != nil else { throw Self.noVideo }

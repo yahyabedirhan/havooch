@@ -1,47 +1,47 @@
 ---
-name: video-review-mate
-description: Listen for the feedback the person sends from the Video Review player - take each send, do what each message on each thread asks in this repo, and answer on its thread in the player. Use when asked to listen for video review feedback, or to be the video review mate or listener.
+name: havooch-mate
+description: Listen for the feedback the person sends from the Havooch player - take each send, do what each message on each thread asks in this repo, and answer on its thread in the player. Use when asked to listen for Havooch or video review feedback, or to be the Havooch mate or listener.
 ---
 
-# Video Review Mate
+# Havooch Mate
 
-The person watches a video in the Video Review app and writes messages on its frames. All messages about one keyframe form one **thread**, numbered from 1; the **General thread** (#0) holds what is about no single frame. A message is about the **subject** the video shows (a project, a design, a setup), not about the video file. Cmd+Enter sends every queued message at once: one **send**, grouped by thread.
+The person watches a video in the Havooch app and writes messages on its frames. All messages about one keyframe form one **thread**, numbered from 1; the **General thread** (#0) holds what is about no single frame. A message is about the **subject** the video shows (a project, a design, a setup), not about the video file. Cmd+Enter sends every queued message at once: one **send**, grouped by thread.
 
 You are the **listener**: you take each send, do what each message asks in this repo, and answer on its thread, where the person reads it beside the video. Only sends drive this loop; what the person says in the chat is ordinary conversation.
 
 ## The command
 
-`video-review` below stands for the CLI inside the app bundle. Write it as a quoted absolute path in every command. Find it once, at the start:
+`havooch` below stands for the CLI inside the app bundle. Write it as a quoted absolute path in every command. Find it once, at the start:
 
-1. `$VIDEO_REVIEW_CLI`, when it is set.
-2. Else `/Applications/Video Review.app/Contents/Helpers/video-review`.
-3. Else the one match of `/Applications/Video Review*.app/Contents/Helpers/video-review`. With several matches, ask the person which app they review in.
+1. `$HAVOOCH_CLI`, when it is set, else `$VIDEO_REVIEW_CLI` (its name before the app was renamed Havooch).
+2. Else `/Applications/Havooch.app/Contents/Helpers/havooch`.
+3. Else the one match of `/Applications/Havooch*.app/Contents/Helpers/havooch`. With several matches, ask the person which app they review in.
 
-Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`video-review --help` prints the usage).
+Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`havooch --help` prints the usage).
 
 You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, and the free `state --json` and `app status`. Every other command drives the player and takes control of the app from the person.
 
-The app knows you by your holder key: `$VIDEO_REVIEW_CONTROL_KEY` when set, else `$CLAUDE_CODE_SESSION_ID`. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `video-review` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
+The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` (or its earlier name `$VIDEO_REVIEW_CONTROL_KEY`) when set, else `$CLAUDE_CODE_SESSION_ID`. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
 ## The loop
 
-1. **Listen.** Run `video-review wait` as a background command, so that its exit wakes you. The player shows the person a listening agent only while a `wait` is open, so keep exactly one open at all times. `wait` keeps connecting while the app is closed, so start it whether or not the app runs.
+1. **Listen.** Run `havooch wait` as a background command, so that its exit wakes you. The player shows the person a listening agent only while a `wait` is open, so keep exactly one open at all times. `wait` keeps connecting while the app is closed, so start it whether or not the app runs.
    - Exit `0`: the send is on standard output, as JSON.
    - Exit `2`: a `--timeout` ran out with no send. Run `wait` again.
    - Exit `1`: see [Refusals](#refusals).
 2. **Acknowledge, then listen again.** The moment a send wakes you, before you study it:
-   1. `video-review ack <send id> "<one short line>"`, for example `"Got 3 messages on 2 threads, starting."` The line goes on the General thread, and every message of the send turns `acknowledged`.
-   2. Start a new background `video-review wait`.
+   1. `havooch ack <send id> "<one short line>"`, for example `"Got 3 messages on 2 threads, starting."` The line goes on the General thread, and every message of the send turns `acknowledged`.
+   2. Start a new background `havooch wait`.
 
    A send that arrives while you work gets the same two commands at once. Its work starts when the send before it is finished.
 3. **Work each thread**, in the order of `threads[]`. Read the thread first: see [The send](#the-send). Then work each of its `messages[]`, in order:
-   1. `video-review status <message id> working`
+   1. `havooch status <message id> working`
    2. Decide its [intent](#intent) and do the work. When you cannot tell what it asks, [ask](#ask).
-   3. When the work changed files in this repo, commit: one commit per message, with only that message's files staged, in this repo's commit convention, and the line `Video-Review-Message: <message id>` at the end of the body.
-   4. `video-review reply <thread id> "<the result>"`, then `video-review status <message id> done`.
+   3. When the work changed files in this repo, commit: one commit per message, with only that message's files staged, in this repo's commit convention, and the line `Havooch-Message: <message id>` at the end of the body.
+   4. `havooch reply <thread id> "<the result>"`, then `havooch status <message id> done`.
 
-   When the message cannot be done: `video-review reply <thread id> "<why, and what would unblock it>"`, then `video-review status <message id> failed`. `status` carries no text, so the reply is the reason.
-4. **Close the send.** `video-review reply t-<hash8>-0 "<one line for the whole send>"` on the General thread: how many messages are done, and which failed, by thread number. `<hash8>` is the part of any id between its first two dashes.
+   When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `status` carries no text, so the reply is the reason.
+4. **Close the send.** `havooch reply t-<hash8>-0 "<one line for the whole send>"` on the General thread: how many messages are done, and which failed, by thread number. `<hash8>` is the part of any id between its first two dashes.
 
 A send is finished when every message in it is `done` or `failed` and has a reply on its thread, and the send has its line on General. `done` and `failed` are final.
 
@@ -92,11 +92,11 @@ A remark that asks for nothing ("nice", "this part is clear") gets a one-line re
 
 Ask when a message has two readings that lead to different work and the frame, the transcript, the history and the context do not settle it. Put the readings in the question, so that a short answer is enough.
 
-Run `video-review ask <thread id> "<question>"` as a background command, like `wait`: the question shows on the thread, the person answers in the player, and the command then exits `0` with the answer on standard output. Leave the message `working` and go on with the next one meanwhile; come back to it when the answer wakes you.
+Run `havooch ask <thread id> "<question>"` as a background command, like `wait`: the question shows on the thread, the person answers in the player, and the command then exits `0` with the answer on standard output. Leave the message `working` and go on with the next one meanwhile; come back to it when the answer wakes you.
 
 A thread holds one open question: a second `ask` on it is refused until the person answers the first. A `reply` does not close a question.
 
-Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `video-review state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.
+Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `havooch state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.
 
 ## Refusals
 
@@ -104,7 +104,7 @@ Exit `1` prints why. Read the line; the same command sent again gets the same an
 
 - **A newer `wait` took this one's place.** You had two open. The newer one is the listener; nothing to do.
 - **The app is quitting**, on `wait` or `ask`: a new `wait` reconnects once the app is back; treat an `ask` as in [Ask](#ask).
-- **The app isn't running**, on any other command: the person quit the player. Finish and commit the work, keep each result, and check `video-review app status` before the next command. When the app runs again, send the replies and statuses you kept. Tell the person in the chat when the session ends first.
+- **The app isn't running**, on any other command: the person quit the player. Finish and commit the work, keep each result, and check `havooch app status` before the next command. When the app runs again, send the replies and statuses you kept. Tell the person in the chat when the session ends first.
 - **No such send, message or thread.** Take the ids from the payload, never from memory.
 - **Nothing was sent on the thread yet.** Use the thread id from the payload.
 - **A message can't move.** It is already `done` or `failed`, or the state is behind its current one. Leave it.

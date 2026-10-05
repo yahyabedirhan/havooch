@@ -1,101 +1,101 @@
 import Foundation
 
-/// What the `video-review` command asks of the running app: one request per
+/// What the `havooch` command asks of the running app: one request per
 /// connection over `control.sock`, sent as a `ControlMessage` with its
 /// holder. A new request is a case here, with its `command` name and its
 /// fields in `ControlMessage`.
 public enum ControlRequest: Equatable, Sendable {
-    /// `video-review app status`: whether the app runs, and on which data.
+    /// `havooch app status`: whether the app runs, and on which data.
     case appStatus
-    /// `video-review state`: everything the app shows.
+    /// `havooch state`: everything the app shows.
     case state
-    /// `video-review control take [--wait <seconds>]`: hold the lease to
+    /// `havooch control take [--wait <seconds>]`: hold the lease to
     /// its cap; while another agent holds it, wait in line up to
     /// `waitSeconds`, or be refused at once without them.
     case controlTake(waitSeconds: Int?)
-    /// `video-review control release`: give the lease up.
+    /// `havooch control release`: give the lease up.
     case controlRelease
-    /// `video-review app open` while the app runs: its status.
+    /// `havooch app open` while the app runs: its status.
     case appOpen
-    /// `video-review app quit`: the app replies, then quits.
+    /// `havooch app quit`: the app replies, then quits.
     case appQuit
-    /// `video-review player open <path>`: the video at the absolute `path`
+    /// `havooch player open <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
-    /// `video-review player play`.
+    /// `havooch player play`.
     case playerPlay
-    /// `video-review player pause`.
+    /// `havooch player pause`.
     case playerPause
-    /// `video-review player seek <time>`: the player moved to exactly
+    /// `havooch player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
-    /// `video-review comment add <text> [--at <time>] [--region x,y,w,h]
+    /// `havooch comment add <text> [--at <time>] [--region x,y,w,h]
     /// [--thread <thread>]`: a message queued at `at` seconds, or at the
     /// player's time when it's nil, on `region` of the frame when it has
     /// one. It joins the thread of that frame or starts one; with `thread`
     /// (a thread id, or a number of the open video, `0` for General) it's
     /// written on that thread.
     case commentAdd(text: String, at: Double?, region: Rectangle? = nil, thread: String? = nil)
-    /// `video-review comment open [<text>] [--region x,y,w,h]`: the comment
+    /// `havooch comment open [<text>] [--region x,y,w,h]`: the comment
     /// popover opened at the player's frame, as C or a drawn rectangle
     /// opens it, on `region` when it has one, with `text` in its field. An
     /// addition to the spec's contract: the popover and its region can be
     /// shown, checked and screenshotted without a click.
     case commentOpen(text: String, region: Rectangle? = nil)
-    /// `video-review comment compose [<text>] [--region x,y,w,h]
+    /// `havooch comment compose [<text>] [--region x,y,w,h]
     /// [--general]`: the composer at the sidebar's foot holds `text`, as
     /// the person types it, with a region chip on the player's frame and
     /// the General toggle. An addition to the contract: the composer can
     /// be shown, checked and screenshotted without typing.
     case commentCompose(text: String, region: Rectangle? = nil, general: Bool = false)
-    /// `video-review comment edit <message-id> <text>`: a queued message's
+    /// `havooch comment edit <message-id> <text>`: a queued message's
     /// new text.
     case commentEdit(id: String, text: String)
-    /// `video-review comment delete <message-id>`: a queued message removed.
+    /// `havooch comment delete <message-id>`: a queued message removed.
     case commentDelete(id: String)
-    /// `video-review context set <text>`: the open video's context note,
+    /// `havooch context set <text>`: the open video's context note,
     /// which the listener gets with the sidecar's text. An empty `text`
     /// clears it.
     case contextSet(text: String)
-    /// `video-review send`: every queued message of the open video sent as
+    /// `havooch send`: every queued message of the open video sent as
     /// one send, which the listener's `wait` gets.
     case send
-    /// `video-review wait [--timeout <seconds>]`: the next send as its
+    /// `havooch wait [--timeout <seconds>]`: the next send as its
     /// JSON payload. The app holds the request until a send is made, up to
     /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
     /// listener, present while its `wait` is open.
     case wait(timeoutSeconds: Int?)
-    /// `video-review ack <send-id> [<text>]`: the listener has the send.
+    /// `havooch ack <send-id> [<text>]`: the listener has the send.
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
     case ack(sendID: String, text: String?)
-    /// `video-review status <message-id> working|done|failed`: how far the
+    /// `havooch status <message-id> working|done|failed`: how far the
     /// listener is with a message.
     case status(messageID: String, state: Status)
-    /// `video-review reply <thread> <text>`: the listener's message on a
+    /// `havooch reply <thread> <text>`: the listener's message on a
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)
-    /// `video-review ask <thread> <question> [--wait <seconds>]`: the
+    /// `havooch ask <thread> <question> [--wait <seconds>]`: the
     /// listener's question on a thread. The app holds the request until the
     /// person answers, up to `waitSeconds`, or with no limit when it's nil.
     case ask(thread: String, question: String, waitSeconds: Int?)
-    /// `video-review thread answer <thread> <text>`: the answer to a
+    /// `havooch thread answer <thread> <text>`: the answer to a
     /// thread's open question, as the person gives it in the app.
     case threadAnswer(thread: String, text: String)
-    /// `video-review thread open <thread> [--frame x,y,w,h]`: the thread
+    /// `havooch thread open <thread> [--frame x,y,w,h]`: the thread
     /// popover opened on the thread's frame, as a click on its pin or its
     /// badge opens it. With `frame` (0 to 1 of the video area, from its
     /// top-left corner) the popover is first kept there, as a drag and a
     /// resize leave it. An addition to the spec's contract: the CLI can't
     /// click, drag or resize.
     case threadOpen(thread: String, frame: Rectangle? = nil)
-    /// `video-review thread show <thread>`: the sidebar shows the thread's
+    /// `havooch thread show <thread>`: the sidebar shows the thread's
     /// view, as a click on its row in the thread list shows it.
     case threadShow(thread: String)
-    /// `video-review thread list`: the sidebar shows the thread list, as
+    /// `havooch thread list`: the sidebar shows the thread list, as
     /// Back in a thread view shows it.
     case threadList
-    /// `video-review screenshot <abs.png> [--appearance light|dark]
+    /// `havooch screenshot <abs.png> [--appearance light|dark]
     /// [--hide-agent-indicator] [--window main|settings]`: the app's
     /// `window` written as a PNG at the absolute `path`, in `appearance`
     /// when it's set, as the Mac shows it otherwise. The agent-control
@@ -103,10 +103,10 @@ public enum ControlRequest: Equatable, Sendable {
     /// leaves it out. The Settings window is opened for the capture, as
     /// ⌘, opens it, and closed again when it was closed before.
     case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false, window: Window = .main)
-    /// `video-review theme list`: every theme the app knows, and which one
+    /// `havooch theme list`: every theme the app knows, and which one
     /// is active and pinned.
     case themeList
-    /// `video-review theme set <name>`: the theme called `name` pinned, or
+    /// `havooch theme set <name>`: the theme called `name` pinned, or
     /// the pin cleared for `system`, so the theme follows the system
     /// appearance again.
     case themeSet(name: String)
@@ -144,9 +144,9 @@ public enum ControlRequest: Equatable, Sendable {
         case light, dark
     }
 
-    /// The window `screenshot` captures: the player's, or Settings.
+    /// The window `screenshot` captures: the player's, Settings or the About panel.
     public enum Window: String, Equatable, Sendable, CaseIterable {
-        case main, settings
+        case main, settings, about
     }
 
     /// Who may send a request.

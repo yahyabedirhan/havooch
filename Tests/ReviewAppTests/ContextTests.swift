@@ -18,10 +18,10 @@ struct ContextDeliveryTests {
     static let noteHeading = "## Note from the reviewer"
 
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     /// The folder the video is in, beside its sidecars.
     let folder = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private var video: URL { folder.appendingPathComponent("clip.mp4") }
 
@@ -104,7 +104,7 @@ struct ContextDeliveryTests {
         let sidecar = try #require(ContextReader.sidecar(beside: MessageTests.fixture))
         #expect(sidecar.file.lastPathComponent == "sample.context.md")
         #expect(sidecar.text.hasPrefix("# Context: sample\n"))
-        #expect(sidecar.text.hasSuffix("- yahyabedirhan/video-review"))
+        #expect(sidecar.text.hasSuffix("- yahyabedirhan/havooch"))
     }
 
     @Test("the context is the sidecar's text, then the note under its heading; null when both are empty")
@@ -225,7 +225,7 @@ struct ContextDeliveryTests {
     func noVideo() async throws {
         defer { cleanUp() }
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
-        #expect(throws: AppRefusal("no video is open; open one with `video-review player open <path>`")) {
+        #expect(throws: AppRefusal("no video is open; open one with `havooch player open <path>`")) {
             try model.setContextNote("A note")
         }
     }

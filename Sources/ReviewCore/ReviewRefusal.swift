@@ -38,7 +38,7 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
         case .emptyText:
             "a message needs text"
         case .unknownID(let id):
-            "no `\(id)` on this video; `video-review state --json` lists the threads and their messages"
+            "no `\(id)` on this video; `havooch state --json` lists the threads and their messages"
         case .otherVideo(let id):
             "`\(id)` is on another video than the open one; open that video first"
         case .notQueued(let id, let state):
@@ -46,7 +46,7 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
         case .badRegion(let x, let y, let w, let h):
             "the region \(x),\(y),\(w),\(h) isn't a rectangle inside the frame; give x,y,w,h from 0 to 1 from the top-left corner, with a width and a height above 0, x+w at most 1 and y+h at most 1"
         case .nothingQueued:
-            "no message is queued, so there's nothing to send; queue one with `video-review comment add <text>`"
+            "no message is queued, so there's nothing to send; queue one with `havooch comment add <text>`"
         case .emptyMessage:
             "a message needs text"
         case .notSent(let thread):
@@ -54,7 +54,7 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
         case .illegalMove(let id, let from, let to):
             "\(id) is \(from?.rawValue ?? "not a person's message") and can't move to \(to.rawValue): a message only moves forward (sent, acknowledged, working, then done or failed)"
         case .questionOpen(let thread):
-            "#\(thread.number) (\(thread)) already has an open question; its answer comes on the thread, which `video-review state --json` shows"
+            "#\(thread.number) (\(thread)) already has an open question; its answer comes on the thread, which `havooch state --json` shows"
         case .noQuestion(let thread):
             "#\(thread.number) (\(thread)) has no open question to answer"
         case .frameMismatch(let thread, let time):

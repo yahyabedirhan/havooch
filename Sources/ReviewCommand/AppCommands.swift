@@ -2,7 +2,7 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// `video-review app status | open [--demo <folder>] | quit`, and `state`.
+/// `havooch app status | open [--demo <folder>] | quit`, and `state`.
 /// `status` answers without the app; `open` launches it (through
 /// `AppLaunching`) when it doesn't run on the data asked for; `quit` waits
 /// until it's gone.
@@ -68,7 +68,7 @@ enum AppCommands {
     /// The app's status, or `not running` (exit 0) when nothing listens.
     static func status(_ context: Context) -> CommandResult {
         let answer = context.client.send(.appStatus)
-        guard case .failure(.notRunning) = answer else { return VideoReviewCLI.result(of: answer) }
+        guard case .failure(.notRunning) = answer else { return HavoochCLI.result(of: answer) }
         return CommandResult(output: context.client.json ? "{\"running\":false}\n" : "not running\n")
     }
 
@@ -93,14 +93,14 @@ enum AppCommands {
             do {
                 try DemoPointer.remove(in: context.support)
             } catch {
-                return .refused("video-review app open: couldn't remove \(DemoPointer.url(in: context.support).path): \(error.localizedDescription)")
+                return .refused("havooch app open: couldn't remove \(DemoPointer.url(in: context.support).path): \(error.localizedDescription)")
             }
         }
         let normal = context.client(in: context.support)
         switch normal.send(.appOpen) {
         case .failure(.notRunning): return launch(environment: handover, answeringAt: normal, context)
         // It runs (or is there but failing): no second launch.
-        case let answer: return VideoReviewCLI.result(of: answer)
+        case let answer: return HavoochCLI.result(of: answer)
         }
     }
 
@@ -114,18 +114,18 @@ enum AppCommands {
         do {
             try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
         } catch {
-            return .refused("video-review app open: couldn't make the demo folder \(demo.path): \(error.localizedDescription)")
+            return .refused("havooch app open: couldn't make the demo folder \(demo.path): \(error.localizedDescription)")
         }
         let previous = DemoPointer.recorded(in: context.support)
         do {
             try DemoPointer.record(demo, in: context.support)
         } catch {
-            return .refused("video-review app open: couldn't write \(DemoPointer.url(in: context.support).path): \(error.localizedDescription)")
+            return .refused("havooch app open: couldn't write \(DemoPointer.url(in: context.support).path): \(error.localizedDescription)")
         }
         let demoClient = context.client(in: demo)
         switch demoClient.send(.appOpen) {
         case .failure(.notRunning): break
-        case let answer: return VideoReviewCLI.result(of: answer)
+        case let answer: return HavoochCLI.result(of: answer)
         }
         var outcome: CommandResult?
         var environment = [SupportFolder.overrideVariable: demo.path]
@@ -151,7 +151,7 @@ enum AppCommands {
         do throws(AppLaunchFailure) {
             try context.launcher.launch(environment: environment)
         } catch {
-            return .refused("video-review app open: \(error.reason)")
+            return .refused("havooch app open: \(error.reason)")
         }
         // A starting app may accept a connection before it can answer, so
         // each look waits briefly and a slow one is looked at again.
@@ -161,7 +161,7 @@ enum AppCommands {
             context.pause(interval)
             switch look.send(.appOpen) {
             case .failure(.notRunning), .failure(.timedOut): continue
-            case let answer: return VideoReviewCLI.result(of: answer)
+            case let answer: return HavoochCLI.result(of: answer)
             }
         }
         return .refused("\(AppIdentity.appName) didn't answer within \(Int(wait)) seconds of launching")
@@ -201,7 +201,7 @@ enum AppCommands {
     /// instead of finding the old one.
     private static func quitAndWait(_ client: ControlClient, _ context: Context) -> Quit {
         let answer = client.send(.appQuit)
-        guard case .success(let reply) = answer, reply.ok else { return .stayed(VideoReviewCLI.result(of: answer)) }
+        guard case .success(let reply) = answer, reply.ok else { return .stayed(HavoochCLI.result(of: answer)) }
         var look = client
         look.timeout = lookTimeout
         for _ in 0..<looks {

@@ -26,7 +26,7 @@ public struct ProcessRecord: Equatable, Sendable {
 /// The processes `Holder.find` walks up through: macOS's process table in
 /// production, a fake in tests.
 public protocol ProcessTable: Sendable {
-    /// This process: the `video-review` command.
+    /// This process: the `havooch` command.
     var currentPID: Int32 { get }
     /// The process `pid`, or nil when there's none (or it can't be read).
     func process(_ pid: Int32) -> ProcessRecord?

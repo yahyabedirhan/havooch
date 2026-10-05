@@ -1,5 +1,5 @@
 #!/bin/bash
-# Makes the 0.2.0 gallery for the pull request, through the `video-review`
+# Makes the 0.2.0 gallery for the pull request, through the `havooch`
 # CLI only, against the installed app in demo mode with the fixture video:
 #
 #   states/<state>-<light|dark>.png   the main states, in both appearances
@@ -41,13 +41,13 @@
 # Every picture but agent-control leaves the agent-control indicator out
 # (`screenshot --hide-agent-indicator`). Like the acceptance script, it stops
 # at once when `app status --json` does not say "demo": true. The operator is
-# VIDEO_REVIEW_CONTROL_KEY when it is set; the listener has a key of its own.
+# HAVOOCH_CONTROL_KEY when it is set; the listener has a key of its own.
 # The replies and their commit ids are scene text.
 
 set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-cli="${VIDEO_REVIEW_CLI:-/Applications/Video Review.app/Contents/Helpers/video-review}"
+cli="${HAVOOCH_CLI:-${VIDEO_REVIEW_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}}"
 video="$root/fixtures/sample/sample.mp4"
 
 case "${1:-}" in
@@ -60,8 +60,8 @@ theme_shots="$gallery/themes"
 
 run_id="$(date +%Y%m%d-%H%M%S)-$$"
 demo="$root/.scratch/screenshots/$run_id"
-operator_key="${VIDEO_REVIEW_CONTROL_KEY:-screenshots-operator-$run_id}"
-listener_key="${VIDEO_REVIEW_LISTENER_KEY:-screenshots-listener-$run_id}"
+operator_key="${HAVOOCH_CONTROL_KEY:-${VIDEO_REVIEW_CONTROL_KEY:-screenshots-operator-$run_id}}"
+listener_key="${HAVOOCH_LISTENER_KEY:-${VIDEO_REVIEW_LISTENER_KEY:-screenshots-listener-$run_id}}"
 holds_lease=0
 listener_pid=""
 taken=()
@@ -74,22 +74,22 @@ fail() {
 
 # Every command must succeed: a scene with a step missing is the wrong picture.
 operator() {
-    VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" "$@" || fail "refused: video-review $*"
+    HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@" || fail "refused: havooch $*"
 }
 listener() {
-    VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" "$@" || fail "refused: video-review $*"
+    HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@" || fail "refused: havooch $*"
 }
 
 # The background `wait` ends and the lease is free. The demo app keeps
 # running: other agents may be in line for it.
 clean_up() {
     [ -n "$listener_pid" ] && kill "$listener_pid" 2>/dev/null
-    [ "$holds_lease" -eq 1 ] && VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" control release >/dev/null 2>&1
+    [ "$holds_lease" -eq 1 ] && HAVOOCH_CONTROL_KEY="$operator_key" "$cli" control release >/dev/null 2>&1
 }
 trap clean_up EXIT
 
 require_demo() {
-    VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" app status --json | jq -e '.demo == true' >/dev/null 2>&1 \
+    HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json | jq -e '.demo == true' >/dev/null 2>&1 \
         || fail 'app status --json does not say "demo": true; nothing more was sent to the app'
 }
 
@@ -115,14 +115,14 @@ message() { printf '%s' "$1" | jq -r '.message.id'; }
 thread() { printf '%s' "$1" | jq -r '.thread.id'; }
 
 command -v jq >/dev/null 2>&1 || fail "jq is needed and was not found"
-[ -x "$cli" ] || fail "no video-review command at $cli; run make install, or set VIDEO_REVIEW_CLI"
+[ -x "$cli" ] || fail "no havooch command at $cli; run make install, or set HAVOOCH_CLI"
 mkdir -p "$shots" "$theme_shots"
 
 # --- the empty screen --------------------------------------------------------
 
 # A running app answers only to the lease holder: take it first. With no app
 # running, the open launches one and the lease is taken from it.
-if VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
+if HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
     operator control take --wait 1800 >/dev/null
     holds_lease=1
     operator app open --demo "$demo/empty" >/dev/null
@@ -168,7 +168,7 @@ listener status "$(message "$words")" failed >/dev/null
 listener status "$(message "$keys")" working >/dev/null
 listener reply "$(thread "$keys")" "Both names are in the video. I'll ask before I change one." >/dev/null
 # `ask --wait 0` leaves the question open and exits 2 at once.
-VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" ask "$(thread "$keys")" \
+HAVOOCH_CONTROL_KEY="$listener_key" "$cli" ask "$(thread "$keys")" \
     "Which name do you want: Cmd+Return, as the menu says, or Cmd+Enter, as the narration says?" --wait 0 >/dev/null
 [ $? -eq 2 ] || fail "the open question was refused"
 
@@ -183,7 +183,7 @@ operator player seek 19.5 >/dev/null
 operator comment add "Show the three ways the agent can answer, not only the reply." --region 0.55,0.6,0.4,0.3 >/dev/null
 
 # The listener waits again, so the footer shows it present.
-VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
+HAVOOCH_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
 listener_pid=$!
 
 # Thread #3's frame: its region and its badge are on the video. The notices

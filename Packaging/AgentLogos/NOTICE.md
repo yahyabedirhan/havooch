@@ -1,6 +1,6 @@
 # Notices for the agent logos
 
-Video Review bundles each known agent's logo, shown on that agent's messages, on the presence pill and on its notices, to say which agent answers. The logos and this attribution come from Shipyard (`yahyabedirhan/shipyard` at `74b9695`, `THIRD-PARTY-NOTICES.md`), unchanged. The SVGs are kept as published in `assets/images/agent-logos/` and converted, unaltered, to the PDFs in `Packaging/AgentLogos/`, which the app bundle carries in `Contents/Resources/AgentLogos/` with this notice. Each logo is its owner's trademark; showing it identifies the agent and implies no endorsement. The licences below cover the drawings' copyright, never the marks.
+Havooch bundles each known agent's logo, shown on that agent's messages, on the presence pill and on its notices, to say which agent answers. The logos and this attribution come from Shipyard (`yahyabedirhan/shipyard` at `74b9695`, `THIRD-PARTY-NOTICES.md`), unchanged. The SVGs are kept as published in `assets/images/agent-logos/` and converted, unaltered, to the PDFs in `Packaging/AgentLogos/`, which the app bundle carries in `Contents/Resources/AgentLogos/` with this notice. Each logo is its owner's trademark; showing it identifies the agent and implies no endorsement. The licences below cover the drawings' copyright, never the marks.
 
 | Logo | Source | Licence |
 |---|---|---|

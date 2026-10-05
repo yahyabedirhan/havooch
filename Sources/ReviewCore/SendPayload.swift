@@ -1,6 +1,6 @@
 import Foundation
 
-/// What `video-review wait` prints: one send as the listener reads it,
+/// What `havooch wait` prints: one send as the listener reads it,
 /// grouped by thread. Each thread carries its keyframe, its transcript
 /// window as the send cut it, the conversation so far (`history`) and the
 /// person's messages of this send. A key with no value is `null`, never

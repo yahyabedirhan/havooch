@@ -60,7 +60,7 @@ protocol AppControlling: AnyObject {
 /// dispatches it, one JSON request per connection with one reply. The
 /// socket, each connection and the heartbeat are `SocketListener`'s, which
 /// reads each request off the main actor and hands it here
-/// (`reply(to:)`). Every refusal is a reply, so the `video-review`
+/// (`reply(to:)`). Every refusal is a reply, so the `havooch`
 /// command always has a line to print. The server owns the one lease: an
 /// operator request asks it first, and a `take`'s reply granting it that
 /// can't be written (its client gone) gives it up at once. A listener's
@@ -260,7 +260,7 @@ final class ControlServer {
                 case .ranOut:
                     return Answer(reply: .ranOut)
                 case .replaced:
-                    return Answer(reply: .refused("a newer `video-review wait` took this one's place: one listener at a time"))
+                    return Answer(reply: .refused("a newer `havooch wait` took this one's place: one listener at a time"))
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
@@ -519,7 +519,7 @@ final class ControlServer {
         }
     }
 
-    /// Stops listening and removes the socket, so the `video-review`
+    /// Stops listening and removes the socket, so the `havooch`
     /// command finds the app gone.
     func stop() {
         listener?.close()

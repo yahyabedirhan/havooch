@@ -471,9 +471,9 @@ struct ControlServerTests {
         let state = try object(await answer(.state, json: true).reply.output)
         #expect((state["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
         #expect(await answer(.contextSet(text: "")).reply == .done("context note cleared\n"))
-        app.refusal = AppRefusal("no video is open; open one with `video-review player open <path>`")
+        app.refusal = AppRefusal("no video is open; open one with `havooch player open <path>`")
         #expect(await answer(.contextSet(text: "note")).reply
-            == .refused("no video is open; open one with `video-review player open <path>`"))
+            == .refused("no video is open; open one with `havooch player open <path>`"))
     }
 
     @Test("send reaches the app and answers the send's id, how many messages it carries and on how many threads")
@@ -516,7 +516,7 @@ struct ControlServerTests {
         // a socket's address holds. The same folder on every run, so the
         // short link to it is reused, not left behind once per run.
         let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("video-review-tests-socket", isDirectory: true)
+            .appendingPathComponent("havooch-tests-socket", isDirectory: true)
             .appendingPathComponent(String(repeating: "deep-", count: 12), isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
         let socket = ControlSocket.url(in: folder)

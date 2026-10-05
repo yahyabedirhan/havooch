@@ -17,7 +17,7 @@ struct PersistenceTests {
     nonisolated static let restarted = Holder(key: "listener-2", name: "Mate", place: "/shop")
 
     let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     var support: URL { root.appendingPathComponent("support", isDirectory: true) }
 
     private func cleanUp() {

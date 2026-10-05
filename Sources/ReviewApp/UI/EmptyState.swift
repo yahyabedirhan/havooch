@@ -12,7 +12,12 @@ struct EmptyState: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Drop a Video Here", systemImage: "play.rectangle.on.rectangle")
+            // The cat mark in place of a symbol: the first screen is the
+            // app's own.
+            VStack(spacing: 14) {
+                HavoochMark(size: 76)
+                Text("Drop a Video Here")
+            }
         } description: {
             Text("An mp4, mov or m4v file. Pause anywhere, or draw on the frame, and write to your agent.")
         } actions: {

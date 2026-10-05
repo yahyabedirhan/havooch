@@ -69,7 +69,7 @@ final class ReviewDesk {
         }
         guard let ref, let hash, let review = review(of: hash) else {
             throw AppRefusal(
-                "no thread `\(text)`; give a thread id from the send `video-review wait` printed, or a number of the open video"
+                "no thread `\(text)`; give a thread id from the send `havooch wait` printed, or a number of the open video"
             )
         }
         do throws(ReviewRefusal) {
@@ -82,7 +82,7 @@ final class ReviewDesk {
     /// Runs `change` on the open review, saves and publishes the result.
     func change<Result>(_ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
         guard let review else {
-            throw AppRefusal("no video is open; open one with `video-review player open <path>`")
+            throw AppRefusal("no video is open; open one with `havooch player open <path>`")
         }
         return try self.change(review.video.contentHash, change)
     }

@@ -1,9 +1,9 @@
 import Foundation
 import ReviewCommand
 
-// The `video-review` executable: runs the command table with the real
+// The `havooch` executable: runs the command table with the real
 // environment, prints what it answers and exits with its code.
-let result = VideoReviewCLI.run(
+let result = HavoochCLI.run(
     Array(CommandLine.arguments.dropFirst()),
     environment: .live(executable: Bundle.main.executableURL)
 )

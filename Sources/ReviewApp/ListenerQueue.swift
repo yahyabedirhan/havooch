@@ -116,7 +116,7 @@ final class ListenerQueue {
 
     // MARK: - The listener's side
 
-    /// `video-review wait`: the next send in line, at once when there is
+    /// `havooch wait`: the next send in line, at once when there is
     /// one, else when the person sends, for up to `timeout` seconds (nil:
     /// with no limit). A `wait` from another holder than the last is a new
     /// listener session: the sends the last one took and didn't finish are
@@ -190,12 +190,12 @@ final class ListenerQueue {
 
     // MARK: - The listener's answers
 
-    /// `video-review ack`: the listener has the send. Its messages turn
+    /// `havooch ack`: the listener has the send. Its messages turn
     /// `acknowledged`, and `text` is the agent's message on General.
     func ack(_ sendID: String, text: String?) throws(AppRefusal) -> StateReport.Send {
         outbox.heard(at: now())
         guard let id = ItemID(sendID), id.kind == .send, let hash = desk.contentHash(of: id) else {
-            throw AppRefusal("no send `\(sendID)`; the send `video-review wait` printed names its id")
+            throw AppRefusal("no send `\(sendID)`; the send `havooch wait` printed names its id")
         }
         let before = desk.review(of: hash)?.general.messages.count ?? 0
         let send = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
@@ -209,13 +209,13 @@ final class ListenerQueue {
         return StateReport.Send(send, in: review)
     }
 
-    /// `video-review status`: how far the listener is with a message. The
+    /// `havooch status`: how far the listener is with a message. The
     /// send whose last message finishes is no longer taken, so the listener
     /// is back to listening.
     func status(_ messageID: String, _ state: MessageState) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
         guard let id = ItemID(messageID), id.kind == .message, let hash = desk.contentHash(of: id) else {
-            throw AppRefusal("no message `\(messageID)`; the send `video-review wait` printed names each message's id")
+            throw AppRefusal("no message `\(messageID)`; the send `havooch wait` printed names each message's id")
         }
         let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.setState(id, state) }
         if let sendID = message.sendID, desk.review(of: hash)?.isFinished(sendID) == true {
@@ -224,7 +224,7 @@ final class ListenerQueue {
         return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `video-review reply`: the agent's message on a thread.
+    /// `havooch reply`: the agent's message on a thread.
     func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
         let (id, hash) = try desk.threadID(thread)
@@ -235,7 +235,7 @@ final class ListenerQueue {
         return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `video-review ask`: the agent's question on a thread, held until the
+    /// `havooch ask`: the agent's question on a thread, held until the
     /// person answers it, for up to `waitSeconds` (nil: with no limit).
     /// When the time runs out the question stays open, and an answer that
     /// comes later stays on the thread.

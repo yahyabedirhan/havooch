@@ -17,7 +17,7 @@ extension ControlServerTests.FakeApp {
     }
 
     func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme {
-        guard name == "Dimmed" else { throw AppRefusal("no theme \(name); video-review theme list names them") }
+        guard name == "Dimmed" else { throw AppRefusal("no theme \(name); havooch theme list names them") }
         return StateReport.Theme(active: "Dimmed", kind: "dark", pinned: "Dimmed", appearance: "light", overrides: 0)
     }
 }

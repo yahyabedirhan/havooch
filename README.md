@@ -1,4 +1,4 @@
-<!-- Logo: the cat head from assets/images/logo/ goes here, as <p align="center"><img src="assets/images/logo/…" width="128" alt="Havooch"></p>. -->
+<p align="center"><img src="assets/images/logo/v2-havuc/havooch-mark.svg" width="128" alt="Havooch: the head of Havuç, an orange and white cat"></p>
 
 # Havooch
 
@@ -49,6 +49,8 @@ Or clear the quarantine flag from a terminal:
 ```sh
 xattr -dr com.apple.quarantine /Applications/Havooch.app
 ```
+
+Havooch was called Video Review before its first release. Its first launch moves your reviews, themes and settings from `~/Library/Application Support/Video Review/` to `~/Library/Application Support/Havooch/`, and the old `VIDEO_REVIEW_*` variables still work.
 
 ## The command and the mate skill
 

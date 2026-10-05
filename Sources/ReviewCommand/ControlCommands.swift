@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review control take [--wait <seconds>] | release`: holding the
+/// `havooch control take [--wait <seconds>] | release`: holding the
 /// lease on purpose and giving it up. Both are free commands: `take` is how
 /// an agent asks for the lease, and `release` from anyone but the holder
 /// changes nothing.

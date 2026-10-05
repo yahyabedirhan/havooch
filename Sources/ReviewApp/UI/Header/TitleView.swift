@@ -53,13 +53,23 @@ struct HeaderWords: Equatable {
 }
 
 /// The header's title, at the window's leading edge beside the traffic
-/// lights: a video icon and the file name, and under it a folder icon and
+/// lights: the cat mark, a video icon and the file name, and under it a folder icon and
 /// the folder, with the full path on hover.
 struct TitleView: View {
     let words: HeaderWords
     @Environment(\.palette) private var palette
 
     var body: some View {
+        HStack(spacing: 8) {
+            HavoochMark(size: 22)
+            lines
+        }
+        .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The file name, and under it the folder.
+    private var lines: some View {
         VStack(alignment: .leading, spacing: 1) {
             Label {
                 Text(words.title)
@@ -85,8 +95,6 @@ struct TitleView: View {
         }
         .lineLimit(1)
         .truncationMode(.middle)
-        .padding(.leading, 4)
-        .accessibilityElement(children: .combine)
     }
 }
 

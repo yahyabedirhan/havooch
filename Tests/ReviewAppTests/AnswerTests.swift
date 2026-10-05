@@ -15,7 +15,7 @@ struct AnswerTests {
     nonisolated static let listener = Holder(key: "listener-1", name: "Mate", place: "/shop")
 
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func cleanUp() {
         try? FileManager.default.removeItem(at: support)
@@ -137,7 +137,7 @@ struct AnswerTests {
         let app = try await taken()
         for id in ["s-00000000-1", app.first, "nonsense"] {
             let reply = await listen(.ack(sendID: id, text: "On it"), app)
-            #expect(reply == .refused("no send `\(id)`; the send `video-review wait` printed names its id"))
+            #expect(reply == .refused("no send `\(id)`; the send `havooch wait` printed names its id"))
         }
         let other = String(app.send.dropLast()) + "9"
         #expect(await listen(.ack(sendID: other, text: nil), app) == .refused(ReviewRefusal.unknownID(other).line))
@@ -189,7 +189,7 @@ struct AnswerTests {
         #expect(await listen(.status(messageID: app.first, state: .done), app).ok)
         for id in ["m-00000000-1", app.send, "nonsense"] {
             #expect(await listen(.status(messageID: id, state: .done), app)
-                == .refused("no message `\(id)`; the send `video-review wait` printed names each message's id"))
+                == .refused("no message `\(id)`; the send `havooch wait` printed names each message's id"))
         }
         #expect(states(app) == [.done, .sent])
     }
@@ -253,7 +253,7 @@ struct AnswerTests {
         let app = try await taken()
         for id in ["m-00000000-1", "nonsense"] {
             #expect(await listen(.reply(thread: id, text: "Hello"), app)
-                == .refused("no thread `\(id)`; give a thread id from the send `video-review wait` printed, or a number of the open video"))
+                == .refused("no thread `\(id)`; give a thread id from the send `havooch wait` printed, or a number of the open video"))
         }
         #expect(await listen(.reply(thread: "7", text: "Hello"), app).ok == false)
         let unsent = try await app.model.addMessage(text: "Not sent yet", at: 15)
@@ -434,7 +434,7 @@ struct AnswerTests {
     func overTheSocket() async throws {
         defer { cleanUp() }
         let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
+            .appendingPathComponent("havooch-\(UUID().uuidString.prefix(8))", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let app = try await taken(socket: ControlSocket.url(in: folder))
         try app.server.start()

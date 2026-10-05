@@ -15,7 +15,7 @@ struct ThemeCommandTests {
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(arguments, environment: run.environment) == CommandResult(output: "done\n"))
+        #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
     }
 
@@ -25,14 +25,14 @@ struct ThemeCommandTests {
     func usage(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result.exitCode == 64)
         #expect(run.transport.requests.isEmpty)
     }
 
     @Test("the usage text names both theme commands")
     func usageText() {
-        #expect(CommandTable.usageText.contains("video-review theme list"))
-        #expect(CommandTable.usageText.contains("video-review theme set <name|system>"))
+        #expect(CommandTable.usageText.contains("havooch theme list"))
+        #expect(CommandTable.usageText.contains("havooch theme set <name|system>"))
     }
 }

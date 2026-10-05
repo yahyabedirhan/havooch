@@ -4,7 +4,7 @@ import ReviewWire
 import ScreenCaptureKit
 import UniformTypeIdentifiers
 
-/// What the control server asks for a `video-review screenshot`.
+/// What the control server asks for a `havooch screenshot`.
 protocol Screenshotting: AnyObject {
     /// The app's `window` written as a PNG at `file`, in `appearance` when
     /// it's set (and back to the app's own afterwards). The agent-control
@@ -59,12 +59,25 @@ final class Screenshotter: Screenshotting {
     ) async throws(AppRefusal) {
         // Settings opens for the capture, as ⌘, opens it, and closes after
         // it when it was closed before.
-        let opened = which == .settings && settings.window == nil
-        if which == .settings { try await settings.show() }
-        defer { if opened { settings.window?.close() } }
-        let found = which == .settings ? settings.window : Self.appWindow
+        // So does the About panel.
+        let opened: Bool
+        let found: NSWindow?
+        switch which {
+        case .main:
+            opened = false
+            found = Self.appWindow
+        case .settings:
+            opened = settings.window == nil
+            try await settings.show()
+            found = settings.window
+        case .about:
+            opened = AboutPanel.window == nil
+            try await AboutPanel.showForCapture()
+            found = AboutPanel.window
+        }
+        defer { if opened { found?.close() } }
         guard let window = found else {
-            throw AppRefusal(which == .settings ? "the Settings window didn't open" : "the app's window isn't on screen")
+            throw AppRefusal(which == .main ? "the app's window isn't on screen" : "the \(which.rawValue) window didn't open")
         }
         let previous = NSApp.appearance
         if let appearance {

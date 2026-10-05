@@ -2,7 +2,7 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// What a command run prints and how it exits: the `video-review`
+/// What a command run prints and how it exits: the `havooch`
 /// executable writes `output` to standard output and `error` to standard
 /// error, then exits with `exitCode`.
 public struct CommandResult: Equatable, Sendable {
@@ -67,7 +67,7 @@ public struct CommandEnvironment: Sendable {
         self.now = now
     }
 
-    /// The real environment of the `video-review` executable at
+    /// The real environment of the `havooch` executable at
     /// `executable`.
     public static func live(executable: URL?) -> CommandEnvironment {
         CommandEnvironment(
@@ -81,10 +81,10 @@ public struct CommandEnvironment: Sendable {
     }
 }
 
-/// The `video-review` command: its arguments read through `CommandTable`,
+/// The `havooch` command: its arguments read through `CommandTable`,
 /// one request sent to the app, the reply printed, the exit code picked.
 /// Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.
-public enum VideoReviewCLI {
+public enum HavoochCLI {
     public static func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult {
         // `--json` is an option anywhere before `--`; after it, it's a word.
         let end = arguments.firstIndex(of: Arguments.optionsEnd) ?? arguments.endIndex
@@ -103,13 +103,13 @@ public enum VideoReviewCLI {
         }
         guard !arguments.isEmpty else { return .usage(CommandTable.usageText) }
         guard let (command, rest) = CommandTable.find(arguments) else {
-            return .usage("video-review: unknown command `\(arguments.prefix(2).joined(separator: " "))`\n\n" + CommandTable.usageText)
+            return .usage("havooch: unknown command `\(arguments.prefix(2).joined(separator: " "))`\n\n" + CommandTable.usageText)
         }
         let invocation: Invocation
         do throws(UsageError) {
             invocation = try command.parse(try Arguments(rest, valued: command.valuedOptions, flags: command.flags), environment)
         } catch {
-            return .usage("video-review \(command.name): \(error.message)\nusage: video-review \(command.synopsis)")
+            return .usage("havooch \(command.name): \(error.message)\nusage: havooch \(command.synopsis)")
         }
         return run(invocation, json: json, environment: environment)
     }
@@ -137,7 +137,7 @@ public enum VideoReviewCLI {
         }
     }
 
-    static let notRunning = "\(AppIdentity.appName) isn't running; run `video-review app open`"
+    static let notRunning = "\(AppIdentity.appName) isn't running; run `havooch app open`"
 
     /// What a reply, or the failure to get one, prints and how it exits.
     static func result(of answer: Result<ControlReply, ControlClient.Failure>) -> CommandResult {

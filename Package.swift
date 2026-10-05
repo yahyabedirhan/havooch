@@ -7,12 +7,13 @@ import PackageDescription
 // ReviewApp is macOS UI code: every other module builds and tests on Linux. A
 // module and a type never share a name.
 let package = Package(
-    name: "VideoReview",
+    name: "Havooch",
     platforms: [.macOS(.v26)],
     products: [
-        // `video-review`, not `VideoReview`: the app's executable has that
-        // name. `make bundle` puts the command in `Contents/Helpers`.
-        .executable(name: "video-review", targets: ["ReviewCLI"]),
+        // `havooch`, the command. The app's executable is `HavoochApp`, not
+        // `Havooch`: on a case-insensitive disk the two would be one file in
+        // `.build`. `make bundle` puts the command in `Contents/Helpers`.
+        .executable(name: "havooch", targets: ["ReviewCLI"]),
     ],
     targets: [
         // Who holds app control and the lease's rules as a pure value, given
@@ -20,7 +21,7 @@ let package = Package(
         .target(name: "ReviewLease", path: "Sources/ReviewLease"),
         // The control protocol, the socket framing and the app identity.
         .target(name: "ReviewWire", dependencies: ["ReviewLease"], path: "Sources/ReviewWire"),
-        // The command table of `video-review`, a library so it tests
+        // The command table of `havooch`, a library so it tests
         // without a process.
         .target(name: "ReviewCommand", dependencies: ["ReviewWire", "ReviewLease"], path: "Sources/ReviewCommand"),
         .executableTarget(name: "ReviewCLI", dependencies: ["ReviewCommand"], path: "Sources/ReviewCLI"),
@@ -49,7 +50,7 @@ let package = Package(
 // The app and its tests are macOS UI code. Elsewhere (a Linux machine) the
 // package is the modules that build and test without the app.
 #if os(macOS)
-package.products.append(.executable(name: "VideoReview", targets: ["ReviewApp"]))
+package.products.append(.executable(name: "HavoochApp", targets: ["ReviewApp"]))
 package.targets += [
     .executableTarget(
         name: "ReviewApp",

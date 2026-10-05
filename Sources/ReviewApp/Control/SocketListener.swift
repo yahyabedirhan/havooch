@@ -37,7 +37,7 @@ nonisolated final class SocketListener: @unchecked Sendable {
     private let undelivered: Delivered
     private let hungUp: HungUp
     private let quit: @MainActor @Sendable () -> Void
-    private static let queue = DispatchQueue(label: "video-review.control", attributes: .concurrent)
+    private static let queue = DispatchQueue(label: "havooch.control", attributes: .concurrent)
     /// How long a connection may take to send its request or read the
     /// reply, so a client that stalls never holds a thread.
     private static let connectionTimeout: TimeInterval = 5
@@ -106,7 +106,7 @@ nonisolated final class SocketListener: @unchecked Sendable {
         return UnixSocket.connectSocket(probe, to: address) == 0
     }
 
-    /// Stops listening and removes the socket, so the `video-review`
+    /// Stops listening and removes the socket, so the `havooch`
     /// command finds the app gone.
     func close() {
         source.cancel()

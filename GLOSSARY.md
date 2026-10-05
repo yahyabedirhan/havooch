@@ -1,6 +1,6 @@
-# Video Review
+# Havooch
 
-A native macOS video player for giving feedback to agents. A person writes messages on frames of a video, sends them to a listening agent, and reads the agent's answers in the player.
+Havooch (formerly Video Review) is a native macOS video player for giving feedback to agents. A person writes messages on frames of a video, sends them to a listening agent, and reads the agent's answers in the player.
 
 ## Language
 

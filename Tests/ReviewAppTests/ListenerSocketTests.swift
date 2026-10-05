@@ -7,7 +7,7 @@ import Testing
 
 /// The listener's whole round over the real socket: the app's model on the
 /// fixture video and the control server listening on `control.sock`, asked
-/// by `ControlClient`s as the `video-review` command asks it, an operator
+/// by `ControlClient`s as the `havooch` command asks it, an operator
 /// and a listener in two shells.
 @Suite("The listener over the real socket", .serialized)
 struct ListenerSocketTests {
@@ -16,10 +16,10 @@ struct ListenerSocketTests {
     nonisolated static let restarted = Holder(key: "listener-2", name: "Mate", place: "/shop")
 
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     /// A folder short enough for a socket's path.
     let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        .appendingPathComponent("havooch-\(UUID().uuidString.prefix(8))", isDirectory: true)
 
     private func cleanUp() {
         try? FileManager.default.removeItem(at: support)
@@ -53,7 +53,7 @@ struct ListenerSocketTests {
         )
     }
 
-    /// One `video-review` command as `holder`, over the socket.
+    /// One `havooch` command as `holder`, over the socket.
     private func command(
         _ request: ControlRequest, as holder: Holder, json: Bool = false, _ app: Running
     ) async throws -> ControlReply {

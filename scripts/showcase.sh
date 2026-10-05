@@ -1,6 +1,6 @@
 #!/bin/bash
 # Plays a believable review of the showcase video (fixtures/showcase/, the
-# Halcyon teaser) through the `video-review` CLI only, against the installed
+# Halcyon teaser) through the `havooch` CLI only, against the installed
 # app in demo mode, and takes the landing page's pictures of it:
 #
 #   scripts/showcase.sh [<gallery folder>]     (default: assets/screenshots/showcase)
@@ -37,7 +37,7 @@
 # and, in the Tokyo Night theme (one picture each):
 #   tokyo-night-list, tokyo-night-thread (thread #2's view)
 #
-# The operator holds the lease (VIDEO_REVIEW_CONTROL_KEY when set, else a
+# The operator holds the lease (HAVOOCH_CONTROL_KEY when set, else a
 # key of this run). The listener has a key of its own and runs `wait`,
 # `ack`, `status`, `reply` and `ask` only. Both carry CLAUDE_CODE_SESSION_ID,
 # so the player names the agent Claude Code. The commit ids in the replies
@@ -46,7 +46,7 @@
 set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-cli="${VIDEO_REVIEW_CLI:-/Applications/Video Review.app/Contents/Helpers/video-review}"
+cli="${HAVOOCH_CLI:-${VIDEO_REVIEW_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}}"
 video="$root/fixtures/showcase/halcyon-teaser.mp4"
 
 case "${1:-}" in
@@ -57,8 +57,8 @@ esac
 
 run_id="$(date +%Y%m%d-%H%M%S)-$$"
 demo="$root/.scratch/showcase/$run_id/demo"
-operator_key="${VIDEO_REVIEW_CONTROL_KEY:-showcase-operator-$run_id}"
-listener_key="${VIDEO_REVIEW_LISTENER_KEY:-showcase-listener-$run_id}"
+operator_key="${HAVOOCH_CONTROL_KEY:-${VIDEO_REVIEW_CONTROL_KEY:-showcase-operator-$run_id}}"
+listener_key="${HAVOOCH_LISTENER_KEY:-${VIDEO_REVIEW_LISTENER_KEY:-showcase-listener-$run_id}}"
 export CLAUDE_CODE_SESSION_ID="${CLAUDE_CODE_SESSION_ID:-showcase-$run_id}"
 holds_lease=0
 listener_pid=""
@@ -70,25 +70,25 @@ fail() {
 
 # Every command must succeed: a scene with a step missing is the wrong picture.
 operator() {
-    VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" "$@" || fail "refused: video-review $*"
+    HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@" || fail "refused: havooch $*"
 }
 listener() {
-    VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" "$@" || fail "refused: video-review $*"
+    HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@" || fail "refused: havooch $*"
 }
 # ask <thread> <question>: leaves the question open; `--wait 0` exits 2 at once.
 ask() {
-    VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" ask "$1" "$2" --wait 0 >/dev/null
+    HAVOOCH_CONTROL_KEY="$listener_key" "$cli" ask "$1" "$2" --wait 0 >/dev/null
     [ $? -eq 2 ] || fail "the question on $1 was refused"
 }
 
 clean_up() {
     [ -n "$listener_pid" ] && kill "$listener_pid" 2>/dev/null
-    [ "$holds_lease" -eq 1 ] && VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" control release >/dev/null 2>&1
+    [ "$holds_lease" -eq 1 ] && HAVOOCH_CONTROL_KEY="$operator_key" "$cli" control release >/dev/null 2>&1
 }
 trap clean_up EXIT
 
 require_demo() {
-    VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" app status --json | jq -e '.demo == true' >/dev/null 2>&1 \
+    HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json | jq -e '.demo == true' >/dev/null 2>&1 \
         || fail 'app status --json does not say "demo": true; nothing more was sent to the app'
 }
 
@@ -107,7 +107,7 @@ shot() {
 }
 
 command -v jq >/dev/null 2>&1 || fail "jq is needed and was not found"
-[ -x "$cli" ] || fail "no video-review command at $cli; run make install, or set VIDEO_REVIEW_CLI"
+[ -x "$cli" ] || fail "no havooch command at $cli; run make install, or set HAVOOCH_CLI"
 [ -f "$video" ] || fail "no showcase video at $video"
 mkdir -p "$gallery" "$demo"
 
@@ -115,7 +115,7 @@ mkdir -p "$gallery" "$demo"
 
 # A running app answers only to the lease holder: take it first. Opening the
 # demo folder relaunches the app on it and hands the lease over.
-if VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
+if HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
     operator control take --wait 1800 >/dev/null
     holds_lease=1
     operator app open --demo "$demo" >/dev/null
@@ -178,7 +178,7 @@ check "$tile"
 check "$(operator comment add "Overall this is so close. The voice and the colour are lovely, please don't touch them." --thread 0 --json)"
 
 # The listener waits again, so the footer shows it with the agent.
-VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
+HAVOOCH_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
 listener_pid=$!
 
 # --- the pictures ----------------------------------------------------------------

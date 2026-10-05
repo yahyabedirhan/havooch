@@ -1,11 +1,11 @@
 import Foundation
 
 /// Who sends a control request: the agent the lease is held by or refused
-/// to. Every request carries one, worked out by the `video-review` command
+/// to. Every request carries one, worked out by the `havooch` command
 /// on each call (`Holder.find`), so agents usually pass nothing.
 public struct Holder: Codable, Hashable, Sendable {
     /// What tells one agent from another across its commands: the key it
-    /// exports (`VIDEO_REVIEW_CONTROL_KEY`), else its session
+    /// exports (`HAVOOCH_CONTROL_KEY`), else its session
     /// (`CLAUDE_CODE_SESSION_ID=…`), else its process (`process:<pid>@<start>`).
     public var key: String
     /// The agent's name as people read it: `Claude Code`, or its process's
@@ -34,7 +34,7 @@ public struct Holder: Codable, Hashable, Sendable {
     /// it, for a setup where neither the agent's session nor its process
     /// stays the same across its commands. A value that's empty or blank
     /// counts as unset.
-    public static let keyVariable = "VIDEO_REVIEW_CONTROL_KEY"
+    public static let keyVariable = "HAVOOCH_CONTROL_KEY"
 
     /// The holder of a command run with `variables` in `workingDirectory`:
     /// the first known session variable that's set, else the nearest
@@ -44,7 +44,7 @@ public struct Holder: Codable, Hashable, Sendable {
     public static func find(variables: [String: String], workingDirectory: URL, processes: any ProcessTable) -> Holder {
         let place = variables["HERDR_PANE_ID"].flatMap { $0.isEmpty ? nil : "Herdr pane \($0)" } ?? workingDirectory.path
         var holder = automatic(variables: variables, place: place, processes: processes)
-        if let key = variables[keyVariable], !key.allSatisfy(\.isWhitespace) {
+        if let key = AppVariable.value(keyVariable, in: variables), !key.allSatisfy(\.isWhitespace) {
             holder.key = key
         }
         return holder

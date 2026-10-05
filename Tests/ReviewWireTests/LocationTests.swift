@@ -6,17 +6,17 @@ import Testing
 struct LocationTests {
     /// A new empty folder, removed when the test ends.
     private func withFolder(_ body: (URL) throws -> Void) throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         try body(folder)
     }
 
-    @Test("the app is Video Review 0.2.0, with no prototype suffix in its name, bundle id or support folder")
+    @Test("the app is Havooch 0.2.0, with no prototype suffix in its name, bundle id or support folder")
     func identity() {
-        #expect(AppIdentity.appName == "Video Review")
-        #expect(AppIdentity.bundleID == "com.yahyabedirhan.video-review")
-        #expect(SupportFolder.app(environment: [:]).lastPathComponent == "Video Review")
+        #expect(AppIdentity.appName == "Havooch")
+        #expect(AppIdentity.bundleID == "com.yahyabedirhan.havooch")
+        #expect(SupportFolder.app(environment: [:]).lastPathComponent == "Havooch")
         #expect(Version.app == "0.2.0")
     }
 
@@ -32,14 +32,16 @@ struct LocationTests {
 
     @Test("the support folder is in Application Support", .enabled(if: onMac, "Application Support is a macOS folder"))
     func applicationSupport() {
-        #expect(SupportFolder.app(environment: [:]).path.hasSuffix("/Library/Application Support/Video Review"))
+        #expect(SupportFolder.app(environment: [:]).path.hasSuffix("/Library/Application Support/Havooch"))
     }
 
-    @Test("VIDEO_REVIEW_SUPPORT_DIR moves the support folder when it's absolute")
+    @Test("HAVOOCH_SUPPORT_DIR moves the support folder when it's absolute")
     func override() {
-        #expect(SupportFolder.app(environment: ["VIDEO_REVIEW_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
-        #expect(SupportFolder.moved(environment: ["VIDEO_REVIEW_SUPPORT_DIR": "demo"]) == nil)
+        #expect(SupportFolder.app(environment: ["HAVOOCH_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
+        #expect(SupportFolder.moved(environment: ["HAVOOCH_SUPPORT_DIR": "demo"]) == nil)
         #expect(SupportFolder.moved(environment: [:]) == nil)
+        // The variable's name before the rename still works.
+        #expect(SupportFolder.app(environment: ["VIDEO_REVIEW_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
     }
 
     @Test("the demo pointer is recorded, read and removed")

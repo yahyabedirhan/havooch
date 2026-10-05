@@ -1,13 +1,13 @@
 # Agents control the app through a leased CLI
 
-Agents are users of Video Review from the first build, not only testers. Every action a person can take in the app, an agent can take through the `video-review` command line, and the app enforces that one agent at a time drives it. The design is Shipyard's app control (`yahyabedirhan/shipyard`, ADR 0006 and ADR 0007), adapted to a video player.
+Agents are users of Havooch from the first build, not only testers. Every action a person can take in the app, an agent can take through the `havooch` command line, and the app enforces that one agent at a time drives it. The design is Shipyard's app control (`yahyabedirhan/shipyard`, ADR 0006 and ADR 0007), adapted to a video player.
 
 ## The wire
 
-- The app listens on a Unix stream socket, `control.sock` in `~/Library/Application Support/Video Review/`, mode 0600. It exists only while the app runs.
+- The app listens on a Unix stream socket, `control.sock` in `~/Library/Application Support/Havooch/`, mode 0600. It exists only while the app runs.
 - One request per connection. The client writes one JSON object and shuts down its write side; the app answers with `{ok, output, error, lease?}`.
 - Every request carries `version` and `holder`. A request of another version is refused, naming both versions, so a CLI from another build is told to reinstall.
-- The CLI ships inside the app bundle at `Contents/Helpers/video-review`.
+- The CLI ships inside the app bundle at `Contents/Helpers/havooch`.
 
 ## Two roles
 
@@ -21,7 +21,7 @@ Shipyard's rules, unchanged:
 
 - The first operator command takes the lease and each later one renews it. It ends one minute after the holder's last command, and five minutes after it was taken at most.
 - `control take --wait <seconds>` holds it for a longer run and queues agents first come, first served. `control release` ends it.
-- The CLI works out the holder on every call: `CLAUDE_CODE_SESSION_ID` when exported, otherwise the nearest ancestor process that isn't a shell (pid plus start time). `VIDEO_REVIEW_CONTROL_KEY` overrides both.
+- The CLI works out the holder on every call: `CLAUDE_CODE_SESSION_ID` when exported, otherwise the nearest ancestor process that isn't a shell (pid plus start time). `HAVOOCH_CONTROL_KEY` overrides both.
 - A command from another holder is refused with exit 1, naming the holder and when the lease ends.
 - While an agent holds the lease the app shows the agent-control icon in the header, left of Context. Its popover names the agent, where it runs and the time left, and has Stop. The person's Stop ends the lease and bars that holder for five minutes. The person always wins.
 - The lease rules are a pure value in an agent-side module, given the time on each call, so they test without the app.

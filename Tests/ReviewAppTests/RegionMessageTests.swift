@@ -119,7 +119,7 @@ struct VideoFrameGeometryTests {
 @Suite("Messages on a region", .serialized)
 struct RegionMessageTests {
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> AppModel {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])

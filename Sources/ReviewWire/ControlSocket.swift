@@ -11,7 +11,7 @@ public enum ControlSocket {
         support.appendingPathComponent(fileName, isDirectory: false)
     }
 
-    /// The socket the `video-review` command asks the running app through,
+    /// The socket the `havooch` command asks the running app through,
     /// given the support folder it knows. While `app open --demo` left a
     /// `DemoPointer` there and the demo's socket is there, it's the demo's:
     /// so agents reach a demo run with no variable to repeat. Otherwise (no

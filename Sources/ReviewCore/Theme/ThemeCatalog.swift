@@ -44,7 +44,7 @@ public enum ThemeRefusal: Error, Equatable, Sendable {
     /// The refusal as the one line the command prints.
     public var line: String {
         switch self {
-        case .unknown(let name): "no theme \(name); video-review theme list names them"
+        case .unknown(let name): "no theme \(name); havooch theme list names them"
         }
     }
 }

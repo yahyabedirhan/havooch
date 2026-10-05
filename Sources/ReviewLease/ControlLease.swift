@@ -23,7 +23,7 @@ public struct ControlLease: Equatable, Sendable {
     public static let bar: TimeInterval = 5 * 60
 
     /// The app the refusals name. `AppIdentity.appName` is this value.
-    public static let appName = "Video Review"
+    public static let appName = "Havooch"
 
     /// A change in who holds the lease, in the order it happened.
     public enum Transition: Equatable, Sendable {
@@ -65,7 +65,7 @@ public struct ControlLease: Equatable, Sendable {
             case .inUse(let term), .queued(let term):
                 return "\(ControlLease.appName) is in use by \(term.holder.name) in \(term.holder.place) "
                     + "until \(ControlLease.clock(term.ends, timeZone)) (\(term.secondsLeft(at: now))s left); "
-                    + "`video-review control take --wait <seconds>` to queue"
+                    + "`havooch control take --wait <seconds>` to queue"
             case .waitedOut(let seconds, let term):
                 return "waited \(seconds)s; \(ControlLease.appName) is still in use by \(term.holder.name) in \(term.holder.place) "
                     + "until \(ControlLease.clock(term.ends, timeZone)) (\(term.secondsLeft(at: now))s left)"
@@ -126,14 +126,14 @@ public struct ControlLease: Equatable, Sendable {
     // MARK: - A relaunch's handover
 
     /// The launch environment's variable a relaunch hands the lease over in.
-    public static let handoverVariable = "VIDEO_REVIEW_CONTROL_LEASE"
+    public static let handoverVariable = "HAVOOCH_CONTROL_LEASE"
 
     /// The lease an app launched with `environment` starts with at `now`:
     /// the one a relaunch handed over in `handoverVariable`, keeping when
     /// it was taken and so its cap; free when there's none, it doesn't
     /// read, or it has already ended.
     public init(environment: [String: String], at now: Date) {
-        guard let json = environment[Self.handoverVariable],
+        guard let json = AppVariable.value(Self.handoverVariable, in: environment),
               var term = try? JSONDecoder().decode(LeaseTerm.self, from: Data(json.utf8)) else { return }
         term.ends = min(term.ends, term.capped)
         guard now < term.ends else { return }
@@ -329,7 +329,7 @@ extension LeaseTerm {
     }
 
     /// What `control take` prints once it holds the lease, its end in
-    /// `timeZone`: `you hold Video Review until 12:05:00`.
+    /// `timeZone`: `you hold Havooch until 12:05:00`.
     public func held(timeZone: TimeZone) -> String {
         "you hold \(ControlLease.appName) until \(ControlLease.clock(ends, timeZone))"
     }

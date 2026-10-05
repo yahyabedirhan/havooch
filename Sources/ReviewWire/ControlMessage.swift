@@ -8,7 +8,7 @@ import ReviewLease
 ///
 ///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":3}
 ///
-/// The wire format is a contract between a `video-review` and the app of
+/// The wire format is a contract between a `havooch` and the app of
 /// the same build.
 public struct ControlMessage: Equatable, Sendable {
     public var request: ControlRequest
@@ -127,7 +127,7 @@ public struct ControlMessage: Equatable, Sendable {
             var window = ControlRequest.Window.main
             if let name = wire.window {
                 guard let known = ControlRequest.Window(rawValue: name) else {
-                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main` or `settings`")
+                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main`, `settings` or `about`")
                 }
                 window = known
             }

@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// The listener's commands, which need no lease. `video-review wait
+/// The listener's commands, which need no lease. `havooch wait
 /// [--timeout <seconds>]` is a long-poll: it exits 0 with the next send as
 /// JSON, and the listener is present in the app while it's open. `ack`,
 /// `status`, `reply` and `ask` answer in the player; `ask` is held until
@@ -87,7 +87,7 @@ enum ListenerCommands {
                 }
                 environment.pause(retry)
             case let answer:
-                return VideoReviewCLI.result(of: answer)
+                return HavoochCLI.result(of: answer)
             }
         }
     }

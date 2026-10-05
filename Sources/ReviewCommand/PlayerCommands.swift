@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review player open | play | pause | seek`.
+/// `havooch player open | play | pause | seek`.
 enum PlayerCommands {
     static let commands: [Command] = [
         Command(name: "player open", synopsis: "player open <path>", summary: "open a video file, paused at its start") {

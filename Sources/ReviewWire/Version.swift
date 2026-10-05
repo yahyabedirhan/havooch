@@ -1,6 +1,6 @@
 /// The versions of this build. The `Makefile` stamps the bundle with `app`.
 public enum Version {
-    /// The app's version, under semantic versioning. `video-review --version`
+    /// The app's version, under semantic versioning. `havooch --version`
     /// prints it.
     public static let app = "0.2.0"
 

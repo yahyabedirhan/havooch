@@ -3,11 +3,11 @@ import ReviewWire
 import SwiftUI
 
 /// The words shown while an agent holds the lease: "Claude Code controls
-/// Video Review", with "video-review · 48s left · 2 waiting". Made from the
+/// Havooch", with "havooch · 48s left · 2 waiting". Made from the
 /// lease's status at the moment drawn, so the countdown ticks with the time
 /// it's made at. The toolbar's agent-control sign and its popover say them.
 struct AgentControlWords: Equatable {
-    /// "Claude Code controls Video Review".
+    /// "Claude Code controls Havooch".
     var title: String
     /// Where the agent runs, short: a working folder's last component, or
     /// `Herdr pane <id>` as it is.

@@ -14,7 +14,7 @@ struct ThemeDeskTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
 
     let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     var layout: SupportLayout { SupportLayout(root: root.appendingPathComponent("support", isDirectory: true)) }
 
     private func cleanUp() {
@@ -93,7 +93,7 @@ struct ThemeDeskTests {
         defer { cleanUp() }
         let (model, server) = model()
         let reply = await send(.themeSet(name: "Purple"), server)
-        #expect(reply == .refused("no theme Purple; video-review theme list names them"))
+        #expect(reply == .refused("no theme Purple; havooch theme list names them"))
         #expect(model.themes.theme.name == "Default Light")
         #expect(!FileManager.default.fileExists(atPath: layout.settingsFile.path))
     }
