@@ -7,7 +7,7 @@ import SwiftUI
 /// where the name comes from as its credits.
 enum AboutPanel {
     /// The credits under the version.
-    static let credits = "Named after Havuç, the maintainer's orange and white cat. Say it hah-VOOCH."
+    static let credits = "Named after Havuç, my orange-and-white cat. Say it hah-VOOCH."
 
     /// Shows the panel, or brings it to the front. From the menu the app
     /// comes forward with it; for a capture it doesn't, so an agent's
