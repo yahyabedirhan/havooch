@@ -2,6 +2,7 @@ import Foundation
 import ReviewCommand
 import ReviewLease
 import ReviewWire
+import Synchronization
 import Testing
 
 @Suite("The video-review command")
@@ -74,8 +75,10 @@ struct CommandTests {
         #expect(run("player", "seek", "0:40") == CommandResult(error: "0:40 is outside the video (0:00 to 0:21.233)\n", exitCode: 1))
     }
 
-    @Test("a second holder exits 1 with the lease's refusal, which names the holder and the lease's end, on standard error")
-    func leaseRefused() throws {
+    @Test("a second holder exits 1 with the lease's refusal, which names the holder and the lease's end, on standard error", arguments: [
+        ["player", "play"], ["control", "take"], ["screenshot", "/tmp/shot.png"],
+    ])
+    func leaseRefused(arguments: [String]) throws {
         // What the app answers a second holder: the lease's own words.
         var lease = ControlLease()
         let first = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
@@ -86,17 +89,18 @@ struct CommandTests {
         let run = Run { _, _ in .success(.refused(line)) }
         defer { run.cleanUp() }
 
-        for arguments in [["player", "play"], ["control", "take"], ["screenshot", "/tmp/shot.png"]] {
-            let result = VideoReviewCLI.run(arguments, environment: run.environment)
-            #expect(result.exitCode == 1)
-            #expect(result.output.isEmpty)
-            #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
-                + "`video-review control take --wait <seconds>` to queue\n")
-        }
+        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 1)
+        #expect(result.output.isEmpty)
+        #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
+            + "`video-review control take --wait <seconds>` to queue\n")
     }
 
-    @Test("the holder key is VIDEO_REVIEW_CONTROL_KEY when set, else the Claude Code session, else the ancestor process")
-    func holderKey() {
+    @Test("the holder key is VIDEO_REVIEW_CONTROL_KEY when set, else the Claude Code session, else the ancestor process", arguments: zip(
+        [["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:]],
+        ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"]
+    ))
+    func holderKey(variables: [String: String], key: String) {
         struct Processes: ProcessTable {
             var currentPID: Int32 { 300 }
             func process(_ pid: Int32) -> ProcessRecord? {
@@ -110,15 +114,11 @@ struct CommandTests {
         }
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
-        for variables in [
-            ["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:],
-        ] {
-            var environment = run.environment
-            environment.variables = variables.merging([SupportFolder.overrideVariable: run.support.path]) { _, new in new }
-            environment.processes = Processes()
-            _ = VideoReviewCLI.run(["control", "take"], environment: environment)
-        }
-        #expect(run.transport.sent.map(\.message.holder.key) == ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"])
+        var environment = run.environment
+        environment.variables = variables.merging([SupportFolder.overrideVariable: run.support.path]) { _, new in new }
+        environment.processes = Processes()
+        _ = VideoReviewCLI.run(["control", "take"], environment: environment)
+        #expect(run.transport.sent.map(\.message.holder.key) == [key])
     }
 
     @Test("a take that waits in line gets its wait on top of the usual time to answer")
@@ -185,8 +185,13 @@ struct CommandTests {
     // MARK: - wait
 
     /// The time `wait` counts by, moved on by each of its rests.
-    final class Clock: @unchecked Sendable {
-        var now = Date(timeIntervalSince1970: 0)
+    final class Clock: Sendable {
+        private let time = Mutex(Date(timeIntervalSince1970: 0))
+
+        var now: Date {
+            get { time.withLock { $0 } }
+            set { time.withLock { $0 = newValue } }
+        }
     }
 
     /// `run`'s environment with a clock that only the command's rests move.
@@ -295,16 +300,15 @@ struct CommandTests {
         #expect(refused("status", "c-7f3a9c2e", "working") == CommandResult(error: line + "\n", exitCode: 1))
     }
 
-    @Test("--help prints the usage on standard output")
-    func help() {
+    @Test("--help prints the usage on standard output, and so do -h and --help with --json or before a command's name", arguments: [
+        ["--help"], ["-h"], ["--json", "--help"], ["--help", "comment", "add"],
+    ])
+    func help(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        let result = run("--help")
-        #expect(result.exitCode == 0)
-        #expect(result.output.contains("video-review player seek <seconds|mm:ss>"))
-        for arguments in [["-h"], ["--json", "--help"], ["--help", "comment", "add"]] {
-            #expect(VideoReviewCLI.run(arguments, environment: run.environment) == result)
-        }
+        #expect(VideoReviewCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
+        #expect(CommandTable.usageText.contains("video-review player seek <seconds|mm:ss>"))
+        #expect(run.transport.sent.isEmpty)
     }
 
     @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's name", arguments: [
@@ -357,20 +361,36 @@ struct AppCommandTests {
 
     /// An app that runs on the support folders in `running`, quits when
     /// asked and starts on the launcher's folder when launched.
-    final class FakeApps: @unchecked Sendable {
+    final class FakeApps: Sendable {
+        private struct State {
+            var running: Set<String> = []
+            var lease: LeaseTerm?
+        }
+
+        private let state = Mutex(State())
+
         /// The support folders' paths.
-        var running: Set<String> = []
+        var running: Set<String> {
+            get { state.withLock { $0.running } }
+            set { state.withLock { $0.running = newValue } }
+        }
+
         /// The lease the app's reply to a quit carries.
-        var lease: LeaseTerm?
+        var lease: LeaseTerm? {
+            get { state.withLock { $0.lease } }
+            set { state.withLock { $0.lease = newValue } }
+        }
 
         func answer(_ message: ControlMessage, _ socket: URL) -> Result<ControlReply, ControlTransportFailure> {
             let support = socket.deletingLastPathComponent().standardizedFileURL.path
-            guard running.contains(support) else { return .failure(.notRunning) }
-            if message.request == .appQuit {
-                running.remove(support)
-                return .success(ControlReply(ok: true, output: "quit\n", lease: lease))
+            return state.withLock { apps -> Result<ControlReply, ControlTransportFailure> in
+                guard apps.running.contains(support) else { return .failure(.notRunning) }
+                if message.request == .appQuit {
+                    apps.running.remove(support)
+                    return .success(ControlReply(ok: true, output: "quit\n", lease: apps.lease))
+                }
+                return .success(.done(AppCommandTests.status))
             }
-            return .success(.done(AppCommandTests.status))
         }
     }
 

@@ -1,24 +1,40 @@
 import Foundation
 import ReviewCommand
 import ReviewWire
+import Synchronization
 
 /// The app, in memory: answers each message with `answer`, by the socket it
 /// was sent to, and records every one.
-final class FakeTransport: ControlTransport, @unchecked Sendable {
-    typealias Answer = (ControlMessage, URL) -> Result<ControlReply, ControlTransportFailure>
+final class FakeTransport: ControlTransport {
+    typealias Answer = @Sendable (ControlMessage, URL) -> Result<ControlReply, ControlTransportFailure>
 
-    var answer: Answer
-    private(set) var sent: [(message: ControlMessage, socket: URL)] = []
+    private struct State {
+        var answer: Answer
+        var sent: [(message: ControlMessage, socket: URL)] = []
+    }
+
+    private let state: Mutex<State>
 
     init(_ answer: @escaping Answer = { _, _ in .failure(.notRunning) }) {
-        self.answer = answer
+        state = Mutex(State(answer: answer))
     }
+
+    var answer: Answer {
+        get { state.withLock { $0.answer } }
+        set { state.withLock { $0.answer = newValue } }
+    }
+
+    var sent: [(message: ControlMessage, socket: URL)] { state.withLock { $0.sent } }
 
     var requests: [ControlRequest] { sent.map(\.message.request) }
 
     func exchange(_ request: Data, socket: URL, timeout: TimeInterval?) throws(ControlTransportFailure) -> Data {
         guard let message = try? ControlMessage.decode(request) else { throw .failed("the test sent an unreadable request") }
-        sent.append((message, socket))
+        let answer: Answer = state.withLock {
+            $0.sent.append((message, socket))
+            return $0.answer
+        }
+        // Answered outside the lock: an answer may read the test's other doubles.
         switch answer(message, socket) {
         case .success(let reply): return reply.encoded()
         case .failure(let failure): throw failure
@@ -27,14 +43,33 @@ final class FakeTransport: ControlTransport, @unchecked Sendable {
 }
 
 /// Records each launch, and runs `launched` so a test can start its fake app.
-final class FakeLauncher: AppLaunching, @unchecked Sendable {
-    private(set) var launches: [[String: String]] = []
-    var failure: AppLaunchFailure?
-    var launched: ([String: String]) -> Void = { _ in }
+final class FakeLauncher: AppLaunching {
+    private struct State {
+        var launches: [[String: String]] = []
+        var failure: AppLaunchFailure?
+        var launched: @Sendable ([String: String]) -> Void = { _ in }
+    }
+
+    private let state = Mutex(State())
+
+    var launches: [[String: String]] { state.withLock { $0.launches } }
+
+    var failure: AppLaunchFailure? {
+        get { state.withLock { $0.failure } }
+        set { state.withLock { $0.failure = newValue } }
+    }
+
+    var launched: @Sendable ([String: String]) -> Void {
+        get { state.withLock { $0.launched } }
+        set { state.withLock { $0.launched = newValue } }
+    }
 
     func launch(environment: [String: String]) throws(AppLaunchFailure) {
         if let failure { throw failure }
-        launches.append(environment)
+        let launched: @Sendable ([String: String]) -> Void = state.withLock {
+            $0.launches.append(environment)
+            return $0.launched
+        }
         launched(environment)
     }
 }

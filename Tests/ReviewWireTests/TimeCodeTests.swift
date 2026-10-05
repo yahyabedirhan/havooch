@@ -18,13 +18,17 @@ struct TimeCodeTests {
         #expect(TimeCode.seconds(text) == nil)
     }
 
-    @Test("digits too many for a number are no time: nothing reads as infinity")
-    func refusesOverflow() {
-        let digits = String(repeating: "9", count: 400)
-        for text in [digits, "\(digits).5", "\(digits):00", "\(digits):00:00"] {
-            #expect(TimeCode.seconds(text) == nil, "\(text.prefix(8))…")
-        }
-        // Many digits after the point are still a time.
+    static let tooManyDigits = String(repeating: "9", count: 400)
+
+    @Test("digits too many for a number are no time: nothing reads as infinity", arguments: [
+        tooManyDigits, "\(tooManyDigits).5", "\(tooManyDigits):00", "\(tooManyDigits):00:00",
+    ])
+    func refusesOverflow(text: String) {
+        #expect(TimeCode.seconds(text) == nil)
+    }
+
+    @Test("many digits after the point are still a time")
+    func readsLongFraction() {
         #expect(TimeCode.seconds("1.\(String(repeating: "0", count: 400))") == 1)
     }
 
