@@ -229,6 +229,98 @@ def app_icon_small():
     return svg("Havooch app icon, small sizes", tile + cat, 1024, 1024)
 
 
+# ---- the light app icon: a white tile like shipyard's ------------------------
+# Measured from shipyard's app icon (yahyabedirhan/shipyard, Packaging/Icon/make-icon.swift,
+# its frame and its white-* options): an 824 squircle (a superellipse, n = 5) at 100 on
+# the 1024 grid; a white-to-#ECEFF3 body over a #C9CFD8 base that shows at the edge; a
+# drop shadow 10 down, blur 22, black at 0.35; a 4-unit white rim at 0.6 inside the
+# edge above 32 px; and the figure centred, its bounding box 483 x 571 (sized here by
+# the box's geometric mean, 525), 1.1 / 0.92 times bigger below 64 px, with a soft
+# shadow in its own colour. The inner shadow is ours: a barely visible inset at the edge.
+LIGHT_TOP, LIGHT_BOTTOM, LIGHT_BASE = "#FFFFFF", "#ECEFF3", "#C9CFD8"
+FIGURE = math.sqrt(483 * 571)   # shipyard's figure, as the geometric mean of its box
+SMALL_FIGURE = 1.1 / 0.92        # shipyard draws its figure this much bigger below 64 px
+
+
+def squircle(x=100, y=100, size=824, n=5, steps=240):
+    """The macOS 11+ body: a superellipse filling the square, as shipyard draws it."""
+    a = size / 2
+    pts = []
+    for i in range(steps):
+        t = i / steps * 2 * math.pi
+        c, s = math.cos(t), math.sin(t)
+        pts.append((x + a + a * math.copysign(abs(c) ** (2 / n), c),
+                    y + a + a * math.copysign(abs(s) ** (2 / n), s)))
+    return "M" + "L".join(f"{f(px)} {f(py)}" for px, py in pts) + "Z"
+
+
+def tip_top(a, v, b, r):
+    """The highest y of an ear tip rounded as in head_outline: a quadratic from
+    `r` before the corner `v`, through it as control, to `r` after it."""
+    s, e = toward(v, a, r), toward(v, b, r)
+    den = s[1] - 2 * v[1] + e[1]
+    t = (s[1] - v[1]) / den if den else 0
+    t = min(1, max(0, t))
+    return (1 - t) ** 2 * s[1] + 2 * t * (1 - t) * v[1] + t * t * e[1]
+
+
+def mark_bounds():
+    """The head's bounding box on the 256 grid: the ellipse's width and foot, the ear tips' top."""
+    ear_out, ear_in, tip_x, tip_r = 34, 96, 50, 20
+    tip = (tip_x, on_head(ear_in) - (ear_in - tip_x))
+    top = tip_top((ear_out, on_head(ear_out)), tip, (ear_in, on_head(ear_in)), tip_r)
+    return CX - RX, min(top, CY - RY), CX + RX, CY + RY
+
+
+def light_app_icon(title, mark_body, bounds, shade, small=False):
+    """The white-tile app icon around `mark_body` (drawn on the 256 grid).
+
+    `bounds` is the mark's box on that grid; the mark is scaled so its box's geometric
+    mean matches shipyard's figure, and centred on the tile as shipyard centres its own.
+    `shade` colours the mark's soft shadow. `small` is the cut for 16 and 32 px: the
+    mark bigger, no rim.
+    """
+    x0, y0, x1, y1 = bounds
+    s = FIGURE * (SMALL_FIGURE if small else 1) / math.sqrt((x1 - x0) * (y1 - y0))
+    tx, ty = 512 - s * (x0 + x1) / 2, 512 - s * (y0 + y1) / 2
+    body = squircle()
+    defs = (
+        '<defs>'
+        '<linearGradient id="tile" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">'
+        f'<stop offset="0" stop-color="{LIGHT_TOP}"/><stop offset="1" stop-color="{LIGHT_BOTTOM}"/></linearGradient>'
+        f'<clipPath id="body"><path d="{body}"/></clipPath>'
+        # shipyard's drop shadow: 10 down, blur 22, black at 0.35
+        '<filter id="drop" x="-10%" y="-10%" width="120%" height="125%">'
+        '<feGaussianBlur in="SourceAlpha" stdDeviation="10"/><feOffset dy="10"/>'
+        '<feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>'
+        '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
+        # the inner shadow: the body's edge, blurred inward, at a few per cent
+        '<filter id="inset" x="0" y="0" width="100%" height="100%">'
+        '<feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="4"/>'
+        '<feComponentTransfer><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>'
+        '<feComposite in2="SourceAlpha" operator="in" result="edge"/>'
+        '<feFlood flood-color="#1B2333" flood-opacity="0.09"/>'
+        '<feComposite in2="edge" operator="in"/></filter>'
+        # the mark's soft shadow in its own shade: 6 down, blur 16, at 0.22
+        '<filter id="lift" x="-20%" y="-20%" width="140%" height="150%">'
+        # (it sits inside the mark's scale, so its 1024-grid sizes are divided by it)
+        f'<feGaussianBlur in="SourceAlpha" stdDeviation="{f(7 / s)}"/><feOffset dy="{f(6 / s)}" result="lift"/>'
+        f'<feFlood flood-color="{shade}" flood-opacity="0.22"/><feComposite in2="lift" operator="in"/>'
+        '</filter>'
+        '</defs>'
+    )
+    layers = (
+        f'<path d="{body}" fill="{LIGHT_BASE}" filter="url(#drop)"/>'
+        f'<g clip-path="url(#body)"><path d="{body}" fill="url(#tile)"/>'
+        f'<path d="{body}" fill="#000" filter="url(#inset)"/>'
+    )
+    mark = f'<g transform="translate({f(tx)} {f(ty)}) scale({f(s)})">'
+    cat = (f'{mark}<g filter="url(#lift)">{mark_body}</g></g>'
+           f'{mark}{mark_body}</g>')
+    rim = "" if small else f'<path d="{body}" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="4"/>'
+    return svg(title, defs + layers + cat + rim + "</g>", 1024, 1024)
+
+
 def main():
     # The full marks sit 3 units high in their square: the optical centre is above the middle.
     up = "0 3 256 256"
@@ -255,6 +347,11 @@ def main():
 
     write("havooch-app-icon.svg", app_icon())
     write("havooch-app-icon-small.svg", app_icon_small())
+    write("havooch-app-icon-light.svg", light_app_icon("Havooch app icon, light", mark_paths(CARROT, CREAM, INK),
+                                                       mark_bounds(), "#D9601A"))
+    write("havooch-app-icon-light-small.svg", light_app_icon("Havooch app icon, light, small sizes",
+                                                             mark_paths(CARROT, CREAM, INK, small=True),
+                                                             mark_bounds(), "#D9601A", small=True))
 
 
 if __name__ == "__main__":

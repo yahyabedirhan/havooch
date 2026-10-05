@@ -33,10 +33,14 @@ def pngs():
     for name in ["havooch-lockup", "havooch-lockup-dark", "havooch-lockup-black", "havooch-lockup-white"]:
         render(name + ".svg", os.path.join(PNG, f"{name}-1200.png"), width=1200)
     render("havooch-app-icon.svg", os.path.join(PNG, "havooch-app-icon-1024.png"), 1024, 1024)
+    # the light app icon at every size: the small cut at 16 and 32 px
+    for size in [16, 32, 64, 128, 256, 512, 1024]:
+        src = "havooch-app-icon-light-small.svg" if size <= 32 else "havooch-app-icon-light.svg"
+        render(src, os.path.join(PNG, f"havooch-app-icon-light-{size}.png"), size, size)
 
 
-def icns():
-    """AppIcon.icns from an .iconset: the small cut at 16 and 32 px, the full icon from 64 px up."""
+def icns(big="havooch-app-icon.svg", small="havooch-app-icon-small.svg", out="AppIcon.icns"):
+    """An .icns from an .iconset: the small cut at 16 and 32 px, the full icon from 64 px up."""
     work = tempfile.mkdtemp()
     iconset = os.path.join(work, "AppIcon.iconset")
     os.makedirs(iconset)
@@ -44,9 +48,9 @@ def icns():
         for scale in [1, 2]:
             px = pt * scale
             suffix = "" if scale == 1 else "@2x"
-            src = "havooch-app-icon-small.svg" if px <= 32 else "havooch-app-icon.svg"
+            src = small if px <= 32 else big
             render(src, os.path.join(iconset, f"icon_{pt}x{pt}{suffix}.png"), px, px)
-    subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, "AppIcon.icns")], check=True)
+    subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, out)], check=True)
     shutil.rmtree(work)
 
 
@@ -219,6 +223,7 @@ def compare():
 if __name__ == "__main__":
     pngs()
     icns()
+    icns("havooch-app-icon-light.svg", "havooch-app-icon-light-small.svg", "AppIcon-light.icns")
     test_sheet()
     compare()
-    print("wrote png/, AppIcon.icns, havooch-test-sheet.png and compare-v1-v2.png")
+    print("wrote png/, AppIcon.icns, AppIcon-light.icns, havooch-test-sheet.png and compare-v1-v2.png")

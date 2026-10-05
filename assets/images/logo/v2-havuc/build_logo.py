@@ -268,6 +268,20 @@ def app_icon_small():
     return svg("Havooch app icon, Havuç, small sizes", tile + cat, 1024, 1024)
 
 
+def mark_bounds():
+    """The head's bounding box on the 256 grid: the ellipse's width and foot, the ear tips' top."""
+    lo, tip, li = ear_points()
+    return CX - RX, min(v1.tip_top(lo, tip, li, 26), CY - RY), CX + RX, CY + RY
+
+
+def light_app_icons():
+    """The white-tile icons, like shipyard's: the first logo's light tile, with the Havuç head."""
+    big = v1.light_app_icon("Havooch app icon, Havuç, light", mark_colour(), mark_bounds(), TABBY)
+    small = v1.light_app_icon("Havooch app icon, Havuç, light, small sizes", mark_colour(small=True),
+                              mark_bounds(), TABBY, small=True)
+    return big, small
+
+
 def main():
     up = "0 6 256 256"            # optical centre: the head sits a little above the middle
     tight = "18 14 220 220"       # the small cut is cropped tight to use every pixel
@@ -289,6 +303,9 @@ def main():
 
     write("havooch-app-icon.svg", app_icon())
     write("havooch-app-icon-small.svg", app_icon_small())
+    big, small = light_app_icons()
+    write("havooch-app-icon-light.svg", big)
+    write("havooch-app-icon-light-small.svg", small)
 
 
 if __name__ == "__main__":

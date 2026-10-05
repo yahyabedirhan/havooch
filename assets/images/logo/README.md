@@ -51,8 +51,34 @@ The wordmark "Havooch" is drawn as paths, not set in a font: a geometric sans wi
 
 ```sh
 python3 assets/images/logo/build_logo.py   # the SVGs, from one set of geometry
-python3 assets/images/logo/export.py       # png/, AppIcon.icns and the test sheet (needs rsvg-convert and iconutil)
+python3 assets/images/logo/export.py       # png/, AppIcon.icns, AppIcon-light.icns, the test sheet and compare-icons-light.png (needs rsvg-convert and iconutil)
 ```
+
+## Light app icon, like Shipyard's
+
+A second app icon for each logo: the cat on a white tile, made to sit beside Shipyard's icon in the Dock. The dark-tile icons above stay as they are.
+
+![Shipyard and both light icons](compare-icons-light.png)
+
+The tile copies the frame of Shipyard's icon, measured from its `AppIcon.icns` and taken from its `Packaging/Icon/make-icon.swift` (`yahyabedirhan/shipyard`). The white colours come from Shipyard's own white-tile options in that script:
+
+- **Shape**: an 824-unit squircle (a superellipse, n = 5) at 100 on the 1024 grid, not a rounded rectangle.
+- **Tile**: a gradient from `#FFFFFF` at the top to `#ECEFF3` at the foot, over a `#C9CFD8` base that shows at the edge.
+- **Drop shadow**: 10 units down, blur 22, black at 0.35.
+- **Rim**: a 4-unit white line at 0.6 inside the edge, from 64 px up.
+- **Inner shadow**: a soft inset at the edge, `#1B2333` at 0.09, blurred 14 and 4 units down. It is barely visible. With the base and the drop shadow, it keeps the white tile's edge on a light background.
+- **Mark**: the cat in colour, centred on its bounding box, as Shipyard centres its sailboat. The box's geometric mean matches Shipyard's figure, 483 × 571 units, so the two marks have the same weight. The cat has a soft tabby shadow, 6 units down, at 0.22.
+- **Small sizes**: the 16 and 32 px icon uses the small-cut cat, 1.1 / 0.92 times bigger, with no rim, like Shipyard.
+
+| File | What it is |
+|---|---|
+| `havooch-app-icon-light.svg` | the light app icon, from 64 px up |
+| `havooch-app-icon-light-small.svg` | the light app icon for 16 and 32 px |
+| `AppIcon-light.icns` | the light app icon, 16 to 1024 px |
+| `png/havooch-app-icon-light-<size>.png` | the light app icon at 16, 32, 64, 128, 256, 512 and 1024 px |
+| `compare-icons-light.png` | Shipyard's icon, v1 light and v2 light at 1024, 128, 32 and 16 px, on a light and a dark Dock |
+
+`v2-havuc/` has the same light files, with the Havuç head. Both come from `light_app_icon()` in `build_logo.py`. `export.py` reads Shipyard's icon from `~/Developer/yahyabedirhan/shipyard/Packaging/Icon/AppIcon.icns`, or from `SHIPYARD_ICNS`. When that file is missing, it skips the comparison. Run `v2-havuc/build_logo.py` before `export.py`, because the comparison reads the v2 SVGs.
 
 ## Second option: Havuç (v2)
 
@@ -74,7 +100,7 @@ Extra colours, beside carrot, white, ink and night: peach `#F7B9A4` (inner ears)
 
 ```sh
 python3 assets/images/logo/v2-havuc/build_logo.py
-python3 assets/images/logo/v2-havuc/export.py   # png/, AppIcon.icns, the test sheet and compare-v1-v2.png
+python3 assets/images/logo/v2-havuc/export.py   # png/, AppIcon.icns, AppIcon-light.icns, the test sheet and compare-v1-v2.png
 ```
 
 NOTE: The name and the mark have not had a trademark search.

@@ -32,10 +32,14 @@ def pngs():
     for name in ["havooch-lockup", "havooch-lockup-dark", "havooch-lockup-black", "havooch-lockup-white"]:
         render(name + ".svg", os.path.join(PNG, f"{name}-1200.png"), width=1200)
     render("havooch-app-icon.svg", os.path.join(PNG, "havooch-app-icon-1024.png"), 1024, 1024)
+    # the light app icon at every size: the small cut at 16 and 32 px
+    for size in [16, 32, 64, 128, 256, 512, 1024]:
+        src = "havooch-app-icon-light-small.svg" if size <= 32 else "havooch-app-icon-light.svg"
+        render(src, os.path.join(PNG, f"havooch-app-icon-light-{size}.png"), size, size)
 
 
-def icns():
-    """AppIcon.icns from an .iconset: the small cut at 16 and 32 px, the full icon from 64 px up."""
+def icns(big="havooch-app-icon.svg", small="havooch-app-icon-small.svg", out="AppIcon.icns"):
+    """An .icns from an .iconset: the small cut at 16 and 32 px, the full icon from 64 px up."""
     work = tempfile.mkdtemp()
     iconset = os.path.join(work, "AppIcon.iconset")
     os.makedirs(iconset)
@@ -43,9 +47,9 @@ def icns():
         for scale in [1, 2]:
             px = pt * scale
             suffix = "" if scale == 1 else "@2x"
-            src = "havooch-app-icon-small.svg" if px <= 32 else "havooch-app-icon.svg"
+            src = small if px <= 32 else big
             render(src, os.path.join(iconset, f"icon_{pt}x{pt}{suffix}.png"), px, px)
-    subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, "AppIcon.icns")], check=True)
+    subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, out)], check=True)
     shutil.rmtree(work)
 
 
@@ -144,8 +148,73 @@ def test_sheet():
     shutil.rmtree(tmp)
 
 
+SHIPYARD_ICNS = os.environ.get(
+    "SHIPYARD_ICNS", os.path.expanduser("~/Developer/yahyabedirhan/shipyard/Packaging/Icon/AppIcon.icns"))
+
+
+def compare_light():
+    """compare-icons-light.png: shipyard's app icon beside both light Havooch icons,
+    at 1024, 128, 32 and 16 px (then 32 and 16 px magnified), on a light and a dark
+    Dock-like background. Shipyard's icon is read from its .icns (SHIPYARD_ICNS)."""
+    if not os.path.exists(SHIPYARD_ICNS):
+        print(f"skipped compare-icons-light.png: no shipyard icon at {SHIPYARD_ICNS}")
+        return
+    tmp = tempfile.mkdtemp()
+    iconset = os.path.join(tmp, "shipyard.iconset")
+    subprocess.run(["iconutil", "-c", "iconset", SHIPYARD_ICNS, "-o", iconset], check=True)
+    shipyard = {1024: "icon_512x512@2x.png", 128: "icon_128x128.png", 32: "icon_32x32.png", 16: "icon_16x16.png"}
+
+    def havooch(folder, size):
+        svg = "havooch-app-icon-light-small.svg" if size <= 32 else "havooch-app-icon-light.svg"
+        out = os.path.join(tmp, f"{os.path.basename(folder)}-{size}.png")
+        subprocess.run(["rsvg-convert", os.path.join(folder, svg), "-o", out, "-w", str(size), "-h", str(size)], check=True)
+        return data_uri(out)
+
+    icons = [("shipyard", lambda size: data_uri(os.path.join(iconset, shipyard[size]))),
+             ("v1, Play blaze, light", lambda size: havooch(HERE, size)),
+             ("v2, Havuç, light", lambda size: havooch(os.path.join(HERE, "v2-havuc"), size))]
+
+    def text(x, y, s, size=22, weight="normal", fill="#2E1D14"):
+        return (f'<text x="{x}" y="{y}" font-family="Helvetica, Arial" font-size="{size}" '
+                f'font-weight="{weight}" fill="{fill}">{s}</text>')
+
+    W, H = 3264, 1960
+    parts = [f'<rect width="{W}" height="{H}" fill="#F4F2EE"/>',
+             text(48, 64, "Shipyard and the light Havooch app icons", 34, "bold")]
+    # 1024 px, true size, on the light Dock grey
+    for i, (name, draw) in enumerate(icons):
+        x = 48 + i * 1072
+        parts.append(text(x, 120, f"{name}: 1024 px"))
+        parts.append(f'<rect x="{x}" y="136" width="1024" height="1024" rx="24" fill="#E6E6E9"/>')
+        parts.append(f'<image x="{x}" y="136" width="1024" height="1024" href="{draw(1024)}"/>')
+    # 128, 32 and 16 px true size, then 32 px at 4x and 16 px at 8x, on light and dark
+    for row, (bg, ink, label) in enumerate([("#E6E6E9", "#2E1D14", "light Dock"), ("#1E1E20", "#FFFFFF", "dark Dock")]):
+        y = 1200 + row * 370
+        for i, (name, draw) in enumerate(icons):
+            x0 = 48 + i * 1072
+            parts.append(text(x0, y, f"{name}, {label}: 128 / 32 / 16 px, then 32 px at 4x and 16 px at 8x"))
+            parts.append(f'<rect x="{x0}" y="{y + 16}" width="1024" height="320" rx="16" fill="{bg}"/>')
+            x = x0 + 24
+            for size in [128, 32, 16]:
+                parts.append(f'<image x="{x}" y="{y + 40 + (256 - size) // 2}" width="{size}" height="{size}" href="{draw(size)}"/>')
+                x += size + 40
+            for size in [32, 16]:
+                parts.append(f'<image x="{x}" y="{y + 40}" width="256" height="256" style="image-rendering:pixelated" '
+                             f'image-rendering="optimizeSpeed" href="{draw(size)}"/>')
+                x += 256 + 32
+
+    sheet = os.path.join(tmp, "compare.svg")
+    with open(sheet, "w") as fh:
+        fh.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">'
+                 + "".join(parts) + "</svg>")
+    subprocess.run(["rsvg-convert", sheet, "-o", os.path.join(HERE, "compare-icons-light.png")], check=True)
+    shutil.rmtree(tmp)
+
+
 if __name__ == "__main__":
     pngs()
     icns()
+    icns("havooch-app-icon-light.svg", "havooch-app-icon-light-small.svg", "AppIcon-light.icns")
     test_sheet()
-    print("wrote png/, AppIcon.icns and havooch-test-sheet.png")
+    compare_light()   # reads v2-havuc's light SVGs: run v2-havuc/build_logo.py first
+    print("wrote png/, AppIcon.icns, AppIcon-light.icns, havooch-test-sheet.png and compare-icons-light.png")
