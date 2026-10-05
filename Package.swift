@@ -19,7 +19,11 @@ let package = Package(
         .target(name: "VRReview"),
         .target(name: "VRTranscript"),
         .target(name: "VRStore", dependencies: ["VRReview", "VRTranscript"]),
-        .executableTarget(name: "VRApp", dependencies: ["VRLease", "VRWire", "VRReview", "VRTranscript", "VRStore"]),
+        .executableTarget(
+            name: "VRApp",
+            dependencies: ["VRLease", "VRWire", "VRReview", "VRTranscript", "VRStore"],
+            swiftSettings: [.enableUpcomingFeature("InferIsolatedConformances")]
+        ),
         .testTarget(name: "VRLeaseTests", dependencies: ["VRLease"]),
         .testTarget(name: "VRWireTests", dependencies: ["VRWire", "VRLease"]),
         .testTarget(name: "VRCommandTests", dependencies: ["VRCommand", "VRWire", "VRLease"]),

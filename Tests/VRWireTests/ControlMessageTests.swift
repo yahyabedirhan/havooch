@@ -34,12 +34,10 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         .wait(timeoutSeconds: nil),
         .wait(timeoutSeconds: 0),
         .wait(timeoutSeconds: 30),
-    ])
-    func everyRequestReadsBackAsItWasSent(request: ControlRequest) throws {
-        for json in [false, true] {
-            let message = ControlMessage(request, holder: holder, json: json)
-            #expect(try ControlMessage.decode(message.encoded()) == message)
-        }
+    ], [false, true])
+    func everyRequestReadsBackAsItWasSent(request: ControlRequest, json: Bool) throws {
+        let message = ControlMessage(request, holder: holder, json: json)
+        #expect(try ControlMessage.decode(message.encoded()) == message)
     }
 
     @Test func aMessageIsOneFlatJSONObjectWithSortedKeys() {
@@ -180,16 +178,19 @@ private let holderJSON = #""holder":{"key":"k","name":"Claude Code","place":"/Us
         #expect(ControlRequest.wait(timeoutSeconds: nil).role == .listener)
     }
 
-    @Test func onlyRequestsThatDriveTheAppNeedTheLease() {
-        for request: ControlRequest in [.appStatus, .state, .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 5), .controlRelease] {
-            #expect(request.role == .free)
-        }
-        for request: ControlRequest in [
-            .appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
-            .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil), .batchSend,
-        ] {
-            #expect(request.role == .operator)
-        }
+    @Test(arguments: [
+        ControlRequest.appStatus, .state, .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 5), .controlRelease,
+    ])
+    func aRequestThatOnlyAsksOrTakesTheLeaseNeedsNoLease(request: ControlRequest) {
+        #expect(request.role == .free)
+    }
+
+    @Test(arguments: [
+        ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
+        .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil), .batchSend,
+    ])
+    func aRequestThatDrivesTheAppNeedsTheLease(request: ControlRequest) {
+        #expect(request.role == .operator)
     }
 }
 

@@ -50,25 +50,23 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(rig.server.lease.current(at: rig.clock.now)?.holder == other)
     }
 
-    @Test func statusAndStateAreNeverRefusedTakeNoLeaseAndReportItForAnyHolder() async throws {
+    @Test(arguments: [ControlRequest.appStatus, .state])
+    func statusAndStateAreNeverRefusedTakeNoLeaseAndReportItForAnyHolder(request: ControlRequest) async throws {
         let rig = Rig()
-        #expect(await rig.send(.appStatus, by: other).reply.output.contains("lease: free\n"))
+        #expect(await rig.send(request, by: other).reply.output.contains("lease: free\n"))
         #expect(rig.server.lease.current(at: rig.clock.now) == nil)
 
         _ = await rig.send(.playerOpen(path: fixtureVideo.path), by: agent)
         rig.clock.set(12)
 
-        #expect(await rig.send(.appStatus, by: other).reply.output.contains("lease: Claude Code in /work/shop, 48s left, 0 waiting\n"))
-        #expect(await rig.send(.state, by: other).reply.output.contains("lease: Claude Code in /work/shop, 48s left, 0 waiting\n"))
-        for request in [ControlRequest.appStatus, .state] {
-            let answer = await rig.send(request, by: other, json: true)
-            let object = try #require(try JSONSerialization.jsonObject(with: Data(answer.reply.output.utf8)) as? [String: Any])
-            let lease = try #require(object["lease"] as? [String: Any])
-            #expect(lease["holder"] as? String == "Claude Code")
-            #expect(lease["place"] as? String == "/work/shop")
-            #expect(lease["secondsLeft"] as? Int == 48)
-            #expect(lease["waiting"] as? Int == 0)
-        }
+        #expect(await rig.send(request, by: other).reply.output.contains("lease: Claude Code in /work/shop, 48s left, 0 waiting\n"))
+        let answer = await rig.send(request, by: other, json: true)
+        let object = try #require(try JSONSerialization.jsonObject(with: Data(answer.reply.output.utf8)) as? [String: Any])
+        let lease = try #require(object["lease"] as? [String: Any])
+        #expect(lease["holder"] as? String == "Claude Code")
+        #expect(lease["place"] as? String == "/work/shop")
+        #expect(lease["secondsLeft"] as? Int == 48)
+        #expect(lease["waiting"] as? Int == 0)
         // Asking renewed nothing and took nothing.
         #expect(rig.server.lease.current(at: rig.clock.now) == ControlLease.Term(
             holder: agent, taken: Date(timeIntervalSince1970: 0), ends: Date(timeIntervalSince1970: 60)
@@ -186,9 +184,7 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(rig.server.indicator.lease.status(at: rig.clock.now) == nil)
         rig.clock.set(20)
         let refusal = ControlReply.refused("the user took video-review back; ask them before using it again")
-        for request in [ControlRequest.playerPlay, .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30)] {
-            #expect(await rig.send(request, by: agent).reply == refusal)
-        }
+        #expect(await rig.send(.playerPlay, by: agent).reply == refusal)
         #expect(!rig.player.isPlaying)
         // Free commands still answer, and nobody else is barred.
         #expect(await rig.send(.state, by: agent).reply.ok)
@@ -196,6 +192,22 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(await rig.send(.playerPlay, by: agent).reply == refusal)
         rig.clock.set(310)
         #expect(await rig.send(.playerPlay, by: agent).reply.ok)
+    }
+
+    @Test(arguments: [ControlRequest.playerPlay, .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30)])
+    func theStoppedAgentIsRefusedAnyRequestThatTakesTheLease(request: ControlRequest) async {
+        let rig = Rig()
+        _ = await rig.send(.playerOpen(path: fixtureVideo.path), by: agent)
+        rig.clock.set(10)
+
+        rig.server.stopLease()
+        rig.clock.set(20)
+
+        #expect(await rig.send(request, by: agent).reply == .refused(
+            "the user took video-review back; ask them before using it again"
+        ))
+        #expect(rig.server.lease.current(at: rig.clock.now) == nil)
+        #expect(!rig.player.isPlaying)
     }
 
     @Test func stopHandsTheLeaseToTheFirstWaitingTake() async throws {

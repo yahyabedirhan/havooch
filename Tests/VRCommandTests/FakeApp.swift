@@ -14,13 +14,25 @@ final class FakeApp: ControlTransport, AppLaunching, @unchecked Sendable {
     private var sent: [(request: ControlRequest, json: Bool, socket: URL)] = []
     private var launched: [(bundleID: String, environment: [String: String])] = []
     private var waited: [TimeInterval] = []
+    private var timingOut = false
+    private var answering: @Sendable (ControlMessage) -> ControlReply = { .done("\($0.request)\n") }
+    private var failingLaunch: AppLaunchFailure?
     /// Set to make every exchange run out of time instead of answering.
-    var timesOut = false
+    var timesOut: Bool {
+        get { lock.withLock { timingOut } }
+        set { lock.withLock { timingOut = newValue } }
+    }
     /// What the app answers each request with; `done` with the command's
     /// wire name by default.
-    var answer: @Sendable (ControlMessage) -> ControlReply = { .done("\($0.request)\n") }
+    var answer: @Sendable (ControlMessage) -> ControlReply {
+        get { lock.withLock { answering } }
+        set { lock.withLock { answering = newValue } }
+    }
     /// Set to make the next launch fail.
-    var launchFailure: AppLaunchFailure?
+    var launchFailure: AppLaunchFailure? {
+        get { lock.withLock { failingLaunch } }
+        set { lock.withLock { failingLaunch = newValue } }
+    }
 
     init() throws {
         support = URL(fileURLWithPath: "/tmp", isDirectory: true)

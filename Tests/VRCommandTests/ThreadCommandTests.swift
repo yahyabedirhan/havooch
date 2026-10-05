@@ -11,9 +11,6 @@ private let table = CommandTable.standard
     @Test func theArgumentsReadAsTheirRequests() throws {
         #expect(try ListenerCommand.parseAck(["b1"]).get() == .ack(batchID: "b1", text: nil))
         #expect(try ListenerCommand.parseAck(["b1", "on it"]).get() == .ack(batchID: "b1", text: "on it"))
-        for state in ["working", "done", "failed"] {
-            #expect(try ListenerCommand.parseStatus(["c1", state]).get() == .status(commentID: "c1", state: state))
-        }
         #expect(try ListenerCommand.parseReply(["c1", "fixed in abc123"]).get() == .reply(id: "c1", text: "fixed in abc123"))
         #expect(try ListenerCommand.parseReply(["b1", "-3 dB it is"]).get() == .reply(id: "b1", text: "-3 dB it is"))
         #expect(try ListenerCommand.parseAsk(["c1", "which part?"]).get()
@@ -23,6 +20,11 @@ private let table = CommandTable.standard
         #expect(try ListenerCommand.parseAsk(["--wait", "0", "c1", "which part?"]).get()
             == .ask(commentID: "c1", question: "which part?", waitSeconds: 0))
         #expect(try ThreadCommand.parse(["answer", "c1", "the intro"]).get() == .threadAnswer(commentID: "c1", text: "the intro"))
+    }
+
+    @Test(arguments: ["working", "done", "failed"])
+    func aStatusReadsAsItsRequest(state: String) throws {
+        #expect(try ListenerCommand.parseStatus(["c1", state]).get() == .status(commentID: "c1", state: state))
     }
 
     @Test(arguments: [
@@ -64,16 +66,15 @@ private let table = CommandTable.standard
         #expect(app.requests.isEmpty)
     }
 
-    @Test func theTableHasEveryCommandAndEachExplainsItselfWithoutTheApp() throws {
+    @Test(arguments: ["thread", "wait", "ack", "status", "reply", "ask"])
+    func theTableHasTheCommandAndItExplainsItselfWithoutTheApp(command: String) throws {
         let app = try FakeApp()
         let help = table.run(["--help"], environment: app.environment).output
 
-        for command in ["thread", "wait", "ack", "status", "reply", "ask"] {
-            #expect(help.contains("  \(command) "))
-            let result = table.run([command, "--help"], environment: app.environment)
-            #expect(result.status == 0)
-            #expect(result.output.hasPrefix("usage: video-review \(command)"))
-        }
+        #expect(help.contains("  \(command) "))
+        let result = table.run([command, "--help"], environment: app.environment)
+        #expect(result.status == 0)
+        #expect(result.output.hasPrefix("usage: video-review \(command)"))
         #expect(app.requests.isEmpty)
     }
 

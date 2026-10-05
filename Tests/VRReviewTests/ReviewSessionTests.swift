@@ -34,20 +34,19 @@ private func refusal(_ body: () throws(ReviewRefusal) -> Void) -> String? {
         "acknowledged→sent", "working→sent",
     ]
 
-    @Test func aCommentMovesOnlyAsTheStateMachineSays() {
-        for from in CommentState.allCases {
-            for to in CommentState.allCases {
-                let move = "\(from.rawValue)→\(to.rawValue)"
-                #expect(from.canMove(to: to) == Self.allowed.contains(move), "\(move)")
-            }
-        }
+    @Test(arguments: CommentState.allCases, CommentState.allCases)
+    func aCommentMovesOnlyAsTheStateMachineSays(from: CommentState, to: CommentState) {
+        let move = "\(from.rawValue)→\(to.rawValue)"
+        #expect(from.canMove(to: to) == Self.allowed.contains(move), "\(move)")
     }
 
     @Test func doneAndFailedAreFinal() {
         #expect(CommentState.allCases.filter(\.isFinal) == [.done, .failed])
-        for final in [CommentState.done, .failed] {
-            #expect(CommentState.allCases.allSatisfy { !final.canMove(to: $0) })
-        }
+    }
+
+    @Test(arguments: [CommentState.done, .failed])
+    func aFinalStateMovesNowhere(final: CommentState) {
+        #expect(CommentState.allCases.allSatisfy { !final.canMove(to: $0) })
     }
 }
 

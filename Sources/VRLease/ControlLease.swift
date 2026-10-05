@@ -174,7 +174,7 @@ public struct ControlLease: Equatable, Sendable {
 
     /// How many `take`s wait in line at `now`, their waits not run out.
     public func waiting(at now: Date) -> Int {
-        queue.filter { now < $0.until }.count
+        queue.count(where: { now < $0.until })
     }
 
     /// Lifts the bars that have ended by `now`, ends a lease that has run

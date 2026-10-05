@@ -1,5 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Foundation
+import Synchronization
 
 /// Starts the app, which `video-review app open` can't ask through the
 /// socket since the app isn't running yet. Tests record the launch.
@@ -32,6 +35,7 @@ public struct WorkspaceLauncher: AppLaunching {
     public init() {}
 
     public func launch(bundleID: String, environment: [String: String]) throws(AppLaunchFailure) {
+        #if canImport(AppKit)
         guard let url = Self.enclosingApp(of: Bundle.main.executableURL)
             ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
         else {
@@ -52,15 +56,18 @@ public struct WorkspaceLauncher: AppLaunching {
         let outcome = LaunchOutcome()
         let done = DispatchSemaphore(value: 0)
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
-            outcome.error = error.map(\.localizedDescription)
+            outcome.error.withLock { $0 = error.map(\.localizedDescription) }
             done.signal()
         }
         guard done.wait(timeout: .now() + timeout) == .success else {
             throw AppLaunchFailure("Launch Services didn't start \(url.path) within \(Int(timeout)) seconds")
         }
-        if let error = outcome.error {
+        if let error = outcome.error.withLock({ $0 }) {
             throw AppLaunchFailure("couldn't launch \(url.path): \(error)")
         }
+        #else
+        throw AppLaunchFailure("launching the app needs macOS")
+        #endif
     }
 
     /// The app bundle whose `Contents/Helpers` holds the command at
@@ -78,7 +85,7 @@ public struct WorkspaceLauncher: AppLaunching {
     }
 
     /// The completion handler's answer, read after the semaphore.
-    private final class LaunchOutcome: @unchecked Sendable {
-        var error: String?
+    private final class LaunchOutcome: Sendable {
+        let error = Mutex<String?>(nil)
     }
 }
