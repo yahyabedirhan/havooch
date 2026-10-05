@@ -62,6 +62,21 @@ final class AppModel: AppControlling {
     /// What the agent just said, shown on the stage: the newest last.
     private(set) var notices: [Notice] = []
 
+    /// The composer's drafts (L41): one per target thread, and one for a
+    /// new thread, in memory only.
+    private(set) var composerDrafts: [ComposerTarget.DraftKey: String] = [:]
+    /// Whether the composer in the thread list writes to General.
+    private(set) var isComposerGeneral = false
+    /// The last region drawn on the frame, on its frame: the composer's
+    /// chip while the stage shows that frame. The popover's words take it
+    /// first when they are written there.
+    private(set) var drawnRegion: Draft?
+    /// Grows each time something asks the composer's field for the keys:
+    /// the field takes the focus when it changes.
+    private(set) var composerFocusRequests = 0
+    /// Whether the composer's words are on their way.
+    private(set) var isComposing = false
+
     /// The stage in the window, from its top-left corner, as it was last
     /// laid out. A click on the stage closes the popover by the stage's own
     /// gestures; a click anywhere else in the window is outside it.
@@ -119,9 +134,12 @@ final class AppModel: AppControlling {
     /// How many messages wait in the queue, as the sidebar's footer counts them.
     var queuedCount: Int { desk.review?.queue.count ?? 0 }
 
-    /// How many messages a send would deliver now.
+    /// How many messages a send would deliver now: the queue, with the
+    /// words in the popover and in the composer that would join it.
     var sendCount: Int {
-        (desk.review?.queue.count ?? 0) + commitsUnderWay + (draft.map { Self.hasWords($0.text) } == true ? 1 : 0)
+        let popover = draft.map { Self.hasWords($0.text) } == true ? 1 : 0
+        let composer = composerTarget.map { !$0.answers && Self.hasWords(composerText) } == true ? 1 : 0
+        return (desk.review?.queue.count ?? 0) + commitsUnderWay + popover + composer
     }
 
     // MARK: - Actions, for the person and the operator alike
@@ -153,6 +171,10 @@ final class AppModel: AppControlling {
         selection = nil
         shown = nil
         isDrawingRegion = false
+        // The composer's words were on the video that was open.
+        composerDrafts = [:]
+        isComposerGeneral = false
+        drawnRegion = nil
         // They point at threads of the video that was open.
         notices = []
         isContextShown = false
@@ -350,6 +372,11 @@ final class AppModel: AppControlling {
                 if self.draft == nil { self.draft = draft }
                 throw error
             }
+        }
+        // The composer's words are queued, or answer at once, as Return
+        // would take them; its draft stays when they are refused.
+        if Self.hasWords(composerText) {
+            _ = try await writeComposer()
         }
         guard let info = desk.review?.video else { throw Self.noVideo }
         // Each thread's transcript window is cut now and kept with the send.
@@ -586,7 +613,10 @@ final class AppModel: AppControlling {
             closePopover(.clickOutside)
         }
         engine.pause()
-        draft = Draft(time: engine.frameTime(of: engine.time), text: "", region: region)
+        let time = engine.frameTime(of: engine.time)
+        draft = Draft(time: time, text: "", region: region)
+        // The region is the composer's chip too, until words take it (L41).
+        if let region { drawnRegion = Draft(time: time, text: "", region: region) }
     }
 
     /// Closes the popover by `reason` (D 1.4, D 2.3): a click outside and
@@ -596,13 +626,24 @@ final class AppModel: AppControlling {
     func closePopover(_ reason: PopoverClose) {
         guard let draft else { return }
         self.draft = nil
+        // Escape and the × drop the region the popover opened on, in the composer too.
+        if reason == .discard { dropDrawnRegion(draft) }
         guard reason != .discard, Self.hasWords(draft.text) else { return }
         deliver(draft)
+    }
+
+    /// The drawn region goes from the composer when `draft` took or
+    /// dropped it.
+    private func dropDrawnRegion(_ draft: Draft) {
+        guard let region = draft.region, drawnRegion?.region == region, drawnRegion?.time == draft.time else { return }
+        drawnRegion = nil
     }
 
     /// The popover's words go on their thread: an answer at once while the
     /// thread has an open question (L14), else into the queue.
     private func deliver(_ draft: Draft) {
+        // The words take the region: it isn't the composer's any more.
+        dropDrawnRegion(draft)
         guard let thread = desk.review?.thread(atFrame: draft.time), thread.openQuestion != nil else {
             queue(draft)
             return
@@ -754,6 +795,12 @@ final class AppModel: AppControlling {
     /// Cmd+Return and the Send button: sends the queue, with the words in
     /// the popover. With nothing to send it does nothing.
     func send() {
+        // An answer in the composer goes at once, as Return takes it, even
+        // with nothing queued to send after it.
+        if let target = composerTarget, target.answers, let thread = target.thread, Self.hasWords(composerText) {
+            let text = composerText
+            if answerQuestion(thread, text: text) { spendComposer(target, text: text) }
+        }
         // A second press while the first is on its way has nothing to add.
         guard canSend, !isSending else { return }
         isSending = true
@@ -872,26 +919,129 @@ final class AppModel: AppControlling {
         frameMarks.first?.thread
     }
 
-    /// The sidebar as `state` reports it: the thread it shows, and its width.
+    /// The sidebar as `state` reports it: the thread it shows, its width
+    /// and the composer.
     var sidebarReport: StateReport.Sidebar {
-        StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth))
+        StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth), composer: composerReport)
     }
 
-    /// The field at the foot of a thread view (L14): with an open
-    /// question the words are the answer and go at once (D 2.16); else
-    /// they are a follow-up in the queue (D 2.13). False when nothing was
-    /// written, and the person is told why.
-    @discardableResult
-    func writeOnThread(_ id: ThreadID, text: String) async -> Bool {
-        guard Self.hasWords(text), let thread = desk.review?.thread(id) else { return false }
-        if thread.openQuestion != nil { return answerQuestion(id, text: text) }
-        do throws(AppRefusal) {
-            _ = try await queueMessage(text: text, time: thread.time, region: nil, thread: id)
-            return true
-        } catch {
-            problem = Problem(title: "The message wasn't queued", reason: error.reason)
-            return false
+    // MARK: - The composer at the sidebar's foot (L41)
+
+    /// Where the composer's words go now; nil with no video.
+    var composerTarget: ComposerTarget? {
+        guard video != nil, let review = desk.review else { return nil }
+        let frame = engine.frameTime(of: engine.time)
+        let shownThread = shown.flatMap { review.thread($0) }
+        return ComposerTarget.resolve(
+            shown: shownThread,
+            general: shownThread == nil && isComposerGeneral ? threads.first(where: \.isGeneral) : nil,
+            atFrame: review.thread(atFrame: frame),
+            frame: frame,
+            nextNumber: review.nextThreadNumber,
+            // The region counts while the stage shows the frame it was drawn on.
+            regionTime: drawnRegion.map(\.time).flatMap { $0 == frame ? $0 : nil }
+        )
+    }
+
+    /// The region chip in the composer: the drawn region, when it goes
+    /// with the words.
+    var composerRegion: Region? {
+        guard composerTarget?.takesRegion == true else { return nil }
+        return drawnRegion?.region
+    }
+
+    /// The words in the composer: the draft of its target.
+    var composerText: String {
+        get { composerTarget.flatMap { composerDrafts[$0.draftKey] } ?? "" }
+        set {
+            guard let key = composerTarget?.draftKey else { return }
+            composerDrafts[key] = newValue.isEmpty ? nil : newValue
         }
+    }
+
+    /// The General toggle in the thread list.
+    func toggleComposerGeneral() {
+        isComposerGeneral.toggle()
+    }
+
+    /// The × on the composer's region chip: the words go on the whole frame.
+    func removeComposerRegion() {
+        drawnRegion = nil
+    }
+
+    /// The person clicked into the composer: the player pauses, so the
+    /// frame it writes at holds still.
+    func composerBegan() {
+        engine.pause()
+    }
+
+    /// Return in the composer and its button: the words go to the target,
+    /// an answer at once, else into the queue. The draft empties once
+    /// they are written; when they are refused the person is told why.
+    func submitComposer() {
+        guard Self.hasWords(composerText), !isComposing else { return }
+        isComposing = true
+        Task {
+            defer { isComposing = false }
+            do throws(AppRefusal) {
+                _ = try await writeComposer()
+            } catch {
+                problem = Problem(title: "The message wasn't written", reason: error.reason)
+            }
+        }
+    }
+
+    /// Writes the composer's words to its target: the target's kind,
+    /// once they are written. The draft, the region chip and the General
+    /// toggle are spent; the sidebar stays where it is.
+    @discardableResult
+    func writeComposer() async throws(AppRefusal) -> ComposerTarget.Kind {
+        guard let target = composerTarget else { throw Self.noVideo }
+        let text = composerText
+        try needWords(text)
+        if target.answers, let thread = target.thread {
+            _ = try answer(thread.text, text: text)
+        } else {
+            let region = target.takesRegion ? drawnRegion?.region : nil
+            engine.pause()
+            _ = try await queueMessage(text: text, time: target.isGeneral ? nil : target.time, region: region, thread: target.thread)
+            if region != nil, drawnRegion?.region == region { drawnRegion = nil }
+        }
+        spendComposer(target, text: text)
+        return target.kind
+    }
+
+    /// The composer's `text` went to `target`: its draft goes, unless the
+    /// person typed on meanwhile, and the General toggle goes off.
+    private func spendComposer(_ target: ComposerTarget, text: String) {
+        if composerDrafts[target.draftKey] == text { composerDrafts[target.draftKey] = nil }
+        if target.isGeneral { isComposerGeneral = false }
+    }
+
+    /// `comment compose` (L41): the words in the composer and its region
+    /// chip, as the person types them and draws, with the General toggle
+    /// on or off. The composer's field takes the keys. The region is on the
+    /// frame on the stage.
+    func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer {
+        try needVideo()
+        engine.pause()
+        isComposerGeneral = general
+        if let region {
+            drawnRegion = Draft(time: engine.frameTime(of: engine.time), text: "", region: region)
+        }
+        composerText = text
+        composerFocusRequests += 1
+        guard let report = composerReport else { throw Self.noVideo }
+        return report
+    }
+
+    /// The composer as `state` reports it.
+    var composerReport: StateReport.Sidebar.Composer? {
+        guard let target = composerTarget else { return nil }
+        return StateReport.Sidebar.Composer(
+            target: target.line, kind: target.kind.name, thread: target.thread?.text, number: target.number, time: target.time,
+            general: isComposerGeneral && shown == nil, text: composerText, region: composerRegion
+        )
     }
 
     /// The sidebar's width: the kept one, inside the limits, else the

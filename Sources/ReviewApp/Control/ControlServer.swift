@@ -47,6 +47,9 @@ protocol AppControlling: AnyObject {
     func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
     /// Shows the thread list in the sidebar, as Back does.
     func showThreadList() -> StateReport.Sidebar
+    /// Puts words, a region chip and the General toggle in the composer at
+    /// the sidebar's foot, as the person types, draws and clicks.
+    func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
     /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
@@ -226,6 +229,10 @@ final class ControlServer {
                 let thread = popover.thread.map { " on #\($0)" } ?? ""
                 let area = popover.region.map { " on the region \($0.text)" } ?? ""
                 return done("popover open\(thread) at \(TimeCode.text(popover.time))\(area)", Output(popover: popover), json)
+            case .commentCompose(let text, let rectangle, let general):
+                let composer = try app.compose(text: text, region: try Self.region(rectangle), general: general)
+                let area = composer.region.map { " with the region \($0.text)" } ?? ""
+                return done("the composer says \"\(composer.target)\"\(area)", Output(composer: composer), json)
             case .commentEdit(let id, let text):
                 let message = try app.editMessage(id, text: text)
                 return done("\(message.id) edited", Output(message: message), json)
@@ -321,6 +328,7 @@ final class ControlServer {
         var theme: StateReport.Theme?
         var popover: StateReport.Popover?
         var sidebar: StateReport.Sidebar?
+        var composer: StateReport.Sidebar.Composer?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {

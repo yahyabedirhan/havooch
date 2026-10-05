@@ -6,7 +6,7 @@ import ReviewLease
 /// naming the protocol's `version`, the `command` and the `holder`, with the
 /// command's own fields beside them:
 ///
-///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":2}
+///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":3}
 ///
 /// The wire format is a contract between a `video-review` and the app of
 /// the same build.
@@ -46,6 +46,8 @@ public struct ControlMessage: Equatable, Sendable {
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
+        case .commentCompose(let text, let region, let general):
+            wire = Wire(command: "comment.compose", text: text, region: region, general: general ? true : nil)
         case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
@@ -139,6 +141,8 @@ public struct ControlMessage: Equatable, Sendable {
             return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at, region: wire.region, thread: wire.thread)
         case "comment.open":
             return .commentOpen(text: wire.text ?? "", region: wire.region)
+        case "comment.compose":
+            return .commentCompose(text: wire.text ?? "", region: wire.region, general: wire.general ?? false)
         case "comment.edit":
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
@@ -233,5 +237,7 @@ public struct ControlMessage: Equatable, Sendable {
         var thread: String?
         /// `thread open --frame`: where the thread's popover is kept.
         var frame: ControlRequest.Rectangle?
+        /// `comment compose --general`: the composer writes to General.
+        var general: Bool?
     }
 }

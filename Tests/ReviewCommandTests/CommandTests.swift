@@ -38,6 +38,10 @@ struct CommandTests {
         (["comment", "open"], .commentOpen(text: "")),
         (["comment", "open", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
          .commentOpen(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
+        (["comment", "compose"], .commentCompose(text: "")),
+        (["comment", "compose", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
+         .commentCompose(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
+        (["comment", "compose", "--general", "Overall"], .commentCompose(text: "Overall", general: true)),
         (["context", "set", "Compare with the old cut"], .contextSet(text: "Compare with the old cut")),
         (["context", "set", ""], .contextSet(text: "")),
         (["send"], .send),
@@ -325,13 +329,13 @@ struct CommandTests {
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("--version prints 0.1.0 without asking the app, as JSON with --json")
+    @Test("--version prints 0.2.0 without asking the app, as JSON with --json")
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.1.0\n"))
+        #expect(VideoReviewCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
         #expect(VideoReviewCLI.run(["--version", "--json"], environment: run.environment)
-            == CommandResult(output: "{\n  \"version\" : \"0.1.0\"\n}\n"))
+            == CommandResult(output: "{\n  \"version\" : \"0.2.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
 

@@ -104,7 +104,7 @@ struct RootView: View {
     }
 }
 
-/// The sidebar column: the threads above the footer, resizable from its
+/// The sidebar column: the threads, the composer and the footer, resizable from its
 /// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
 /// on that edge separates it from the stage.
 struct SidebarColumn: View {
@@ -125,6 +125,8 @@ struct SidebarColumn: View {
         VStack(spacing: 0) {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
+            // One composer for the list and the thread view alike (L41).
+            Composer(model: model)
             SidebarFooter(model: model)
         }
         .frame(width: width)

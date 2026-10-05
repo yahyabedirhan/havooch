@@ -2,30 +2,10 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// What the field at the foot of a thread does with its words (L14): the
-/// answer to the agent's open question goes at once (D 2.16); anything
-/// else is a follow-up in the queue (D 2.13).
-struct ThreadFieldLook: Equatable {
-    var placeholder: String
-    var hint: String
-    var button: String
-    var answers: Bool
-
-    init(_ thread: ReviewThread) {
-        answers = thread.openQuestion != nil
-        if answers {
-            (placeholder, hint, button) = ("Answer the question…", "↩ answers at once", "Answer")
-        } else if thread.isGeneral {
-            (placeholder, hint, button) = ("Write to the agent…", "↩ queues · ⌘↩ sends the queue", "Queue")
-        } else {
-            (placeholder, hint, button) = ("Follow up on #\(thread.number)…", "↩ queues · ⌘↩ sends the queue", "Queue")
-        }
-    }
-}
-
 /// The sidebar's view of one thread (L38): a top bar with Back, the
-/// thread's number and time, and Previous and Next; the conversation; and
-/// the field at the foot. No keyframe: the stage shows the thread's frame.
+/// thread's number and time, and Previous and Next; then the conversation.
+/// No keyframe: the stage shows the thread's frame. The composer under it
+/// (`Composer`) writes on the thread.
 struct ThreadView: View {
     let model: AppModel
     let thread: ReviewThread
@@ -49,10 +29,6 @@ struct ThreadView: View {
             .defaultScrollAnchor(.bottom)
             // Each thread opens at its newest message.
             .id(thread.id)
-            Hairline(axis: .horizontal)
-            ThreadField(model: model, thread: thread)
-                // Words written on one thread never go to another.
-                .id(thread.id)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.isGeneral ? "General thread" : "Thread \(thread.number)")
@@ -90,8 +66,8 @@ private struct ThreadViewBar: View {
             HStack(spacing: 0) {
                 back(others)
                 Spacer(minLength: 8)
-                step("Previous thread", symbol: "chevron.up", forward: false)
-                step("Next thread", symbol: "chevron.down", forward: true)
+                step("Previous thread", key: "↑", symbol: "chevron.up", forward: false)
+                step("Next thread", key: "↓", symbol: "chevron.down", forward: true)
             }
             title
         }
@@ -146,7 +122,7 @@ private struct ThreadViewBar: View {
         .allowsHitTesting(false)
     }
 
-    private func step(_ title: String, symbol: String, forward: Bool) -> some View {
+    private func step(_ title: String, key: String, symbol: String, forward: Bool) -> some View {
         Button {
             model.showNeighbour(forward: forward)
         } label: {
@@ -160,7 +136,7 @@ private struct ThreadViewBar: View {
         // disabled, and takes the focus ring with keyboard navigation.
         .buttonStyle(.borderless)
         .disabled(model.neighbour(forward: forward) == nil)
-        .help(title)
+        .help("\(title) (\(key))")
         .accessibilityLabel(title)
     }
 }
@@ -188,50 +164,5 @@ private struct GeneralIntro: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette[.well], in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// The field at the foot of a thread view: answers an open question at
-/// once, else queues a follow-up. It waits for a click, so an answer that
-/// arrives never takes the keys from the player.
-private struct ThreadField: View {
-    let model: AppModel
-    let thread: ReviewThread
-
-    @State private var words = ""
-    @State private var isWriting = false
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let look = ThreadFieldLook(thread)
-        VStack(alignment: .trailing, spacing: 6) {
-            MessageField(text: $words, placeholder: look.placeholder, takesFocus: false, commit: write, cancel: { words = "" })
-                .frame(height: 48)
-            HStack(spacing: 8) {
-                Text(look.hint)
-                    .font(.caption)
-                    .foregroundStyle(palette[.textTertiary])
-                Spacer()
-                Button(look.button, action: write)
-                    .buttonStyle(.borderedProminent)
-                    .tint(look.answers ? palette[.question] : palette[.accent])
-                    .controlSize(.small)
-                    .disabled(!AppModel.hasWords(words) || isWriting)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(look.answers ? "Answer the agent's question" : "Write on this thread")
-    }
-
-    private func write() {
-        guard AppModel.hasWords(words), !isWriting else { return }
-        let text = words
-        isWriting = true
-        Task {
-            defer { isWriting = false }
-            if await model.writeOnThread(thread.id, text: text), words == text { words = "" }
-        }
     }
 }

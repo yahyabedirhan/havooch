@@ -12,7 +12,6 @@
     "knob": "#ffffff",
     "shadow": "#00000040",
     "controlHover": "#0000000f",
-    "controlPressed": "#0000001f",
     "textPrimary": "#2b2925",
     "textSecondary": "#6b665d",
     "textTertiary": "#9a948a",

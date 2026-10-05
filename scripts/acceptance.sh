@@ -18,11 +18,9 @@
 #     rule of the spec (`group` below);
 #   - what the composer at the foot of the sidebar says it writes to:
 #     "New thread at 0:10", "Reply on #1", "Follow up on #1", "Answer #1 ·
-#     goes at once". COMPOSER (#42): the state report has no composer field
-#     yet. `composer_says` reads `sidebar.composer.target`; until a build
-#     reports it, each of these checks is PENDING, not failed, and the run
-#     ends with exit 4. Change `composer_says` if #42 names the field
-#     otherwise.
+#     goes at once", `sidebar.composer.target` of `state --json` (#42). A
+#     build that doesn't report it makes each of these checks PENDING, not
+#     failed, and the run ends with exit 4.
 #
 # It uses only the CLI contract, so it runs against another build by naming
 # that build's command:
@@ -310,9 +308,9 @@ grouped() {
 }
 
 # composer_says <target>: what the composer at the foot of the sidebar says
-# it writes to. COMPOSER (#42): the field is `sidebar.composer.target` of
-# `state --json`. Until the app reports it, the check is PENDING: it is
-# listed at the end and the run exits 4, never 0.
+# it writes to: `sidebar.composer.target` of `state --json` (#42). With a
+# build that doesn't report it, the check is PENDING: it is listed at the
+# end and the run exits 4, never 0.
 composer_pending=()
 composer_says() {
     local file="$logs/composer-$commands.json"

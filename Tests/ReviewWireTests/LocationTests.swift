@@ -12,12 +12,12 @@ struct LocationTests {
         try body(folder)
     }
 
-    @Test("the app is Video Review 0.1.0, with no prototype suffix in its name, bundle id or support folder")
+    @Test("the app is Video Review 0.2.0, with no prototype suffix in its name, bundle id or support folder")
     func identity() {
         #expect(AppIdentity.appName == "Video Review")
         #expect(AppIdentity.bundleID == "com.yahyabedirhan.video-review")
         #expect(SupportFolder.app(environment: [:]).lastPathComponent == "Video Review")
-        #expect(Version.app == "0.1.0")
+        #expect(Version.app == "0.2.0")
     }
 
     /// Whether the tests run on the Mac, where the support folder is

@@ -72,7 +72,8 @@ struct AgentAvatar: View {
     let agent: KnownAgent?
     let size: CGFloat
     /// The SF Symbol shown without a logo: "sparkles" for an agent's
-    /// message, "person.fill" for the person's.
+    /// message, "questionmark" for its question, a notice's own symbol on
+    /// a notice.
     let symbol: String
     let fill: Color
     @Environment(\.palette) private var palette

@@ -29,7 +29,7 @@ struct ControlServerTests {
 
         func state() -> StateReport {
             var report = StateReport(
-                app: .init(version: "0.1.0", demo: true, support: "/demo"),
+                app: .init(version: "0.2.0", demo: true, support: "/demo"),
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
@@ -132,6 +132,14 @@ struct ControlServerTests {
             calls.append("thread list")
             shown = nil
             return StateReport.Sidebar(thread: nil, width: 340)
+        }
+
+        func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer {
+            try record("comment compose \(text)\(region.map { " on \($0.text)" } ?? "")\(general ? " general" : "")")
+            return StateReport.Sidebar.Composer(
+                target: general ? "Reply on General" : "New thread at 0:12", kind: general ? "reply" : "new", thread: nil, number: general ? 0 : 2, time: general ? nil : 12.5,
+                general: general, text: text, region: region
+            )
         }
 
         private func record(_ call: String) throws(AppRefusal) {
@@ -248,7 +256,7 @@ struct ControlServerTests {
     func stateJSON() async throws {
         app.time = 10
         var state = try object(await answer(.state, json: true).reply.output)
-        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.1.0", "demo": true, "support": "/demo"])
+        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.2.0", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
             == ["path": "/videos/sample.mp4", "contentHash": "abcdef0123", "title": "sample", "duration": 21.233, "contextNote": ""])
@@ -272,7 +280,7 @@ struct ControlServerTests {
     @Test("state and app status answer lines without --json")
     func lines() async {
         #expect(await answer(.state).reply.output == """
-            \(AppIdentity.appName) 0.1.0, demo data in /demo
+            \(AppIdentity.appName) 0.2.0, demo data in /demo
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
             transcript: none
@@ -283,7 +291,7 @@ struct ControlServerTests {
 
             """)
         #expect(await answer(.appStatus).reply.output == """
-            running: \(AppIdentity.appName) 0.1.0
+            running: \(AppIdentity.appName) 0.2.0
             data: demo, /demo
             video: /videos/sample.mp4
             lease: free
@@ -337,6 +345,24 @@ struct ControlServerTests {
         #expect(app.calls == ["comment open ", "comment open This box on 0.25,0.2,0.3,0.25", "comment open Again"])
     }
 
+    @Test("comment compose reaches the app with its words, region and General toggle, and answers with what the composer says it writes to")
+    func commentCompose() async throws {
+        #expect(await answer(.commentCompose(text: "Too fast")).reply == .done("the composer says \"New thread at 0:12\"\n"))
+        let region = ControlRequest.Rectangle(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
+        #expect(await answer(.commentCompose(text: "", region: region)).reply
+            == .done("the composer says \"New thread at 0:12\" with the region 0.25,0.2,0.3,0.25\n"))
+        let printed = try object(await answer(.commentCompose(text: "Overall", general: true), json: true).reply.output)
+        let composer = try #require(printed["composer"] as? [String: Any])
+        #expect(composer["target"] as? String == "Reply on General")
+        #expect(composer["kind"] as? String == "reply")
+        #expect(composer["general"] as? Bool == true)
+        #expect(composer["text"] as? String == "Overall")
+        #expect(composer["time"] is NSNull)
+        // Numbers that aren't a region are refused before the app is asked.
+        #expect(await answer(.commentCompose(text: "", region: .init(x: 0.9, y: 0, w: 0.5, h: 0.5))).reply.ok == false)
+        #expect(app.calls == ["comment compose Too fast", "comment compose  on 0.25,0.2,0.3,0.25", "comment compose Overall general"])
+    }
+
     @Test("`thread open` opens a thread's popover, kept at a frame when it names one; a frame outside the video area is refused first")
     func threadOpen() async throws {
         _ = try await app.addMessage(text: "Here", at: 12.5, region: nil, thread: nil)
@@ -364,7 +390,7 @@ struct ControlServerTests {
         sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
         #expect(sidebar["thread"] as? String == "t-abcdef01-1")
         let shown = try object(await answer(.threadShow(thread: "t-abcdef01-0"), json: true).reply.output)
-        #expect(shown["sidebar"] as? [String: AnyHashable] == ["thread": "t-abcdef01-0", "width": 340])
+        #expect(shown["sidebar"] as? [String: AnyHashable] == ["thread": "t-abcdef01-0", "width": 340, "composer": NSNull()])
         #expect(shown.count == 1)
         #expect(await answer(.threadShow(thread: "t-abcdef01-9")).reply.ok == false)
 

@@ -42,6 +42,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// addition to the spec's contract: the popover and its region can be
     /// shown, checked and screenshotted without a click.
     case commentOpen(text: String, region: Rectangle? = nil)
+    /// `video-review comment compose [<text>] [--region x,y,w,h]
+    /// [--general]`: the composer at the sidebar's foot holds `text`, as
+    /// the person types it, with a region chip on the player's frame and
+    /// the General toggle. An addition to the contract: the composer can
+    /// be shown, checked and screenshotted without typing.
+    case commentCompose(text: String, region: Rectangle? = nil, general: Bool = false)
     /// `video-review comment edit <message-id> <text>`: a queued message's
     /// new text.
     case commentEdit(id: String, text: String)
@@ -161,7 +167,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .themeSet: .operator
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
-        case .commentAdd, .commentOpen, .commentEdit, .commentDelete, .send: .operator
+        case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadOpen, .threadShow, .threadList: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }

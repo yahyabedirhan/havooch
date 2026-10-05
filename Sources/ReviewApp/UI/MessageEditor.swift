@@ -10,8 +10,9 @@ import SwiftUI
 ///
 /// Return commits, Shift+Return makes a new line, Escape cancels. Tab and
 /// Shift+Tab move the focus to the next and the previous control, as in a
-/// text field, so the keyboard reaches past the editor. `focusChanged` hears when the text view takes and gives up the focus,
-/// so the field around it draws the focus ring.
+/// text field, so the keyboard reaches past the editor. `focusChanged`
+/// hears when the text view takes and gives up the focus, so the field
+/// around it draws the focus ring.
 struct MessageEditor: NSViewRepresentable {
     @Binding var text: String
     var takesFocus = true
