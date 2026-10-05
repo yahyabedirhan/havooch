@@ -50,6 +50,10 @@ final class AppModel: AppControlling {
     /// The thread the sidebar shows in its thread view; nil while it
     /// shows the thread list (L38).
     private(set) var shown: ThreadID?
+    /// The thread whose row in the thread list has the keyboard focus
+    /// under keyboard navigation: Space and Return open it. Nil while no
+    /// row has it.
+    @ObservationIgnored var focusedRow: ThreadID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the sidebar is shown beside the stage.
@@ -851,6 +855,16 @@ final class AppModel: AppControlling {
         shown = id
         engine.pause()
         return thread
+    }
+
+    /// A row's action on thread `id`: the one path for a click, Space or
+    /// Return on the focused row, the row's menu and VoiceOver.
+    func perform(_ action: RowAction, on id: ThreadID) {
+        switch action {
+        case .open: showThread(id)
+        case .showOnVideo: showOnVideo(id)
+        case .deleteQueued: deleteQueued(on: id)
+        }
     }
 
     /// What a row's menu offers for `thread` (L40): Open always; Show on

@@ -185,6 +185,35 @@ struct SidebarTests {
         #expect(!model.escape())
     }
 
+    @Test("a row's actions are one path: Open does what a click does, Show on Video leaves the list, Delete Queued Messages takes the queued ones")
+    func rowActions() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        _ = try await model.addMessage(text: "One", at: 5)
+        _ = try await model.addMessage(text: "Two", at: 15)
+        let (one, two) = (try thread(1, model).id, try thread(2, model).id)
+        try await model.seek(to: 10)
+
+        model.perform(.showOnVideo, on: one)
+        await eventually { model.engine.time == 5 }
+        #expect(model.engine.time == 5)
+        #expect(model.selection == one)
+        #expect(model.shown == nil)
+
+        // Space or Return on a focused row opens it the same way.
+        model.focusedRow = two
+        model.perform(.open, on: two)
+        #expect(model.shown == two)
+        #expect(model.selection == two)
+        await eventually { model.engine.time == 15 }
+        #expect(model.engine.time == 15)
+
+        _ = model.showThreadList()
+        model.perform(.deleteQueued, on: one)
+        #expect(!model.threads.contains { $0.id == one })
+        #expect(model.threads.contains { $0.id == two })
+    }
+
     @Test("Previous and Next go through the threads in time order, General first, and stop at either end")
     func previousAndNext() async throws {
         defer { cleanUp() }
