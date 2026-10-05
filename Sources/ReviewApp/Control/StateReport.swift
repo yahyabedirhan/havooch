@@ -231,6 +231,25 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
+    /// The sidebar: the expanded thread and the kept width.
+    struct Sidebar: Encodable, Equatable {
+        /// The id of the one expanded thread; `null` while every thread is
+        /// collapsed.
+        var expanded: String?
+        /// The sidebar's width in points, as it is kept in the settings.
+        var width: Double
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(expanded, forKey: .expanded)
+            try container.encode(width, forKey: .width)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case expanded, width
+        }
+    }
+
     var app: App
     /// Who drives the app; `null` while nobody does. The control server,
     /// which owns the lease, fills it in.
@@ -248,6 +267,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     var transcript: Transcript?
     /// The message being written; `null` while the popover is closed.
     var popover: Popover?
+    /// The sidebar; the app's model fills it in.
+    var sidebar: Sidebar?
     /// The open video's threads: General first, then in time order.
     var threads: [Thread]
     /// The ids of the messages waiting to be sent, in the threads' order.
@@ -276,7 +297,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme
+        case transcript, theme, sidebar
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -289,6 +310,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(player, forKey: .player)
         try container.encode(transcript, forKey: .transcript)
         try container.encode(popover, forKey: .popover)
+        try container.encode(sidebar, forKey: .sidebar)
         try container.encode(threads, forKey: .threads)
         try container.encode(queue, forKey: .queue)
         try container.encode(sends, forKey: .sends)

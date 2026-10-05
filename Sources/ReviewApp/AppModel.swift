@@ -44,8 +44,11 @@ final class AppModel: AppControlling {
     private(set) var video: OpenVideo?
     /// The message being written; nil while the popover is closed.
     var draft: Draft?
-    /// The thread whose pin and section are picked out.
+    /// The thread whose pin is picked out.
     private(set) var selection: ThreadID?
+    /// The one thread the sidebar shows expanded; nil while every thread
+    /// is collapsed (L33).
+    private(set) var expanded: ThreadID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the rail is shown beside the stage.
@@ -150,6 +153,7 @@ final class AppModel: AppControlling {
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         draft = nil
         selection = nil
+        expanded = nil
         isDrawingRegion = false
         // They point at threads of the video that was open.
         notices = []
@@ -306,6 +310,7 @@ final class AppModel: AppControlling {
         if deleted.removedThread, let video {
             ImageFiles.remove(layout.keyframe(deleted.thread, of: video.contentHash))
             if selection == deleted.thread { selection = nil }
+            if expanded == deleted.thread { expanded = nil }
         }
         return report
     }
@@ -390,6 +395,7 @@ final class AppModel: AppControlling {
         )
         report.transcript = transcript
         report.theme = themes.report
+        report.sidebar = .init(expanded: expanded?.text, width: Double(sidebarWidth))
         return report
     }
 
@@ -705,6 +711,8 @@ final class AppModel: AppControlling {
     private func startThread(_ id: ThreadID) -> Double? {
         guard let thread = desk.review?.thread(id), let time = thread.time else { return nil }
         selection = id
+        // The sidebar shows the same conversation as the popover (L33).
+        expanded = id
         unread.remove(id)
         engine.pause()
         if draft?.time != time {
@@ -761,16 +769,86 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// A click on a pin or a thread: selects the thread, pauses and moves
-    /// the player to its frame. General has no frame to move to.
+    /// A click on a pin, a keyframe or a notice: selects the thread,
+    /// expands it in the sidebar, pauses and moves the player to its
+    /// frame. General has no frame to move to.
     func select(_ id: ThreadID) {
         guard let thread = desk.review?.thread(id) else { return }
         selection = id
+        expanded = id
         // Its conversation shows: the person sees what the agent said.
         unread.remove(id)
         engine.pause()
         // A move to the thread's frame is a change of the moment.
         if let time = thread.time { move(to: time) }
+    }
+
+    // MARK: - The sidebar
+
+    /// A click on a thread's row in the sidebar: the thread expands, and
+    /// the one expanded before collapses. A click on the expanded thread
+    /// collapses it. The thread's pin is picked out; the player stays
+    /// where it is.
+    func expandThread(_ id: ThreadID) {
+        guard desk.review?.thread(id) != nil else { return }
+        if expanded == id {
+            expanded = nil
+        } else {
+            expanded = id
+            selection = id
+            unread.remove(id)
+        }
+    }
+
+    /// `thread expand` (L34): the thread of the open video shows expanded,
+    /// as a click on its collapsed row shows it. A thread already expanded
+    /// stays so.
+    func expandThread(_ ref: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
+        try needVideo()
+        let (id, hash) = try desk.threadID(ref)
+        guard hash == video?.contentHash else { throw AppRefusal("\(ref) is a thread of another video; open it first") }
+        if expanded != id { expandThread(id) }
+        return (StateReport.Sidebar(expanded: id.text, width: Double(sidebarWidth)), id.number)
+    }
+
+    /// The field at the foot of an expanded thread (L14): with an open
+    /// question the words are the answer and go at once (D 2.16); else
+    /// they are a follow-up in the queue (D 2.13). False when nothing was
+    /// written, and the person is told why.
+    @discardableResult
+    func writeOnThread(_ id: ThreadID, text: String) async -> Bool {
+        guard Self.hasWords(text), let thread = desk.review?.thread(id) else { return false }
+        if thread.openQuestion != nil { return answerQuestion(id, text: text) }
+        do throws(AppRefusal) {
+            _ = try await queueMessage(text: text, time: thread.time, region: nil, thread: id)
+            return true
+        } catch {
+            problem = Problem(title: "The message wasn't queued", reason: error.reason)
+            return false
+        }
+    }
+
+    /// The sidebar's width: the kept one, inside the limits, else the
+    /// default.
+    var sidebarWidth: CGFloat { Self.sidebarWidth(kept: themes.settings.sidebarWidth) }
+
+    /// `kept` inside `Metrics.railWidthRange`; the default with none.
+    static func sidebarWidth(kept: Double?) -> CGFloat {
+        guard let kept, kept.isFinite else { return Metrics.railWidth }
+        let range = Metrics.railWidthRange
+        return min(max(CGFloat(kept), range.lowerBound), range.upperBound)
+    }
+
+    /// The person let go of the sidebar's edge at `width`: it is kept in
+    /// the settings, inside the limits, for this run and the next.
+    func keepSidebarWidth(_ width: CGFloat) {
+        let width = Self.sidebarWidth(kept: Double(width.rounded()))
+        guard width != sidebarWidth else { return }
+        do throws(AppRefusal) {
+            try themes.keepSidebarWidth(Double(width))
+        } catch {
+            // A width is a comfort, not the person's work: it's only lost.
+        }
     }
 
     /// Up and Down: the pin before or after the player's time.
@@ -808,14 +886,19 @@ final class AppModel: AppControlling {
         notices.removeAll { $0.id == id }
     }
 
-    /// A click on a notice: it goes, the rail shows, and the thread it's
-    /// on is selected, so its conversation is open with the answer field
-    /// under a question.
+    /// A click on a notice: it goes, and its thread's popover opens on
+    /// the thread's frame, with the answer field under a question (D 4.10).
+    /// A notice on General expands General in the sidebar (L18).
     func openNotice(_ id: UUID) {
         guard let notice = notices.first(where: { $0.id == id }) else { return }
         dismiss(id)
-        isRailVisible = true
-        select(notice.thread)
+        // General has no frame: its conversation is in the sidebar (L18).
+        if notice.thread.number == 0 {
+            isRailVisible = true
+            expanded = notice.thread
+        } else {
+            openThread(notice.thread)
+        }
     }
 
     /// Return in an answer field and its button: the person's answer to

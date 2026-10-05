@@ -55,6 +55,7 @@ struct CommandTests {
         (["thread", "open", "3"], .threadOpen(thread: "3")),
         (["thread", "open", "t-f92cbb2a-3", "--frame", "0.55,0.1,0.4,0.5"],
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
+        (["thread", "expand", "3"], .threadExpand(thread: "3")),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }

@@ -207,13 +207,13 @@ struct AnswerTests {
         #expect(notice.title == "#1 · Mate")
         #expect(notice.expires != nil)
         #expect(app.model.unread == [try #require(ItemID(app.one))])
-        #expect(MarkerPin.Badge(try thread(app.one, app), unread: app.model.unread) == .unread)
 
-        // A click on the notice: it goes, and the thread is selected and read.
+        // A click on the notice: it goes, and the thread's popover opens on its frame.
         app.model.openNotice(notice.id)
         #expect(app.model.notices.isEmpty)
         #expect(app.model.selection == ItemID(app.one))
         #expect(app.model.unread.isEmpty)
+        #expect(app.model.state().popover?.thread == 1)
     }
 
     @Test("a reply on General, by its number, is a message about the whole send")
@@ -228,6 +228,12 @@ struct AnswerTests {
         #expect(message["kind"] as? String == "message")
         #expect(try thread(app.general, app).messages.map(\.text) == ["Both fixed in one commit"])
         #expect(app.model.notices.first?.title == "General · Mate")
+
+        // General has no frame: a click on its notice expands it in the sidebar.
+        let notice = try #require(app.model.notices.first)
+        app.model.openNotice(notice.id)
+        #expect(app.model.expanded == ItemID(app.general))
+        #expect(app.model.state().popover == nil)
     }
 
     @Test("a reply on a thread that names nothing, has nothing sent, or has no words, is refused")
@@ -273,7 +279,7 @@ struct AnswerTests {
         let asking = Task { await server.reply(to: ControlRequest.ask(thread: two, question: "Which box?", waitSeconds: 30).sent(by: Self.listener)) }
         await eventually { app.model.listeners.outbox.openAsks == 1 }
         #expect(try thread(app.two, app).openQuestion?.text == "Which box?")
-        #expect(MarkerPin.Badge(try thread(app.two, app), unread: []) == .question)
+        #expect(ThreadSummary(try thread(app.two, app), agent: "Mate").waitsForAnswer)
         #expect(app.model.notices.first?.title == "#2 · Mate")
 
         let answered = await operate(.threadAnswer(thread: "2", text: "The left one"), app)

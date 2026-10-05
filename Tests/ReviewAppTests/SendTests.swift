@@ -472,23 +472,4 @@ struct RailWordsTests {
         // Before anyone listened, the hover still says who: an agent.
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))
     }
-
-    @Test("a thread's conversation is cut into the person's messages, as rows, and runs of the agent's messages and answers")
-    func parts() throws {
-        var review = VideoReview(video: VideoInfo(contentHash: "f92cbb2a00", title: "sample", duration: 21.233, path: "/sample.mp4"))
-        let now = Date(timeIntervalSince1970: 0)
-        let thread = try review.write(text: "First", at: 10, now: now).thread.id
-        try review.write(text: "Second", at: 10, now: now)
-        try review.send(at: now)
-        try review.reply(on: thread, text: "Looking", now: now)
-        try review.ask(on: thread, question: "Which?", now: now)
-        try review.answer(thread, text: "This one", now: now)
-        try review.write(text: "Third", at: 10, now: now)
-
-        let parts = RailView.parts(of: try #require(review.thread(thread)).messages)
-
-        #expect(parts.map(\.id) == ["m-f92cbb2a-1", "m-f92cbb2a-2", "talk-m-f92cbb2a-3", "m-f92cbb2a-6"])
-        guard case .talk(let talk) = parts[2] else { Issue.record("not a run of talk"); return }
-        #expect(talk.map(\.kind) == [.message, .question, .answer])
-    }
 }

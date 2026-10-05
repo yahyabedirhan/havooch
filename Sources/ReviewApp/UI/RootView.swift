@@ -92,7 +92,8 @@ struct RootView: View {
 /// leading edge between `Metrics.railWidthRange`'s bounds.
 struct SidebarColumn: View {
     let model: AppModel
-    @State private var width = Metrics.railWidth
+    /// The width while the person drags; nil shows the kept width.
+    @State private var dragged: CGFloat?
     /// The width when the drag started.
     @State private var dragStart: CGFloat?
     @Environment(\.palette) private var palette
@@ -105,7 +106,7 @@ struct SidebarColumn: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            RailView(model: model)
+            SidebarView(model: model)
                 .frame(maxHeight: .infinity)
             SidebarFooter(model: model)
         }
@@ -114,7 +115,10 @@ struct SidebarColumn: View {
         .overlay(alignment: .leading) { resizeHandle }
     }
 
-    /// A thin strip on the leading edge that drags the width.
+    private var width: CGFloat { dragged ?? model.sidebarWidth }
+
+    /// A thin strip on the leading edge that drags the width. The width is
+    /// kept in the settings when the drag ends (D 5.10).
     private var resizeHandle: some View {
         Color.clear
             .frame(width: 6)
@@ -126,9 +130,13 @@ struct SidebarColumn: View {
                         let start = dragStart ?? width
                         dragStart = start
                         let range = Metrics.railWidthRange
-                        width = min(max(start - drag.translation.width, range.lowerBound), range.upperBound)
+                        dragged = min(max(start - drag.translation.width, range.lowerBound), range.upperBound)
                     }
-                    .onEnded { _ in dragStart = nil }
+                    .onEnded { _ in
+                        if let dragged { model.keepSidebarWidth(dragged) }
+                        dragStart = nil
+                        dragged = nil
+                    }
             )
             .accessibilityHidden(true)
     }

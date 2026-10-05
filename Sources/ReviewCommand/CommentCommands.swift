@@ -73,6 +73,12 @@ enum CommentCommands {
             }
             return .send(.threadOpen(thread: thread, frame: frame))
         },
+        Command(
+            name: "thread expand", synopsis: "thread expand <thread>",
+            summary: "show a thread (an id, or a number of the open video) expanded in the sidebar, as a click on its row does"
+        ) { arguments, _ throws(UsageError) in
+            .send(.threadExpand(thread: try arguments.one("<thread>")))
+        },
     ]
 
     /// The `--region x,y,w,h` written, if any.

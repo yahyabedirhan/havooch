@@ -42,6 +42,8 @@ protocol AppControlling: AnyObject {
     /// Opens a thread's popover on its frame, as a click on its pin does,
     /// first keeping it at `frame` when there is one.
     func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover
+    /// Shows a thread expanded in the sidebar, as a click on its row does.
+    func expandThread(_ thread: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
     /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
@@ -280,6 +282,9 @@ final class ControlServer {
                 let popover = try await app.openThread(thread, frame: frame)
                 let number = popover.thread.map { "#\($0)" } ?? thread
                 return done("popover open on \(number) at \(TimeCode.text(popover.time))", Output(popover: popover), json)
+            case .threadExpand(let thread):
+                let expanded = try app.expandThread(thread)
+                return done("#\(expanded.number) expanded", Output(sidebar: expanded.sidebar), json)
             case .themeList:
                 let list = app.themeList()
                 return done(json ? StateReport.json(list) : list.lines)
@@ -307,6 +312,7 @@ final class ControlServer {
         var answer: StateReport.Message?
         var theme: StateReport.Theme?
         var popover: StateReport.Popover?
+        var sidebar: StateReport.Sidebar?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {

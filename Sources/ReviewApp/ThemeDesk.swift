@@ -121,6 +121,20 @@ final class ThemeDesk {
         return theme.name
     }
 
+    /// Keeps the sidebar's `width` in `settings.json`, beside the theme.
+    /// A settings file that doesn't read is left as it is.
+    func keepSidebarWidth(_ width: Double) throws(AppRefusal) {
+        if let settingsProblem { throw AppRefusal(settingsProblem) }
+        var next = settings
+        next.sidebarWidth = width
+        do throws(Library.Failure) {
+            try next.save(layout)
+        } catch {
+            throw AppRefusal(error.reason)
+        }
+        settings = next
+    }
+
     private func resolve() {
         let name = catalog.active(pinned: settings.theme, appearance: appearance)
         let resolved = (try? catalog.resolve(name, overrides: settings.overrides))

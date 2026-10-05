@@ -47,15 +47,12 @@ enum ThreadPopover {
 }
 
 /// A thread's conversation in its popover, above the field (D 2.7): the
-/// person's messages on the right with their state, the agent's on the
-/// left, a question picked out, the newest at the foot.
-///
-/// NOTE: The sidebar draws a thread's messages with views of its own. The
-/// two read the same thread, so a message written in either shows in both.
+/// sidebar's `MessageBubble`s, in the order written, the newest at the
+/// foot. One message style in both places, and both read the same thread,
+/// so a message written in either shows in both.
 struct PopoverConversation: View {
+    let model: AppModel
     let thread: ReviewThread
-    /// The agent's name as people read it.
-    let agent: String
     /// Whether the conversation takes the room the popover has, in a
     /// popover the person sized; else it grows to `conversationHeight`.
     let fills: Bool
@@ -64,9 +61,9 @@ struct PopoverConversation: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(thread.messages) { message in
-                    PopoverMessage(message: message, agent: agent, isOpen: message.id == thread.openQuestion?.id)
+                    MessageBubble(model: model, message: message, isOpenQuestion: message.id == thread.openQuestion?.id)
                 }
             }
             .padding(.vertical, 2)
@@ -77,80 +74,6 @@ struct PopoverConversation: View {
         .frame(maxHeight: fills ? .infinity : min(max(contentHeight, 1), ThreadPopover.conversationHeight))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Thread \(thread.number)")
-    }
-}
-
-/// One message in the popover's conversation: who wrote it and, for the
-/// person's, its state; then the words in a bubble.
-private struct PopoverMessage: View {
-    let message: Message
-    let agent: String
-    /// Whether this is the question the agent waits on.
-    let isOpen: Bool
-    @Environment(\.palette) private var palette
-
-    private var byPerson: Bool { message.author == .person }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            if byPerson { Spacer(minLength: 28) }
-            VStack(alignment: byPerson ? .trailing : .leading, spacing: 3) {
-                caption
-                Text(message.text)
-                    .font(.callout)
-                    .foregroundStyle(palette[.textPrimary])
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(bubble, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            }
-            if !byPerson { Spacer(minLength: 28) }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// "You · Queued", "Claude Code", "Claude Code asked · waiting for you".
-    private var caption: some View {
-        HStack(spacing: 4) {
-            if message.region != nil {
-                Image(systemName: "rectangle.dashed")
-                    .foregroundStyle(palette[.textTertiary])
-                    .accessibilityLabel("On a region")
-            }
-            Text(title)
-                .fontWeight(.semibold)
-                .foregroundStyle(message.kind == .question ? palette[.question] : palette[.textSecondary])
-            if let state = message.state {
-                Image(systemName: StateLook.glyph(state))
-                    .imageScale(.small)
-                    .foregroundStyle(palette.state(state))
-                    .accessibilityHidden(true)
-                Text(StateLook.name(state))
-                    .foregroundStyle(palette.state(state))
-            } else if isOpen {
-                Text("waiting for you")
-                    .foregroundStyle(palette[.question])
-            }
-        }
-        .font(.caption2)
-    }
-
-    private var title: String {
-        switch (message.author, message.kind) {
-        case (.agent, .question): "\(agent) asked"
-        case (.agent, _): agent
-        case (.person, .answer): "You answered"
-        case (.person, _): "You"
-        }
-    }
-
-    private var bubble: Color {
-        switch (message.author, message.kind) {
-        case (.agent, .question): palette[.bubbleQuestion]
-        case (.agent, _): palette[.bubbleAgent]
-        case (.person, _): palette[.bubblePerson]
-        }
     }
 }
 

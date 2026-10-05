@@ -115,6 +115,12 @@ struct ControlServerTests {
             return StateReport.Popover(thread: id.number, time: time, text: "", region: nil)
         }
 
+        func expandThread(_ thread: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
+            try record("thread expand \(thread)")
+            let threadID = try id(thread)
+            return (StateReport.Sidebar(expanded: threadID.text, width: 340), threadID.number)
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }

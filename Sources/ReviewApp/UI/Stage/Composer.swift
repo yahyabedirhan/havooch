@@ -47,7 +47,7 @@ struct Composer: View {
         VStack(alignment: .leading, spacing: 6) {
             header
             if let thread, !thread.messages.isEmpty {
-                PopoverConversation(thread: thread, agent: model.agentName, fills: size != nil)
+                PopoverConversation(model: model, thread: thread, fills: size != nil)
             }
             CommentField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
                 .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)

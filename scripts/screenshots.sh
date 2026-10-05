@@ -176,11 +176,12 @@ sleep 6
 echo "threads in every state, with their pins:"
 pair threads --hide-agent-indicator
 
-# PENDING (#30 sidebar): expand thread #3 and leave the others collapsed, then
-#   pair sidebar --hide-agent-indicator
-# with the command #30 adds to expand a thread, for example
-#   operator thread expand "$(thread "$keys")"
-pending sidebar "#30" "no command expands a thread in the sidebar yet"
+# Thread #3 expanded, with its reply, its open question and its region's
+# crop; the others collapsed.
+operator thread expand "$(thread "$keys")" >/dev/null
+sleep 1
+echo "a collapsed and an expanded thread in the sidebar:"
+pair sidebar --hide-agent-indicator
 
 # Thread #3's popover, as a click on its pin opens it: its conversation with
 # the agent's open question above the field, beside its region.

@@ -238,7 +238,7 @@ Sources/
     AppCommands.swift              app status | open [--demo] | quit, state, --version
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
-    CommentCommands.swift          comment add | edit | delete, send, thread answer, context set
+    CommentCommands.swift          comment add | edit | delete, send, thread answer | expand, context set
     ThemeCommands.swift            theme list | set
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator]
     ListenerCommands.swift         wait, ack, status, reply, ask
@@ -299,7 +299,7 @@ Sources/
       Screenshotter.swift          the app window through ScreenCaptureKit, in an appearance
     UI/
       RootView.swift               stage, player bar, sidebar, header; injects the Palette; `SidebarColumn`: the
-                                   threads above the footer, resizable, proto-1's spring in and out
+                                   threads above the footer, resizable, the width kept in settings, proto-1's spring in and out
       Palette.swift                the resolved tokens as SwiftUI colours, in the environment; the only way a view gets a colour; the window's appearance for a pinned theme
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
       QuietButtonStyle.swift       hover and press feedback for symbol buttons
@@ -321,17 +321,20 @@ Sources/
                                    conversation, a field that fills it, quiet hints; the header drags it, the corner
                                    grip resizes it; where it opens beside a region or above the bar's playhead (pure)
         ThreadPopover.swift        a thread's kept popover frame on the stage, fitted to it (pure); the conversation
-                                   above the field (#31)
+                                   above the field, in the sidebar's `MessageBubble`s (#31)
         Notices.swift              the brief notices that name the thread
       PlayerBar/
         PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button
         Timeline.swift             the track, ticks and time labels, the pins
         ThreadPin.swift            one pin: circle or rounded square, the state's colour, the hover line (pure words)
       Sidebar/
-        SidebarView.swift          General, then threads in time order; resizable; animated in and out
-        ThreadRow.swift            the collapsed row: number, thumbnail, state, start of the last message
-        ThreadConversation.swift   the expanded thread: keyframe header, messages, the field
-        MessageBubble.swift        avatar, name, time, bubble, crop; edit and delete on a queued message
+        SidebarView.swift          General, then threads in time order: each a row, the expanded one its conversation
+        ThreadRow.swift            the collapsed row: number, thumbnail, state, start of the last message;
+                                   `ThreadSummary`, its words (pure)
+        ThreadConversation.swift   the expanded thread: header, keyframe, messages, the field; `ThreadFieldLook` (pure)
+        MessageBubble.swift        avatar, name, time, bubble, crop; state and edit and delete on a person's message;
+                                   `ThreadHeading` (pure), `StateChip`, `RowButton`
+        SidebarPicture.swift       a keyframe or a crop read off the main actor at the size it shows
         SidebarFooter.swift        the presence pill, the queued count, Send; as tall as the player bar
         PresencePill.swift         the pill's words and the agent's name on hover (pure)
 
@@ -366,10 +369,10 @@ As proto-2, with these changes:
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
-| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator)` | takes or renews |
+| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadExpand(thread)`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?)` | none |
 
-- A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
+- A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `threadExpand`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
 - `ControlClient` reads to the end; the server's heartbeat spaces before the reply are skipped as JSON allows, and a reply of spaces only is an app that went away (D A.8). Its timeout is proto-2's, applied to each read: 15 s plus the request's `holdSeconds`, and no limit for a `wait` or an `ask` with no limit. With the heartbeat no read of a healthy held request waits more than 2 s.
 
 ### ReviewCommand
@@ -385,6 +388,7 @@ As proto-2, with the spec's names and outputs:
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
 | `thread open <thread> [--frame x,y,w,h]` (L29) | `popover open on #3 at 0:12.5` | `{"popover": {"thread", "time", "text", "region"}}` |
+| `thread expand <thread>` (L34) | `#1 expanded` | `{"sidebar": {"expanded": "t-…", "width": 340}}` |
 | `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks; then `left out: <reason>` per file left out | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}], "problems": ["…"]}` |
 | `theme set <name>` | `theme Dimmed pinned`, or `theme follows the system (Default Dark)` for `system`; names match without regard to case | `{"theme": {…}}` as in `state` |
 | `wait [--timeout]` | the payload JSON, with or without `--json` | same |
@@ -583,7 +587,9 @@ public struct SupportLayout: Sendable {
 | `addMessage(text, at?, region?, thread?)` | the CLI's path: pause, seek to `at`, snap to the frame, write the images, write the message | no video; empty text; bad time, region or thread |
 | `editMessage`, `deleteMessage` | through `ReviewDesk`; delete removes the crop, and the keyframe when the thread goes | not queued; unknown id |
 | `openThread(id)` | a pin, a badge, a notice, a row's frame button, `thread open` (L29): seek to the thread's frame (a moment change for a popover open on another frame; one open on this thread keeps its words), pause, select the thread, open its popover at its kept frame | General; with `thread open`, no video, an unknown thread, another video's thread |
-| `expandThread(id)` | the sidebar's one expanded thread | |
+| `expandThread(id)` | a click on a row: the sidebar's one expanded thread (`expanded`, apart from the pin's `selection`, L33); a click on the expanded one collapses it; the player stays. `openThread` (a pin, a badge, the keyframe, a notice) and `select` expand their thread too, so the sidebar shows the popover's conversation; a written message does not. `expandThread(ref)` is `thread expand` | a thread of another video |
+| `writeOnThread(id, text)` | the field at a thread's foot (L14): with an open question it is `answerQuestion`, at once; else a follow-up queued on the thread at its frame, without a seek | empty text |
+| `keepSidebarWidth(width)` | the end of a drag on the sidebar's edge: the width, inside `Metrics.railWidthRange`, goes to `settings.json` through `ThemeDesk.keepSidebarWidth`; `sidebarWidth` reads it back, the default 340 without one | |
 | `movePopover(id, frame)` | the end of a drag or a resize: saves the `PopoverFrame` | |
 | `send()` | queue the open draft's text, then `ReviewDesk.change { $0.send(…) }`, then `ListenerQueue.enqueue`; does nothing while a send is under way | nothing queued (`send` exits 1) |
 | `answer(thread, text)` | `thread answer` and the field: through `ReviewDesk`, then `ListenerQueue.answered` | no open question |
@@ -611,6 +617,7 @@ public struct SupportLayout: Sendable {
   "player":   { "time": 10.017, "playing": false },
   "transcript": { "source": "voiceover", "complete": true, "lines": 3, "problem": null },
   "popover":  null,
+  "sidebar":  { "expanded": null, "width": 340 },
   "threads":  [ { "id": "t-f92cbb2a-0", "number": 0, "time": null, "state": null, "keyframePath": null, "messages": [] },
                 { "id": "t-f92cbb2a-1", "number": 1, "time": 10.017, "state": "queued", "keyframePath": "/abs/…png",
                   "popoverFrame": null,
@@ -634,7 +641,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 | Comment popover (#29) | proto-2's `Composer` with 8 pt padding, a field across its whole width, `#3 · 0:12` (whole seconds, as the bar) and ×, quiet `textTertiary` key hints. On a moment its notch points at the player bar's playhead (`trackArea`, L25); on a region it sits beside the rectangle. | D 1.2, D 1.7, D 1.8 |
 | Frame marks | On the current frame, while paused or playing: each thread's region outlines and one number badge per thread (at its first region's corner, or the frame's top-left corner for a thread without a region). A badge click is `openThread`. Nothing opens by itself. | D 2.6, D 2.11 |
 | Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame (only on an existing thread, L30). Opens at its kept frame, fitted to the stage (L32), else beside the draft's region or the thread's first region, else above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |
-| Sidebar | General first, then threads in time order. A collapsed `ThreadRow`: number, keyframe thumbnail, state, the start of the last message. One expanded thread at a time: keyframe header, `MessageBubble`s in order (avatar, name, time, bubble; a region message shows its crop), edit and delete on queued messages, a field at the bottom (answer at once when a question is open, else queue). Resizable between `Metrics.sidebarMin` and `sidebarMax`, width kept in settings, proto-1's animation for open and close. | D 3.1 to D 3.7, D 4.5, D 5.10 |
+| Sidebar | General first, then threads in time order. A collapsed `ThreadRow`: number, keyframe thumbnail, state, the start of the last message. One expanded thread at a time: keyframe header, `MessageBubble`s in order (avatar, name, time, bubble; a region message shows its crop), edit and delete on queued messages, a field at the bottom (answer at once when a question is open, else queue). Background segments it: a header band over the expanded thread, its own fill under it, no cards. It opens at the top; an expansion scrolls its thread's header to the top. Resizable between the bounds of `Metrics.railWidthRange` (300 to 460), width kept in `settings.json`, proto-1's animation for open and close. | D 3.1 to D 3.7, D 4.5, D 5.10 |
 | Footer | proto-3's line: presence pill (`Listening`, `Working`, `No listener`; hover names the agent), the queued count, Send. Same height as the player bar. | D 4.8, D 4.9 |
 | Header | Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `header` token (L26). | D 4.1 to D 4.4, D 4.7 |
 | Notices | Top right of the stage, name the thread, open it on click, fade after 5 s, a question's too (L28). | D 4.10 |
@@ -911,3 +918,5 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L30 | Only a popover on an existing thread drags and resizes. A popover that will start a thread opens at its placement and gets the handles once its first message is queued. | The frame is kept per thread (D 2.10); before the first message there is no thread to keep it on, and a frame held in the draft would be lost on every close. |
 | L31 | Words in the popover on a thread with an open question are an answer however they leave it: Return, a click outside, a change of the moment, Cmd+Enter. | L14 names one field; a click outside that queued the words instead would leave the agent's question waiting while the words sit in the queue. |
 | L32 | The video area of a `PopoverFrame` is the stage (the video with its letterbox). A kept frame is fitted on screen: at least 280 × 190 pt, at most the stage, 8 pt inside its edges. | The popover moves over the whole stage, not only the picture; normalized to the stage, it lands in the same place at any window size and is never lost off screen or too small to use. |
+| L33 | The sidebar's one expanded thread is `AppModel.expanded`, apart from the pin's `selection`. A row click, `thread expand`, and every way the thread popover opens (a pin, a badge, the keyframe, a notice) expand a thread; a message written selects its pin but leaves every thread collapsed. | D 3.3 says collapsed by default and expand on a click. A message written from the popover or the CLI expanding its thread scrolled the sidebar away from General each time. |
+| L34 | `thread expand <thread>` expands a thread of the open video in the sidebar, as a click on its row does. An operator command, an addition to the contract. | The CLI cannot click. Without it an expanded thread can't be shown, checked or screenshotted in the real app. |
