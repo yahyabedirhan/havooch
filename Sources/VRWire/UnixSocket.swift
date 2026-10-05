@@ -1,4 +1,8 @@
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
 import Darwin
+#endif
 import Foundation
 
 /// The few POSIX calls both ends of `control.sock` make, so the client here
@@ -7,7 +11,11 @@ import Foundation
 public enum UnixSocket {
     /// A new stream socket, or -1 with `errno` set.
     public static func make() -> Int32 {
+        #if canImport(Glibc)
+        socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #else
         socket(AF_UNIX, SOCK_STREAM, 0)
+        #endif
     }
 
     /// The longest path a socket's address holds (103 bytes on macOS),
@@ -25,7 +33,9 @@ public enum UnixSocket {
         guard bytes.count <= maximumPathLength else { return nil }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
+        #if !canImport(Glibc)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        #endif
         withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: bytes) }
         return address
     }
@@ -115,7 +125,7 @@ public enum UnixSocket {
 
     /// Closes the writing side, so the peer reads to its end.
     public static func finishWriting(_ descriptor: Int32) {
-        shutdown(descriptor, SHUT_WR)
+        shutdown(descriptor, Int32(SHUT_WR))
     }
 
     /// `errno` in words.
