@@ -130,15 +130,25 @@ struct BatchPayloadTests {
 
         #expect(Set(payload.keys) == ["batch", "video", "context", "comments"])
         #expect(payload["batch"] as? [String: String] == ["id": "b-00000001", "sentAt": "2026-09-21T14:13:20Z"])
-        #expect(payload["video"] as? [String: AnyHashable]
-            == ["path": "/videos/sample.mp4", "contentHash": "abc", "duration": 21.233, "title": "sample"])
+        // Field by field with typed casts: a number read back compares
+        // unequal to a literal through AnyHashable on Linux's Foundation.
+        let video = try #require(payload["video"] as? [String: Any])
+        #expect(Set(video.keys) == ["path", "contentHash", "duration", "title"])
+        #expect(video["path"] as? String == "/videos/sample.mp4")
+        #expect(video["contentHash"] as? String == "abc")
+        #expect(video["duration"] as? Double == 21.233)
+        #expect(video["title"] as? String == "sample")
         #expect(payload["context"] is NSNull)
         let comments = try #require(payload["comments"] as? [[String: Any]])
         #expect(comments.count == 2)
-        #expect(comments[0] as? [String: AnyHashable] == [
-            "id": "c-00000001", "time": 10, "text": "Too fast", "keyframePath": "/data/frames/c-00000001.png",
-            "region": NSNull(), "cropPath": NSNull(), "transcript": [] as [String],
-        ])
+        #expect(Set(comments[0].keys) == ["id", "time", "text", "keyframePath", "region", "cropPath", "transcript"])
+        #expect(comments[0]["id"] as? String == "c-00000001")
+        #expect(comments[0]["time"] as? Double == 10)
+        #expect(comments[0]["text"] as? String == "Too fast")
+        #expect(comments[0]["keyframePath"] as? String == "/data/frames/c-00000001.png")
+        #expect(comments[0]["region"] is NSNull)
+        #expect(comments[0]["cropPath"] is NSNull)
+        #expect((comments[0]["transcript"] as? [Any])?.isEmpty == true)
         #expect(Set(comments[1].keys) == ["id", "time", "text", "keyframePath", "region", "cropPath", "transcript"])
         #expect(comments[1]["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
         #expect(comments[1]["cropPath"] as? String == "/data/crops/c-00000002.png")
@@ -157,8 +167,11 @@ struct BatchPayloadTests {
 
         #expect(payload["context"] as? String == "About the queue.")
         let comment = try #require((payload["comments"] as? [[String: Any]])?.first)
-        #expect(comment["transcript"] as? [[String: AnyHashable]]
-            == [["start": 6.067, "end": 14.333, "text": "Your comments queue up."]])
+        let lines = try #require(comment["transcript"] as? [[String: Any]])
+        #expect(lines.count == 1)
+        #expect(lines.first?["start"] as? Double == 6.067)
+        #expect(lines.first?["end"] as? Double == 14.333)
+        #expect(lines.first?["text"] as? String == "Your comments queue up.")
     }
 
     @Test("a batch delivered again carries only its unfinished comments, under the same id")

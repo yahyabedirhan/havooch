@@ -1,3 +1,5 @@
+// ImageIO exists on Apple platforms only; elsewhere the module builds without images.
+#if canImport(ImageIO)
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -72,3 +74,4 @@ public struct ImageFiles: Sendable {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
+#endif

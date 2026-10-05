@@ -1,3 +1,5 @@
+// CryptoKit exists on Apple platforms only; elsewhere the module builds without the hash.
+#if canImport(CryptoKit)
 import CryptoKit
 import Foundation
 
@@ -26,3 +28,4 @@ public enum ContentHash {
 
     private static let chunkSize = 4 << 20
 }
+#endif

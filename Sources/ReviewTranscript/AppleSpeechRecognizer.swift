@@ -1,3 +1,5 @@
+// Apple's speech frameworks exist on macOS only; elsewhere the module builds without them.
+#if canImport(Speech)
 import AVFoundation
 import Foundation
 import Speech
@@ -78,3 +80,4 @@ public struct AppleSpeechRecognizer: SpeechRecognizing {
         try await heard
     }
 }
+#endif

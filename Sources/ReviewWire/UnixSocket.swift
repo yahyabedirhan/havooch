@@ -1,4 +1,8 @@
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
 import Darwin
+#endif
 import Foundation
 
 /// The few POSIX calls both ends of `control.sock` make, so the client here
@@ -7,7 +11,11 @@ import Foundation
 package enum UnixSocket {
     /// A new stream socket, or -1 with `errno` set.
     package static func make() -> Int32 {
+        #if canImport(Glibc)
+        socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #else
         socket(AF_UNIX, SOCK_STREAM, 0)
+        #endif
     }
 
     /// The longest path a socket's address holds (103 bytes on macOS),
@@ -37,7 +45,9 @@ package enum UnixSocket {
         guard bytes.count <= maximumPathLength else { return nil }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
+        #if canImport(Darwin)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        #endif
         withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: bytes) }
         return address
     }
@@ -45,9 +55,7 @@ package enum UnixSocket {
     /// A symbolic link to `folder` in the user's temporary folder, made or
     /// corrected when it's missing or points elsewhere; nil when it can't be.
     private static func shortLink(to folder: String) -> String? {
-        var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
-        guard confstr(_CS_DARWIN_USER_TEMP_DIR, &buffer, buffer.count) > 0 else { return nil }
-        let temporary = String(decoding: buffer.prefix { $0 != 0 }.map(UInt8.init(bitPattern:)), as: UTF8.self)
+        guard let temporary = userTemporaryFolder() else { return nil }
         // FNV-1a over the folder's path: the same link for the same folder.
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in folder.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3 }
@@ -59,6 +67,18 @@ package enum UnixSocket {
         unlink(link)
         // The other end may make the same link at the same moment.
         return symlink(folder, link) == 0 || pointsThere() ? link : nil
+    }
+
+    /// The user's own temporary folder: on macOS the per-user one, which
+    /// `TMPDIR` may not name in every process; elsewhere `TMPDIR` or `/tmp`.
+    private static func userTemporaryFolder() -> String? {
+        #if canImport(Darwin)
+        var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+        guard confstr(_CS_DARWIN_USER_TEMP_DIR, &buffer, buffer.count) > 0 else { return nil }
+        return String(decoding: buffer.prefix { $0 != 0 }.map(UInt8.init(bitPattern:)), as: UTF8.self)
+        #else
+        return NSTemporaryDirectory()
+        #endif
     }
 
     /// `connect(2)` to `address`: 0, or -1 with `errno` set.
@@ -147,7 +167,7 @@ package enum UnixSocket {
 
     /// Closes the writing side, so the peer reads to its end.
     package static func finishWriting(_ descriptor: Int32) {
-        shutdown(descriptor, SHUT_WR)
+        shutdown(descriptor, Int32(SHUT_WR))
     }
 
     /// Whether the peer of `descriptor` has closed its socket: its process

@@ -17,6 +17,21 @@ struct LocationTests {
         #expect(!AppIdentity.variant.isEmpty)
         #expect(AppIdentity.appName == "Video Review (\(AppIdentity.variant))")
         #expect(AppIdentity.bundleID == "com.yahyabedirhan.video-review.\(AppIdentity.variant)")
+        #expect(SupportFolder.app(environment: [:]).lastPathComponent == AppIdentity.appName)
+    }
+
+    /// Whether the tests run on the Mac, where the support folder is
+    /// Application Support's.
+    static var onMac: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    @Test("the support folder is in Application Support", .enabled(if: onMac, "Application Support is a macOS folder"))
+    func applicationSupport() {
         #expect(SupportFolder.app(environment: [:]).path.hasSuffix("/Library/Application Support/\(AppIdentity.appName)"))
     }
 

@@ -12,7 +12,6 @@ let package = Package(
         // `video-review`, not `VideoReview`: the app's executable has that
         // name. `make bundle` puts the command in `Contents/Helpers`.
         .executable(name: "video-review", targets: ["ReviewCLI"]),
-        .executable(name: "VideoReview", targets: ["ReviewApp"]),
     ],
     targets: [
         // The control protocol, the socket framing and the app identity.
@@ -30,11 +29,6 @@ let package = Package(
         .target(name: "ReviewTranscript", path: "Sources/ReviewTranscript"),
         // What's kept on disk, by the content hash of the video.
         .target(name: "ReviewStore", dependencies: ["ReviewCore", "ReviewTranscript"], path: "Sources/ReviewStore"),
-        .executableTarget(
-            name: "ReviewApp",
-            dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
-            path: "Sources/ReviewApp"
-        ),
         .testTarget(name: "ReviewTranscriptTests", dependencies: ["ReviewTranscript"], path: "Tests/ReviewTranscriptTests"),
         .testTarget(name: "ReviewCoreTests", dependencies: ["ReviewCore"], path: "Tests/ReviewCoreTests"),
         .testTarget(
@@ -47,10 +41,23 @@ let package = Package(
             dependencies: ["ReviewWire", "ReviewLease", "ReviewCommand"],
             path: "Tests/ReviewCommandTests"
         ),
-        .testTarget(
-            name: "ReviewAppTests",
-            dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
-            path: "Tests/ReviewAppTests"
-        ),
     ]
 )
+
+// The app and its tests are macOS UI code. Elsewhere (a Linux machine) the
+// package is the modules that build and test without the app.
+#if os(macOS)
+package.products.append(.executable(name: "VideoReview", targets: ["ReviewApp"]))
+package.targets += [
+    .executableTarget(
+        name: "ReviewApp",
+        dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
+        path: "Sources/ReviewApp"
+    ),
+    .testTarget(
+        name: "ReviewAppTests",
+        dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
+        path: "Tests/ReviewAppTests"
+    ),
+]
+#endif

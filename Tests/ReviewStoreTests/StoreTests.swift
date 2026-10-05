@@ -1,6 +1,8 @@
+#if canImport(ImageIO)
 import CoreGraphics
-import Foundation
 import ImageIO
+#endif
+import Foundation
 import ReviewCore
 import ReviewStore
 import Testing
@@ -19,6 +21,7 @@ struct Scratch {
     }
 }
 
+#if canImport(CryptoKit)
 @Suite("The content hash")
 struct ContentHashTests {
     @Test("it's the SHA-256 of the file's bytes")
@@ -53,7 +56,9 @@ struct ContentHashTests {
         #expect(ContentHash.of(URL(fileURLWithPath: "/nowhere/a.mp4")) == nil)
     }
 }
+#endif
 
+#if canImport(ImageIO)
 @Suite("Image files")
 struct ImageFilesTests {
     private func image(width: Int, height: Int) throws -> CGImage {
@@ -108,3 +113,4 @@ struct ImageFilesTests {
         #expect(throws: ImageFiles.Failure.self) { try ImageFiles.write(try image(width: 4, height: 4), to: file) }
     }
 }
+#endif

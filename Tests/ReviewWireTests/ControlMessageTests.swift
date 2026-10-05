@@ -44,12 +44,10 @@ struct ControlMessageTests {
         .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 0),
         .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 600),
         .threadAnswer(commentID: "c-7f3a9c2e", text: "The intro"),
-    ])
-    func roundTrip(request: ControlRequest) throws {
-        for json in [false, true] {
-            let message = ControlMessage(request, holder: Self.holder, json: json)
-            #expect(try ControlMessage.decode(message.encoded()) == message)
-        }
+    ], [false, true])
+    func roundTrip(request: ControlRequest, json: Bool) throws {
+        let message = ControlMessage(request, holder: Self.holder, json: json)
+        #expect(try ControlMessage.decode(message.encoded()) == message)
     }
 
     @Test("a region is four numbers with commas between them, and anything else isn't one")
@@ -58,9 +56,13 @@ struct ControlMessageTests {
         #expect(ControlRequest.Rectangle("0, 0, 1, 1") == .init(x: 0, y: 0, w: 1, h: 1))
         // Numbers outside the frame still read: the app refuses them in words.
         #expect(ControlRequest.Rectangle("0.9,0.2,0.3,0.25") != nil)
-        for text in ["", "0.25,0.2,0.3", "0.25,0.2,0.3,0.25,1", "a,b,c,d", "0.25,,0.3,0.25", "0.25 0.2 0.3 0.25", "nan,0,1,1", "inf,0,1,1"] {
-            #expect(ControlRequest.Rectangle(text) == nil, "\(text)")
-        }
+    }
+
+    @Test("what isn't four finite numbers with commas between them isn't a region", arguments: [
+        "", "0.25,0.2,0.3", "0.25,0.2,0.3,0.25,1", "a,b,c,d", "0.25,,0.3,0.25", "0.25 0.2 0.3 0.25", "nan,0,1,1", "inf,0,1,1",
+    ])
+    func notARectangle(text: String) {
+        #expect(ControlRequest.Rectangle(text) == nil)
     }
 
     @Test("a request carries its version, its command and its holder")
@@ -144,12 +146,16 @@ struct ControlMessageTests {
         #expect(refusal(fields("thread.answer", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `thread.answer` needs its `text`"))
     }
 
-    @Test("the listener's answers take no lease; an ask may be held for its wait, or with no limit without one; thread answer is the operator's")
+    @Test("the listener's answers take no lease and are never held", arguments: [
+        ControlRequest.ack(batchID: "b-1", text: nil), .status(commentID: "c-1", state: .done), .reply(id: "c-1", text: "a"),
+    ])
+    func listenerAnswer(request: ControlRequest) {
+        #expect(request.role == .listener)
+        #expect(request.holdSeconds == 0)
+    }
+
+    @Test("an ask takes no lease and may be held for its wait, or with no limit without one; thread answer is the operator's")
     func answers() {
-        for request in [ControlRequest.ack(batchID: "b-1", text: nil), .status(commentID: "c-1", state: .done), .reply(id: "c-1", text: "a")] {
-            #expect(request.role == .listener)
-            #expect(request.holdSeconds == 0)
-        }
         #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).role == .listener)
         #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).holdSeconds == 30)
         #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: nil).holdSeconds == nil)
@@ -166,18 +172,21 @@ struct ControlMessageTests {
         #expect(ControlRequest.batchSend.holdSeconds == 0)
     }
 
-    @Test("only operator requests take the lease")
-    func roles() {
-        #expect(ControlRequest.appStatus.role == .free)
-        #expect(ControlRequest.state.role == .free)
-        #expect(ControlRequest.controlTake(waitSeconds: 30).role == .free)
-        #expect(ControlRequest.controlRelease.role == .free)
-        for request in [ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
-                        .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
-                        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1"),
-                        .contextSet(text: "a")] {
-            #expect(request.role == .operator)
-        }
+    @Test("reading the app and taking or releasing the lease are free", arguments: [
+        ControlRequest.appStatus, .state, .controlTake(waitSeconds: 30), .controlRelease,
+    ])
+    func freeRole(request: ControlRequest) {
+        #expect(request.role == .free)
+    }
+
+    @Test("only operator requests take the lease", arguments: [
+        ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
+        .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
+        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1"),
+        .contextSet(text: "a"),
+    ])
+    func operatorRole(request: ControlRequest) {
+        #expect(request.role == .operator)
     }
 
     @Test("a take that waits in line may be held for its wait; no other request is held")
