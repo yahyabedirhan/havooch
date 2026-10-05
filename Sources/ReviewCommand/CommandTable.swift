@@ -86,7 +86,7 @@ struct Arguments: Equatable {
     }
 }
 
-/// One command of `video-review`: its name, what it takes, and how its
+/// One command of `havooch`: its name, what it takes, and how its
 /// arguments become an `Invocation`.
 struct Command: Sendable {
     /// The words that name it: `player seek`.
@@ -101,7 +101,7 @@ struct Command: Sendable {
     var parse: @Sendable (Arguments, CommandEnvironment) throws(UsageError) -> Invocation
 }
 
-/// The commands of `video-review`, by name. A new command is a `Command` in
+/// The commands of `havooch`, by name. A new command is a `Command` in
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
     static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
@@ -122,15 +122,15 @@ public enum CommandTable {
     public static var usageText: String {
         let width = commands.map(\.synopsis.count).max() ?? 0
         let lines = commands.map { command in
-            "  video-review " + command.synopsis.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + command.summary
+            "  havooch " + command.synopsis.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + command.summary
         }
         return """
-            usage: video-review <command> [--json]
+            usage: havooch <command> [--json]
 
             \(lines.joined(separator: "\n"))
 
             --json prints machine output on every command.
-            --version prints the version of Video Review this command comes with.
+            --version prints the version of Havooch this command comes with.
             Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.
 
             """

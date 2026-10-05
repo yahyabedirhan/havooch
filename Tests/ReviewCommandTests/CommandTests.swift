@@ -5,7 +5,7 @@ import ReviewWire
 import Synchronization
 import Testing
 
-@Suite("The video-review command")
+@Suite("The havooch command")
 struct CommandTests {
     @Test("each command sends its request", arguments: [
         (["state"], ControlRequest.state),
@@ -23,6 +23,7 @@ struct CommandTests {
         (["screenshot", "/tmp/shot.png", "--appearance", "dark"], .screenshot(path: "/tmp/shot.png", appearance: .dark)),
         (["screenshot", "--appearance", "light", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: .light)),
         (["screenshot", "/tmp/set.png", "--window", "settings"], .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings)),
+        (["screenshot", "/tmp/about.png", "--window", "about"], .screenshot(path: "/tmp/about.png", appearance: nil, window: .about)),
         (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
         (["comment", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
         (["comment", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
@@ -67,7 +68,7 @@ struct CommandTests {
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
-        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
     }
@@ -105,15 +106,15 @@ struct CommandTests {
         let run = Run { _, _ in .success(.refused(line)) }
         defer { run.cleanUp() }
 
-        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result.exitCode == 1)
         #expect(result.output.isEmpty)
         #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
-            + "`video-review control take --wait <seconds>` to queue\n")
+            + "`havooch control take --wait <seconds>` to queue\n")
     }
 
-    @Test("the holder key is VIDEO_REVIEW_CONTROL_KEY when set, else the Claude Code session, else the ancestor process", arguments: zip(
-        [["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:]],
+    @Test("the holder key is HAVOOCH_CONTROL_KEY when set, else the Claude Code session, else the ancestor process", arguments: zip(
+        [["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:]],
         ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"]
     ))
     func holderKey(variables: [String: String], key: String) {
@@ -122,7 +123,7 @@ struct CommandTests {
             func process(_ pid: Int32) -> ProcessRecord? {
                 let started = Date(timeIntervalSince1970: 1_700_000_000)
                 return [
-                    300: ProcessRecord(pid: 300, parent: 200, started: started, name: "video-review"),
+                    300: ProcessRecord(pid: 300, parent: 200, started: started, name: "havooch"),
                     200: ProcessRecord(pid: 200, parent: 100, started: started, name: "zsh"),
                     100: ProcessRecord(pid: 100, parent: 1, started: started, name: "codex"),
                 ][pid]
@@ -133,7 +134,7 @@ struct CommandTests {
         var environment = run.environment
         environment.variables = variables.merging([SupportFolder.overrideVariable: run.support.path]) { _, new in new }
         environment.processes = Processes()
-        _ = VideoReviewCLI.run(["control", "take"], environment: environment)
+        _ = HavoochCLI.run(["control", "take"], environment: environment)
         #expect(run.transport.sent.map(\.message.holder.key) == [key])
     }
 
@@ -149,7 +150,7 @@ struct CommandTests {
     func notRunning() {
         let run = Run()
         defer { run.cleanUp() }
-        let line = "\(AppIdentity.appName) isn't running; run `video-review app open`\n"
+        let line = "\(AppIdentity.appName) isn't running; run `havooch app open`\n"
         #expect(run("player", "play") == CommandResult(error: line, exitCode: 1))
         #expect(run("control", "take", "--wait", "5") == CommandResult(error: line, exitCode: 1))
         #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
@@ -165,7 +166,7 @@ struct CommandTests {
         ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
-        ["screenshot", "/tmp/shot.png", "--window", "about"],
+        ["screenshot", "/tmp/shot.png", "--window", "inspector"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
@@ -192,10 +193,10 @@ struct CommandTests {
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
-        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result.exitCode == 64)
         #expect(result.output.isEmpty)
-        #expect(result.error.contains("usage: video-review"))
+        #expect(result.error.contains("usage: havooch"))
         #expect(run.transport.sent.isEmpty)
         #expect(run.launcher.launches.isEmpty)
     }
@@ -240,10 +241,10 @@ struct CommandTests {
 
     @Test("a wait the app refuses exits 1 with the reason")
     func waitRefused() {
-        let run = Run { _, _ in .success(.refused("a newer `video-review wait` took this one's place: one listener at a time")) }
+        let run = Run { _, _ in .success(.refused("a newer `havooch wait` took this one's place: one listener at a time")) }
         defer { run.cleanUp() }
         #expect(run("wait") == CommandResult(
-            error: "a newer `video-review wait` took this one's place: one listener at a time\n", exitCode: 1
+            error: "a newer `havooch wait` took this one's place: one listener at a time\n", exitCode: 1
         ))
     }
 
@@ -252,7 +253,7 @@ struct CommandTests {
         let clock = Clock()
         let run = Run { _, _ in clock.now < Date(timeIntervalSince1970: 3) ? .failure(.notRunning) : .success(.done("{}\n")) }
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(["wait", "--timeout", "10"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
+        #expect(HavoochCLI.run(["wait", "--timeout", "10"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
         #expect(run.transport.requests == [
             .wait(timeoutSeconds: 10), .wait(timeoutSeconds: 9), .wait(timeoutSeconds: 8), .wait(timeoutSeconds: 7),
         ])
@@ -263,13 +264,13 @@ struct CommandTests {
         let clock = Clock()
         let run = Run()
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 2))
+        #expect(HavoochCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 2))
         #expect(clock.now == Date(timeIntervalSince1970: 3))
 
         let later = Clock()
         let patient = Run { _, _ in later.now < Date(timeIntervalSince1970: 120) ? .failure(.notRunning) : .success(.done("{}\n")) }
         defer { patient.cleanUp() }
-        #expect(VideoReviewCLI.run(["wait"], environment: timed(patient, later)) == CommandResult(output: "{}\n"))
+        #expect(HavoochCLI.run(["wait"], environment: timed(patient, later)) == CommandResult(output: "{}\n"))
         #expect(patient.transport.requests.last == .wait(timeoutSeconds: nil))
     }
 
@@ -289,7 +290,7 @@ struct CommandTests {
             }
             return socket.path == ControlSocket.url(in: demo).path ? .success(.done("{}\n")) : .failure(.notRunning)
         }
-        #expect(VideoReviewCLI.run(["wait"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
+        #expect(HavoochCLI.run(["wait"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
         #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)
     }
 
@@ -324,8 +325,8 @@ struct CommandTests {
     func help(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
-        #expect(CommandTable.usageText.contains("video-review player seek <seconds|mm:ss>"))
+        #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
+        #expect(CommandTable.usageText.contains("havooch player seek <seconds|mm:ss>"))
         #expect(run.transport.sent.isEmpty)
     }
 
@@ -333,8 +334,8 @@ struct CommandTests {
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
-        #expect(VideoReviewCLI.run(["--version", "--json"], environment: run.environment)
+        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
+        #expect(HavoochCLI.run(["--version", "--json"], environment: run.environment)
             == CommandResult(output: "{\n  \"version\" : \"0.2.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
@@ -353,7 +354,7 @@ struct CommandTests {
     func optionLikeText(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
-        let result = VideoReviewCLI.run(arguments, environment: run.environment)
+        let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
         // The text's `--json` isn't the command's.
@@ -383,7 +384,7 @@ struct CommandTests {
     }
 }
 
-@Suite("video-review app open and quit")
+@Suite("havooch app open and quit")
 struct AppCommandTests {
     static let status = "running: \(AppIdentity.appName)\n"
 
@@ -492,7 +493,7 @@ struct AppCommandTests {
 
     @Test("app open --demo on the demo that already runs keeps it running")
     func sameDemo() {
-        let demo = FileManager.default.temporaryDirectory.appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        let demo = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: demo) }
         let (run, apps) = makeRun { _ in [demo] }
         defer { run.cleanUp() }
@@ -519,7 +520,7 @@ struct AppCommandTests {
         defer { run.cleanUp() }
         run.launcher.failure = AppLaunchFailure("the app isn't installed")
         let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
-        #expect(run("app", "open", "--demo", demo.path) == CommandResult(error: "video-review app open: the app isn't installed\n", exitCode: 1))
+        #expect(run("app", "open", "--demo", demo.path) == CommandResult(error: "havooch app open: the app isn't installed\n", exitCode: 1))
         #expect(DemoPointer.recorded(in: run.support) == nil)
     }
 

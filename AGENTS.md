@@ -1,6 +1,6 @@
-# video-review
+# Havooch
 
-A native macOS video player for giving feedback to agents. You pause any video, or draw a region on its frame, and comment. Comments queue up and Cmd+Enter sends them as one batch to a listening agent session, with the timestamp, the keyframe, the region and the transcript around that point. The agent answers inside the player.
+Havooch (formerly Video Review; `docs/adr/0002-the-app-is-named-havooch.md`) is a native macOS video player for giving feedback to agents. You pause any video, or draw a region on its frame, and comment. Comments queue up and Cmd+Enter sends them as one batch to a listening agent session, with the timestamp, the keyframe, the region and the transcript around that point. The agent answers inside the player.
 
 The v1 spec is a GitHub issue titled `Spec: Video Review v1`. Read it before building anything.
 
@@ -39,13 +39,13 @@ Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and 
 
 ## Testing
 
-Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `video-review` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
+Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `havooch` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Set `HAVOOCH_SUPPORT_DIR` to a scratch folder for `make install` and every command, so a check never opens the maintainer's data and never moves the folder of the earlier name. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues in `yahyabedirhan/video-review`, handled with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `yahyabedirhan/video-review`, handled with the `gh` CLI. The repository keeps its old name until the maintainer renames it `yahyabedirhan/havooch`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

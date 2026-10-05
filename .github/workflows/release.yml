@@ -1,0 +1,107 @@
+# A release: push a tag v<version> that matches Version.app in
+# Sources/ReviewWire/Version.swift. The workflow tests, bundles, zips the app
+# and publishes the zip and its SHA-256 as a GitHub Release, then updates the
+# Homebrew tap's cask. It never runs on a plain push.
+#
+# The tap step is inactive until the tap repository exists and the secret
+# TAP_TOKEN is set: without the token scripts/update-tap.sh skips with a
+# notice. The command is `havooch` since the rename (docs/adr/0002), and
+# Packaging/homebrew/havooch.rb is its cask.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # macOS 26 is the newest generally available image; the package needs the
+    # Swift 6.2 tools and the macOS 26 SDK (Package.swift), which its default
+    # Xcode 26.x has. Apple silicon, like the Macs the app runs on.
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    outputs:
+      command: ${{ steps.identity.outputs.command }}
+      version: ${{ steps.identity.outputs.version }}
+      sha256: ${{ steps.zip.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the app's identity
+        id: identity
+        run: |
+          make -s identity | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check the tag matches the version
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::the tag $TAG doesn't match the version $VERSION in Sources/ReviewWire/Version.swift"
+            exit 1
+          fi
+
+      - name: Show the toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
+      - name: Test
+        run: make test
+
+      - name: Bundle
+        run: make bundle
+
+      - name: Zip the app and compute its SHA-256
+        id: zip
+        env:
+          APP_NAME: ${{ steps.identity.outputs.app_name }}
+          COMMAND: ${{ steps.identity.outputs.command }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          mkdir -p dist
+          zip="$COMMAND-$VERSION.zip"
+          ditto -c -k --keepParent "build/$APP_NAME.app" "dist/$zip"
+          (cd dist && shasum -a 256 "$zip" > "$zip.sha256")
+          cat "dist/$zip.sha256"
+          echo "zip=dist/$zip" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(awk '{print $1}' "dist/$zip.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          APP_NAME: ${{ steps.identity.outputs.app_name }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          ZIP: ${{ steps.zip.outputs.zip }}
+        run: |
+          gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+            --title "$APP_NAME $VERSION" \
+            --generate-notes \
+            --verify-tag
+
+  tap:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Update the cask in the Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          COMMAND: ${{ needs.release.outputs.command }}
+          VERSION: ${{ needs.release.outputs.version }}
+          SHA256: ${{ needs.release.outputs.sha256 }}
+        run: scripts/update-tap.sh "$COMMAND" "$VERSION" "$SHA256"

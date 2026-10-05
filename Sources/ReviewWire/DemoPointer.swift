@@ -1,6 +1,6 @@
 import Foundation
 
-/// The note `video-review app open --demo` leaves in the normal support
+/// The note `havooch app open --demo` leaves in the normal support
 /// folder, naming the demo run's support folder, so later commands find the
 /// demo's socket (`ControlSocket.locate`). Plain `app open` removes it. It's
 /// the only file a demo run writes outside its folder.

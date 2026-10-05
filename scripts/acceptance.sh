@@ -1,7 +1,7 @@
 #!/bin/bash
 # The 0.2.0 acceptance scenario (`Spec: Video Review 0.2.0`, #36): the 10
 # steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
-# `video-review` CLI only, against the installed app in demo mode with the
+# `havooch` CLI only, against the installed app in demo mode with the
 # fixture video.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
@@ -25,11 +25,11 @@
 # It uses only the CLI contract, so it runs against another build by naming
 # that build's command:
 #
-#   VIDEO_REVIEW_CLI=/path/to/video-review scripts/acceptance.sh
+#   HAVOOCH_CLI=/path/to/havooch scripts/acceptance.sh
 #
 # Two agents take part. The operator drives the app under the lease, with
-# VIDEO_REVIEW_CONTROL_KEY when it is set (else a key of this run). The
-# listener is a second process with its own key (VIDEO_REVIEW_LISTENER_KEY,
+# HAVOOCH_CONTROL_KEY when it is set (else a key of this run). The
+# listener is a second process with its own key (HAVOOCH_LISTENER_KEY,
 # else a key of this run): it runs `wait` in the background, as "a second
 # shell", and never holds the lease.
 #
@@ -51,9 +51,9 @@ set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
-# The one place that names the command: VIDEO_REVIEW_CLI, else the installed
+# The one place that names the command: HAVOOCH_CLI, else the installed
 # app's.
-cli="${VIDEO_REVIEW_CLI:-/Applications/Video Review.app/Contents/Helpers/video-review}"
+cli="${HAVOOCH_CLI:-${VIDEO_REVIEW_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}}"
 
 # The fixture, and what its README says about it.
 video="$root/fixtures/sample/sample.mp4"
@@ -87,10 +87,10 @@ demo="$out/demo"
 logs="$out/logs"
 shots="${ACCEPTANCE_SHOTS:-$root/assets/screenshots/0.2.0/acceptance}"
 
-operator_key="${VIDEO_REVIEW_CONTROL_KEY:-acceptance-operator-$run_id}"
-listener_key="${VIDEO_REVIEW_LISTENER_KEY:-acceptance-listener-$run_id}"
-operator() { VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" "$@"; }
-listener() { VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" "$@"; }
+operator_key="${HAVOOCH_CONTROL_KEY:-${VIDEO_REVIEW_CONTROL_KEY:-acceptance-operator-$run_id}}"
+listener_key="${HAVOOCH_LISTENER_KEY:-${VIDEO_REVIEW_LISTENER_KEY:-acceptance-listener-$run_id}}"
+operator() { HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@"; }
+listener() { HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@"; }
 
 # The thread list's rule (spec 0.2.0, L38), over a thread of `state --json`:
 # Needs you (the last question has no answer after it), With agent (a
@@ -331,7 +331,7 @@ for tool in jq sips xxd awk; do
     fi
 done
 if [ ! -x "$cli" ]; then
-    echo "acceptance: no video-review command at $cli; run make install, or set VIDEO_REVIEW_CLI" >&2
+    echo "acceptance: no havooch command at $cli; run make install, or set HAVOOCH_CLI" >&2
     exit 69
 fi
 if [ ! -f "$video" ] || [ ! -f "$context_file" ]; then
@@ -340,7 +340,7 @@ if [ ! -f "$video" ] || [ ! -f "$context_file" ]; then
 fi
 mkdir -p "$logs" "$shots"
 
-echo "Video Review 0.2.0 acceptance scenario"
+echo "Havooch 0.2.0 acceptance scenario"
 echo "cli:   $cli ($("$cli" --version 2>/dev/null))"
 echo "video: $video"
 echo "run:   $out"

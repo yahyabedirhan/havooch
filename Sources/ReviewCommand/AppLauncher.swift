@@ -5,7 +5,7 @@ import Foundation
 import ReviewWire
 import Synchronization
 
-/// Starts the app, which `video-review app open` can't ask through the
+/// Starts the app, which `havooch app open` can't ask through the
 /// socket since the app isn't running yet. Tests record the launch.
 public protocol AppLaunching: Sendable {
     /// Launches the app in the background, with `environment` (empty for a
@@ -26,7 +26,7 @@ public struct AppLaunchFailure: Error, Equatable, Sendable {
 /// Launches through Launch Services (`NSWorkspace`), without bringing the
 /// app forward: the agent's terminal keeps the focus.
 public struct WorkspaceLauncher: AppLaunching {
-    /// The `video-review` executable that runs, when it's known.
+    /// The `havooch` executable that runs, when it's known.
     var command: URL?
     /// How long to wait for Launch Services to say the app started.
     var timeout: TimeInterval = 10
@@ -38,7 +38,7 @@ public struct WorkspaceLauncher: AppLaunching {
     }
 
     /// The app to launch: the bundle this command ships in
-    /// (`<app>/Contents/Helpers/video-review`), so each build's command
+    /// (`<app>/Contents/Helpers/havooch`), so each build's command
     /// starts its own app; else the installed app with this build's bundle
     /// id.
     static func bundle(of command: URL?) -> URL? {

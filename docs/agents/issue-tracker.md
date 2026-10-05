@@ -2,6 +2,8 @@
 
 Issues and specs for this repo live as GitHub issues in `yahyabedirhan/video-review`, so the repo has no `.efforts/` folder. Use the `gh` CLI for all operations.
 
+NOTE: The app is named Havooch (`docs/adr/0002-the-app-is-named-havooch.md`). The repository keeps the name `yahyabedirhan/video-review` until the maintainer renames it `yahyabedirhan/havooch`. After the rename, GitHub redirects the old name.
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
@@ -32,8 +34,8 @@ Write each prefix the way its maker writes it. Use a semantic prefix before a ge
 
 - `Player`: opening and playing a video, the timeline and its markers.
 - `Comment`: comments, regions, the queue and sending a batch.
-- `Mate`: the listener loop, the `video-review-mate` skill and agent messages in the player.
-- `Control`: the `video-review` CLI, the control socket, the lease, demo mode and screenshots.
+- `Mate`: the listener loop, the `havooch-mate` skill and agent messages in the player.
+- `Control`: the `havooch` CLI, the control socket, the lease, demo mode and screenshots.
 - `Transcript`: transcript sources and the `Transcriber`.
 - `Proto`: one prototype build and its comparison.
 - `Thread`: threads on a keyframe, the General thread, the sidebar and the thread popover.

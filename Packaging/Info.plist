@@ -8,8 +8,10 @@
 	<string>__APP_NAME__</string>
 	<key>CFBundleIdentifier</key>
 	<string>__BUNDLE_ID__</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
-	<string>VideoReview</string>
+	<string>HavoochApp</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

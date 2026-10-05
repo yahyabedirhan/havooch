@@ -153,7 +153,7 @@ final class ThemeDesk {
     /// Each problem not reported before, on standard error.
     private func report(_ problems: [String]) {
         for problem in problems where !reported.contains(problem) {
-            FileHandle.standardError.write(Data("Video Review: \(problem)\n".utf8))
+            FileHandle.standardError.write(Data("Havooch: \(problem)\n".utf8))
         }
         reported = Set(problems)
     }

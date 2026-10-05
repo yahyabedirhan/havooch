@@ -24,10 +24,10 @@ struct PresencePill: Equatable {
             help = "\(agent) is listening. It gets what you send at once."
         case .working:
             title = "Working"
-            help = "\(agent) is working on a send. What you send now waits for its next `video-review wait`." + waiting
+            help = "\(agent) is working on a send. What you send now waits for its next `havooch wait`." + waiting
         case .absent:
             title = "No listener"
-            help = "No agent runs `video-review wait`. What you send waits for the next one." + waiting
+            help = "No agent runs `havooch wait`. What you send waits for the next one." + waiting
         }
     }
 

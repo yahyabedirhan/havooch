@@ -88,7 +88,7 @@ struct Run {
     let launcher = FakeLauncher()
 
     init(_ answer: @escaping FakeTransport.Answer = { _, _ in .failure(.notRunning) }) {
-        folder = FileManager.default.temporaryDirectory.appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         support = folder.appendingPathComponent("support", isDirectory: true)
         transport = FakeTransport(answer)
     }
@@ -109,6 +109,6 @@ struct Run {
     }
 
     func callAsFunction(_ arguments: String...) -> CommandResult {
-        VideoReviewCLI.run(arguments, environment: environment)
+        HavoochCLI.run(arguments, environment: environment)
     }
 }

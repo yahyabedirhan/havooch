@@ -1,8 +1,8 @@
 # Notices for the built-in themes
 
-Default Light, Default Dark and Dimmed are Video Review's own.
+Default Light, Default Dark and Dimmed are Havooch's own.
 
-The other built-in themes take their colours from popular VS Code colour themes. Each file maps that theme's palette onto Video Review's colour tokens; where a colour of the palette was too faint for a state, the file darkens or swaps it, as `docs/research/2026-10-05-popular-vs-code-themes.md` records. The names belong to their authors, and Video Review is not endorsed by them. Each source theme is under the MIT License, whose notice follows the list.
+The other built-in themes take their colours from popular VS Code colour themes. Each file maps that theme's palette onto Havooch's colour tokens; where a colour of the palette was too faint for a state, the file darkens or swaps it, as `docs/research/2026-10-05-popular-vs-code-themes.md` records. The names belong to their authors, and Havooch is not endorsed by them. Each source theme is under the MIT License, whose notice follows the list.
 
 | Built-in theme | Source theme | Repository and commit | Copyright |
 |---|---|---|---|

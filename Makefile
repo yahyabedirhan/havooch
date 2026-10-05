@@ -1,23 +1,30 @@
-# video-review: build, test, bundle, sign and install the app with SwiftPM
+# havooch: build, test, bundle, sign and install the app with SwiftPM
 # alone (no Xcode project).
 #
 #   make            build the app and the command (release)
 #   make test       run the tests (swift test); never drives the Mac
-#   make bundle     build/<app name>.app with the video-review command in
-#                   Contents/Helpers, the built-in themes in
+#   make bundle     build/<app name>.app with the havooch command in
+#                   Contents/Helpers, the app icon and the cat mark in
+#                   Contents/Resources, the built-in themes in
 #                   Contents/Resources/Themes, the agents' logos and their
 #                   notice in Contents/Resources/AgentLogos and the demo
 #                   video in Contents/Resources/Demo, ad-hoc signed
-#   make install    bundle, then replace /Applications/<app name>.app and open it
+#   make install    bundle, then replace /Applications/<app name>.app and open
+#                   it; on the support folder HAVOOCH_SUPPORT_DIR names when
+#                   it's set, so a check never opens the person's own data
 #   make acceptance run the acceptance scenario through the installed app's
 #                   command, on demo data (scripts/acceptance.sh); after make install
 #   make agent-logos redraw Packaging/AgentLogos/*.pdf from the SVGs in
 #                   assets/images/agent-logos/ (needs rsvg-convert)
+#   make logo       redraw Packaging/Logo/*.pdf, the cat mark the app shows,
+#                   from assets/images/logo/v2-havuc/ (needs rsvg-convert)
+#   make identity   print the app name, the command, the bundle id and the
+#                   version as name=value lines (the release workflow reads them)
 #   make clean
 
 # The executables' names.
-APP := VideoReview
-CLI := video-review
+APP := HavoochApp
+CLI := havooch
 
 # The name, the bundle id and the version each live in one Swift constant,
 # so the command, the app and `swift test` see the same identity as this file.
@@ -29,6 +36,8 @@ BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
 INSTALLED   := /Applications/$(APP_NAME).app
+# The app icon: logo v2 "Havuç" on the white tile, beside Shipyard's.
+APP_ICON    := assets/images/logo/v2-havuc/AppIcon-light.icns
 
 # With the Command Line Tools alone (no Xcode), swift test can't find the
 # Testing framework the tests use: point the compiler and the test runner at
@@ -45,11 +54,13 @@ TEST_FLAGS := -Xswiftc -F -Xswiftc $(TESTING_FRAMEWORKS) \
 # checkout's first build compiles Swift, Foundation, SwiftUI and the rest
 # from their interfaces. One module cache shared by every checkout and
 # worktree pays that once.
+# The folder keeps the app's earlier name (docs/adr/0002): checkouts and
+# worktrees of both names share it, and the agents' install lock beside it.
 MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install acceptance agent-logos clean
+.PHONY: all build test bundle install acceptance agent-logos logo identity clean
 
 all: build
 
@@ -62,12 +73,17 @@ test:
 
 bundle: build
 	@rm -rf "$(APP_BUNDLE)"
-	@mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Helpers"
+	@mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Helpers" "$(CONTENTS)/Resources"
 	cp "$$(swift build -c release --show-bin-path)/$(APP)" "$(CONTENTS)/MacOS/$(APP)"
 	cp "$$(swift build -c release --show-bin-path)/$(CLI)" "$(CONTENTS)/Helpers/$(CLI)"
 	sed -e 's/__APP_NAME__/$(APP_NAME)/g' -e 's/__BUNDLE_ID__/$(BUNDLE_ID)/g' -e 's/__VERSION__/$(VERSION)/g' \
 		Packaging/Info.plist > "$(CONTENTS)/Info.plist"
 	@printf 'APPL????' > "$(CONTENTS)/PkgInfo"
+	@# The app icon (CFBundleIconFile in Info.plist), and the cat mark the
+	@# empty screen, Settings and the header show (Contents/Resources/Logo).
+	cp "$(APP_ICON)" "$(CONTENTS)/Resources/AppIcon.icns"
+	@mkdir -p "$(CONTENTS)/Resources/Logo"
+	cp Packaging/Logo/*.pdf "$(CONTENTS)/Resources/Logo/"
 	@# The built-in themes, as plain files beside the code (Contents/Resources/Themes).
 	@mkdir -p "$(CONTENTS)/Resources/Themes"
 	cp Packaging/Themes/*.json Packaging/Themes/NOTICE.md "$(CONTENTS)/Resources/Themes/"
@@ -87,7 +103,7 @@ bundle: build
 
 install: bundle
 	@# Only this bundle's app, by the full path of its executable, so a
-	@# prototype's app (`Video Review (proto-N).app`) keeps running. One
+	@# prototype's app (`Havooch (proto-N).app`) keeps running. One
 	@# that hasn't quit after about 10 s is killed.
 	@running=$$(printf '%s' "$(INSTALLED)/Contents/MacOS/$(APP)" | sed 's/[][().*^$$+?{}|\\]/\\&/g'); \
 	pkill -u "$$USER" -f "^$$running" 2>/dev/null || true; \
@@ -102,8 +118,10 @@ install: bundle
 	rm -rf "$(INSTALLED)"
 	ditto "$(APP_BUNDLE)" "$(INSTALLED)"
 	@echo "installed $(INSTALLED)"
-	@# In the background: the terminal keeps the focus.
-	open -g "$(INSTALLED)"
+	@# In the background: the terminal keeps the focus. With
+	@# HAVOOCH_SUPPORT_DIR set, on that folder: a check that installs never
+	@# opens the person's data, nor moves the earlier name's folder.
+	open -g $(if $(HAVOOCH_SUPPORT_DIR),--env "HAVOOCH_SUPPORT_DIR=$(HAVOOCH_SUPPORT_DIR)") "$(INSTALLED)"
 
 # Drives the installed app, in demo mode only. It is not part of `make test`.
 acceptance:
@@ -124,6 +142,27 @@ agent-logos:
 		rsvg-convert --format pdf --output $$pdf $$svg || exit 1; \
 		echo "drew $$pdf"; \
 	done
+
+# The cat mark, as the vector PDFs the app bundles: the full mark, and the
+# small cut for 32 points and under. Committed like the agents' logos; run
+# this after changing the logo (brew install librsvg).
+LOGO_SVGS := assets/images/logo/v2-havuc/havooch-mark.svg assets/images/logo/v2-havuc/havooch-mark-small.svg
+
+logo:
+	@mkdir -p Packaging/Logo
+	@for svg in $(LOGO_SVGS); do \
+		pdf=Packaging/Logo/$$(basename $$svg .svg).pdf; \
+		rsvg-convert --format pdf --output $$pdf $$svg || exit 1; \
+		echo "drew $$pdf"; \
+	done
+
+# One name=value line each, the form $$GITHUB_OUTPUT takes, so the release
+# workflow names the zip and the release from the same constants as this file.
+identity:
+	@echo "app_name=$(APP_NAME)"
+	@echo "command=$(CLI)"
+	@echo "bundle_id=$(BUNDLE_ID)"
+	@echo "version=$(VERSION)"
 
 clean:
 	rm -rf $(BUILD_DIR) .build

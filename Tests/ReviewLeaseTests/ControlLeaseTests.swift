@@ -202,8 +202,8 @@ struct ControlLeaseTests {
 
         guard case .failure(let refusal) = refused.answer else { Issue.record("not refused"); return }
         #expect(refusal.message(at: Self.at(12.5), timeZone: try #require(TimeZone(identifier: "UTC")))
-            == "Video Review is in use by codex in Herdr pane w1-2 until 00:01:00 (48s left); "
-            + "`video-review control take --wait <seconds>` to queue")
+            == "Havooch is in use by codex in Herdr pane w1-2 until 00:01:00 (48s left); "
+            + "`havooch control take --wait <seconds>` to queue")
     }
 
     @Test("take says until when it holds the lease; a wait that runs out says how long it waited and who still holds it")
@@ -215,10 +215,10 @@ struct ControlLeaseTests {
 
         let waited = lease.giveUp(by: Self.a, waited: 30, at: Self.at(40))
 
-        #expect(try held.answer.get().held(timeZone: utc) == "you hold Video Review until 00:05:00")
+        #expect(try held.answer.get().held(timeZone: utc) == "you hold Havooch until 00:05:00")
         guard case .failure(let refusal) = waited.answer else { Issue.record("not refused"); return }
         #expect(refusal.message(at: Self.at(40), timeZone: utc)
-            == "waited 30s; Video Review is still in use by codex in Herdr pane w1-2 until 00:05:00 (260s left)")
+            == "waited 30s; Havooch is still in use by codex in Herdr pane w1-2 until 00:05:00 (260s left)")
     }
 
     @Test("the stop's refusal tells the agent to ask the person; a bar holds until its end, and the next end is the earliest")
@@ -234,7 +234,7 @@ struct ControlLeaseTests {
 
         guard case .failure(let refusal) = refused.answer else { Issue.record("not refused"); return }
         #expect(refusal.message(at: Self.at(50), timeZone: try #require(TimeZone(identifier: "UTC")))
-            == "the person took Video Review back; ask them before using it again")
+            == "the person took Havooch back; ask them before using it again")
         // The lease's end comes before either bar's; then each bar's, five minutes after its stop.
         #expect(lease.nextEnd(after: Self.at(50)) == Self.at(100))
         _ = lease.release(by: Self.c, at: Self.at(60))
@@ -266,13 +266,13 @@ struct ControlLeaseTests {
         ControlLease.handover(LeaseTerm(holder: a, taken: at(taken), ends: at(ends)))[ControlLease.handoverVariable] ?? ""
     }
 
-    @Test("a relaunch hands the lease over in VIDEO_REVIEW_CONTROL_LEASE")
+    @Test("a relaunch hands the lease over in HAVOOCH_CONTROL_LEASE")
     func handoverForm() {
         let term = LeaseTerm(holder: Self.a, taken: Self.at(0), ends: Self.at(70.5))
 
         let handed = ControlLease.handover(term)
 
-        #expect(Array(handed.keys) == ["VIDEO_REVIEW_CONTROL_LEASE"])
+        #expect(Array(handed.keys) == ["HAVOOCH_CONTROL_LEASE"])
         #expect(ControlLease(environment: handed, at: Self.at(10)).current(at: Self.at(10)) == term)
     }
 

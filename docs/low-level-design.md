@@ -1,4 +1,4 @@
-# Video Review 0.2.0: low-level design
+# Havooch 0.2.0: low-level design
 
 Written 2026-10-05, before the first build ticket of `effort:0.1.0`, from `Spec: Video Review 0.1.0` (#20), the prototype decisions in `docs/prototypes/2026-10-05-decisions.md` (cited as D x.y), ADR 0001 and the tickets #22 to #33. It is documentation for the maintainer, not a review gate. When the code and this document disagree, fix one of them in the same change. `Spec: Video Review 0.2.0` (#36) and its tickets #37 to #44 changed it since; their decisions are L36 to L44.
 
@@ -8,13 +8,13 @@ NOTE: Domain words follow `GLOSSARY.md`. In particular, a **message** is what th
 
 ## For a newcomer, in one screen
 
-Video Review is one Swift package. It builds two executables: the macOS app (`/Applications/Video Review.app`) and the `video-review` command, which ships inside the bundle at `Contents/Helpers/video-review`. The code is eight modules, split by concern. The agent side never links the app's rules.
+Havooch is one Swift package. It builds two executables: the macOS app (`/Applications/Havooch.app`) and the `havooch` command, which ships inside the bundle at `Contents/Helpers/havooch`. The code is eight modules, split by concern. The agent side never links the app's rules.
 
 ```text
 agent side (no app rules, no UI; builds and tests on Linux)
   ReviewLease       Holder and how it is found; the lease rules as a pure value. Depends on nothing.
   ReviewWire        the control protocol: request, reply, socket framing, socket and support folder locations, the app identity and version
-  ReviewCommand     the command table of `video-review`: parse, send one request, print the reply, pick the exit code
+  ReviewCommand     the command table of `havooch`: parse, send one request, print the reply, pick the exit code
   ReviewCLI         main.swift only
 
 app side
@@ -23,17 +23,17 @@ app side
   ReviewStore       SupportLayout (every path), Library (load and save), images, the speech cache, theme files
   ReviewApp         the SwiftUI app: player, stage, popovers, sidebar, header, control server, listener queue. macOS only.
 
-video-review (CLI)   → ReviewLease + ReviewWire + ReviewCommand
-Video Review.app     → everything
+havooch (CLI)   → ReviewLease + ReviewWire + ReviewCommand
+Havooch.app     → everything
 ```
 
 ```text
 person ──keys, mouse──▶ ReviewApp UI ──────────┐
                                                ├─▶ AppModel ──▶ PlayerEngine (AVPlayer)
-operator ──▶ video-review ──▶ SocketListener ──▶ ControlServer      ├─▶ ReviewDesk ──▶ VideoReview (Core) ──▶ Library (Store)
+operator ──▶ havooch ──▶ SocketListener ──▶ ControlServer      ├─▶ ReviewDesk ──▶ VideoReview (Core) ──▶ Library (Store)
              (lease)          (control.sock)    (decode, lease,     ├─▶ ListenerQueue ──▶ Outbox (Core)
                                                  dispatch)          └─▶ ThemeDesk ──▶ ThemeCatalog (Core), ThemeFiles (Store)
-listener ──▶ video-review wait / ack / status / reply / ask ──▶ ControlServer ──▶ ListenerQueue, ReviewDesk
+listener ──▶ havooch wait / ack / status / reply / ask ──▶ ControlServer ──▶ ListenerQueue, ReviewDesk
              (no lease)
 ```
 
@@ -41,7 +41,7 @@ The person and the operator reach the same `AppModel` methods, so a UI action an
 
 | You want to | Open |
 |---|---|
-| see where the app starts | `Sources/ReviewApp/VideoReviewApp.swift`, then `AppModel.swift` |
+| see where the app starts | `Sources/ReviewApp/HavoochApp.swift`, then `AppModel.swift` |
 | see where the CLI starts | `Sources/ReviewCLI/main.swift`, then `Sources/ReviewCommand/CommandTable.swift` |
 | add a CLI command | [Extensibility](#5-extensibility), first row |
 | change a thread or message rule, or a state | `Sources/ReviewCore/VideoReview.swift`, `MessageState.swift` |
@@ -64,7 +64,7 @@ The 92 user stories of the spec are the requirements. They group into these capa
 2. **Write a message** on the current frame (C, or the Comment button) or on a drawn region, in the comment popover. The message joins the thread of that exact frame, or starts one. (5 to 12)
 3. **Close the popover safely**: a click outside queues the text, × or Escape discards it, a change of the moment queues text at its original time and region and discards an empty popover. (14 to 18)
 4. **Queue**: messages wait as `queued`; a queued message can be edited or deleted. (19)
-5. **Send**: Cmd+Enter, the Send button or `video-review send` sends every queued message of the open video, on any threads, as one send. (20 to 22)
+5. **Send**: Cmd+Enter, the Send button or `havooch send` sends every queued message of the open video, on any threads, as one send. (20 to 22)
 6. **Pins**: one pin per thread on the timeline, its shape from its regions, its colour from its state or, while the agent waits for an answer, the question's (L35), its details on hover; a click seeks and opens the thread popover. (23 to 27)
 7. **Thread popover**: outlines and number badges on the frame; the popover holds the conversation above the field, drags and resizes, and keeps its frame per thread. Nothing opens during playback. (28 to 34)
 8. **Sidebar**: the thread list, grouped by who must act next, and the thread view of one thread with Back, Previous and Next; message bubbles with crops, one composer at the sidebar's foot, resizable. (35 to 44, 65; 0.2.0: L38 to L41)
@@ -113,7 +113,7 @@ In: all of the above. Out, as the spec says: a redesign of the comment popover, 
 | 2, 4, 12 threads and messages | ReviewCore `VideoReview`, `ReviewThread`, `Message`, `ItemID`, ReviewStore `SupportLayout`, `Library` | #24 |
 | 5, 9, 13 the send, `wait`, the outbox | ReviewCore `Send`, `SendPayload`, `Outbox`, ReviewApp `ListenerQueue`, `TranscriptDesk` | #25 |
 | 9 `ack`, `status`, `reply`, `ask`, `thread answer` | ReviewCore `VideoReview`, ReviewApp `ListenerQueue`, `Notice` | #26 |
-| 9 the listener skill | `.agents/skills/video-review-mate/` | #27 |
+| 9 the listener skill | `.agents/skills/havooch-mate/` | #27 |
 | 6 pins | ReviewApp `UI/PlayerBar/` | #28 |
 | 2, 3 comment popover, region | ReviewApp `UI/Stage/` | #29 |
 | 8 sidebar | ReviewApp `UI/Sidebar/` | #30 |
@@ -206,25 +206,32 @@ What changed from proto-2, in short:
 
 ```text
 Package.swift                      targets below; macOS 26; no dependencies; ReviewApp and its tests under #if os(macOS)
-Makefile                           test, build, bundle, install, acceptance, agent-logos, clean; reads VERSION from ReviewWire/Version.swift
+Makefile                           test, build, bundle, install, acceptance, agent-logos, identity, clean; reads VERSION from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle)
 Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
 Packaging/AgentLogos/              the nine agent harnesses' logos as PDFs (OpenCode has a -dark file), drawn by make agent-logos
+Packaging/Logo/                    the cat mark (logo v2 "Havuç") as PDFs, the full mark and the small cut, drawn by make logo; copied to Contents/Resources/Logo/
                                    from assets/images/agent-logos/*.svg, and NOTICE.md (Shipyard's attribution at 74b9695);
                                    copied to Contents/Resources/AgentLogos/
 scripts/acceptance.sh              the 0.2.0 acceptance scenario, CLI only (#33, #44)
+scripts/install.sh                 installs the latest release (or --from <zip>): the app, a link to its command, the mate skill; --uninstall (#49)
+scripts/update-tap.sh              writes the cask's version and sha256 into the tap repository; run by the release workflow (#49)
+Packaging/homebrew/havooch.rb      the cask the tap carries; version and sha256 filled in by scripts/update-tap.sh
+.github/workflows/release.yml      on a v* tag: make test, make bundle, the zip and its .sha256 as a GitHub Release, then the tap
+LICENSE, README.md                 MIT; what the app is, install, first launch, build from source
 scripts/screenshots.sh             the 0.2.0 gallery: states/ in light and dark, themes/ the list and a thread view per built-in theme (#33, #44)
-.agents/skills/video-review-mate/  the listener skill (#27)
+.agents/skills/havooch-mate/  the listener skill (#27)
 fixtures/sample/                   the fixture video and its sidecars
 
 Sources/
   ReviewLease/
-    Holder.swift                   who sends a request: key, name, place; Holder.find (VIDEO_REVIEW_CONTROL_KEY, CLAUDE_CODE_SESSION_ID, ancestor)
+    Holder.swift                   who sends a request: key, name, place; Holder.find (HAVOOCH_CONTROL_KEY, CLAUDE_CODE_SESSION_ID, ancestor)
+    AppVariable.swift              the HAVOOCH_* variables, each read by its earlier VIDEO_REVIEW_* name when unset (ADR 0002)
     ProcessTable.swift             the process table Holder.find walks (sysctl on macOS, /proc on Linux), and its protocol
     LeaseTerm.swift                a lease held: holder, taken, ends
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
   ReviewWire/
-    AppIdentity.swift              the app name, bundle id, support folder name ("Video Review", no suffix)
+    AppIdentity.swift              the app name, bundle id, support folder name ("Havooch", no suffix)
     Version.swift                  the app version "0.2.0" and the protocol version 3 (L44)
     ControlRequest.swift           every request as an enum case; its role; how long the app may hold it
     ControlMessage.swift           request plus holder as one JSON object; decode refuses another version
@@ -235,20 +242,21 @@ Sources/
     ControlClient.swift            one exchange over the socket, skipping heartbeat spaces; the ControlTransport seam
     ControlSocket.swift            where control.sock is; follows the demo pointer
     DemoPointer.swift              demo.json in the normal support folder
-    SupportFolder.swift            the support folder; VIDEO_REVIEW_SUPPORT_DIR moves it
+    SupportFolder.swift            the support folder; HAVOOCH_SUPPORT_DIR moves it
+    EarlierSupportFolder.swift     at a launch on the person's data, moves ~/Library/Application Support/Video Review/ into the support folder (ADR 0002)
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
-    VideoReviewCLI.swift           run(arguments, environment) → output, error, exit code
+    HavoochCLI.swift               run(arguments, environment) → output, error, exit code
     AppCommands.swift              app status | open [--demo] | quit, state, --version
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
     CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | open | show | list, context set
     ThemeCommands.swift            theme list | set
-    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings] (L42)
+    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42, ADR 0002)
     ListenerCommands.swift         wait, ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services; the AppLaunching seam
   ReviewCLI/
-    main.swift                     exit(VideoReviewCLI.run(...))
+    main.swift                     exit(HavoochCLI.run(...))
   ReviewCore/
     ItemID.swift                   t-<hash8>-<n>, m-<hash8>-<n>, s-<hash8>-<n>: parse, make, the hash prefix;
                                    ThreadID, MessageID, SendID; ThreadRef (a full id or a bare number, L5)
@@ -280,7 +288,7 @@ Sources/
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
     Settings.swift                 the pinned theme, the overrides, the sidebar width; settings.json load and save
   ReviewApp/
-    VideoReviewApp.swift           @main; the one window, Settings (L42); the menu commands
+    HavoochApp.swift               @main; the one window, Settings (L42); the menu commands; at launch, the move of the earlier support folder (ADR 0002)
     AppModel.swift                 the orchestrator; every action a person or an operator can take
     Draft.swift                    `AppModel.Draft`: the open popover's time, text and region (view state, never
                                    saved; its thread number is `AppModel.draftThreadNumber`); `PopoverClose`; `FrameMark`
@@ -309,13 +317,15 @@ Sources/
                                    hairline on its leading edge; `Hairline`, one pixel of `separator`
       Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
-      SettingsView.swift           the Settings window (⌘,) with the theme picker View › Theme shares; `SettingsWindow` opens and finds it for app control (L42)
+      SettingsView.swift           the Settings window (⌘,) with the cat mark, the name and version, and the theme picker View › Theme shares; `SettingsWindow` opens and finds it for app control (L42)
       MessageEditor.swift          the one text view messages are written in, its keys, and `MessageField`'s look with the system focus ring (L42)
-      EmptyState.swift             `ContentUnavailableView` with "Open a Video…" and "Try the Demo", the drop target over it (L42)
+      EmptyState.swift             `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo", the drop target over it (L42)
       AgentMark.swift              `AgentLogoImage`, the logo loader (Contents/Resources/AgentLogos/, else Packaging/AgentLogos/);
                                    `AgentMark`, a known agent's logo at any size; `AgentAvatar`, the logo or the neutral symbol
+      HavoochMark.swift            the cat mark at any size (the small cut at 32 pt and under), on the empty screen, in Settings and in the header
+      AboutPanel.swift             Havooch › About Havooch: the standard About panel with the app icon and the name's story; found for `screenshot --window about`
       Header/
-        TitleView.swift            video icon and file name; folder icon and folder, shortened in the middle, or "Demo"
+        TitleView.swift            the cat mark at the leading edge; video icon and file name; folder icon and folder, shortened in the middle, or "Demo"
         FloatingControls.swift     the group at the top right: agent-control icon, Context, sidebar toggle
         AgentControl.swift         the icon and its popover: who, where, time left, Stop (words as a pure struct)
         ContextPopover.swift       sidecar text, the editable note, the transcript part
@@ -371,16 +381,16 @@ A module and a type never share a name. `ReviewThread` is not called `Thread`, w
 
 ### ReviewLease
 
-proto-1's split (D A.7): `Holder`, `ProcessTable` and `LeaseTerm` move here from proto-2's `ReviewWire`, so the lease module depends on nothing and `ReviewWire` imports it. The rules are proto-2's `ControlLease`, unchanged: `renewal` 60 s, `cap` 5 min, `bar` 5 min, the time passed into every call; `use`, `take`, `release`, `stop`, `settle`, `giveUp`, `status`, `nextEnd`; `Decision` with its transitions; `Refusal` with its line; `handover` across a relaunch in `VIDEO_REVIEW_CONTROL_LEASE`.
+proto-1's split (D A.7): `Holder`, `ProcessTable` and `LeaseTerm` move here from proto-2's `ReviewWire`, so the lease module depends on nothing and `ReviewWire` imports it. The rules are proto-2's `ControlLease`, unchanged: `renewal` 60 s, `cap` 5 min, `bar` 5 min, the time passed into every call; `use`, `take`, `release`, `stop`, `settle`, `giveUp`, `status`, `nextEnd`; `Decision` with its transitions; `Refusal` with its line; `handover` across a relaunch in `HAVOOCH_CONTROL_LEASE`.
 
-`Holder.find(variables, workingDirectory, processes)`: `VIDEO_REVIEW_CONTROL_KEY`, else `CLAUDE_CODE_SESSION_ID`, else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`.
+`Holder.find(variables, workingDirectory, processes)`: `HAVOOCH_CONTROL_KEY`, else `CLAUDE_CODE_SESSION_ID`, else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`.
 
 ### ReviewWire
 
 As proto-2, with these changes:
 
-- `AppIdentity` has no variant: `appName` "Video Review", `bundleID` "com.yahyabedirhan.video-review", support folder `~/Library/Application Support/Video Review/` (D A.10). The name's one definition is `ControlLease.appName`, since the lease's refusals name the app and `ReviewLease` depends on nothing; `AppIdentity.appName` is that value, and the `Makefile` reads it there.
-- `Version.app` is "0.2.0"; `video-review --version` prints it. `Version.controlProtocol` is 3 (L1, L44).
+- `AppIdentity` has no variant: `appName` "Havooch", `bundleID` "com.yahyabedirhan.havooch", support folder `~/Library/Application Support/Havooch/` (D A.10). The name's one definition is `ControlLease.appName`, since the lease's refusals name the app and `ReviewLease` depends on nothing; `AppIdentity.appName` is that value, and the `Makefile` reads it there.
+- `Version.app` is "0.2.0"; `havooch --version` prints it. `Version.controlProtocol` is 3 (L1, L44).
 - `ControlRequest` follows the spec's contract:
 
 | Role | Cases | Lease |
@@ -560,7 +570,7 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
 `SupportLayout` (D A.6) is a pure value that owns every path of the store; `Library`, `ImageFiles`, `TranscriptFiles`, `ThemeFiles` and the payload's `images` closure all ask it. The socket and the demo pointer stay in `ReviewWire`, since the CLI needs them and does not link the store.
 
 ```text
-<support>/                               ~/Library/Application Support/Video Review/, or the demo folder
+<support>/                               ~/Library/Application Support/Havooch/, or the demo folder
   control.sock                           while the app runs (ReviewWire)
   demo.json                              the demo pointer; only in the normal folder (ReviewWire)
   outbox.json                            the Outbox
@@ -673,16 +683,16 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 | Header | Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `window` token, or the native toolbar when `window` is `system` (L26, L36, L37). | D 4.1 to D 4.4, D 4.7 |
 | Notices | Top right of the stage, name the thread, open it on click, fade after 5 s, a question's too (L28). | D 4.10 |
 | Structure | One surface, `window`, for the header, the stage, the player bar, the sidebar and its footer, native in the default themes (L37); `separator` hairlines on the sidebar's leading edge and above the footer; bubbles only for messages; no bordered cards. | L36, L37, replaces D 5.9 |
-| Empty screen | The native `ContentUnavailableView` with "Open a Video…" and "Try the Demo" (opens the bundled fixture in a demo folder under the user's temporary folder, L27). The whole stage is the drop target; a dashed accent outline shows over it while a file is over it (L42). | D 5.11 |
+| Empty screen | The native `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo" (opens the bundled fixture in a demo folder under the user's temporary folder, L27). The whole stage is the drop target; a dashed accent outline shows over it while a file is over it (L42). | D 5.11 |
 
 ### The listener skill
 
-`.agents/skills/video-review-mate/SKILL.md` stays one file. For threads:
+`.agents/skills/havooch-mate/SKILL.md` stays one file. For threads:
 
 ```text
 on a send     `ack <send-id> "<line>"`, then a new background `wait`
 per thread    read the keyframe, the crops, the transcript, history[] and the context
-per message   `status working` → the work → one commit when files changed, its body ending `Video-Review-Message: <message-id>`
+per message   `status working` → the work → one commit when files changed, its body ending `Havooch-Message: <message-id>`
               → `reply <thread-id>` with the short SHA → `status done`
               cannot be done: `reply <thread-id>` with the reason → `status failed`
 unclear       `ask <thread-id>` in the background; the next thread goes on
@@ -776,17 +786,17 @@ Edge cases:
 - An answer typed in the sidebar field while the thread's question is open: it is an `answer`, it never enters the queue, and the waiting `ask` exits at once.
 - A `reply` on a thread whose only messages are queued: refused (`notSent`). On General: accepted.
 - Speech still transcribing at send time: each thread keeps the lines that exist then; a redelivery gives the same lines.
-- `theme set Purple` with no such theme: exit 1, `no theme Purple; video-review theme list names them`.
+- `theme set Purple` with no such theme: exit 1, `no theme Purple; havooch theme list names them`.
 - A user theme file is saved with a syntax error: the catalog leaves it out; when it was active, the app falls back to the default of the appearance and `state` reports the active name.
 
 ### Trace 1: a CLI command, `comment add` on a region
 
 Start: the app runs on demo data with the fixture open, paused at 10.0 s. Thread #1 is at frame time 10.017 with one queued message `m-f92cbb2a-1` and no region. The lease is free. The caller is a Claude Code session.
 
-Command: `video-review comment add "This box is too dark" --region 0.47,0.27,0.29,0.15`
+Command: `havooch comment add "This box is too dark" --region 0.47,0.27,0.29,0.15`
 
 ```text
-ReviewCLI/main.swift                   VideoReviewCLI.run(["comment","add",…], environment)
+ReviewCLI/main.swift                   HavoochCLI.run(["comment","add",…], environment)
 ReviewCommand/CommandTable.swift         `comment add` → CommentCommands.add
 ReviewCommand/CommentCommands.swift      --region → ControlRequest.Rectangle(0.47,0.27,0.29,0.15)   (not four numbers: exit 64)
 ReviewLease/Holder.swift                 Holder.find → "CLAUDE_CODE_SESSION_ID=…", "Claude Code", the working folder
@@ -807,14 +817,14 @@ ReviewStore/Library.swift                  review.json written
                                          state: #1 has 2 queued messages; its pin turns a rounded square; queue = [m-1, m-2]
 ReviewApp/Control/ControlServer.swift    done("m-f92cbb2a-2 queued on #1 at 0:10 on the region 0.47,0.27,0.29,0.15")
 ReviewApp/Control/SocketListener.swift   heartbeat stopped; reply written; connection closed
-ReviewCommand/VideoReviewCLI.swift       prints the line, exit 0
+ReviewCommand/HavoochCLI.swift           prints the line, exit 0
 ```
 
-The rejection: five seconds later another holder runs `video-review comment add "x"`.
+The rejection: five seconds later another holder runs `havooch comment add "x"`.
 
 ```text
 ControlLease.use(by: other, at: 12:00:05) → .inUse(term); nothing reaches AppModel
-reply {"ok":false,"error":"Video Review is in use by Claude Code in /…/repo until 12:01:00 (55s left); `video-review control take --wait <seconds>` to queue"}
+reply {"ok":false,"error":"Havooch is in use by Claude Code in /…/repo until 12:01:00 (55s left); `havooch control take --wait <seconds>` to queue"}
 CLI: the line on standard error, exit 1
 ```
 
@@ -822,7 +832,7 @@ A CLI of a prototype build sends `"version": 1`: `decode` refuses it before the 
 
 ### Trace 2: a send, from Cmd+Enter to `wait`, then a follow-up
 
-Start: after Trace 1, the person seeks to 0:15 and draws a region; thread #2 starts at 15.015 with `m-f92cbb2a-3` (region). The queue is `m-1`, `m-2` (#1) and `m-3` (#2). A listener session L1 has `video-review wait` open and has not had this video's context. Its outbox: `session = L1`, nothing pending or taken.
+Start: after Trace 1, the person seeks to 0:15 and draws a region; thread #2 starts at 15.015 with `m-f92cbb2a-3` (region). The queue is `m-1`, `m-2` (#1) and `m-3` (#2). A listener session L1 has `havooch wait` open and has not had this video's context. Its outbox: `session = L1`, nothing pending or taken.
 
 ```text
 ReviewApp/Player/Shortcuts.swift         Cmd+Return → AppModel.send()
@@ -872,7 +882,8 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 ### Build and tests
 
 - `Package.swift`: tools 6.2, macOS 26, no dependencies; `ReviewApp` uses `.defaultIsolation(MainActor.self)`; explicit `@MainActor` marks that the default makes redundant are removed (D A.2). `ReviewApp`, `ReviewAppTests` and the `VideoReview` product are added under `#if os(macOS)` (D A.9).
-- `make bundle` stamps `Video Review`, the bundle id and `0.2.0` into `Info.plist`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Video Review.app` and never touches the prototype apps.
+- `make bundle` stamps `Havooch`, the bundle id and `0.2.0` into `Info.plist`, copies the app icon (`assets/images/logo/v2-havuc/AppIcon-light.icns`, `CFBundleIconFile`) to `Contents/Resources/AppIcon.icns` and `Packaging/Logo/` to `Contents/Resources/Logo/`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Havooch.app` and never touches the prototype apps or `/Applications/Video Review.app`; with `HAVOOCH_SUPPORT_DIR` set it opens the app on that folder.
+- A release is a `v<version>` tag; the tag must match `Version.app`. `.github/workflows/release.yml` reads the name, the command and the version through `make identity`, zips the bundle with `ditto -c -k --keepParent` as `<command>-<version>.zip` with `<command>-<version>.zip.sha256` beside it, and publishes both. `scripts/install.sh` reads the app and command names from the zip, never from a constant; it finds an installed copy for `--uninstall` by the bundle id `com.<repository owner>.<command>`. The app is ad-hoc signed and not notarized, so the first launch needs Open Anyway (#49).
 - Owner tests, one per contract at its strongest boundary:
 
 | Contract | Owner test |
@@ -939,7 +950,7 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L24 | A drag on the frame with the popover open is a click outside it: the words are queued on their region, or an empty popover goes, and the new rectangle opens a new popover. | D 1.4 for every click outside. proto-2 moved the open popover to the new region instead. |
 | L25 | The popover on a moment points at the playhead on the player bar's track, whose frame in the window the bar reports (`AppModel.trackArea`). | The bar's track sits between its buttons, not under the stage's whole width. |
 | L26 | (Replaced by L36: the band is `window`.) The `header` token paints the window's toolbar band (`toolbarBackground`), behind the title and the floating group. | The token was in the palette with no view; the header is a surface of its own, and a theme may set it apart from `window` (the built-in themes keep them equal). |
-| L27 | "Try the demo" on a run on the person's data starts a new copy of the app on `<temporary folder>/Video Review Demo`, with `VIDEO_REVIEW_OPEN_VIDEO` naming the bundled `Contents/Resources/Demo/sample.mp4`, records the demo pointer, and quits. A demo run opens the video itself. | The support folder is fixed for a run, and demo data must never mix with the person's (L17). The pointer lets `video-review` reach the demo copy as after `app open --demo`. |
+| L27 | "Try the demo" on a run on the person's data starts a new copy of the app on `<temporary folder>/Havooch Demo`, with `HAVOOCH_OPEN_VIDEO` naming the bundled `Contents/Resources/Demo/sample.mp4`, records the demo pointer, and quits. A demo run opens the video itself. | The support folder is fixed for a run, and demo data must never mix with the person's (L17). The pointer lets `havooch` reach the demo copy as after `app open --demo`. |
 | L28 | Every notice fades after 5 s, a question's too. The question stays open on its thread and in `state`. | D 4.10 says a notice fades; a question that stayed over the video had no way to close but a click (the 0.1.0 acceptance run). |
 | L29 | `thread open <thread> [--frame x,y,w,h]` opens a thread's popover on its frame, as a click on its pin or badge does; `--frame` first keeps the popover at that rectangle of the video area, as a drag and a resize leave it. An operator command, an addition to the contract. | The CLI cannot click, drag or resize. Without it the thread popover, its kept frame and its persistence can't be shown, checked or screenshotted in the real app. |
 | L30 | Only a popover on an existing thread drags and resizes. A popover that will start a thread opens at its placement and gets the handles once its first message is queued. | The frame is kept per thread (D 2.10); before the first message there is no thread to keep it on, and a frame held in the draft would be lost on every close. |

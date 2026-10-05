@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review theme list | set <name>`. `list` is free: it changes
+/// `havooch theme list | set <name>`. `list` is free: it changes
 /// nothing a person sees. `set` is the operator's: it pins a theme, or
 /// unpins with `system`. The app knows the themes, so both ask it.
 enum ThemeCommands {

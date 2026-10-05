@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Havooch — review videos with your coding agent</title>
+  <meta name="description" content="Havooch is a native macOS video player for giving feedback to coding agents. Pause, point at the frame, comment, press ⌘↩, and the agent answers in the player.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://yahyabedirhan.github.io/havooch/">
+
+  <!-- Link previews. og:image must be an absolute URL. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Havooch">
+  <meta property="og:title" content="Havooch — review videos with your coding agent">
+  <meta property="og:description" content="Pause any video, point at the frame and comment. ⌘↩ sends it all to your coding agent, and the agent answers in the player. A native macOS app, free and open source.">
+  <meta property="og:url" content="https://yahyabedirhan.github.io/havooch/">
+  <meta property="og:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Havooch — review videos with your coding agent">
+  <meta name="twitter:description" content="Pause any video, point at the frame and comment. ⌘↩ sends it all to your coding agent, and the agent answers in the player.">
+  <meta name="twitter:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta name="twitter:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/logo.svg">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="top">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="Havooch, back to top">
+        <img class="brand-mark" src="assets/logo.svg" alt="" width="28" height="28">
+        <span>Havooch</span>
+      </a>
+      <nav aria-label="Sections">
+        <ul class="nav-links">
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#story">The name</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-small btn-filled" href="#install">Install</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-copy">
+        <img class="hero-mark" src="assets/logo.svg" alt="" width="88" height="88">
+        <h1 id="hero-title">Havooch</h1>
+        <p class="say"><span class="visually-hidden">Pronounced </span><span aria-hidden="true">/</span>hah-VOOCH<span aria-hidden="true">/</span></p>
+        <p class="pitch">Pause the video. Point at the frame.<br class="br-wide"> Your coding agent answers right there.</p>
+        <p class="lede">A native Mac video player for reviewing videos with your coding agent. Comment on any moment, or draw a box around what you mean, press <kbd>⌘</kbd><kbd>↩</kbd>, and your agent gets the time, the frame, the region and what was being said. Then it answers right beside the frame.</p>
+        <div class="cta">
+          <a class="btn btn-filled" href="#install">Install for Mac</a>
+          <a class="btn btn-plain" href="https://github.com/yahyabedirhan/havooch">View on GitHub <span aria-hidden="true">›</span></a>
+        </div>
+        <p class="fine">Free and open source · MIT licence · macOS 26 Tahoe</p>
+      </div>
+
+      <figure class="wrap hero-shot">
+        <div class="window">
+          <picture>
+            <source srcset="assets/shots/hero-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="assets/shots/hero-light.webp" width="2400" height="1412" alt="The Havooch window: a teaser for a weather app, paused at its sunrise logo, and beside it a thread where you asked for a lighter wordmark. Claude Code made the change, asked about the tagline, got your answer and finished. A follow-up waits in the queue." fetchpriority="high">
+          </picture>
+        </div>
+        <figcaption class="visually-hidden">Havooch in demo mode: a thread with the agent's reply, its question, your answer and a queued follow-up.</figcaption>
+      </figure>
+    </section>
+
+    <!-- How it works -->
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="eyebrow">How it works</p>
+        <h2 id="how-title">One loop, on the frame.</h2>
+        <p class="section-lede">You watch, your agent works, and every note stays pinned to the moment it's about.</p>
+
+        <div class="loop" data-step="1">
+          <ol class="loop-steps" role="tablist" aria-label="The review loop">
+            <li role="presentation"><button role="tab" id="tab-1" aria-controls="loop-stage" aria-selected="true" data-go="1"><span class="n">1</span><span><strong>Pause</strong> on any moment, or drag a region on the frame.</span></button></li>
+            <li role="presentation"><button role="tab" id="tab-2" aria-controls="loop-stage" aria-selected="false" data-go="2"><span class="n">2</span><span><strong>Comment.</strong> Messages queue up, one thread per keyframe.</span></button></li>
+            <li role="presentation"><button role="tab" id="tab-3" aria-controls="loop-stage" aria-selected="false" data-go="3"><span class="n">3</span><span><strong>Press <kbd>⌘</kbd><kbd>↩</kbd>.</strong> The whole queue goes to the agent as one send.</span></button></li>
+            <li role="presentation"><button role="tab" id="tab-4" aria-controls="loop-stage" aria-selected="false" data-go="4"><span class="n">4</span><span><strong>The agent answers</strong> on the thread, beside the frame.</span></button></li>
+          </ol>
+
+          <div class="loop-stage" id="loop-stage" role="tabpanel" aria-labelledby="tab-1">
+            <div class="mini" aria-hidden="true">
+              <div class="mini-bar"><i></i><i></i><i></i><span>sample.mp4</span></div>
+              <div class="mini-body">
+                <div class="mini-stage">
+                  <div class="frame">
+                    <div class="frame-tag">01 / PAUSE AND POINT</div>
+                    <div class="frame-card"><b class="dot"></b><b class="bar"></b></div>
+                    <div class="frame-title">Pause.<br><span>Comment.</span></div>
+                    <div class="region"><span>1</span></div>
+                    <div class="pop">
+                      <div class="pop-head">#1 · 0:03</div>
+                      <div class="pop-msg">The title fades in too late.</div>
+                      <div class="pop-foot"><span class="state-q">Queued</span><span class="hint">↩ queue · ⌘↩ send</span></div>
+                    </div>
+                    <div class="keys"><kbd>⌘</kbd><kbd>↩</kbd></div>
+                  </div>
+                  <div class="mini-player">
+                    <span class="pp"></span>
+                    <div class="track"><div class="fill"></div><span class="pin"></span><span class="head"></span></div>
+                    <span class="time">0:03</span>
+                  </div>
+                </div>
+                <div class="mini-side">
+                  <div class="side-head">#1 <span>0:03</span></div>
+                  <div class="bubble me">The title fades in too late.</div>
+                  <div class="me-state"><span class="s s-q">◌ Queued</span><span class="s s-s">● Sent</span><span class="s s-a">✓ Acknowledged</span><span class="s s-d">✓ Done</span></div>
+                  <div class="agent">
+                    <span class="agent-name"><b class="spark">✳</b> Agent</span>
+                    <div class="bubble them">Moved the title in 0.4 s earlier. Commit 3f9c2ab.</div>
+                  </div>
+                  <div class="side-foot"><span class="pill"><b></b> Listening</span><span class="queued">1 queued</span></div>
+                </div>
+              </div>
+            </div>
+            <p class="loop-caption visually-hidden" id="loop-caption" aria-live="polite">Pause on any moment, or drag a region on the frame.</p>
+            <button class="loop-toggle" type="button" hidden aria-pressed="false">Pause</button>
+          </div>
+        </div>
+
+        <div class="payload">
+          <div class="payload-copy">
+            <h3>What the agent receives</h3>
+            <p>Each send is grouped by thread. For every thread the agent gets the exact time, the keyframe image, the region you drew and its crop, the transcript from 15 seconds either side, and the context: what the video is about, its source repos and your note. Then it works in your repo, commits, and tells you on the thread what it changed.</p>
+            <p>The agent side is one skill, <a href="https://github.com/yahyabedirhan/havooch/tree/main/.agents/skills/havooch-mate"><code>havooch-mate</code></a>. Ask your agent to listen for Havooch feedback, and you'll see it listening in the player.</p>
+          </div>
+          <pre class="code" aria-label="An example send, as JSON"><code><span class="c">// one send, as the agent reads it</span>
+{
+  <span class="k">"send"</span>: { <span class="k">"id"</span>: <span class="s">"s-f92cbb2a-2"</span> },
+  <span class="k">"video"</span>: { <span class="k">"title"</span>: <span class="s">"halcyon-teaser.mp4"</span>, <span class="k">"duration"</span>: 42.6 },
+  <span class="k">"threads"</span>: [{
+    <span class="k">"number"</span>: 2, <span class="k">"time"</span>: 12.0,
+    <span class="k">"keyframePath"</span>: <span class="s">"…/t-1.png"</span>,
+    <span class="k">"transcript"</span>: [{ <span class="k">"text"</span>: <span class="s">"Meet Halcyon…"</span> }],
+    <span class="k">"messages"</span>: [{
+      <span class="k">"text"</span>: <span class="s">"The wordmark feels heavy…"</span>,
+      <span class="k">"region"</span>: { <span class="k">"x"</span>: 0.08, <span class="k">"y"</span>: 0.27, <span class="k">"w"</span>: 0.5, <span class="k">"h"</span>: 0.28 },
+      <span class="k">"cropPath"</span>: <span class="s">"…/m-9.png"</span>
+    }]
+  }]
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section section-alt" id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <p class="eyebrow">Features</p>
+        <h2 id="features-title">Built like a Mac app, because it is one.</h2>
+        <p class="section-lede">I built it from native AppKit and SwiftUI parts, with one calm surface across the window and fine hairlines where other apps paint bands.</p>
+
+        <article class="feature feature-wide">
+          <div class="feature-copy">
+            <h3>Every thread, by who acts next</h3>
+            <p>The thread list sorts your review into <em>Needs you</em>, <em>With agent</em>, <em>Queued</em> and <em>Done</em>, so you always know whose turn it is. Each row shows its frame, its state and who spoke last, and the pins on the timeline take you to the same threads.</p>
+          </div>
+          <div class="window">
+            <picture>
+              <source srcset="assets/shots/list-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/shots/list-light.webp" width="1800" height="1058" loading="lazy" alt="The thread list beside the week view of a weather app teaser: one thread needs you, one is with the agent, three are queued, and two are done or failed.">
+            </picture>
+          </div>
+        </article>
+
+        <div class="bento">
+          <article class="feature tile tile-tall">
+            <div class="feature-copy">
+              <h3>A real conversation</h3>
+              <p>Your messages sit on the right, your agent's on the left with its logo. Each one shows where it is: queued, sent, acknowledged, working, done or failed.</p>
+            </div>
+            <div class="crop">
+              <picture>
+                <source srcset="assets/shots/chat-dark.webp" media="(prefers-color-scheme: dark)">
+                <img src="assets/shots/chat-light.webp" width="680" height="1156" loading="lazy" alt="A thread view: your note on the wordmark is done. Claude Code replied, asked whether the tagline should go lighter too, got your answer and finished. A follow-up waits with a dashed outline.">
+              </picture>
+            </div>
+          </article>
+
+          <div class="tile-stack">
+            <article class="feature tile">
+              <div class="feature-copy">
+                <h3>One composer</h3>
+                <p>One field at the foot of the sidebar does it all: follow up on a thread, answer a question, or start a new note at the playhead. <kbd>↩</kbd> queues, <kbd>⌘</kbd><kbd>↩</kbd> sends the queue.</p>
+              </div>
+              <div class="crop">
+                <picture>
+                  <source srcset="assets/shots/composer-dark.webp" media="(prefers-color-scheme: dark)">
+                  <img src="assets/shots/composer-light.webp" width="660" height="246" loading="lazy" alt="The composer: a field that follows up on #2, the hint that return queues and command-return sends, and a Send button with 3 queued.">
+                </picture>
+              </div>
+            </article>
+
+            <article class="feature tile tile-text">
+              <div class="feature-copy">
+                <h3>Works with your agent</h3>
+                <p>Any agent that runs skills and a shell can listen, and the player shows you who it is, with its logo.</p>
+              </div>
+              <ul class="chips" aria-label="Agent harnesses with a logo in the player">
+                <li>Claude Code</li><li>Codex</li><li>Gemini CLI</li><li>Copilot</li><li>Cursor</li><li>Amp</li><li>opencode</li><li>Droid</li><li>Pi</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+
+        <article class="feature feature-wide feature-flip">
+          <div class="feature-copy">
+            <h3>The agent asks. You answer at once.</h3>
+            <p>When a note could mean two things, your agent asks on the thread instead of guessing. The question gets its own card and moves the thread to <em>Needs you</em>, and your answer skips the queue and goes straight back.</p>
+          </div>
+          <div class="window">
+            <picture>
+              <source srcset="assets/shots/question-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/shots/question-light.webp" width="1800" height="1058" loading="lazy" alt="A region drawn on a rain alert in the video, and in the sidebar Claude Code asks whether the card should lead with the time to leave or the time the rain starts.">
+            </picture>
+          </div>
+        </article>
+
+        <article class="feature feature-wide">
+          <div class="feature-copy">
+            <h3>Native surfaces, or your editor's colours</h3>
+            <p>Default Light and Default Dark use the native macOS surfaces. Rather have your editor's colours? Tokyo Night, Dracula, One Dark Pro, Catppuccin, GitHub and more come built in, and a theme file of your own can build on any of them.</p>
+          </div>
+          <div class="window window-dark">
+            <img src="assets/shots/theme-tokyo.webp" width="1800" height="1058" loading="lazy" alt="The thread list in the Tokyo Night theme, beside the rain alert of the weather app teaser.">
+          </div>
+        </article>
+
+        <ul class="facts" aria-label="More details">
+          <li><strong>Agents drive it too.</strong> A leased CLI lets an agent open videos, seek, comment and take screenshots, and you can take control back at any time.</li>
+          <li><strong>Reviews stay.</strong> Threads are kept per video by its content, so a renamed or moved copy opens the same review.</li>
+          <li><strong>Context travels.</strong> A sidecar file or a note in the app tells your agent what the video is about.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <p class="eyebrow">Install</p>
+        <h2 id="install-title">One command.</h2>
+        <p class="section-lede">Both ways install the same release build and the <code>havooch</code> command.</p>
+
+        <div class="installs">
+          <div class="install">
+            <div class="install-head">
+              <h3>Homebrew</h3>
+              <span class="tag">Recommended</span>
+            </div>
+            <div class="cmd">
+              <code id="cmd-brew">brew install --cask yahyabedirhan/tap/havooch</code>
+              <button class="copy" type="button" data-copy="cmd-brew" aria-label="Copy the Homebrew command"><span class="copy-label">Copy</span></button>
+            </div>
+            <p class="install-note">Updates with <code>brew upgrade</code>.</p>
+          </div>
+          <div class="install">
+            <div class="install-head">
+              <h3>Install script</h3>
+            </div>
+            <div class="cmd">
+              <code id="cmd-curl">curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash</code>
+              <button class="copy" type="button" data-copy="cmd-curl" aria-label="Copy the install script command"><span class="copy-label">Copy</span></button>
+            </div>
+            <p class="install-note">Checks the release's SHA-256, installs the app, the command and the <code>havooch-mate</code> skill. Remove it all with <code>--uninstall</code>.</p>
+          </div>
+        </div>
+
+        <aside class="note" aria-label="First launch">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5M10 6.2v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <p><strong>First launch.</strong> Havooch is signed ad hoc, not notarized, so macOS asks once. Open <em>System Settings › Privacy &amp; Security</em> and choose <em>Open Anyway</em>. Then try the demo from the empty window to see the whole loop, even before you have a video of your own.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Story -->
+    <section class="section section-alt" id="story" aria-labelledby="story-title">
+      <div class="wrap story">
+        <div class="story-art" aria-hidden="true">
+          <div class="story-card">
+            <img src="assets/logo.svg" alt="" width="160" height="160">
+            <div class="story-word">Havuç</div>
+            <div class="story-gloss"><span>Turkish</span> carrot</div>
+          </div>
+        </div>
+        <div class="story-copy">
+          <p class="eyebrow">The name</p>
+          <h2 id="story-title">Named after a cat.</h2>
+          <p>Havooch is named after Havuç, my orange-and-white cat. <em>Havuç</em> is Turkish for “carrot”, and one look at the cat tells you why.</p>
+          <p>I spelled the app's name the way it sounds — <strong>hah-VOOCH</strong> — so you can type it and say it without guessing. The logo is Havuç's head, drawn simply enough to read at 16 pixels.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Links -->
+    <section class="section links-section" aria-labelledby="links-title">
+      <div class="wrap">
+        <h2 id="links-title" class="visually-hidden">Links</h2>
+        <ul class="links">
+          <li><a href="https://github.com/yahyabedirhan/havooch">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5a10.5 10.5 0 0 0-3.32 20.46c.53.1.72-.23.72-.5v-1.8c-2.92.63-3.54-1.4-3.54-1.4-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.08-.64.08-.64 1.05.07 1.6 1.08 1.6 1.08.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.66-1.4-2.33-.27-4.78-1.17-4.78-5.18 0-1.15.41-2.08 1.08-2.82-.1-.27-.47-1.33.1-2.78 0 0 .88-.28 2.89 1.08a10 10 0 0 1 5.26 0c2-1.36 2.88-1.08 2.88-1.08.58 1.45.21 2.51.1 2.78.68.74 1.08 1.67 1.08 2.82 0 4.02-2.45 4.9-4.79 5.16.38.33.71.97.71 1.96v2.9c0 .28.19.61.73.5A10.5 10.5 0 0 0 12 1.5Z"/></svg>
+            <span><strong>Source code</strong><small>github.com/yahyabedirhan/havooch</small></span></a></li>
+          <li><a href="https://github.com/yahyabedirhan/havooch/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/></svg>
+            <span><strong>Latest release</strong><small>Notes and the app zip</small></span></a></li>
+          <li><a href="https://github.com/yahyabedirhan/havooch/tree/main/.agents/skills/havooch-mate">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/></svg>
+            <span><strong>The mate skill</strong><small>havooch-mate, for your agent</small></span></a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <img src="assets/logo.svg" alt="" width="20" height="20">
+        <span>Havooch</span>
+      </div>
+      <p>Free and open source under the <a href="https://github.com/yahyabedirhan/havooch/blob/main/LICENSE">MIT licence</a>. Made by <a href="https://github.com/yahyabedirhan">@yahyabedirhan</a>.</p>
+      <p class="footer-fine">macOS is a trademark of Apple Inc. Agent names belong to their owners.</p>
+    </div>
+  </footer>
+</body>
+</html>

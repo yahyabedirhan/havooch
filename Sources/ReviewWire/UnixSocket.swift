@@ -59,7 +59,7 @@ package enum UnixSocket {
         // FNV-1a over the folder's path: the same link for the same folder.
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in folder.utf8 { hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3 }
-        let link = temporary + (temporary.hasSuffix("/") ? "" : "/") + "video-review-" + String(hash, radix: 16)
+        let link = temporary + (temporary.hasSuffix("/") ? "" : "/") + "havooch-" + String(hash, radix: 16)
         func pointsThere() -> Bool {
             (try? FileManager.default.destinationOfSymbolicLink(atPath: link)) == folder
         }

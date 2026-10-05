@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | open | compose | edit | delete`, `context set`, `send` and
+/// `havooch comment add | open | compose | edit | delete`, `context set`, `send` and
 /// `thread answer`.
 enum CommentCommands {
     static let commands: [Command] = [

@@ -1,8 +1,10 @@
 import AppKit
+import ReviewWire
 import SwiftUI
 
-/// The Settings window (⌘,, L42): the theme picker, the same choice as
-/// View › Theme and `video-review theme set`. It takes the pinned theme's
+/// The Settings window (⌘,, L42): the cat mark, the name and the version,
+/// and the theme picker, the same choice as
+/// View › Theme and `havooch theme set`. It takes the pinned theme's
 /// appearance, as the player's window does, and the theme's accent.
 struct SettingsView: View {
     let model: AppModel
@@ -10,6 +12,19 @@ struct SettingsView: View {
     var body: some View {
         let palette = Palette(theme: model.themes.theme)
         Form {
+            Section {
+                HStack(spacing: 12) {
+                    HavoochMark(size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(AppIdentity.appName)
+                            .font(.headline)
+                        Text("Version \(Version.app)")
+                            .font(.caption)
+                            .foregroundStyle(palette[.textSecondary])
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
             Section {
                 ThemePicker(model: model)
             } footer: {

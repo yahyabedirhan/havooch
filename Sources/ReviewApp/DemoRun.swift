@@ -14,7 +14,7 @@ import ReviewWire
 enum DemoRun {
     /// The variable that names a video for the app to open at launch, in
     /// place of the last one.
-    static let openVariable = "VIDEO_REVIEW_OPEN_VIDEO"
+    static let openVariable = "HAVOOCH_OPEN_VIDEO"
 
     /// The bundled sample video, when this build has one: a bundle made by
     /// `make bundle` does, a bare `swift build` doesn't.
@@ -41,7 +41,7 @@ enum DemoRun {
         let demo = folder()
         do {
             try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
-            // So `video-review` reaches the demo copy, as after `app open --demo`.
+            // So `havooch` reaches the demo copy, as after `app open --demo`.
             try DemoPointer.record(demo, in: normalSupport)
         } catch {
             started("couldn't make the demo folder \(demo.path): \(error.localizedDescription)")

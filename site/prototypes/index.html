@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Havooch landing page prototypes</title>
+  <meta name="description" content="Three alternative landing pages for Havooch, each a self-contained static page with desktop and phone previews.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="pixel-world/logo.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: light dark; --bg: #f6f6f8; --card: #fff; --ink: #17181d; --muted: #5e6472; --hair: rgba(0,0,0,.1); --accent: #b4520e; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #101114; --card: #17181c; --ink: #f2f2f4; --muted: #a3a7b0; --hair: rgba(255,255,255,.1); --accent: #ffa15a; } }
+    :root[data-theme="dark"] { --bg: #101114; --card: #17181c; --ink: #f2f2f4; --muted: #a3a7b0; --hair: rgba(255,255,255,.1); --accent: #ffa15a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif; padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 40px) 64px; }
+    main { max-width: 1120px; margin: 0 auto; }
+    h1 { margin: 0; font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -0.02em; line-height: 1.1; }
+    .intro { margin: 12px 0 0; color: var(--muted); max-width: 68ch; }
+    .intro a { color: inherit; }
+    .list { list-style: none; margin: 36px 0 0; padding: 0; display: grid; gap: 28px; }
+    .proto { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 20px 32px; align-items: start; padding: 24px; border-radius: 16px; background: var(--card); border: 1px solid var(--hair); }
+    .proto h2 { margin: 0; font-size: 22px; letter-spacing: -0.015em; }
+    .proto h2 a { color: inherit; text-decoration: none; }
+    .proto h2 a:hover { color: var(--accent); }
+    .proto p { margin: 10px 0 0; color: var(--muted); }
+    .proto .open { display: inline-block; margin-top: 16px; font-weight: 500; color: var(--accent); }
+    .previews { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+    .previews a { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--hair); background: var(--bg); }
+    .previews img { display: block; width: 100%; height: auto; }
+    .previews .phone { aspect-ratio: 390 / 844; overflow: hidden; }
+    .previews .desk { aspect-ratio: 1440 / 900; overflow: hidden; }
+    .previews .phone img, .previews .desk img { object-fit: cover; object-position: top; height: 100%; }
+    @media (max-width: 820px) { .proto { grid-template-columns: 1fr; } }
+    footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Havooch landing page prototypes</h1>
+    <p class="intro">Three directions for the public page, each a self-contained static page beside the <a href="../index.html">current landing page</a>. Each folder has a README with the design plan, and a <code>preview/</code> folder with the desktop and phone screenshots shown here. Open a prototype and resize the window; switch your system appearance to see light and dark.</p>
+
+    <ul class="list">
+      <li class="proto">
+        <div>
+          <h2><a href="pixel-world/">pixel-world</a></h2>
+          <p>A lit isometric pixel diorama of the loop, rendered in software from code: the screening room where Havuç pauses and points, the path the notes travel, and the agent's workshop where the replies come from. Dark first, with a dusk light mode.</p>
+          <a class="open" href="pixel-world/">Open the prototype</a>
+        </div>
+        <div class="previews">
+          <a class="desk" href="pixel-world/preview/desktop.png"><img src="pixel-world/preview/desktop.png" width="1440" height="900" alt="pixel-world at 1440 px, dark" loading="lazy"></a>
+          <a class="phone" href="pixel-world/preview/phone.png"><img src="pixel-world/preview/phone.png" width="390" height="844" alt="pixel-world at 390 px, dark" loading="lazy"></a>
+        </div>
+      </li>
+
+      <li class="proto">
+        <div>
+          <h2><a href="studio/">studio</a></h2>
+          <p>A calm product page in the native-Mac tradition: real screenshots, an annotated hero window with callouts, and the loop explained in five moves. One typeface, one accent, a lot of air.</p>
+          <a class="open" href="studio/">Open the prototype</a>
+        </div>
+        <div class="previews">
+          <a class="desk" href="studio/preview/desktop.png"><img src="studio/preview/desktop.png" width="1440" height="900" alt="studio at 1440 px, light" loading="lazy"></a>
+          <a class="phone" href="studio/preview/phone.png"><img src="studio/preview/phone.png" width="390" height="844" alt="studio at 390 px, light" loading="lazy"></a>
+        </div>
+      </li>
+
+      <li class="proto">
+        <div>
+          <h2><a href="wire/">wire</a></h2>
+          <p>The developer-tool direction, centred on the agent's side of the loop: a terminal that plays one send, both ends of the wire laid side by side, the JSON the agent reads and the command line. Blueprint paper with a faint grid.</p>
+          <a class="open" href="wire/">Open the prototype</a>
+        </div>
+        <div class="previews">
+          <a class="desk" href="wire/preview/desktop.png"><img src="wire/preview/desktop.png" width="1440" height="900" alt="wire at 1440 px, light" loading="lazy"></a>
+          <a class="phone" href="wire/preview/phone.png"><img src="wire/preview/phone.png" width="390" height="844" alt="wire at 390 px, dark" loading="lazy"></a>
+        </div>
+      </li>
+    </ul>
+    <footer>Screenshots were taken with headless Chromium at 1440 and 390 px wide; the previews here are the first screen of each page.</footer>
+  </main>
+</body>
+</html>

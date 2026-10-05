@@ -16,7 +16,7 @@ struct SendDeliveryTests {
     nonisolated static let restarted = Holder(key: "listener-2", name: "Claude Code", place: "/shop")
 
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func cleanUp() {
         try? FileManager.default.removeItem(at: support)
@@ -292,7 +292,7 @@ struct SendDeliveryTests {
         await eventually { model.listeners.outbox.isWaitOpen }
         let newer = waiting(server)
 
-        #expect(await older.value.reply == .refused("a newer `video-review wait` took this one's place: one listener at a time"))
+        #expect(await older.value.reply == .refused("a newer `havooch wait` took this one's place: one listener at a time"))
         #expect(model.listeners.outbox.isWaitOpen)
         _ = try await model.addMessage(text: "For the newer one", at: 3)
         _ = try await model.sendQueue()
@@ -383,7 +383,7 @@ struct SendDeliveryTests {
     /// A folder short enough for a socket's path.
     private var socketFolder: URL {
         URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
+            .appendingPathComponent("havooch-\(UUID().uuidString.prefix(8))", isDirectory: true)
     }
 
     @Test("the listener's client gets the send over the real socket while the operator sends it")
@@ -424,7 +424,7 @@ struct SendDeliveryTests {
         try server.start(heartbeat: .milliseconds(200))
         defer { server.stop() }
 
-        // A `video-review wait` that's stopped: it sent its request, then its process ended.
+        // A `havooch wait` that's stopped: it sent its request, then its process ended.
         let descriptor = UnixSocket.make()
         let address = try #require(UnixSocket.address(server.socket.path))
         #expect(UnixSocket.connectSocket(descriptor, to: address) == 0)
@@ -467,7 +467,7 @@ struct SidebarWordsTests {
 
         let absent = PresencePill(presence: .absent, session: nil, pendingSends: 0)
         #expect(absent.title == "No listener")
-        #expect(absent.help == "No agent runs `video-review wait`. What you send waits for the next one.")
+        #expect(absent.help == "No agent runs `havooch wait`. What you send waits for the next one.")
         #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).help.hasSuffix("1 send waits for it."))
         // Before anyone listened, the hover still says who: an agent.
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))

@@ -114,7 +114,7 @@ struct ThemeTests {
     func unknown() {
         let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [])
         #expect(throws: ThemeRefusal.unknown("Purple")) { try catalog.resolve("Purple") }
-        #expect(ThemeRefusal.unknown("Purple").line == "no theme Purple; video-review theme list names them")
+        #expect(ThemeRefusal.unknown("Purple").line == "no theme Purple; havooch theme list names them")
     }
 
     @Test("a theme file reads from JSON with its name, kind, optional extends and tokens")

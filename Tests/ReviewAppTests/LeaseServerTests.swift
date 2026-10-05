@@ -33,7 +33,7 @@ struct LeaseServerTests {
     let indicator = AgentControlIcon()
     /// A folder of its own for each test, short enough for a socket's path.
     let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        .appendingPathComponent("havooch-\(UUID().uuidString.prefix(8))", isDirectory: true)
     var socket: URL { ControlSocket.url(in: folder) }
 
     private func server(
@@ -63,7 +63,7 @@ struct LeaseServerTests {
         #expect(server.lease.waiting(at: clock.now) == count)
     }
 
-    /// A `video-review` command's exchange, as it runs in its own process:
+    /// A `havooch` command's exchange, as it runs in its own process:
     /// on a thread of its own, since `send` blocks until the app answers,
     /// and a blocked send must not hold one of the few threads the server's
     /// own tasks answer on.
@@ -90,7 +90,7 @@ struct LeaseServerTests {
         let refused = await server.reply(to: request.sent(by: Self.other))
 
         #expect(refused == .init(reply: .refused(
-            "\(Self.name) is in use by Claude Code in /work until 00:01:00 (48s left); `video-review control take --wait <seconds>` to queue"
+            "\(Self.name) is in use by Claude Code in /work until 00:01:00 (48s left); `havooch control take --wait <seconds>` to queue"
         )))
         #expect(app.calls == ["play"])
         #expect(screenshotter.calls.isEmpty)
@@ -169,7 +169,7 @@ struct LeaseServerTests {
 
         #expect(taken == .init(reply: .done("you hold \(Self.name) until 00:05:00\n"), granted: Self.term(Self.agent, taken: 0)))
         #expect(refused == .init(reply: .refused(
-            "\(Self.name) is in use by Claude Code in /work until 00:05:00 (290s left); `video-review control take --wait <seconds>` to queue"
+            "\(Self.name) is in use by Claude Code in /work until 00:05:00 (290s left); `havooch control take --wait <seconds>` to queue"
         )))
         #expect(notTheirs == .init(reply: .done("released \(Self.name)\n")))
         #expect(stillHeld == Self.agent)
@@ -383,11 +383,11 @@ struct LeaseServerTests {
             ControlLease.Status(holder: holder, taken: clock.now, ends: clock.now, secondsLeft: left, waiting: waiting)
         }
 
-        let short = AgentControlWords(status(Holder(key: "k", name: "Claude Code", place: "/Users/me/video-review"), left: 48, waiting: 0))
+        let short = AgentControlWords(status(Holder(key: "k", name: "Claude Code", place: "/Users/me/havooch"), left: 48, waiting: 0))
         let long = AgentControlWords(status(Self.other, left: 245, waiting: 2))
 
         #expect(short.title == "Claude Code controls \(Self.name)")
-        #expect(short.detail == "video-review · 48s left")
+        #expect(short.detail == "havooch · 48s left")
         #expect(long.title == "Codex controls \(Self.name)")
         #expect(long.detail == "Herdr pane w1-2 · 4m 05s left · 2 waiting")
         #expect(long.text == "Codex controls \(Self.name) · Herdr pane w1-2 · 4m 05s left · 2 waiting")

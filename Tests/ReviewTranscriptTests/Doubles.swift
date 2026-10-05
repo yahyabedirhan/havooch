@@ -27,7 +27,7 @@ enum Fixture {
 /// test copies in.
 struct VideoFolder {
     let folder = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-transcript-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-transcript-tests-\(UUID().uuidString)", isDirectory: true)
 
     init(sidecars: [String] = [], as names: [String: String] = [:]) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

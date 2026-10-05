@@ -30,7 +30,7 @@ struct TranscriptDeliveryTests {
     ]
 
     let support = FileManager.default.temporaryDirectory
-        .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func cleanUp() {
         try? FileManager.default.removeItem(at: support)

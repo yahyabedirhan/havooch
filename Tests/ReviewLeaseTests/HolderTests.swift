@@ -17,9 +17,9 @@ struct HolderTests {
     static let folder = URL(fileURLWithPath: "/Users/me/shop", isDirectory: true)
     static let started = Date(timeIntervalSince1970: 1_700_000_000)
 
-    /// `video-review` (300) run by zsh (200) run by `codex` (100).
+    /// `havooch` (300) run by zsh (200) run by `codex` (100).
     static let processes = FakeProcesses(currentPID: 300, records: [
-        ProcessRecord(pid: 300, parent: 200, started: started, name: "video-review"),
+        ProcessRecord(pid: 300, parent: 200, started: started, name: "havooch"),
         ProcessRecord(pid: 200, parent: 100, started: started, name: "-zsh"),
         ProcessRecord(pid: 100, parent: 1, started: started, name: "codex"),
     ])
@@ -36,15 +36,15 @@ struct HolderTests {
         #expect(holder == Holder(key: "process:100@1700000000000000", name: "codex", place: "/Users/me/shop"))
     }
 
-    @Test("VIDEO_REVIEW_CONTROL_KEY replaces the key only, and a blank one counts as unset")
+    @Test("HAVOOCH_CONTROL_KEY replaces the key only, and a blank one counts as unset")
     func keyOverride() {
         let named = Holder.find(
-            variables: ["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "listener-1"],
+            variables: ["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "listener-1"],
             workingDirectory: Self.folder, processes: Self.processes
         )
         #expect(named == Holder(key: "listener-1", name: "Claude Code", place: "/Users/me/shop"))
         let blank = Holder.find(
-            variables: ["CLAUDE_CODE_SESSION_ID": "abc", "VIDEO_REVIEW_CONTROL_KEY": "  "],
+            variables: ["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "  "],
             workingDirectory: Self.folder, processes: Self.processes
         )
         #expect(blank.key == "CLAUDE_CODE_SESSION_ID=abc")

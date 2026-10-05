@@ -112,7 +112,7 @@ public struct ControlClient: Sendable {
             return .success(try ControlReply.decode(data))
         } catch {
             return .failure(.failed(
-                "\(error.message); is the app from the same build as this video-review (\(Version.app))?"
+                "\(error.message); is the app from the same build as this havooch (\(Version.app))?"
             ))
         }
     }
