@@ -25,132 +25,146 @@ nonisolated struct StateReport: Encodable, Equatable {
         var contextNote = ""
     }
 
-    /// The comment still in the comment box.
-    struct Draft: Encodable, Equatable {
+    /// The open popover's message, still being written: view state, never
+    /// kept.
+    struct Popover: Encodable, Equatable {
+        /// The thread it writes to: its number, or the number a new thread
+        /// will take.
+        var thread: Int?
         var time: Double
         var text: String
-        /// The region the comment is about; `null` for the whole frame.
+        /// The region the message is about; `null` for the whole frame.
         var region: Region?
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(thread, forKey: .thread)
             try container.encode(time, forKey: .time)
             try container.encode(text, forKey: .text)
             try container.encode(region, forKey: .region)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case time, text, region
+            case thread, time, text, region
         }
     }
 
-    struct Comment: Encodable, Equatable {
+    /// One thread: its number, its frame and keyframe, its state and its
+    /// messages in the order written.
+    struct Thread: Encodable, Equatable {
         var id: String
-        var time: Double
-        var text: String
-        var state: String
-        /// The PNG of the frame at `time`.
-        var keyframePath: String
-        /// The part of the frame the comment points at, 0 to 1 from the
-        /// frame's top-left corner; `null` for the whole frame.
-        var region: Region?
-        /// The PNG of the region, cut from the keyframe; `null` with no
-        /// region.
-        var cropPath: String?
-        /// The batch the comment was sent in; `null` while it's queued.
-        var batchId: String?
-        /// What the agent said on the comment and what the person
-        /// answered, in the order written.
-        var thread: [Message] = []
+        var number: Int
+        /// The frame time; `null` for General.
+        var time: Double?
+        /// The state of its latest open person message; `null` with no
+        /// person message.
+        var state: String?
+        /// The PNG of the frame; `null` for General.
+        var keyframePath: String?
+        /// Where the person left its popover; `null` until they move it.
+        var popoverFrame: PopoverFrame?
+        var messages: [Message]
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(id, forKey: .id)
+            try container.encode(number, forKey: .number)
             try container.encode(time, forKey: .time)
-            try container.encode(text, forKey: .text)
             try container.encode(state, forKey: .state)
             try container.encode(keyframePath, forKey: .keyframePath)
-            try container.encode(region, forKey: .region)
-            try container.encode(cropPath, forKey: .cropPath)
-            try container.encode(batchId, forKey: .batchId)
-            try container.encode(thread, forKey: .thread)
+            try container.encode(popoverFrame, forKey: .popoverFrame)
+            try container.encode(messages, forKey: .messages)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, time, text, state, keyframePath, region, cropPath, batchId, thread
+            case id, number, time, state, keyframePath, popoverFrame, messages
         }
 
-        init(
-            id: String, time: Double, text: String, state: String, keyframePath: String, region: Region? = nil,
-            cropPath: String? = nil, batchId: String? = nil, thread: [Message] = []
-        ) {
-            self.id = id
-            self.time = time
-            self.text = text
-            self.state = state
-            self.keyframePath = keyframePath
-            self.region = region
-            self.cropPath = cropPath
-            self.batchId = batchId
-            self.thread = thread
-        }
-
-        /// `comment` of the video with `contentHash`, whose pictures
-        /// are where `layout` says.
-        init(_ comment: ReviewCore.Comment, contentHash: String, layout: SupportLayout) {
-            self.init(
-                id: comment.id.text, time: comment.time, text: comment.text, state: comment.state.rawValue,
-                keyframePath: layout.keyframe(comment.id, of: contentHash).path, region: comment.region,
-                cropPath: comment.region.map { _ in layout.crop(comment.id, of: contentHash).path },
-                batchId: comment.batchID?.text, thread: comment.thread.map(Message.init)
-            )
+        /// `thread` of the video with `contentHash`, whose pictures are
+        /// where `layout` says.
+        init(_ thread: ReviewThread, contentHash: String, layout: SupportLayout) {
+            id = thread.id.text
+            number = thread.number
+            time = thread.time
+            state = thread.state?.rawValue
+            keyframePath = thread.isGeneral ? nil : layout.keyframe(thread.id, of: contentHash).path
+            popoverFrame = thread.popoverFrame
+            messages = thread.messages.map { Message($0, contentHash: contentHash, layout: layout) }
         }
     }
 
-    /// One message of a comment's thread, or of a batch: who wrote it
-    /// (`person` or `agent`) and what it is (`message`, `question` or
-    /// `answer`).
+    /// One message: who wrote it (`person` or `agent`), what it is
+    /// (`message`, `question` or `answer`), and for a person's message its
+    /// state, region, crop and send.
     struct Message: Encodable, Equatable {
         var id: String
         var author: String
         var kind: String
         var text: String
         var at: Date
+        var state: String?
+        /// The part of the frame it points at, 0 to 1 from the frame's
+        /// top-left corner; `null` for the whole frame.
+        var region: Region?
+        /// The PNG of the region, cut from the keyframe; `null` with no
+        /// region.
+        var cropPath: String?
+        /// The send it went out in; `null` while it's queued, and for
+        /// every message but a person's `message`.
+        var sendId: String?
 
-        init(_ message: ThreadMessage) {
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(author, forKey: .author)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(text, forKey: .text)
+            try container.encode(at, forKey: .at)
+            try container.encode(state, forKey: .state)
+            try container.encode(region, forKey: .region)
+            try container.encode(cropPath, forKey: .cropPath)
+            try container.encode(sendId, forKey: .sendId)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, author, kind, text, at, state, region, cropPath, sendId
+        }
+
+        init(_ message: ReviewCore.Message, contentHash: String, layout: SupportLayout) {
             id = message.id.text
             author = message.author.rawValue
             kind = message.kind.rawValue
             text = message.text
             at = message.at
+            state = message.state?.rawValue
+            region = message.region
+            cropPath = message.region.map { _ in layout.crop(message.id, of: contentHash).path }
+            sendId = message.sendID?.text
         }
     }
 
-    /// The comments one send delivered together.
-    struct Batch: Encodable, Equatable {
+    /// The person's messages one send delivered together.
+    struct Send: Encodable, Equatable {
         var id: String
         var sentAt: Date
-        /// The batch's comments, in time order.
-        var commentIds: [String]
-        /// What the agent said about the batch as one.
-        var messages: [Message] = []
+        var messageIds: [String]
+        /// The threads the messages are on, General first, then in time
+        /// order.
+        var threadIds: [String]
 
-        init(id: String, sentAt: Date, commentIds: [String], messages: [Message] = []) {
-            self.id = id
-            self.sentAt = sentAt
-            self.commentIds = commentIds
-            self.messages = messages
-        }
-
-        init(_ batch: ReviewCore.Batch) {
-            self.init(
-                id: batch.id.text, sentAt: batch.sentAt, commentIds: batch.commentIDs.map(\.text),
-                messages: batch.messages.map(Message.init)
-            )
+        init(_ send: ReviewCore.Send, in review: VideoReview) {
+            id = send.id.text
+            sentAt = send.sentAt
+            messageIds = send.messageIDs.map(\.text)
+            var threads: [String] = []
+            for (_, thread) in review.messages(of: send.id) where !threads.contains(thread.text) {
+                threads.append(thread.text)
+            }
+            threadIds = threads
         }
     }
 
-    /// The agent that receives the batches.
+    /// The agent that receives the sends.
     struct Listener: Encodable, Equatable {
         /// `listening`, `working` or `absent`.
         var presence: String
@@ -159,25 +173,25 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// The name of the agent of the last `wait`; `null` before the
         /// first one.
         var session: String?
-        /// The batches sent and not yet taken by a `wait`.
-        var pendingBatches: Int
-        /// The batches a `wait` took that aren't finished.
-        var takenBatches: Int
+        /// The sends made and not yet taken by a `wait`.
+        var pendingSends: Int
+        /// The sends a `wait` took that aren't finished.
+        var takenSends: Int
 
         /// Nobody has listened yet.
-        static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingBatches: 0, takenBatches: 0)
+        static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingSends: 0, takenSends: 0)
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(presence, forKey: .presence)
             try container.encode(waitOpen, forKey: .waitOpen)
             try container.encode(session, forKey: .session)
-            try container.encode(pendingBatches, forKey: .pendingBatches)
-            try container.encode(takenBatches, forKey: .takenBatches)
+            try container.encode(pendingSends, forKey: .pendingSends)
+            try container.encode(takenSends, forKey: .takenSends)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case presence, waitOpen, session, pendingBatches, takenBatches
+            case presence, waitOpen, session, pendingSends, takenSends
         }
     }
 
@@ -221,7 +235,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// Who drives the app; `null` while nobody does. The control server,
     /// which owns the lease, fills it in.
     var lease: ControlLease.Status?
-    /// Whether an agent listens for batches. The control server, which
+    /// Whether an agent listens for sends. The control server, which
     /// answers the listener, fills it in.
     var listener = Listener.absent
     /// The active theme; the app's model fills it in.
@@ -232,21 +246,18 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// The open video's transcript; `null` with no video. The app's model
     /// fills it in.
     var transcript: Transcript?
-    /// The comment being written; `null` while the comment box is closed.
-    var draft: Draft?
-    /// The open video's comments, in time order.
-    var comments: [Comment]
-    /// The open video's batches, in the order they were sent.
-    var batches: [Batch]
-
-    /// The ids of the comments waiting to be sent, in time order.
-    var queue: [String] {
-        comments.filter { $0.state == "queued" }.map(\.id)
-    }
+    /// The message being written; `null` while the popover is closed.
+    var popover: Popover?
+    /// The open video's threads: General first, then in time order.
+    var threads: [Thread]
+    /// The ids of the messages waiting to be sent, in the threads' order.
+    var queue: [String]
+    /// The open video's sends, in the order they were sent.
+    var sends: [Send]
 
     init(
-        app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, draft: Draft? = nil,
-        comments: [Comment] = [], batches: [Batch] = []
+        app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, popover: Popover? = nil,
+        threads: [Thread] = [], queue: [String] = [], sends: [Send] = []
     ) {
         self.app = app
         self.lease = lease
@@ -257,13 +268,14 @@ nonisolated struct StateReport: Encodable, Equatable {
             )
         }
         self.player = Player(time: Self.milliseconds(player.time), playing: player.playing)
-        self.draft = draft
-        self.comments = comments
-        self.batches = batches
+        self.popover = popover
+        self.threads = threads
+        self.queue = queue
+        self.sends = sends
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, lease, listener, video, player, draft, comments, queue, batches
+        case app, lease, listener, video, player, popover, threads, queue, sends
         case transcript, theme
     }
 
@@ -276,10 +288,10 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
         try container.encode(transcript, forKey: .transcript)
-        try container.encode(draft, forKey: .draft)
-        try container.encode(comments, forKey: .comments)
+        try container.encode(popover, forKey: .popover)
+        try container.encode(threads, forKey: .threads)
         try container.encode(queue, forKey: .queue)
-        try container.encode(batches, forKey: .batches)
+        try container.encode(sends, forKey: .sends)
     }
 
     // MARK: - state
@@ -296,36 +308,30 @@ nonisolated struct StateReport: Encodable, Equatable {
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
-        \(theme.map { $0.line + "\n" } ?? "")comments: \(commentLines)
+        \(theme.map { $0.line + "\n" } ?? "")threads: \(threadLines)
 
         """
     }
 
-    /// `listener: listening (Claude Code), 0 batches waiting, 1 taken`.
+    /// `listener: listening (Claude Code), 0 sends waiting, 1 taken`.
     private var listenerLine: String {
         let who = listener.session.map { " (\($0))" } ?? ""
-        let waiting = "\(listener.pendingBatches) \(listener.pendingBatches == 1 ? "batch" : "batches") waiting"
-        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenBatches) taken"
+        let waiting = "\(listener.pendingSends) \(listener.pendingSends == 1 ? "send" : "sends") waiting"
+        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken"
     }
 
-    /// The comments, one line each under their count.
-    private var commentLines: String {
-        guard !comments.isEmpty else { return "none" }
-        let lines = comments.map {
-            let region = $0.region.map { " region \($0.text)" } ?? ""
-            return "  \($0.id) \(TimeCode.text($0.time))\(region) \($0.state)\(Self.threadWords($0.thread)): \($0.text.replacing("\n", with: " "))"
+    /// The threads, one line each with their messages under them.
+    private var threadLines: String {
+        let lines = threads.flatMap { thread in
+            let place = thread.time.map { "#\(thread.number) at \(TimeCode.text($0))" } ?? "#0 General"
+            let head = "  \(place) \(thread.id) \(thread.state ?? "-")"
+            return [head] + thread.messages.map { message in
+                let region = message.region.map { " region \($0.text)" } ?? ""
+                let state = message.state.map { " \($0)" } ?? ""
+                return "    \(message.id) \(message.author) \(message.kind)\(state)\(region): \(message.text.replacing("\n", with: " "))"
+            }
         }
-        return (["\(comments.count) (\(queue.count) queued)"] + lines).joined(separator: "\n")
-    }
-
-    /// A thread on a comment's line: ` (2 messages, question open)`, or
-    /// nothing for an empty one.
-    private static func threadWords(_ thread: [Message]) -> String {
-        guard !thread.isEmpty else { return "" }
-        let count = "\(thread.count) message\(thread.count == 1 ? "" : "s")"
-        let question = thread.lastIndex { $0.kind == "question" }
-        let isOpen = question.map { index in !thread[index...].contains { $0.kind == "answer" } } ?? false
-        return " (\(count)\(isOpen ? ", question open" : ""))"
+        return (["\(threads.count) (\(queue.count) queued)"] + lines).joined(separator: "\n")
     }
 
     // MARK: - app status

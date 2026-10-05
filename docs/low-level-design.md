@@ -246,7 +246,8 @@ Sources/
   ReviewCLI/
     main.swift                     exit(VideoReviewCLI.run(...))
   ReviewCore/
-    ItemID.swift                   t-<hash8>-<n>, m-<hash8>-<n>, s-<hash8>-<n>: parse, make, the hash prefix
+    ItemID.swift                   t-<hash8>-<n>, m-<hash8>-<n>, s-<hash8>-<n>: parse, make, the hash prefix;
+                                   ThreadID, MessageID, SendID; ThreadRef (a full id or a bare number, L5)
     Region.swift                   x, y, w, h in 0..1 from the top left; validation; pixels in a picture
     Message.swift                  id, author, kind, text, at, region, state, sendID
     MessageState.swift             the six states, the legal moves, editable, open
@@ -255,7 +256,8 @@ Sources/
     VideoReview.swift              one video's review: every rule about threads, messages and sends; the counters
     ReviewRefusal.swift            why a change is refused, as the line the CLI prints
     Outbox.swift                   the listener outbox: pending, taken, session, context sent, presence
-    SendPayload.swift              the JSON `wait` prints, and how it is assembled
+    SendPayload.swift              the JSON `wait` prints, and how it is assembled (#24 left an interim flat
+                                   shape, one entry per message with its thread; #25 groups it by thread)
     Theme/
       ThemeToken.swift             every semantic colour token, by name
       ThemeColor.swift             a colour as "#rrggbb" or "#rrggbbaa": parse and print
@@ -265,7 +267,7 @@ Sources/
     TranscriptLine.swift, Transcriber.swift, TranscriptWindow.swift, TranscriptSources.swift,
     VoiceoverSource.swift, SubtitleSource.swift, SpeechSource.swift, AppleSpeechRecognizer.swift
   ReviewStore/
-    SupportLayout.swift            every path under a support folder (pure)
+    SupportLayout.swift            every path under a support folder (pure), and the pending name of a picture (L19)
     Library.swift                  reviews, the outbox, recent, settings: load and save, the schema version; the hash-prefix index
     ContentHash.swift              SHA-256 of the file, streamed
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
@@ -275,7 +277,8 @@ Sources/
   ReviewApp/
     VideoReviewApp.swift           @main; the one window; the menu commands
     AppModel.swift                 the orchestrator; every action a person or an operator can take
-    Draft.swift                    the open popover's text, region, moment and thread (view state, never saved)
+    Draft.swift                    the open popover's text, region, moment and thread (view state, never saved);
+                                   until #29 it is `AppModel.Draft` (time, text, region)
     ReviewDesk.swift               change a review, save it, publish it
     ListenerQueue.swift            open waits and asks; delivery; payload assembly; presence; the listener's answers
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
@@ -426,7 +429,7 @@ public struct VideoReview: Codable, Equatable {          // one video's review
 - **Questions**: `openQuestion` is the last agent `question` with no person `answer` after it. `ask` is refused while one is open; `answer` is refused with none; a `reply` does not close it.
 - **The listener's reach**: `setState`, `reply` and `ask` need something sent on the thread (`notSent`); General takes `reply` and `ask` always. `acknowledge` moves each message of the send still `sent` and leaves the ones further on.
 - **Popover frame** (D 2.10): `PopoverFrame` is `x, y, w, h` in normalized coordinates of the video area, nil until the person moves or resizes the popover.
-- `ReviewRefusal` is `emptyText`, `unknownID(id)`, `otherVideo(id)`, `notQueued(id, state)`, `badRegion`, `nothingQueued`, `emptyMessage`, `notSent(thread)`, `illegalMove(id, from, to)`, `questionOpen(thread)`, `noQuestion(thread)`, `frameMismatch(thread, time)`, each with its `line`.
+- `ReviewRefusal` is `emptyText`, `unknownID(id)`, `otherVideo(id)`, `notQueued(id, state)`, `badRegion`, `nothingQueued`, `emptyMessage`, `notSent(thread)`, `illegalMove(id, from, to)`, `questionOpen(thread)`, `noQuestion(thread)`, `frameMismatch(thread, time)`, `noFrame` (a time or a region on General), each with its `line`.
 
 **Ids** (D A.5): `ItemID` is `<kind>-<hash8>-<n>` with `t`, `m` or `s`, where `hash8` is the first eight hex digits of the video's content hash and `n` a counter of the review. A listener's command finds its video from the prefix (`Library.contentHash(prefix:)`), so it works after another video opens. Numbers come from the review's counters and are never given twice, so tests are deterministic with no injected ids.
 
@@ -548,6 +551,7 @@ public struct SupportLayout: Sendable {
     public func transcriptFile(_ hash: String) -> URL
     public func keyframe(_ thread: ThreadID, of hash: String) -> URL
     public func crop(_ message: MessageID, of hash: String) -> URL
+    public func pendingImage(_ token: String, of hash: String) -> URL   // frames/.pending-<token>.png (L19)
 }
 ```
 
@@ -579,7 +583,7 @@ public struct SupportLayout: Sendable {
 | `setTheme(name)` | through `ThemeDesk`; `system` unpins | unknown theme |
 
 - `Draft` is view state only: `thread` (an id, or the number a new thread will take), `time`, `region`, `text`. It is never saved (D 1.4). `state --json` reports it as `popover`.
-- **Frame time** (L2): `PlayerEngine.frameTime(of: t)` is the start of the frame shown at `t` (from the track's nominal frame rate), raised to the next millisecond, as proto-2 raised a comment's time (D46). Every thread time goes through it, from the UI and from `--at`.
+- **Frame time** (L2): `PlayerEngine.frameTime(of: t)` is the start of the frame shown at `t` (from the track's nominal frame rate), raised to the next millisecond, as proto-2 raised a comment's time (D46). Every thread time goes through it, from the UI and from `--at`. The frame length comes from the nominal rate snapped to a whole or an NTSC rate (L20).
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
 - `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `undelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s; a question stays until answered or clicked). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or expands General in the sidebar.
@@ -649,14 +653,19 @@ Writing a message (the UI and `comment add` meet in `AppModel.addMessage` and `s
 
 ```text
 AppModel.addMessage(text, at, region, thread)
-  require a video; seek(at) when given (a moment change: closePopover(.momentChanged)); pause
-  time    = player.frameTime(of: player.time)                       // the thread key
+  require a video and words
   target  = thread ref → ThreadID (number of the open video, or a full id of the open video)   else refused
-  existing = review.thread(atFrame: time) ?? target
-  if no existing thread: FrameGrabber.writeKeyframe(time) → frames/<next thread id>.png        // @concurrent
-  if region: FrameGrabber.writeCrop(region) → crops/<next message id>.png
-  (message, thread) = desk.change { try $0.write(text:, at: time, region:, to: target, now:) }
-  on refusal: remove the images written for it
+  time    = frameTime(at) ?? target's time (nil for General) ?? frameTime(player.time)   // the thread key
+  a trial write on a copy of the review: every refusal comes here, before the player moves (L6)
+  pause; seek(time) when there is one (a moment change: closePopover(.momentChanged))
+AppModel.queueMessage(text, time, region, thread)                    // also the popover's path
+  planned = trial write                                              // starts a thread? which frame?
+  FrameGrabber.writeImages(frame) → frames/.pending-<token>-keyframe.png (a new thread),
+                                    frames/.pending-<token>-crop.png (a region)          // @concurrent
+  written = desk.change { try $0.write(text:, at: time, region:, to: target, now:) }     // no await from here on
+  move the pending keyframe to frames/<thread id>.png when the thread has none,
+  the pending crop to crops/<message id>.png (a crop that can't be moved deletes the message again)
+  remove what's left pending
 ```
 
 Closing the popover:
@@ -877,3 +886,6 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L16 | A send is marked `taken` only after its reply was written; until then it is in flight and no other `wait` gets it. | proto-1's rule, which pairs with the heartbeat of D A.8: a dead listener never loses a send. |
 | L17 | "Try the demo" opens the fixture bundled in the app in a demo folder under the user's temporary folder. | The empty screen needs a demo with no command line (D 5.11), and demo data must never mix with the person's. |
 | L18 | Notices for General say `General · <agent>: …` and expand General in the sidebar on click. | General has no frame to open (D 4.10). |
+| L19 | A message's pictures are written under a pending name in `frames/` and renamed to `frames/<thread-id>.png` and `crops/<message-id>.png` once the review gave the ids. | The ids come from the review's counters, and a listener's `reply` written while the frame is read takes the next message number. Predicted names could be taken or overwritten; a rename on the main actor right after the write can't. |
+| L20 | `PlayerEngine` snaps the track's nominal frame rate to a whole rate or an NTSC rate (n × 1000 / 1001) when it is within 0.001 of one. | AVFoundation gives the rate as a `Float` a hair off (29.999998 for 30), which put 10.0 s in the frame before. |
+| L21 | `--thread 0` with `--at` or `--region` is refused (`noFrame`); without `--thread` a message always has a frame time. | General has no keyframe, so a time or a region on it means nothing. |

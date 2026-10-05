@@ -7,14 +7,14 @@ import ReviewCore
 /// root, so demo data and real data can't mix. A pure value: it touches no
 /// file.
 ///
-///     <root>/outbox.json                              the batches in line for the listener
+///     <root>/outbox.json                              the sends in line for the listener
 ///     <root>/recent.json                              the path of the last open video
 ///     <root>/settings.json                            the pinned theme, token overrides, sidebar width
 ///     <root>/Themes/<any name>.json                   the person's own themes
 ///     <root>/videos/<contentHash>/review.json         one video's review
 ///     <root>/videos/<contentHash>/transcript.json     its transcribed speech
-///     <root>/videos/<contentHash>/frames/<id>.png     a comment's keyframe
-///     <root>/videos/<contentHash>/crops/<id>.png      a region comment's crop
+///     <root>/videos/<contentHash>/frames/<id>.png     a thread's keyframe
+///     <root>/videos/<contentHash>/crops/<id>.png      a region message's crop
 ///
 /// A video's folder is named after the hash of its content, so a renamed or
 /// moved file finds its review again. The socket and the demo pointer are
@@ -47,14 +47,22 @@ public struct SupportLayout: Equatable, Sendable {
         folder(contentHash).appendingPathComponent("transcript.json")
     }
 
-    /// The keyframe of `item` on the video with `contentHash`.
-    public func keyframe(_ item: ItemID, of contentHash: String) -> URL {
-        folder(contentHash).appendingPathComponent("frames", isDirectory: true).appendingPathComponent("\(item.text).png")
+    /// The keyframe of `thread` on the video with `contentHash`. General
+    /// has none.
+    public func keyframe(_ thread: ThreadID, of contentHash: String) -> URL {
+        folder(contentHash).appendingPathComponent("frames", isDirectory: true).appendingPathComponent("\(thread.text).png")
     }
 
-    /// The crop of `item`'s region on the video with `contentHash`. Only an
-    /// item on a region has the file.
-    public func crop(_ item: ItemID, of contentHash: String) -> URL {
-        folder(contentHash).appendingPathComponent("crops", isDirectory: true).appendingPathComponent("\(item.text).png")
+    /// The crop of `message`'s region on the video with `contentHash`. Only
+    /// a message on a region has the file.
+    public func crop(_ message: MessageID, of contentHash: String) -> URL {
+        folder(contentHash).appendingPathComponent("crops", isDirectory: true).appendingPathComponent("\(message.text).png")
+    }
+
+    /// Where an image is written before the message it's for has its id:
+    /// beside the keyframes, named by `token`, and renamed to its own path
+    /// once the message is in the review.
+    public func pendingImage(_ token: String, of contentHash: String) -> URL {
+        folder(contentHash).appendingPathComponent("frames", isDirectory: true).appendingPathComponent(".pending-\(token).png")
     }
 }

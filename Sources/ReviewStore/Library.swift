@@ -27,27 +27,28 @@ public final class Library {
         }
     }
 
-    /// The video of each comment and batch on disk, by its id: a listener's
-    /// command names an item and no video.
-    private var index: [ItemID: String] = [:]
-    /// The batches on disk with a comment the listener hasn't finished, in
+    /// The content hash of each video with a review on disk, by its first
+    /// eight digits: a listener's command names an id, whose prefix names
+    /// its video.
+    private var index: [String: String] = [:]
+    /// The sends on disk with a message the listener hasn't finished, in
     /// the order they were sent, as the reviews read at launch.
-    private var unfinished: [BatchRef] = []
+    private var unfinished: [SendRef] = []
     /// Whether `outbox.json` is a newer build's, which is left as it is.
     private var outboxIsNewer = false
 
-    /// Reads every review under `layout` once, for the ids in it. Nothing
-    /// is written.
+    /// Reads every review under `layout` once, for its video and its
+    /// unfinished sends. Nothing is written.
     public init(layout: SupportLayout) {
         self.layout = layout
-        var sent: [(Date, BatchRef)] = []
+        var sent: [(Date, SendRef)] = []
         let folders = (try? FileManager.default.contentsOfDirectory(at: layout.videosFolder, includingPropertiesForKeys: nil)) ?? []
         for folder in folders {
             // A review that doesn't read stays out; opening its video says why.
             guard let review = try? load(folder.lastPathComponent) else { continue }
             note(review)
-            for batch in review.batches where !review.isFinished(batch.id) {
-                sent.append((batch.sentAt, BatchRef(batchID: batch.id, contentHash: review.video.contentHash)))
+            for send in review.sends where !review.isFinished(send.id) {
+                sent.append((send.sentAt, SendRef(sendID: send.id, contentHash: review.video.contentHash)))
             }
         }
         unfinished = sent.sorted { $0.0 < $1.0 }.map(\.1)
@@ -55,10 +56,16 @@ public final class Library {
 
     // MARK: - Reviews
 
-    /// The content hash of the video whose review has the comment or the
-    /// batch `id`; nil when no review on disk has it.
+    /// The content hash of the video with a review on disk whose first
+    /// eight digits are `prefix`; nil when there's none.
+    public func contentHash(prefix: String) -> String? {
+        index[prefix]
+    }
+
+    /// The content hash of the video the thread, message or send `id` is
+    /// on; nil when no review on disk is that video's.
     public func contentHash(of id: ItemID) -> String? {
-        index[id]
+        contentHash(prefix: id.hash8)
     }
 
     /// The review kept for the video with `contentHash`; nil when there's
@@ -78,21 +85,18 @@ public final class Library {
     /// Keeps `review`, replacing its video's file.
     public func save(_ review: VideoReview) throws(Failure) {
         try write(Kept(content: review), to: layout.reviewFile(review.video.contentHash))
-        let hash = review.video.contentHash
-        index = index.filter { $0.value != hash }
         note(review)
     }
 
     private func note(_ review: VideoReview) {
-        for comment in review.comments { index[comment.id] = review.video.contentHash }
-        for batch in review.batches { index[batch.id] = review.video.contentHash }
+        index[review.hash8] = review.video.contentHash
     }
 
     // MARK: - The outbox
 
     /// The outbox as the last run left it, made to agree with the reviews
     /// on disk (`Outbox.reconcile`): with no file, or one that doesn't
-    /// read, every unfinished batch is in line again, so no feedback is
+    /// read, every unfinished send is in line again, so no feedback is
     /// lost with the file.
     public func loadOutbox() -> Outbox {
         var outbox = Outbox()
@@ -140,7 +144,7 @@ public final class Library {
 
     /// A file's content with the schema version beside its own keys:
     ///
-    ///     { "schemaVersion": 1, "video": { … }, "comments": [ … ], … }
+    ///     { "schemaVersion": 1, "video": { … }, "threads": [ … ], … }
     private struct Kept<Content: Codable>: Codable {
         var schemaVersion = Library.schemaVersion
         var content: Content

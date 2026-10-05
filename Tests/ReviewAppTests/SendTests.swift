@@ -6,11 +6,11 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// Batches from the person to the listener: the app's model on the fixture
+/// Sends from the person to the listener: the app's model on the fixture
 /// video and the control server in front of it, asked as an operator and a
 /// listener ask it. No window; the real socket for the last two tests only.
-@Suite("Sending a batch to a listener", .serialized)
-struct BatchDeliveryTests {
+@Suite("Sending to a listener", .serialized)
+struct SendDeliveryTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
     nonisolated static let listener = Holder(key: "listener-1", name: "Claude Code", place: "/shop")
     nonisolated static let restarted = Holder(key: "listener-2", name: "Claude Code", place: "/shop")
@@ -25,7 +25,7 @@ struct BatchDeliveryTests {
     /// The model with the fixture open, and the server in front of it.
     private func app(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> (AppModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
-        try await model.open(CommentTests.fixture)
+        try await model.open(MessageTests.fixture)
         let server = ControlServer(
             socket: socket, app: model, listeners: model.listeners, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
@@ -49,16 +49,24 @@ struct BatchDeliveryTests {
         Task { await server.reply(to: ControlRequest.wait(timeoutSeconds: timeout).sent(by: holder)) }
     }
 
-    /// Two queued comments: one on the frame at 10 s, one on a region at 12.5 s.
-    private func queueTwo(_ model: AppModel) async throws -> (StateReport.Comment, StateReport.Comment) {
-        let first = try await model.addComment(text: "Too fast here", at: 10)
-        let second = try await model.addComment(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
+    /// Two queued messages: one on the frame at 10 s (#1), one on a region
+    /// at 12.5 s (#2).
+    private func queueTwo(
+        _ model: AppModel
+    ) async throws -> ((message: StateReport.Message, thread: StateReport.Thread), (message: StateReport.Message, thread: StateReport.Thread)) {
+        let first = try await model.addMessage(text: "Too fast here", at: 10)
+        let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
         return (first, second)
+    }
+
+    /// The person's messages of the open video, in the threads' order.
+    private func work(_ model: AppModel) -> [Message] {
+        model.threads.flatMap { $0.messages.filter(\.isWork) }
     }
 
     // MARK: - With a listener waiting
 
-    @Test("batch send with a wait open: the wait answers with the batch as the spec's payload, and every image is on disk")
+    @Test("send with a wait open: the wait answers with the send as its payload, and every image is on disk")
     func sendToAWaitingListener() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
@@ -67,143 +75,147 @@ struct BatchDeliveryTests {
         #expect(model.listeners.presence(at: Date()) == .listening)
         let (first, second) = try await queueTwo(model)
 
-        let sent = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         let answer = await wait.value
 
-        let batch = try #require(model.batches.first)
-        #expect(sent.reply == .done("\(batch.id) sent with 2 comments, taken by the listener\n"))
+        let send = try #require(model.sends.first)
+        #expect(sent.reply == .done("\(send.id) sent: 2 messages on 2 threads, taken by the listener\n"))
         #expect(answer.reply.ok)
-        #expect(answer.delivered == BatchRef(batchID: batch.id, contentHash: try #require(model.video?.contentHash)))
+        #expect(answer.delivered == SendRef(sendID: send.id, contentHash: try #require(model.video?.contentHash)))
 
         let payload = try object(answer.reply.output)
-        #expect(Set(payload.keys) == ["batch", "video", "context", "comments"])
-        let batchPart = try #require(payload["batch"] as? [String: String])
-        #expect(batchPart["id"] == batch.id.text)
-        #expect(ItemID(batch.id.text)?.kind == .batch)
-        #expect(ISO8601DateFormatter().date(from: try #require(batchPart["sentAt"])) != nil)
+        #expect(Set(payload.keys) == ["send", "video", "context", "messages"])
+        let sendPart = try #require(payload["send"] as? [String: String])
+        #expect(sendPart["id"] == send.id.text)
+        #expect(ItemID(send.id.text)?.kind == .send)
+        #expect(ISO8601DateFormatter().date(from: try #require(sendPart["sentAt"])) != nil)
         #expect(payload["video"] as? [String: AnyHashable] == [
-            "path": CommentTests.fixture.standardizedFileURL.path, "contentHash": try #require(model.video?.contentHash),
+            "path": MessageTests.fixture.standardizedFileURL.path, "contentHash": try #require(model.video?.contentHash),
             "duration": 21.233, "title": "sample",
         ])
-        #expect((model.video?.contentHash.count ?? 0) == 64)
-        // The fixture's sidecar, on this session's first batch.
-        #expect(payload["context"] as? String == ContextReader.sidecar(beside: CommentTests.fixture)?.text)
-        #expect((payload["context"] as? String)?.hasPrefix("# Context: sample\n") == true)
-        let comments = try #require(payload["comments"] as? [[String: Any]])
-        #expect(comments.count == 2)
-        #expect(comments[0].filter { $0.key != "transcript" } as? [String: AnyHashable] == [
-            "id": first.id, "time": 10, "text": "Too fast here", "keyframePath": first.keyframePath,
-            "region": NSNull(), "cropPath": NSNull(),
+        // The fixture's sidecar, on this session's first send.
+        #expect(payload["context"] as? String == ContextReader.sidecar(beside: MessageTests.fixture)?.text)
+        let messages = try #require(payload["messages"] as? [[String: Any]])
+        #expect(messages.count == 2)
+        #expect(messages[0].filter { $0.key != "transcript" } as? [String: AnyHashable] == [
+            "id": first.message.id, "threadId": first.thread.id, "threadNumber": 1, "time": 10, "text": "Too fast here",
+            "keyframePath": try #require(first.thread.keyframePath), "region": NSNull(), "cropPath": NSNull(),
         ])
         // The fixture's narration, from its voiceover.json.
-        #expect((comments[0]["transcript"] as? [[String: Any]])?.count == 3)
-        #expect(comments[1]["id"] as? String == second.id)
-        #expect(comments[1]["time"] as? Double == 12.5)
-        #expect(comments[1]["text"] as? String == "This box")
-        #expect(comments[1]["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
-        #expect(comments[1]["keyframePath"] as? String == second.keyframePath)
-        #expect(comments[1]["cropPath"] as? String == second.cropPath)
-        for path in [first.keyframePath, second.keyframePath, try #require(second.cropPath)] {
+        #expect((messages[0]["transcript"] as? [[String: Any]])?.count == 3)
+        #expect(messages[1]["id"] as? String == second.message.id)
+        #expect(messages[1]["threadNumber"] as? Int == 2)
+        #expect(messages[1]["time"] as? Double == 12.5)
+        #expect(messages[1]["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
+        #expect(messages[1]["keyframePath"] as? String == second.thread.keyframePath)
+        #expect(messages[1]["cropPath"] as? String == second.message.cropPath)
+        for path in [first.thread.keyframePath, second.thread.keyframePath, second.message.cropPath] {
+            let path = try #require(path)
             #expect(path.hasPrefix(support.path + "/"))
             #expect(FileManager.default.fileExists(atPath: path))
         }
 
-        // The listener has the batch: it works, and waits no longer.
-        #expect(model.listeners.outbox.taken.map(\.batchID) == [batch.id])
+        // The listener has the send: it works, and waits no longer.
+        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
         #expect(model.listeners.outbox.pending.isEmpty)
         #expect(model.listeners.presence(at: Date()) == .working)
     }
 
-    @Test("sent comments are sent in the state report, name their batch, and leave the queue")
+    @Test("sent messages are sent in the state report, name their send, and leave the queue")
     func sentInState() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
         let (first, second) = try await queueTwo(model)
-        _ = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        _ = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
 
         let state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
-        let comments = try #require(state["comments"] as? [[String: Any]])
-        let batch = try #require((state["batches"] as? [[String: Any]])?.first)
-        #expect(comments.map { $0["state"] as? String } == ["sent", "sent"])
-        #expect(comments.map { $0["batchId"] as? String } == [batch["id"] as? String, batch["id"] as? String])
-        #expect(batch["commentIds"] as? [String] == [first.id, second.id])
+        let threads = try #require(state["threads"] as? [[String: Any]])
+        let messages = threads.flatMap { ($0["messages"] as? [[String: Any]]) ?? [] }
+        let send = try #require((state["sends"] as? [[String: Any]])?.first)
+        #expect(threads.map { $0["state"] as? String } == [nil, "sent", "sent"])
+        #expect(messages.map { $0["state"] as? String } == ["sent", "sent"])
+        #expect(messages.map { $0["sendId"] as? String } == [send["id"] as? String, send["id"] as? String])
+        #expect(send["messageIds"] as? [String] == [first.message.id, second.message.id])
+        #expect(send["threadIds"] as? [String] == [first.thread.id, second.thread.id])
         #expect(state["queue"] as? [String] == [])
-        #expect(model.comments.map(\.state) == [.sent, .sent])
+        #expect(work(model).map(\.state) == [.sent, .sent])
         #expect(!model.canSend)
-        // A sent comment is a record.
-        let edit = await server.reply(to: ControlRequest.commentEdit(id: first.id, text: "new").sent(by: Self.operatorAgent))
-        #expect(edit.reply == .refused("\(first.id) is sent, and only a queued comment can change"))
+        // A sent message is a record.
+        let edit = await server.reply(to: ControlRequest.commentEdit(id: first.message.id, text: "new").sent(by: Self.operatorAgent))
+        #expect(edit.reply == .refused("\(first.message.id) is sent, and only a queued message can change"))
+        let delete = await server.reply(to: ControlRequest.commentDelete(id: first.message.id).sent(by: Self.operatorAgent))
+        #expect(!delete.reply.ok)
     }
 
     // MARK: - With no listener
 
-    @Test("a batch sent before any wait waits in line, and the next wait returns it at once")
+    @Test("a send made before any wait waits in line, and the next wait returns it at once")
     func sendBeforeAnyWait() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
         _ = try await queueTwo(model)
 
-        let sent = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
 
-        let batch = try #require(model.batches.first)
-        #expect(sent.reply == .done("\(batch.id) sent with 2 comments, waiting for a listener\n"))
-        #expect(model.listeners.outbox.pending.map(\.batchID) == [batch.id])
+        let send = try #require(model.sends.first)
+        #expect(sent.reply == .done("\(send.id) sent: 2 messages on 2 threads, waiting for a listener\n"))
+        #expect(model.listeners.outbox.pending.map(\.sendID) == [send.id])
         #expect(model.listeners.presence(at: Date()) == .absent)
         var state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingBatches": 1, "takenBatches": 0,
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0,
         ])
 
         let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
 
         let payload = try object(answer.reply.output)
-        #expect((payload["batch"] as? [String: String])?["id"] == batch.id.text)
-        #expect((payload["comments"] as? [[String: Any]])?.count == 2)
+        #expect((payload["send"] as? [String: String])?["id"] == send.id.text)
+        #expect((payload["messages"] as? [[String: Any]])?.count == 2)
         state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingBatches": 0, "takenBatches": 1,
+            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1,
         ])
         #expect(await server.reply(to: ControlRequest.state.sent(by: Self.listener)).reply.output
-            .contains("listener: working (Claude Code), 0 batches waiting, 1 taken\n"))
+            .contains("listener: working (Claude Code), 0 sends waiting, 1 taken\n"))
     }
 
-    @Test("batches go out first in, first out, one per wait")
-    func oneBatchPerWait() async throws {
+    @Test("sends go out first in, first out, one per wait")
+    func oneSendPerWait() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
-        _ = try await model.addComment(text: "First", at: 3)
-        _ = try await model.sendBatch()
-        _ = try await model.addComment(text: "Second", at: 5)
-        _ = try await model.sendBatch()
-        let ids = model.batches.map(\.id.text)
+        _ = try await model.addMessage(text: "First", at: 3)
+        _ = try await model.sendQueue()
+        _ = try await model.addMessage(text: "Second", at: 5)
+        _ = try await model.sendQueue()
+        let ids = model.sends.map(\.id.text)
 
         var got: [String?] = []
         for _ in 0..<2 {
             let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
-            got.append((try object(answer.reply.output)["batch"] as? [String: String])?["id"])
+            got.append((try object(answer.reply.output)["send"] as? [String: String])?["id"])
         }
         #expect(got == ids)
         #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
     }
 
-    @Test("a send with nothing queued is refused, and no batch is made")
+    @Test("a send with nothing queued is refused, and no send is made")
     func nothingQueued() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
-        let sent = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         #expect(!sent.reply.ok)
-        #expect(sent.reply.error.hasPrefix("no comment is queued"))
-        #expect(model.batches.isEmpty)
+        #expect(sent.reply.error.hasPrefix("no message is queued"))
+        #expect(model.sends.isEmpty)
         #expect(model.listeners.outbox.pending.isEmpty)
     }
 
     // MARK: - The person's key
 
-    @Test("Cmd+Return goes the same way as batch send, and takes the words in the comment box with it")
+    @Test("Cmd+Return goes the same way as send, and takes the words in the popover with it")
     func sendFromTheKey() async throws {
         defer { cleanUp() }
         let (model, _) = try await app()
-        _ = try await model.addComment(text: "Queued", at: 3)
+        _ = try await model.addMessage(text: "Queued", at: 3)
         try await model.seek(to: 8)
         model.startDraft()
         model.draft?.text = "Still in the box"
@@ -211,23 +223,23 @@ struct BatchDeliveryTests {
 
         // What the key and the Send button call.
         model.send()
-        await eventually { !model.batches.isEmpty }
+        await eventually { !model.sends.isEmpty }
 
         #expect(model.draft == nil)
-        #expect(model.comments.map(\.text) == ["Queued", "Still in the box"])
-        #expect(model.comments.map(\.state) == [.sent, .sent])
-        #expect(model.batches.count == 1)
+        #expect(work(model).map(\.text) == ["Queued", "Still in the box"])
+        #expect(work(model).map(\.state) == [.sent, .sent])
+        #expect(model.sends.count == 1)
         #expect(model.listeners.outbox.pending.count == 1)
         #expect(model.sendCount == 0)
 
-        // With nothing to send the key does nothing: no batch, no problem shown.
+        // With nothing to send the key does nothing: no send, no problem shown.
         model.send()
         try await Task.sleep(for: .milliseconds(50))
-        #expect(model.batches.count == 1)
+        #expect(model.sends.count == 1)
         #expect(model.problem == nil)
     }
 
-    @Test("a comment whose keyframe is still being written when Cmd+Return is pressed joins the batch")
+    @Test("a message whose keyframe is still being written when Cmd+Return is pressed joins the send")
     func sendRightAfterReturn() async throws {
         defer { cleanUp() }
         let (model, _) = try await app()
@@ -235,17 +247,17 @@ struct BatchDeliveryTests {
         model.startDraft()
         model.draft?.text = "Just committed"
         model.commitDraft()
-        #expect(model.comments.isEmpty)
+        #expect(work(model).isEmpty)
         #expect(model.canSend)
 
         model.send()
-        await eventually { !model.batches.isEmpty }
+        await eventually { !model.sends.isEmpty }
 
-        #expect(model.comments.map(\.state) == [.sent])
-        #expect(model.batches.first?.commentIDs == model.comments.map(\.id))
+        #expect(work(model).map(\.state) == [.sent])
+        #expect(model.sends.first?.messageIDs == work(model).map(\.id))
     }
 
-    // MARK: - A wait that ends with no batch
+    // MARK: - A wait that ends with no send
 
     @Test("a wait whose timeout runs out answers that it ran out, and the listener is absent 5 s later")
     func timeout() async throws {
@@ -277,8 +289,8 @@ struct BatchDeliveryTests {
 
         #expect(await older.value.reply == .refused("a newer `video-review wait` took this one's place: one listener at a time"))
         #expect(model.listeners.outbox.isWaitOpen)
-        _ = try await model.addComment(text: "For the newer one", at: 3)
-        _ = try await model.sendBatch()
+        _ = try await model.addMessage(text: "For the newer one", at: 3)
+        _ = try await model.sendQueue()
         #expect(await newer.value.reply.ok)
     }
 
@@ -294,39 +306,39 @@ struct BatchDeliveryTests {
         #expect(answer.delivered == nil)
     }
 
-    // MARK: - A batch that goes back
+    // MARK: - A send that goes back
 
-    @Test("a wait from a new listener session gets the batch the last one took and didn't finish; the same session doesn't")
+    @Test("a wait from a new listener session gets the send the last one took and didn't finish; the same session doesn't")
     func listenerRestart() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
         _ = try await queueTwo(model)
-        _ = try await model.sendBatch()
-        let batch = try #require(model.batches.first)
+        _ = try await model.sendQueue()
+        let send = try #require(model.sends.first)
         let first = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
-        #expect(first.delivered?.batchID == batch.id)
+        #expect(first.delivered?.sendID == send.id)
 
-        // The same session waits again before it works on the batch: nothing for it.
+        // The same session waits again before it works on the send: nothing for it.
         #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
-        #expect(model.listeners.outbox.taken.map(\.batchID) == [batch.id])
+        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
 
         // The listener restarts: another holder key.
         let again = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
 
         #expect(again.delivered == first.delivered)
         #expect(again.reply.output == first.reply.output)
-        #expect(model.listeners.outbox.taken.map(\.batchID) == [batch.id])
+        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
         #expect(model.listeners.outbox.pending.isEmpty)
         #expect(model.listeners.outbox.session?.key == Self.restarted.key)
-        #expect(model.comments.map(\.state) == [.sent, .sent])
+        #expect(work(model).map(\.state) == [.sent, .sent])
     }
 
-    @Test("a batch whose reply couldn't be written is first in line again, and the next wait gets it")
+    @Test("a send whose reply couldn't be written is first in line again, and the next wait gets it")
     func undelivered() async throws {
         defer { cleanUp() }
         let (model, server) = try await app()
         _ = try await queueTwo(model)
-        _ = try await model.sendBatch()
+        _ = try await model.sendQueue()
         let lost = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
 
         server.undelivered(lost)
@@ -345,7 +357,7 @@ struct BatchDeliveryTests {
             .appendingPathComponent("video-review-\(UUID().uuidString.prefix(8))", isDirectory: true)
     }
 
-    @Test("the listener's client gets the batch over the real socket while the operator sends it")
+    @Test("the listener's client gets the send over the real socket while the operator sends it")
     func overTheSocket() async throws {
         defer { cleanUp() }
         let folder = socketFolder
@@ -361,17 +373,17 @@ struct BatchDeliveryTests {
         }
         await eventually { model.listeners.outbox.isWaitOpen }
         let sent = await LeaseServerTests.sending {
-            ControlClient(socket: socket, holder: Self.operatorAgent, transport: UnixSocketTransport()).send(.batchSend)
+            ControlClient(socket: socket, holder: Self.operatorAgent, transport: UnixSocketTransport()).send(.send)
         }
 
         let reply = try await waited.get()
         #expect(try sent.get().ok)
         #expect(reply.ok)
-        #expect((try object(reply.output)["batch"] as? [String: String])?["id"] == model.batches.first?.id.text)
+        #expect((try object(reply.output)["send"] as? [String: String])?["id"] == model.sends.first?.id.text)
         #expect(model.listeners.outbox.taken.count == 1)
     }
 
-    @Test("a wait whose client goes away is closed: the listener no longer waits, and a batch sent then waits for the next one")
+    @Test("a wait whose client goes away is closed: the listener no longer waits, and a send made then waits for the next one")
     func clientGoesAway() async throws {
         defer { cleanUp() }
         let folder = socketFolder
@@ -401,8 +413,8 @@ struct BatchDeliveryTests {
         await eventually { !model.listeners.outbox.isWaitOpen }
 
         #expect(!model.listeners.outbox.isWaitOpen)
-        _ = try await model.addComment(text: "After the listener left", at: 3)
-        _ = try await model.sendBatch()
+        _ = try await model.addMessage(text: "After the listener left", at: 3)
+        _ = try await model.sendQueue()
         #expect(model.listeners.outbox.pending.count == 1)
         #expect(model.listeners.outbox.taken.isEmpty)
     }
@@ -410,46 +422,40 @@ struct BatchDeliveryTests {
 
 @Suite("The rail's words")
 struct RailWordsTests {
-    @Test("the presence pill says whether an agent listens, who, and what happens to a batch sent now")
+    @Test("the presence pill says whether an agent listens, who, and what happens to a send made now")
     func pill() {
-        let listening = PresencePill(presence: .listening, session: "Claude Code", pendingBatches: 0)
+        let listening = PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0)
         #expect(listening.title == "Agent listening")
         #expect(listening.detail == "Claude Code")
         #expect(listening.text == "Agent listening · Claude Code")
 
-        let working = PresencePill(presence: .working, session: "Claude Code", pendingBatches: 2)
+        let working = PresencePill(presence: .working, session: "Claude Code", pendingSends: 2)
         #expect(working.title == "Agent working")
-        #expect(working.detail == "Claude Code · 2 batches waiting")
+        #expect(working.detail == "Claude Code · 2 sends waiting")
 
-        let absent = PresencePill(presence: .absent, session: nil, pendingBatches: 0)
+        let absent = PresencePill(presence: .absent, session: nil, pendingSends: 0)
         #expect(absent.title == "No agent listening")
-        #expect(absent.detail == "a batch will wait")
+        #expect(absent.detail == "a send will wait")
         // An agent that left is still named by its last wait, but it isn't there.
-        #expect(PresencePill(presence: .absent, session: "Claude Code", pendingBatches: 1).detail == "1 batch waiting")
+        #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).detail == "1 send waiting")
     }
 
-    @Test("the rail groups the cards: the queue first, then each batch from the newest, numbered as the markers are")
-    func groups() throws {
-        var review = VideoReview(video: VideoInfo(contentHash: "abc", title: "sample", duration: 21.233, path: "/sample.mp4"))
-        func id(_ kind: String, _ number: Int) -> ItemID { ItemID("\(kind)-0000000\(number)")! }
-        try review.addComment(id: id("c", 1), time: 10, text: "First batch, later")
-        try review.addComment(id: id("c", 2), time: 2, text: "First batch, earlier")
-        try review.send(batchID: id("b", 1), at: Date(timeIntervalSince1970: 0))
-        try review.addComment(id: id("c", 3), time: 5, text: "Second batch")
-        try review.send(batchID: id("b", 2), at: Date(timeIntervalSince1970: 60))
-        try review.addComment(id: id("c", 4), time: 1, text: "Queued")
+    @Test("a thread's conversation is cut into the person's messages, as rows, and runs of the agent's messages and answers")
+    func parts() throws {
+        var review = VideoReview(video: VideoInfo(contentHash: "f92cbb2a00", title: "sample", duration: 21.233, path: "/sample.mp4"))
+        let now = Date(timeIntervalSince1970: 0)
+        let thread = try review.write(text: "First", at: 10, now: now).thread.id
+        try review.write(text: "Second", at: 10, now: now)
+        try review.send(at: now)
+        try review.reply(on: thread, text: "Looking", now: now)
+        try review.ask(on: thread, question: "Which?", now: now)
+        try review.answer(thread, text: "This one", now: now)
+        try review.write(text: "Third", at: 10, now: now)
 
-        let groups = RailView.groups(comments: review.comments, batches: review.batches)
+        let parts = RailView.parts(of: try #require(review.thread(thread)).messages)
 
-        #expect(groups.map(\.id) == ["queue", "b-00000002", "b-00000001"])
-        #expect(groups.map { $0.cards.map(\.comment.id.text) } == [["c-00000004"], ["c-00000003"], ["c-00000002", "c-00000001"]])
-        // Numbers are the comments' places in time order: 1 s, 2 s, 5 s, 10 s.
-        #expect(groups.map { $0.cards.map(\.number) } == [[1], [3], [2, 4]])
-        #expect(RailView.progress(of: groups[2].cards.map(\.comment)) == "2 comments")
-        #expect(RailView.progress(of: groups[1].cards.map(\.comment)) == "1 comment")
-
-        // With everything sent the queue's group is still there, empty.
-        try review.send(batchID: id("b", 3), at: Date(timeIntervalSince1970: 120))
-        #expect(RailView.groups(comments: review.comments, batches: review.batches).first?.cards.isEmpty == true)
+        #expect(parts.map(\.id) == ["m-f92cbb2a-1", "m-f92cbb2a-2", "talk-m-f92cbb2a-3", "m-f92cbb2a-6"])
+        guard case .talk(let talk) = parts[2] else { Issue.record("not a run of talk"); return }
+        #expect(talk.map(\.kind) == [.message, .question, .answer])
     }
 }

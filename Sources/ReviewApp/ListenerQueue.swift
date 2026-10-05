@@ -8,16 +8,16 @@ import ReviewWire
 /// The listener's side of the app: it holds the `Outbox` (the rules), the
 /// one open `wait` and the open `ask`s (held connections, like a `take`
 /// waiting in line) and assembles the payload at the moment a `wait` takes
-/// a batch. The listener's answers (`ack`, `status`, `reply`, `ask`) change
+/// a send. The listener's answers (`ack`, `status`, `reply`, `ask`) change
 /// a review through the `ReviewDesk` and are announced as a notice. The
 /// views read the presence from it.
 @Observable
 final class ListenerQueue {
     /// How a `wait` ends.
     enum Outcome: Equatable {
-        /// The next batch, with the JSON the command prints.
-        case batch(BatchRef, payload: String)
-        /// Its time ran out with no batch.
+        /// The next send, with the JSON the command prints.
+        case send(SendRef, payload: String)
+        /// Its time ran out with no send.
         case ranOut
         /// A newer `wait` took its place.
         case replaced
@@ -25,7 +25,7 @@ final class ListenerQueue {
         case gone
     }
 
-    /// The pending and taken batches, the listener session and its presence.
+    /// The pending and taken sends, the listener session and its presence.
     /// What of it outlives a run is saved whenever it changes.
     private(set) var outbox: Outbox {
         didSet {
@@ -34,7 +34,7 @@ final class ListenerQueue {
         }
     }
 
-    /// The `wait` that's held open until a batch is sent.
+    /// The `wait` that's held open until a send is made.
     private struct OpenWait {
         var ticket = UUID()
         /// The connection it came over, to tell when its client goes away.
@@ -63,15 +63,15 @@ final class ListenerQueue {
     }
 
     @ObservationIgnored private var open: OpenWait?
-    /// The open `ask`s, by the comment each one asks about: a comment has
-    /// one open question at most.
-    @ObservationIgnored private var asks: [ItemID: OpenAsk] = [:]
+    /// The open `ask`s, by the thread each one asks on: a thread has one
+    /// open question at most.
+    @ObservationIgnored private var asks: [ThreadID: OpenAsk] = [:]
     /// Told each thing the agent says, to show it as a notice.
     @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
-    /// Where a comment's transcript lines come from; with none, a comment
+    /// Where a thread's transcript lines come from; with none, a thread
     /// gets no lines. The app's model sets it.
     @ObservationIgnored var transcripts: TranscriptDesk?
 
@@ -85,7 +85,7 @@ final class ListenerQueue {
     }
 
     /// Saves `outbox`. One that can't be written is written with the next
-    /// change; the reviews hold every batch, and the next launch puts an
+    /// change; the reviews hold every send, and the next launch puts an
     /// unfinished one that's missing back in line (`Outbox.reconcile`).
     private func keep(_ outbox: Outbox) {
         do throws(Library.Failure) {
@@ -97,9 +97,9 @@ final class ListenerQueue {
 
     // MARK: - The person's side
 
-    /// A batch the person sent: the open `wait` gets it at once, else it
+    /// A send the person made: the open `wait` gets it at once, else it
     /// waits in line for the next one.
-    func enqueue(_ ref: BatchRef) {
+    func enqueue(_ ref: SendRef) {
         outbox.enqueue(ref)
         deliver()
     }
@@ -113,22 +113,22 @@ final class ListenerQueue {
     func report(at time: Date) -> StateReport.Listener {
         StateReport.Listener(
             presence: outbox.presence(at: time).rawValue, waitOpen: outbox.isWaitOpen, session: outbox.session?.name,
-            pendingBatches: outbox.pending.count, takenBatches: outbox.taken.count
+            pendingSends: outbox.pending.count, takenSends: outbox.taken.count
         )
     }
 
     // MARK: - The listener's side
 
-    /// `video-review wait`: the next batch in line, at once when there is
-    /// one, else when the person sends one, for up to `timeout` seconds
-    /// (nil: with no limit). A `wait` from another holder than the last is
-    /// a new listener session: the batches the last one took and didn't
-    /// finish are first in line again, their unfinished comments `sent`. A
+    /// `video-review wait`: the next send in line, at once when there is
+    /// one, else when the person sends, for up to `timeout` seconds (nil:
+    /// with no limit). A `wait` from another holder than the last is a new
+    /// listener session: the sends the last one took and didn't finish are
+    /// first in line again, their unfinished messages `sent`. A
     /// `wait` that's still open is replaced: one listener at a time.
     func wait(by holder: Holder, timeout: Int?, connection: UUID? = nil) async -> Outcome {
         let listener = ListenerSession(key: holder.key, name: holder.name, place: holder.place)
         for ref in outbox.waitOpened(by: listener, at: now()) {
-            _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.batchID) }
+            _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
         }
         if let older = open {
             open = nil
@@ -161,9 +161,9 @@ final class ListenerQueue {
         for (id, ask) in asks where ask.connection == connection { closeAsk(id, ask.ticket, .gone) }
     }
 
-    /// The reply that carried `ref` couldn't be written: the batch is first
+    /// The reply that carried `ref` couldn't be written: the send is first
     /// in line again, for the next `wait`.
-    func undelivered(_ ref: BatchRef) {
+    func undelivered(_ ref: SendRef) {
         outbox.undelivered(ref)
         deliver()
     }
@@ -177,64 +177,63 @@ final class ListenerQueue {
 
     // MARK: - The listener's answers
 
-    /// `video-review ack`: the listener has the batch. Its comments turn
-    /// `acknowledged`, and `text` is a message for the full batch.
-    func ack(_ batchID: String, text: String?) throws(AppRefusal) -> StateReport.Batch {
+    /// `video-review ack`: the listener has the send. Its messages turn
+    /// `acknowledged`, and `text` is the agent's message on General.
+    func ack(_ sendID: String, text: String?) throws(AppRefusal) -> StateReport.Send {
         outbox.heard(at: now())
-        guard let id = ItemID(batchID), id.kind == .batch, let hash = desk.contentHash(of: id) else {
-            throw AppRefusal(ReviewRefusal.unknownBatch(batchID).line)
+        guard let id = ItemID(sendID), id.kind == .send, let hash = desk.contentHash(of: id) else {
+            throw AppRefusal("no send `\(sendID)`; the send `video-review wait` printed names its id")
         }
-        let messageID = ItemID.make(.message)
-        let batch = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
-            try review.acknowledge(id, text: text, messageID: messageID, at: time)
+        let before = desk.review(of: hash)?.general.messages.count ?? 0
+        let send = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
+            try review.acknowledge(id, text: text, now: time)
         }
-        let count = batch.commentIDs.count
+        guard let review = desk.review(of: hash) else { throw AppRefusal("there's no review of the video \(hash)") }
+        let count = send.messageIDs.count
         // The acknowledgement's own words, when it came with some.
-        let words = batch.messages.last.flatMap { $0.id == messageID ? $0.text : nil }
-        notify(.batch(id), .acknowledgement, words ?? "It got your \(count) comment\(count == 1 ? "" : "s").")
-        return StateReport.Batch(batch)
+        let words = review.general.messages.count > before ? review.general.messages.last?.text : nil
+        notify(review.general.id, .acknowledgement, words ?? "It got your \(count) message\(count == 1 ? "" : "s").")
+        return StateReport.Send(send, in: review)
     }
 
-    /// `video-review status`: how far the listener is with a comment. The
-    /// batch whose last comment finishes is no longer taken, so the
-    /// listener is back to listening.
-    func status(_ commentID: String, _ state: CommentState) throws(AppRefusal) -> StateReport.Comment {
+    /// `video-review status`: how far the listener is with a message. The
+    /// send whose last message finishes is no longer taken, so the listener
+    /// is back to listening.
+    func status(_ messageID: String, _ state: MessageState) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        let (id, hash) = try comment(commentID)
-        let comment = try desk.change(hash) { review throws(ReviewRefusal) in try review.setStatus(id, state) }
-        if let batchID = comment.batchID, desk.review(of: hash)?.isFinished(batchID) == true {
-            outbox.finished(BatchRef(batchID: batchID, contentHash: hash))
+        guard let id = ItemID(messageID), id.kind == .message, let hash = desk.contentHash(of: id) else {
+            throw AppRefusal("no message `\(messageID)`; the send `video-review wait` printed names each message's id")
         }
-        return StateReport.Comment(comment, contentHash: hash, layout: layout)
+        let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.setState(id, state) }
+        if let sendID = message.sendID, desk.review(of: hash)?.isFinished(sendID) == true {
+            outbox.finished(SendRef(sendID: sendID, contentHash: hash))
+        }
+        return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `video-review reply`: the agent's message on a comment's thread, or
-    /// for the full batch when `target` is a batch's id.
-    func reply(to target: String, text: String) throws(AppRefusal) -> StateReport.Message {
+    /// `video-review reply`: the agent's message on a thread.
+    func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        guard let id = ItemID(target), id.kind != .message, let hash = desk.contentHash(of: id) else {
-            throw AppRefusal("no comment or batch `\(target)`; the batch `video-review wait` printed names their ids")
+        let (id, hash) = try desk.threadID(thread)
+        let message = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
+            try review.reply(on: id, text: text, now: time)
         }
+        notify(id, .message, message.text)
+        return StateReport.Message(message, contentHash: hash, layout: layout)
+    }
+
+    /// `video-review ask`: the agent's question on a thread, held until the
+    /// person answers it, for up to `waitSeconds` (nil: with no limit).
+    /// When the time runs out the question stays open, and an answer that
+    /// comes later stays on the thread.
+    func ask(on thread: String, question: String, waitSeconds: Int?, connection: UUID? = nil) async throws(AppRefusal) -> Asked {
+        outbox.heard(at: now())
+        let (id, hash) = try desk.threadID(thread)
         let time = now()
         let message = try desk.change(hash) { review throws(ReviewRefusal) in
-            try review.reply(to: id, text: text, messageID: ItemID.make(.message), at: time)
+            try review.ask(on: id, question: question, now: time)
         }
-        notify(id.kind == .batch ? .batch(id) : .comment(id), .message, message.text)
-        return StateReport.Message(message)
-    }
-
-    /// `video-review ask`: the agent's question on a comment's thread,
-    /// held until the person answers it, for up to `waitSeconds` (nil: with
-    /// no limit). When the time runs out the question stays open, and an
-    /// answer that comes later stays in the thread.
-    func ask(_ commentID: String, question: String, waitSeconds: Int?, connection: UUID? = nil) async throws(AppRefusal) -> Asked {
-        outbox.heard(at: now())
-        let (id, hash) = try comment(commentID)
-        let time = now()
-        let message = try desk.change(hash) { review throws(ReviewRefusal) in
-            try review.ask(id, question: question, messageID: ItemID.make(.message), at: time)
-        }
-        notify(.comment(id), .question, message.text)
+        notify(id, .question, message.text)
         if waitSeconds == 0 { return .ranOut }
         outbox.askOpened(at: time)
         return await withCheckedContinuation { continuation in
@@ -250,16 +249,16 @@ final class ListenerQueue {
         }
     }
 
-    /// The person answered the open question of the comment `id`: the
-    /// `ask` that waits for it, when one still does, exits with the answer.
-    func answered(_ id: ItemID, with message: ThreadMessage) {
+    /// The person answered the open question on the thread `id`: the `ask`
+    /// that waits for it, when one still does, exits with the answer.
+    func answered(_ id: ThreadID, with message: StateReport.Message) {
         guard let ask = asks[id] else { return }
-        closeAsk(id, ask.ticket, .answered(StateReport.Message(message)))
+        closeAsk(id, ask.ticket, .answered(message))
     }
 
-    /// Ends the open `ask` on the comment `id` with `outcome`, when it's
+    /// Ends the open `ask` on the thread `id` with `outcome`, when it's
     /// still the one `ticket` names.
-    private func closeAsk(_ id: ItemID, _ ticket: UUID, _ outcome: Asked) {
+    private func closeAsk(_ id: ThreadID, _ ticket: UUID, _ outcome: Asked) {
         guard let ask = asks[id], ask.ticket == ticket else { return }
         asks[id] = nil
         ask.timeout?.cancel()
@@ -267,22 +266,13 @@ final class ListenerQueue {
         ask.answer.resume(returning: outcome)
     }
 
-    /// The comment a listener's command names, and its video. The command
-    /// names no video, so the library's index of ids finds it.
-    private func comment(_ text: String) throws(AppRefusal) -> (ItemID, String) {
-        guard let id = ItemID(text), id.kind == .comment, let hash = desk.contentHash(of: id) else {
-            throw AppRefusal("no comment `\(text)`; the batch `video-review wait` printed names each comment's id")
-        }
-        return (id, hash)
-    }
-
-    private func notify(_ subject: Notice.Subject, _ kind: Notice.Kind, _ text: String) {
-        announce?(Notice(subject: subject, kind: kind, agent: outbox.session?.name ?? "The agent", text: text, at: now()))
+    private func notify(_ thread: ThreadID, _ kind: Notice.Kind, _ text: String) {
+        announce?(Notice(thread: thread, kind: kind, agent: outbox.session?.name ?? "The agent", text: text, at: now()))
     }
 
     // MARK: - Delivery
 
-    /// Gives the open `wait` the first batch in line, when there are both.
+    /// Gives the open `wait` the first send in line, when there are both.
     private func deliver() {
         guard let waiting = open, let outcome = takeNext() else { return }
         open = nil
@@ -299,37 +289,39 @@ final class ListenerQueue {
         waiting.answer.resume(returning: outcome)
     }
 
-    /// Takes the first batch in line for the open `wait`, as its payload,
-    /// assembled now. A batch with nothing left to deliver (it has no
-    /// review that reads, or every comment in it is finished) leaves the
-    /// line instead.
+    /// Takes the first send in line for the open `wait`, as its payload,
+    /// assembled now. A send with nothing left to deliver (it has no review
+    /// that reads, or every message in it is finished) leaves the line
+    /// instead.
     private func takeNext() -> Outcome? {
         while outbox.isWaitOpen, let first = outbox.pending.first {
-            guard let review = desk.review(of: first.contentHash), let batch = review.batch(first.batchID),
-                  !review.isFinished(first.batchID)
+            guard let review = desk.review(of: first.contentHash), let send = review.send(first.sendID),
+                  !review.isFinished(first.sendID)
             else {
                 outbox.discard(first)
                 continue
             }
             guard let ref = outbox.deliverNext(at: now()) else { return nil }
-            return .batch(ref, payload: payload(of: batch, in: review).json)
+            return .send(ref, payload: payload(of: send, in: review).json)
         }
         return nil
     }
 
-    /// The payload of `batch`, read at the moment the `wait` takes it. The
+    /// The payload of `send`, read at the moment the `wait` takes it. The
     /// context is in it when this listener session hasn't had it for the
-    /// video, or it changed. Each comment gets the transcript lines that
+    /// video, or it changed. Each thread gets the transcript lines that
     /// exist then.
-    private func payload(of batch: Batch, in review: VideoReview) -> BatchPayload {
+    private func payload(of send: Send, in review: VideoReview) -> SendPayload {
         let hash = review.video.contentHash
-        return BatchPayload.assemble(
-            review: review, batch: batch, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
-            transcript: { [transcripts] comment in transcripts?.lines(around: comment.time, of: review.video) ?? [] },
-            images: { [layout] comment in
-                BatchPayload.Images(
-                    keyframe: layout.keyframe(comment.id, of: hash).path,
-                    crop: comment.region.map { _ in layout.crop(comment.id, of: hash).path }
+        return SendPayload.assemble(
+            review: review, send: send, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
+            transcript: { [transcripts] thread in
+                thread.time.map { transcripts?.lines(around: $0, of: review.video) ?? [] } ?? []
+            },
+            images: { [layout] message, thread in
+                SendPayload.Images(
+                    keyframe: thread.isGeneral ? nil : layout.keyframe(thread.id, of: hash).path,
+                    crop: message.region.map { _ in layout.crop(message.id, of: hash).path }
                 )
             }
         )

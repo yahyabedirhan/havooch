@@ -1,26 +1,26 @@
 import ReviewCore
 import SwiftUI
 
-/// One comment's pin: its number in time order, drawn by its state. A
-/// queued comment is hollow; every later state fills the pin with its
+/// One thread's pin: its number, drawn by its state. A queued thread is
+/// hollow; every later state fills the pin with its
 /// colour, and a state the agent set adds its glyph at the pin's foot. A
 /// badge at its head says the agent waits for an answer, or said something
-/// the person hasn't looked at. The same pin heads the comment's row in
-/// the rail, which ties the two.
+/// the person hasn't looked at. The same pin heads the thread in the rail,
+/// which ties the two.
 struct MarkerPin: View {
-    /// What the agent left on a comment for the person.
+    /// What the agent left on a thread for the person.
     enum Badge: Equatable {
         /// A message the person hasn't looked at.
         case unread
         /// A question that waits for an answer.
         case question
 
-        /// The badge of `comment`: an open question comes before an
+        /// The badge of `thread`: an open question comes before an
         /// unread message, since the agent waits for it.
-        init?(_ comment: Comment, unread: Set<ItemID>) {
-            if comment.openQuestion != nil {
+        init?(_ thread: ReviewThread, unread: Set<ThreadID>) {
+            if thread.openQuestion != nil {
                 self = .question
-            } else if unread.contains(comment.id) {
+            } else if unread.contains(thread.id) {
                 self = .unread
             } else {
                 return nil
@@ -29,7 +29,7 @@ struct MarkerPin: View {
     }
 
     let number: Int
-    let state: CommentState
+    let state: MessageState
     var isSelected = false
     var badge: Badge?
 
@@ -101,19 +101,20 @@ struct MarkerPin: View {
     }
 
     private var isHollow: Bool {
-        state == .draft || state == .queued
+        state == .queued
     }
 }
 
-/// The markers above the timeline's track: one pin per comment at its time,
-/// with a stem down to the track. A click on a pin selects its comment.
+/// The markers above the timeline's track: one pin per thread at its frame,
+/// with a stem down to the track. A click on a pin selects its thread.
 struct MarkerLayer: View {
-    let comments: [Comment]
+    /// The threads on a frame, in time order.
+    let threads: [ReviewThread]
     let duration: Double
-    let selection: ItemID?
-    /// The comments with an agent message the person hasn't looked at.
-    var unread: Set<ItemID> = []
-    let select: (ItemID) -> Void
+    let selection: ThreadID?
+    /// The threads with an agent message the person hasn't looked at.
+    var unread: Set<ThreadID> = []
+    let select: (ThreadID) -> Void
     @Environment(\.palette) private var palette
 
     /// The stem's length: from the pin down to the track.
@@ -123,26 +124,27 @@ struct MarkerLayer: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
-                let isSelected = comment.id == selection
+            ForEach(threads) { thread in
+                let isSelected = thread.id == selection
+                let state = thread.state ?? .queued
                 VStack(spacing: 0) {
                     Button {
-                        select(comment.id)
+                        select(thread.id)
                     } label: {
                         MarkerPin(
-                            number: index + 1, state: comment.state, isSelected: isSelected,
-                            badge: MarkerPin.Badge(comment, unread: unread)
+                            number: thread.number, state: state, isSelected: isSelected,
+                            badge: MarkerPin.Badge(thread, unread: unread)
                         )
                     }
                     .buttonStyle(.plain)
-                    .help(comment.text)
-                    .accessibilityLabel("Comment \(index + 1), \(StateLook.name(comment.state))")
+                    .help(thread.messages.last?.text ?? "")
+                    .accessibilityLabel("Thread \(thread.number), \(StateLook.name(state))")
                     Capsule()
                         .fill(isSelected ? palette[.accent] : palette[.textSecondary])
                         .frame(width: 1.5, height: stem)
                         .allowsHitTesting(false)
                 }
-                .position(x: duration > 0 ? proxy.size.width * min(max(comment.time / duration, 0), 1) : 0, y: height / 2)
+                .position(x: duration > 0 ? proxy.size.width * min(max((thread.time ?? 0) / duration, 0), 1) : 0, y: height / 2)
                 .zIndex(isSelected ? 1 : 0)
             }
         }

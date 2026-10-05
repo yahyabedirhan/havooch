@@ -89,8 +89,22 @@ final class PlayerEngine {
         self.asset = asset
         duration = length.seconds
         videoSize = shown
-        frameDuration = frameRate > 0 ? 1 / Double(frameRate) : 1.0 / 30
+        frameDuration = Self.frameDuration(nominalRate: Double(frameRate))
         time = 0
+    }
+
+    /// One frame's length from the track's nominal rate, which comes as a
+    /// `Float` a hair off the real rate (29.999998 for 30). A rate that
+    /// close to a whole one, or to an NTSC one (n × 1000 / 1001), is that
+    /// rate, so a thread's frame time names the frame and not the one
+    /// before it.
+    nonisolated static func frameDuration(nominalRate rate: Double) -> Double {
+        guard rate.isFinite, rate > 0 else { return 1.0 / 30 }
+        let whole = rate.rounded()
+        if abs(rate - whole) < 0.001 { return 1 / whole }
+        let ntsc = (rate * 1001 / 1000).rounded()
+        if abs(rate - ntsc * 1000 / 1001) < 0.001 { return 1001 / (ntsc * 1000) }
+        return 1 / rate
     }
 
     /// Plays; from the start when the video is at its end.
@@ -125,6 +139,25 @@ final class PlayerEngine {
     /// coarser time could name the frame before the comment's.
     nonisolated static func exact(_ seconds: Double) -> CMTime {
         CMTime(seconds: seconds, preferredTimescale: timescale)
+    }
+
+    /// The frame time of the moment `seconds`: a thread's key.
+    func frameTime(of seconds: Double) -> Double {
+        Self.frameTime(of: seconds, frameDuration: frameDuration, duration: duration)
+    }
+
+    /// The start of the frame shown at `seconds`, from the nominal frame
+    /// rate, raised to the next millisecond. Two moments inside one frame
+    /// give one time, and the time names that frame, not the one before:
+    /// a frame rarely starts on a whole millisecond (7.2333… s at 30 frames
+    /// a second). The video's end is past its last frame, which it names.
+    nonisolated static func frameTime(of seconds: Double, frameDuration: Double, duration: Double) -> Double {
+        guard frameDuration > 0 else { return 0 }
+        // The player's own noise, far below a frame or a millisecond, is no move.
+        let last = max(((duration - frameDuration / 2) / frameDuration).rounded(.down), 0)
+        let frame = min((max(seconds, 0) / frameDuration + 1e-6).rounded(.down), last)
+        let milliseconds = (frame * frameDuration * 1000 - 1e-6).rounded(.up)
+        return max(milliseconds, 0) / 1000
     }
 
     private func moved(to time: CMTime) {

@@ -11,9 +11,8 @@ public struct VideoInfo: Codable, Equatable, Sendable {
     /// Where the file was when it was last opened.
     public var path: String
     /// Frames a second, as the player read it when the video was last
-    /// opened; nil in a review kept before this was. A `voiceover.json`'s
-    /// scene times need it, also for a batch that's delivered in a run
-    /// that didn't open the video.
+    /// opened; nil before it was. A `voiceover.json`'s scene times need it,
+    /// also for a send that's delivered in a run that didn't open the video.
     public var frameRate: Double?
 
     public init(contentHash: String, title: String, duration: TimeInterval, path: String, frameRate: Double? = nil) {
@@ -25,185 +24,312 @@ public struct VideoInfo: Codable, Equatable, Sendable {
     }
 }
 
-/// Everything kept about one video, and every rule about its comments. Ids
-/// come in as arguments, so a test names them.
+/// Everything kept about one video, and every rule about its threads,
+/// messages and sends. The review makes every id from its own counters,
+/// which never give a number twice, so a test knows its ids.
 public struct VideoReview: Codable, Equatable, Sendable {
     public var video: VideoInfo
     /// The person's context note for the agent, added to the sidecar's
     /// text; empty for none.
     public var note = ""
-    /// The comments in time order; two at the same time stay in the order
-    /// they were added.
-    public private(set) var comments: [Comment]
-    /// The batches, in the order they were sent.
-    public private(set) var batches: [Batch]
+    /// General first, then the threads in time order.
+    public private(set) var threads: [ReviewThread]
+    /// The sends, in the order they were sent.
+    public private(set) var sends: [Send]
+    private var counters: Counters
 
+    /// The next number of each kind of id. Numbers are never reused, so a
+    /// deleted thread's number never points at another frame.
+    private struct Counters: Codable, Equatable, Sendable {
+        var thread = 1
+        var message = 1
+        var send = 1
+    }
+
+    /// A new review, with its General thread.
     public init(video: VideoInfo) {
         self.video = video
-        comments = []
-        batches = []
+        threads = [ReviewThread(id: ThreadID(.thread, hash8: ItemID.hash8(of: video.contentHash), number: 0), time: nil)]
+        sends = []
+        counters = Counters()
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case video, note, comments, batches
+    /// The first eight hex digits of the video's content hash, which every
+    /// id of the review carries.
+    public var hash8: String { ItemID.hash8(of: video.contentHash) }
+
+    /// The General thread: number 0, no keyframe.
+    public var general: ReviewThread { threads[0] }
+
+    /// The number the next new thread takes.
+    public var nextThreadNumber: Int { counters.thread }
+
+    /// What `write` did: the message, the thread as it is now, and whether
+    /// the message started the thread.
+    public struct Written: Equatable, Sendable {
+        public var message: Message
+        public var thread: ReviewThread
+        public var startedThread: Bool
     }
 
-    /// Reads a review; one written before there was a note has none.
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        video = try container.decode(VideoInfo.self, forKey: .video)
-        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
-        comments = try container.decode([Comment].self, forKey: .comments)
-        batches = try container.decode([Batch].self, forKey: .batches)
+    /// What `delete` did: the message, and its thread's id, and whether the
+    /// thread went with its last message.
+    public struct Deleted: Equatable, Sendable {
+        public var message: Message
+        public var thread: ThreadID
+        public var removedThread: Bool
     }
 
-    /// The comments waiting to be sent, in time order.
-    public var queue: [Comment] {
-        comments.filter { $0.state == .queued }
+    // MARK: - Finding
+
+    public func thread(_ id: ThreadID) -> ReviewThread? {
+        threads.first { $0.id == id }
     }
 
-    public func comment(_ id: ItemID) -> Comment? {
-        comments.first { $0.id == id }
+    /// The thread whose key is exactly the frame time `time`.
+    public func thread(atFrame time: Double) -> ReviewThread? {
+        threads.first { $0.time == time }
     }
 
-    /// Queues a comment at `time`, on `region` of the frame when it has
-    /// one. The text loses the space around it; a text with no words is
-    /// refused.
-    @discardableResult
-    public mutating func addComment(
-        id: ItemID, time: TimeInterval, text: String, region: Region? = nil
-    ) throws(ReviewRefusal) -> Comment {
-        let comment = Comment(id: id, time: time, text: try Self.words(text), state: .queued, region: region)
-        let index = comments.firstIndex { $0.time > time } ?? comments.endIndex
-        comments.insert(comment, at: index)
-        return comment
-    }
-
-    /// Replaces a queued comment's text.
-    @discardableResult
-    public mutating func editComment(_ id: ItemID, text: String) throws(ReviewRefusal) -> Comment {
-        let index = try queuedIndex(id)
-        comments[index].text = try Self.words(text)
-        return comments[index]
-    }
-
-    /// Removes a queued comment.
-    @discardableResult
-    public mutating func deleteComment(_ id: ItemID) throws(ReviewRefusal) -> Comment {
-        comments.remove(at: try queuedIndex(id))
-    }
-
-    // MARK: - Batches
-
-    public func batch(_ id: ItemID) -> Batch? {
-        batches.first { $0.id == id }
-    }
-
-    /// The comments of the batch `id`, in time order.
-    public func comments(of id: ItemID) -> [Comment] {
-        comments.filter { $0.batchID == id }
-    }
-
-    /// Sends every queued comment as one batch: each moves to `sent` and
-    /// names the batch. Refused when nothing is queued.
-    @discardableResult
-    public mutating func send(batchID: ItemID, at now: Date) throws(ReviewRefusal) -> Batch {
-        let queued = comments.indices.filter { comments[$0].state == .queued }
-        guard !queued.isEmpty else { throw .nothingQueued }
-        for index in queued {
-            comments[index].state = .sent
-            comments[index].batchID = batchID
+    /// The message `id`, and the thread it's on.
+    public func message(_ id: MessageID) -> (message: Message, thread: ReviewThread)? {
+        for thread in threads {
+            if let message = thread.messages.first(where: { $0.id == id }) { return (message, thread) }
         }
-        let batch = Batch(id: batchID, sentAt: Self.kept(now), commentIDs: queued.map { comments[$0].id })
-        batches.append(batch)
-        return batch
+        return nil
     }
 
-    /// Whether the listener has nothing left to do on the batch `id`:
-    /// every comment in it is `done` or `failed`. A batch the review
-    /// doesn't have counts as finished.
-    public func isFinished(_ id: ItemID) -> Bool {
-        comments(of: id).allSatisfy(\.state.isFinal)
+    public func send(_ id: SendID) -> Send? {
+        sends.first { $0.id == id }
     }
 
-    /// The batch `id` goes back to the listener's queue, since the
-    /// listener that took it is gone: its unfinished comments return to
-    /// `sent`, the one move back the states allow. Finished comments stay
-    /// as they are. Returns the comments that are to be delivered again.
+    /// The thread a command names: a bare number of this review, or a full
+    /// id of this video. Refused for an id of another video, and for a
+    /// thread the review doesn't have.
+    public func threadID(_ ref: ThreadRef) throws(ReviewRefusal) -> ThreadID {
+        let id: ThreadID
+        switch ref {
+        case .number(let number): id = ThreadID(.thread, hash8: hash8, number: number)
+        case .id(let given): id = given
+        }
+        guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
+        guard thread(id) != nil else { throw .unknownID(id.text) }
+        return id
+    }
+
+    /// The person's messages waiting to be sent: threads in their order
+    /// (General first, then by time), and the order written within one.
+    public var queue: [Message] {
+        threads.flatMap { $0.messages.filter { $0.isWork && $0.state == .queued } }
+    }
+
+    /// The messages of the send `id`, each with its thread's id.
+    public func messages(of id: SendID) -> [(message: Message, thread: ThreadID)] {
+        threads.flatMap { thread in thread.messages.filter { $0.sendID == id }.map { ($0, thread.id) } }
+    }
+
+    /// Whether the listener has nothing left to do on the send `id`: every
+    /// message in it is `done` or `failed`. A send the review doesn't have
+    /// counts as finished.
+    public func isFinished(_ id: SendID) -> Bool {
+        messages(of: id).allSatisfy { $0.message.state?.isFinal ?? true }
+    }
+
+    // MARK: - The person and the operator
+
+    /// Queues the person's message. On `thread` it joins that thread; then
+    /// a `time` must be the thread's own frame. Without `thread`, a `time`
+    /// joins the thread whose key is exactly that frame time, or starts a
+    /// new one with the next number; with neither, it goes on General. A
+    /// region needs a frame, so General refuses it. The text loses the
+    /// space around it; one with no words is refused.
     @discardableResult
-    public mutating func requeue(_ id: ItemID) -> [ItemID] {
-        let unfinished = comments.indices.filter { comments[$0].batchID == id && !comments[$0].state.isFinal }
-        for index in unfinished { comments[index].state = .sent }
-        return unfinished.map { comments[$0].id }
+    public mutating func write(
+        text: String, at time: Double?, region: Region? = nil, to thread: ThreadID? = nil, now: Date
+    ) throws(ReviewRefusal) -> Written {
+        let words = try Self.words(text)
+        var index: Int
+        var started = false
+        if let thread {
+            guard thread.hash8 == hash8 else { throw .otherVideo(thread.text) }
+            guard let found = threads.firstIndex(where: { $0.id == thread }) else { throw .unknownID(thread.text) }
+            index = found
+            if threads[index].isGeneral {
+                guard time == nil, region == nil else { throw .noFrame }
+            } else if let time, time != threads[index].time {
+                throw .frameMismatch(thread, time: time)
+            }
+        } else if let time {
+            if let found = threads.firstIndex(where: { $0.time == time }) {
+                index = found
+            } else {
+                index = threads.firstIndex { ($0.time ?? -.infinity) > time } ?? threads.endIndex
+                threads.insert(ReviewThread(id: nextID(.thread), time: time), at: index)
+                started = true
+            }
+        } else {
+            guard region == nil else { throw .noFrame }
+            index = 0
+        }
+        let message = Message(
+            id: nextID(.message), author: .person, kind: .message, text: words, at: Self.kept(now),
+            region: region, state: .queued
+        )
+        threads[index].messages.append(message)
+        return Written(message: message, thread: threads[index], startedThread: started)
     }
 
-    // MARK: - The listener's answers
-
-    /// The listener has the batch `id`: each of its comments still `sent`
-    /// moves to `acknowledged`, and one further on stays where it is. Words
-    /// that come with it are a message for the full batch. Returns the
-    /// batch as it is now.
+    /// Replaces a queued message's text.
     @discardableResult
-    public mutating func acknowledge(
-        _ id: ItemID, text: String? = nil, messageID: ItemID, at now: Date
-    ) throws(ReviewRefusal) -> Batch {
-        let batch = try batchIndex(id)
-        for index in comments.indices where comments[index].batchID == id && comments[index].state == .sent {
-            comments[index].state = .acknowledged
+    public mutating func edit(_ id: MessageID, text: String) throws(ReviewRefusal) -> Message {
+        let (thread, index) = try queuedIndex(id)
+        threads[thread].messages[index].text = try Self.words(text)
+        return threads[thread].messages[index]
+    }
+
+    /// Removes a queued message. A thread whose last message goes, goes
+    /// too; its number is not given again. General always stays.
+    @discardableResult
+    public mutating func delete(_ id: MessageID) throws(ReviewRefusal) -> Deleted {
+        let (thread, index) = try queuedIndex(id)
+        let message = threads[thread].messages.remove(at: index)
+        let threadID = threads[thread].id
+        let removed = threads[thread].messages.isEmpty && !threads[thread].isGeneral
+        if removed { threads.remove(at: thread) }
+        return Deleted(message: message, thread: threadID, removedThread: removed)
+    }
+
+    /// Keeps where the person left a thread's popover.
+    public mutating func setPopoverFrame(_ id: ThreadID, _ frame: PopoverFrame?) throws(ReviewRefusal) {
+        guard let index = threads.firstIndex(where: { $0.id == id }) else { throw .unknownID(id.text) }
+        threads[index].popoverFrame = frame
+    }
+
+    /// Sends every queued message as one send: each moves to `sent` and
+    /// names the send. Refused when nothing is queued.
+    @discardableResult
+    public mutating func send(at now: Date) throws(ReviewRefusal) -> Send {
+        let queued = threads.indices.flatMap { thread in
+            threads[thread].messages.indices
+                .filter { threads[thread].messages[$0].isWork && threads[thread].messages[$0].state == .queued }
+                .map { (thread: thread, index: $0) }
+        }
+        guard !queued.isEmpty else { throw .nothingQueued }
+        let id = nextID(.send)
+        for (thread, index) in queued {
+            threads[thread].messages[index].state = .sent
+            threads[thread].messages[index].sendID = id
+        }
+        let send = Send(id: id, sentAt: Self.kept(now), messageIDs: queued.map { threads[$0.thread].messages[$0.index].id })
+        sends.append(send)
+        return send
+    }
+
+    /// The person's answer to the open question on `thread`, which closes
+    /// it. It's never queued: it goes to the waiting `ask` at once.
+    @discardableResult
+    public mutating func answer(_ thread: ThreadID, text: String, now: Date) throws(ReviewRefusal) -> Message {
+        let index = try threadIndex(thread)
+        guard threads[index].openQuestion != nil else { throw .noQuestion(thread) }
+        let message = Message(id: nextID(.message), author: .person, kind: .answer, text: try Self.message(text), at: Self.kept(now))
+        threads[index].messages.append(message)
+        return message
+    }
+
+    // MARK: - The listener
+
+    /// The listener has the send `id`: each of its messages still `sent`
+    /// moves to `acknowledged`, and one further on stays where it is.
+    /// Words that come with it are the agent's message on General. Returns
+    /// the send.
+    @discardableResult
+    public mutating func acknowledge(_ id: SendID, text: String? = nil, now: Date) throws(ReviewRefusal) -> Send {
+        guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
+        guard let send = send(id) else { throw .unknownID(id.text) }
+        for thread in threads.indices {
+            for index in threads[thread].messages.indices
+            where threads[thread].messages[index].sendID == id && threads[thread].messages[index].state == .sent {
+                threads[thread].messages[index].state = .acknowledged
+            }
         }
         if let words = text?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty {
-            batches[batch].messages.append(ThreadMessage(id: messageID, author: .agent, kind: .message, text: words, at: Self.kept(now)))
+            threads[0].messages.append(Message(id: nextID(.message), author: .agent, kind: .message, text: words, at: Self.kept(now)))
         }
-        return batches[batch]
+        return send
     }
 
-    /// The listener says how far it is with a comment: `working`, `done`
-    /// or `failed`. A state only moves forward and may skip one; `done` and
-    /// `failed` are final. Saying the state the comment already has changes
-    /// nothing and isn't refused.
+    /// The listener says how far it is with a person's message: `working`,
+    /// `done` or `failed`. A state only moves forward and may skip one;
+    /// `done` and `failed` are final. Saying the state the message already
+    /// has changes nothing and isn't refused.
     @discardableResult
-    public mutating func setStatus(_ id: ItemID, _ state: CommentState) throws(ReviewRefusal) -> Comment {
-        let index = try sentIndex(id)
-        let from = comments[index].state
-        guard from != state else { return comments[index] }
-        guard state.isStatus, from.canMove(to: state) else { throw .illegalMove(id, from: from, to: state) }
-        comments[index].state = state
-        return comments[index]
+    public mutating func setState(_ id: MessageID, _ state: MessageState) throws(ReviewRefusal) -> Message {
+        guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
+        guard let (thread, index) = messageIndex(id) else { throw .unknownID(id.text) }
+        let message = threads[thread].messages[index]
+        guard message.isWork else { throw .illegalMove(id, from: nil, to: state) }
+        guard message.sendID != nil else { throw .notSent(threads[thread].id) }
+        let from = message.state
+        guard from != state else { return message }
+        guard state.isStatus, let from, from.canMove(to: state) else { throw .illegalMove(id, from: from, to: state) }
+        threads[thread].messages[index].state = state
+        return threads[thread].messages[index]
     }
 
-    /// The agent's message on a comment's thread, or for the full batch
-    /// when `id` names a batch.
+    /// The agent's message on `thread`. It needs something sent on the
+    /// thread; General takes one always.
     @discardableResult
-    public mutating func reply(to id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
-        let message = ThreadMessage(id: messageID, author: .agent, kind: .message, text: try Self.message(text), at: Self.kept(now))
-        if id.kind == .batch {
-            batches[try batchIndex(id)].messages.append(message)
-        } else {
-            comments[try sentIndex(id)].thread.append(message)
+    public mutating func reply(on thread: ThreadID, text: String, now: Date) throws(ReviewRefusal) -> Message {
+        let index = try answerableIndex(thread)
+        let message = Message(id: nextID(.message), author: .agent, kind: .message, text: try Self.message(text), at: Self.kept(now))
+        threads[index].messages.append(message)
+        return message
+    }
+
+    /// The agent's question on `thread`. Refused while the thread has a
+    /// question with no answer: an answer names a thread, so it must have
+    /// one question to go to.
+    @discardableResult
+    public mutating func ask(on thread: ThreadID, question: String, now: Date) throws(ReviewRefusal) -> Message {
+        let index = try answerableIndex(thread)
+        let words = try Self.message(question)
+        guard threads[index].openQuestion == nil else { throw .questionOpen(thread) }
+        let message = Message(id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now))
+        threads[index].messages.append(message)
+        return message
+    }
+
+    /// The send `id` goes back to the listener's line, since the listener
+    /// that took it is gone: its unfinished messages return to `sent`, the
+    /// one move back the states allow. Returns those messages.
+    @discardableResult
+    public mutating func requeue(_ id: SendID) -> [MessageID] {
+        var requeued: [MessageID] = []
+        for thread in threads.indices {
+            for index in threads[thread].messages.indices
+            where threads[thread].messages[index].sendID == id && threads[thread].messages[index].state?.isFinal == false {
+                threads[thread].messages[index].state = .sent
+                requeued.append(threads[thread].messages[index].id)
+            }
         }
-        return message
+        return requeued
     }
 
-    /// The agent's question on a comment's thread. Refused while the
-    /// comment has a question with no answer: an answer names a comment, so
-    /// it must have one question to go to.
-    @discardableResult
-    public mutating func ask(_ id: ItemID, question: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
-        let index = try sentIndex(id)
-        let message = ThreadMessage(id: messageID, author: .agent, kind: .question, text: try Self.message(question), at: Self.kept(now))
-        guard comments[index].openQuestion == nil else { throw .questionOpen(id) }
-        comments[index].thread.append(message)
-        return message
-    }
+    // MARK: - Helpers
 
-    /// The person's answer to a comment's open question, which closes it.
-    @discardableResult
-    public mutating func answer(_ id: ItemID, text: String, messageID: ItemID, at now: Date) throws(ReviewRefusal) -> ThreadMessage {
-        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
-        let message = ThreadMessage(id: messageID, author: .person, kind: .answer, text: try Self.message(text), at: Self.kept(now))
-        guard comments[index].openQuestion != nil else { throw .noQuestion(id) }
-        comments[index].thread.append(message)
-        return message
+    /// A new id of `kind` from its counter.
+    private mutating func nextID(_ kind: ItemID.Kind) -> ItemID {
+        switch kind {
+        case .thread:
+            defer { counters.thread += 1 }
+            return ItemID(kind, hash8: hash8, number: counters.thread)
+        case .message:
+            defer { counters.message += 1 }
+            return ItemID(kind, hash8: hash8, number: counters.message)
+        case .send:
+            defer { counters.send += 1 }
+            return ItemID(kind, hash8: hash8, number: counters.send)
+        }
     }
 
     /// A time as the review keeps it: to the millisecond, which is what
@@ -212,28 +338,39 @@ public struct VideoReview: Codable, Equatable, Sendable {
         Date(timeIntervalSince1970: (time.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
     }
 
-    private func batchIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
-        guard let index = batches.firstIndex(where: { $0.id == id }) else { throw .unknownBatch(id.text) }
+    private func threadIndex(_ id: ThreadID) throws(ReviewRefusal) -> Int {
+        guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
+        guard let index = threads.firstIndex(where: { $0.id == id }) else { throw .unknownID(id.text) }
         return index
     }
 
-    /// A comment the listener can answer: one that was sent.
-    private func sentIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
-        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
-        guard comments[index].batchID != nil else { throw .notSent(id) }
+    /// A thread the listener can write on: General, or one with something
+    /// sent.
+    private func answerableIndex(_ id: ThreadID) throws(ReviewRefusal) -> Int {
+        let index = try threadIndex(id)
+        guard threads[index].isGeneral || threads[index].wasSent else { throw .notSent(id) }
         return index
+    }
+
+    private func messageIndex(_ id: MessageID) -> (thread: Int, index: Int)? {
+        for thread in threads.indices {
+            if let index = threads[thread].messages.firstIndex(where: { $0.id == id }) { return (thread, index) }
+        }
+        return nil
+    }
+
+    private func queuedIndex(_ id: MessageID) throws(ReviewRefusal) -> (thread: Int, index: Int) {
+        guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
+        guard let (thread, index) = messageIndex(id) else { throw .unknownID(id.text) }
+        let message = threads[thread].messages[index]
+        guard message.isWork, message.state?.isEditable == true else { throw .notQueued(id, message.state) }
+        return (thread, index)
     }
 
     private static func message(_ text: String) throws(ReviewRefusal) -> String {
         let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !words.isEmpty else { throw .emptyMessage }
         return words
-    }
-
-    private func queuedIndex(_ id: ItemID) throws(ReviewRefusal) -> Int {
-        guard let index = comments.firstIndex(where: { $0.id == id }) else { throw .unknownComment(id.text) }
-        guard comments[index].state.isEditable else { throw .notQueued(id, comments[index].state) }
-        return index
     }
 
     private static func words(_ text: String) throws(ReviewRefusal) -> String {

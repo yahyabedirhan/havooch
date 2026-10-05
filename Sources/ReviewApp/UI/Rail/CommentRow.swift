@@ -3,46 +3,38 @@ import ReviewStore
 import ReviewWire
 import SwiftUI
 
-/// One comment in the rail, as a full-width row: its pin, time and state, a
-/// picture (the region's crop, else the keyframe) and the text, then its
-/// thread. A click selects it and moves the player to its time. A queued
-/// row can be edited and deleted; no other row shows those controls. The
-/// thread is open on the selected row and on any row with an open
-/// question; another row shows its last message on one line.
+/// One of the person's messages in the rail, as a full-width row: its
+/// state, a picture (the region's crop, else the thread's keyframe) and the
+/// text. A click selects its thread and moves the player to its frame. A
+/// queued row can be edited and deleted; no other row shows those controls.
 ///
-/// A row has no border: the selected row is told by its fill, and the rail
-/// draws a hairline between rows.
+/// A row has no border: the selected thread's rows are told by their fill.
 struct CommentRow: View {
     let model: AppModel
-    let comment: Comment
-    /// The comment's number in time order, as on its marker.
-    let number: Int
+    let message: Message
+    let thread: ReviewThread
 
     @State private var thumbnail: CGImage?
-    /// The text being edited; nil while the row only shows its comment.
+    /// The text being edited; nil while the row only shows its message.
     @State private var edited: String?
     @State private var isHovered = false
     @Environment(\.palette) private var palette
 
     private static let thumbnailSize = CGSize(width: 96, height: 54)
-    /// The space between the pin and the time, which the text lines up with.
-    static let pinSpacing: CGFloat = 8
-    /// How far a row's words start from its leading edge, where the
-    /// hairline between rows starts.
-    static let textInset: CGFloat = Metrics.railPadding + MarkerPin.size + pinSpacing
 
-    private var isSelected: Bool { model.selection == comment.id }
+    private var isSelected: Bool { model.selection == thread.id }
+    private var state: MessageState { message.state ?? .queued }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
             HStack(alignment: .top, spacing: 10) {
-                keyframe
+                if !thread.isGeneral { keyframe }
                 if let edited {
-                    CommentField(text: binding(edited), placeholder: "Comment", commit: save, cancel: { self.edited = nil })
+                    CommentField(text: binding(edited), placeholder: "Message", commit: save, cancel: { self.edited = nil })
                         .frame(height: 66)
                 } else {
-                    Text(comment.text)
+                    Text(message.text)
                         .font(.callout)
                         .lineLimit(isSelected ? nil : 3)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,14 +51,6 @@ struct CommentRow: View {
                 }
                 .controlSize(.small)
             }
-            if !comment.thread.isEmpty {
-                if isSelected || comment.openQuestion != nil {
-                    ThreadView(messages: comment.thread, agent: model.agentName) { model.answerQuestion(comment.id, text: $0) }
-                        .padding(.top, 4)
-                } else {
-                    threadSummary
-                }
-            }
         }
         .padding(.horizontal, Metrics.railPadding)
         .padding(.vertical, 12)
@@ -75,67 +59,34 @@ struct CommentRow: View {
         .animation(.smooth(duration: 0.15), value: isSelected)
         .animation(.smooth(duration: 0.12), value: isHovered)
         .contentShape(Rectangle())
-        .onTapGesture { model.select(comment.id) }
+        .onTapGesture { model.select(thread.id) }
         .onHover { isHovered = $0 }
-        .task(id: comment.id) { await loadThumbnail() }
+        .task(id: message.id) { await loadThumbnail() }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Comment \(number) at \(TimeCode.text(comment.time))")
+        .accessibilityLabel("Your message on thread \(thread.number)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    /// The selected row's fill; a fainter one under the pointer.
+    /// The selected thread's fill; a fainter one under the pointer.
     private var fill: Color {
         if isSelected { return palette[.sidebarRowSelected] }
         return isHovered ? palette[.sidebarRowHover] : .clear
     }
 
     private var header: some View {
-        HStack(spacing: Self.pinSpacing) {
-            MarkerPin(
-                number: number, state: comment.state, isSelected: isSelected,
-                badge: MarkerPin.Badge(comment, unread: model.unread)
-            )
-            Text(TimeCode.text(comment.time))
-                .font(.callout.monospacedDigit().weight(.semibold))
-            if comment.region != nil {
+        HStack(spacing: 8) {
+            StateChip(state: state)
+            if message.region != nil {
                 Image(systemName: "rectangle.dashed")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(palette[.textSecondary])
                     .help("On a region of the frame")
                     .accessibilityLabel("On a region of the frame")
             }
-            StateChip(state: comment.state)
             Spacer(minLength: 4)
-            if comment.state.isEditable, edited == nil {
-                RowButton("Edit", symbol: "pencil") { edited = comment.text }
-                RowButton("Delete", symbol: "trash") { model.delete(comment.id) }
-            }
-        }
-    }
-
-    /// A closed thread on one line: its last message, and how many there
-    /// are. An unread one is picked out.
-    @ViewBuilder
-    private var threadSummary: some View {
-        if let last = comment.thread.last {
-            let isUnread = model.unread.contains(comment.id)
-            HStack(spacing: 6) {
-                Image(systemName: isUnread ? "bubble.left.fill" : "bubble.left")
-                    .font(.caption)
-                    .foregroundStyle(isUnread ? palette[.agent] : palette[.textTertiary])
-                    .accessibilityHidden(true)
-                Text("\(last.author == .agent ? model.agentName : "You"): \(last.text)")
-                    .font(.caption.weight(isUnread ? .semibold : .regular))
-                    .foregroundStyle(isUnread ? palette[.textPrimary] : palette[.textSecondary])
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 4)
-                if comment.thread.count > 1 {
-                    Text("\(comment.thread.count)")
-                        .font(.caption2.weight(.medium).monospacedDigit())
-                        .foregroundStyle(palette[.textTertiary])
-                        .accessibilityLabel("\(comment.thread.count) messages")
-                }
+            if state.isEditable, edited == nil {
+                RowButton("Edit", symbol: "pencil") { edited = message.text }
+                RowButton("Delete", symbol: "trash") { model.delete(message.id) }
             }
         }
     }
@@ -166,13 +117,13 @@ struct CommentRow: View {
 
     private func save() {
         guard let edited, AppModel.hasWords(edited) else { return }
-        model.edit(comment.id, text: edited)
+        model.edit(message.id, text: edited)
         self.edited = nil
     }
 
     private func loadThumbnail() async {
-        // What the comment points at: its region's crop, else the whole frame.
-        guard let file = model.crop(of: comment) ?? model.keyframe(of: comment) else { return }
+        // What the message points at: its region's crop, else the whole frame.
+        guard let file = model.crop(of: message) ?? model.keyframe(of: thread) else { return }
         // Twice the thumbnail's size, for a sharp picture on a Retina display.
         thumbnail = await Self.thumbnail(of: file, side: Int(Self.thumbnailSize.width) * 2)
     }
@@ -184,11 +135,11 @@ struct CommentRow: View {
     }
 }
 
-/// A comment's state: its glyph and its name, in its colour. No capsule
+/// A message's state: its glyph and its name, in its colour. No capsule
 /// behind it: the pin beside it already carries the colour, and the name
 /// only has to be read.
 struct StateChip: View {
-    let state: CommentState
+    let state: MessageState
     @Environment(\.palette) private var palette
 
     var body: some View {

@@ -20,20 +20,22 @@ protocol AppControlling: AnyObject {
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
-    /// Queues a comment at `at`, or at the player's time, on `region` of
-    /// the frame when it has one, once its keyframe and its crop are on
-    /// disk.
-    func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment
-    func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment
-    func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment
+    /// Queues a message on the thread of the frame at `at`, or at the
+    /// player's time, or on `thread`, on `region` of the frame when it has
+    /// one, once the keyframe and the crop are on disk.
+    func addMessage(
+        text: String, at: Double?, region: Region?, thread: String?
+    ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread)
+    func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message
+    func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message
     /// Sets the open video's context note, without the space around it,
     /// and returns it as it's kept. An empty text clears the note.
     func setContextNote(_ text: String) throws(AppRefusal) -> String
-    /// Sends every queued comment as one batch, and hands it to the
+    /// Sends every queued message as one send, and hands it to the
     /// listener queue.
-    func sendBatch() async throws(AppRefusal) -> StateReport.Batch
-    /// Answers the open question of a comment, as the answer box does.
-    func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment
+    func sendQueue() async throws(AppRefusal) -> StateReport.Send
+    /// Answers the open question on a thread, as the answer field does.
+    func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
     /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
@@ -49,18 +51,18 @@ protocol AppControlling: AnyObject {
 /// operator request asks it first, and a `take`'s reply granting it that
 /// can't be written (its client gone) gives it up at once. A listener's
 /// requests go to the `ListenerQueue`, with no lease: a `wait` and an `ask`
-/// are held like a `take` in line, and a batch whose reply can't be written
+/// are held like a `take` in line, and a send whose reply can't be written
 /// goes back to the front of the listener's line.
 final class ControlServer {
     /// A reply, whether the app quits once it's written, and what only the
     /// client would know, undone when the reply can't be written
     /// (`undelivered`): the lease a `control take`'s reply grants, and the
-    /// batch a `wait`'s reply carries.
+    /// send a `wait`'s reply carries.
     nonisolated struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: LeaseTerm?
-        var delivered: BatchRef?
+        var delivered: SendRef?
         /// Nothing is written: the connection just closes, as it does when
         /// the app isn't there, so a `wait` connects again.
         var silent = false
@@ -68,7 +70,7 @@ final class ControlServer {
 
     let socket: URL
     private let app: any AppControlling
-    /// The listener's side: the open `wait` and the batches in line.
+    /// The listener's side: the open `wait` and the sends in line.
     private let listeners: ListenerQueue
     private let screenshotter: any Screenshotting
     private let quit: @MainActor () -> Void
@@ -137,8 +139,8 @@ final class ControlServer {
     /// anyone but its holder, with nothing done. A quit hands the lease
     /// back in its reply, for a relaunch to pass on. A `take` that waits in
     /// line is answered once it gets the lease or its wait runs out, other
-    /// requests answered meanwhile; so is a listener's `wait`, once a batch
-    /// is sent. `connection` names the connection the request came over,
+    /// requests answered meanwhile; so is a listener's `wait`, once a send
+    /// is made. `connection` names the connection the request came over,
     /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
         // The app is still opening its last video: a command sees the app
@@ -197,7 +199,7 @@ final class ControlServer {
             case .screenshot(let path, let appearance, let hideAgentIndicator):
                 try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator)
                 return done(path, Output(path: path), json)
-            case .commentAdd(let text, let at, let rectangle):
+            case .commentAdd(let text, let at, let rectangle, let thread):
                 // Numbers that aren't a region of the frame are refused
                 // before the app is asked for anything.
                 var region: Region?
@@ -208,31 +210,36 @@ final class ControlServer {
                         throw AppRefusal(error.line)
                     }
                 }
-                let comment = try await app.addComment(text: text, at: at, region: region)
-                let place = comment.region.map { " on the region \($0.text)" } ?? ""
-                return done("\(comment.id) queued at \(TimeCode.text(comment.time))\(place)", Output(comment: comment), json)
+                let added = try await app.addMessage(text: text, at: at, region: region, thread: thread)
+                let place = added.thread.time.map { " at \(TimeCode.text($0))" } ?? ""
+                let area = added.message.region.map { " on the region \($0.text)" } ?? ""
+                return done(
+                    "\(added.message.id) queued on #\(added.thread.number)\(place)\(area)",
+                    Output(message: added.message, thread: Output.ThreadRef(id: added.thread.id, number: added.thread.number)), json
+                )
             case .commentEdit(let id, let text):
-                let comment = try app.editComment(id, text: text)
-                return done("\(comment.id) edited", Output(comment: comment), json)
+                let message = try app.editMessage(id, text: text)
+                return done("\(message.id) edited", Output(message: message), json)
             case .commentDelete(let id):
-                let comment = try app.deleteComment(id)
-                return done("\(comment.id) deleted", Output(deleted: comment.id), json)
+                let message = try app.deleteMessage(id)
+                return done("\(message.id) deleted", Output(deleted: message.id), json)
             case .contextSet(let text):
                 let note = try app.setContextNote(text)
                 let line = note.isEmpty
                     ? "context note cleared"
                     : "context note set (\(note.count) character\(note.count == 1 ? "" : "s"))"
                 return done(line, Output(video: app.state().video), json)
-            case .batchSend:
-                let batch = try await app.sendBatch()
-                let count = batch.commentIds.count
-                let taken = listeners.outbox.taken.contains { $0.batchID.text == batch.id }
-                let line = "\(batch.id) sent with \(count) comment\(count == 1 ? "" : "s"), "
+            case .send:
+                let send = try await app.sendQueue()
+                let messages = send.messageIds.count
+                let threads = send.threadIds.count
+                let taken = listeners.outbox.taken.contains { $0.sendID.text == send.id }
+                let line = "\(send.id) sent: \(messages) message\(messages == 1 ? "" : "s") on \(threads) thread\(threads == 1 ? "" : "s"), "
                     + (taken ? "taken by the listener" : "waiting for a listener")
-                return done(line, Output(batch: batch), json)
+                return done(line, Output(send: send), json)
             case .wait(let timeout):
                 switch await listeners.wait(by: message.holder, timeout: timeout, connection: connection) {
-                case .batch(let ref, let payload):
+                case .send(let ref, let payload):
                     return Answer(reply: .done(payload), delivered: ref)
                 case .ranOut:
                     return Answer(reply: .ranOut)
@@ -241,20 +248,20 @@ final class ControlServer {
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
-            case .ack(let batchID, let text):
-                let batch = try listeners.ack(batchID, text: text)
-                let count = batch.commentIds.count
-                return done("\(batch.id) acknowledged, \(count) comment\(count == 1 ? "" : "s")", Output(batch: batch), json)
-            case .status(let commentID, let status):
-                // Every status is a comment state of the same name.
-                let state = CommentState(rawValue: status.rawValue) ?? .working
-                let comment = try listeners.status(commentID, state)
-                return done("\(comment.id) \(comment.state)", Output(comment: comment), json)
-            case .reply(let id, let text):
-                let message = try listeners.reply(to: id, text: text)
-                return done("\(message.id) on \(id)", Output(message: message), json)
-            case .ask(let commentID, let question, let waitSeconds):
-                switch try await listeners.ask(commentID, question: question, waitSeconds: waitSeconds, connection: connection) {
+            case .ack(let sendID, let text):
+                let send = try listeners.ack(sendID, text: text)
+                let count = send.messageIds.count
+                return done("\(send.id) acknowledged, \(count) message\(count == 1 ? "" : "s")", Output(send: send), json)
+            case .status(let messageID, let status):
+                // Every status is a message state of the same name.
+                let state = MessageState(rawValue: status.rawValue) ?? .working
+                let message = try listeners.status(messageID, state)
+                return done("\(message.id) \(message.state ?? status.rawValue)", Output(message: message), json)
+            case .reply(let thread, let text):
+                let message = try listeners.reply(on: thread, text: text)
+                return done("\(message.id) on \(Self.name(ThreadRef(thread)) ?? thread)", Output(message: message), json)
+            case .ask(let thread, let question, let waitSeconds):
+                switch try await listeners.ask(on: thread, question: question, waitSeconds: waitSeconds, connection: connection) {
                 case .answered(let answer):
                     return done(answer.text, Output(answer: answer), json)
                 case .ranOut:
@@ -262,9 +269,9 @@ final class ControlServer {
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
-            case .threadAnswer(let commentID, let text):
-                let comment = try app.answer(commentID, text: text)
-                return done("\(comment.id) answered", Output(comment: comment), json)
+            case .threadAnswer(let thread, let text):
+                let answered = try app.answer(thread, text: text)
+                return done("#\(answered.number) answered", Output(message: answered.message), json)
             case .themeList:
                 let list = app.themeList()
                 return done(json ? StateReport.json(list) : list.lines)
@@ -285,12 +292,27 @@ final class ControlServer {
         var quit: Bool?
         var lease: ControlLease.Status?
         var released: Bool?
-        var comment: StateReport.Comment?
-        var deleted: String?
-        var batch: StateReport.Batch?
         var message: StateReport.Message?
+        var thread: ThreadRef?
+        var deleted: String?
+        var send: StateReport.Send?
         var answer: StateReport.Message?
         var theme: StateReport.Theme?
+
+        /// The thread a message went on: its id and its number.
+        struct ThreadRef: Encodable {
+            var id: String
+            var number: Int
+        }
+    }
+
+    /// `#3` for a thread a command named, or nil when it isn't one.
+    private static func name(_ ref: ReviewCore.ThreadRef?) -> String? {
+        switch ref {
+        case .number(let number): "#\(number)"
+        case .id(let id): "#\(id.number)"
+        case nil: nil
+        }
     }
 
     /// What the app shows, with the lease and the listener as they are now.
@@ -369,8 +391,8 @@ final class ControlServer {
     /// up for that holder at once, and the next waiter gets it as usual,
     /// rather than it sitting unused until it runs out. A lease that has
     /// moved on meanwhile (another holder's, or a new one) is left alone.
-    /// A `wait`'s reply that carried a batch and couldn't be written: the
-    /// listener never got the batch, so it's first in its line again.
+    /// A `wait`'s reply that carried a send and couldn't be written: the
+    /// listener never got the send, so it's first in its line again.
     func undelivered(_ answer: Answer) {
         if let ref = answer.delivered { listeners.undelivered(ref) }
         guard let granted = answer.granted, let term = lease.current(at: now()),

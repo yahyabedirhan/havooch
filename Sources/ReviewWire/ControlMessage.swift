@@ -6,7 +6,7 @@ import ReviewLease
 /// naming the protocol's `version`, the `command` and the `holder`, with the
 /// command's own fields beside them:
 ///
-///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":1}
+///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":2}
 ///
 /// The wire format is a contract between a `video-review` and the app of
 /// the same build.
@@ -41,19 +41,19 @@ public struct ControlMessage: Equatable, Sendable {
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
-        case .commentAdd(let text, let at, let region):
-            wire = Wire(command: "comment.add", text: text, at: at, region: region)
+        case .commentAdd(let text, let at, let region, let thread):
+            wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
-        case .batchSend: wire = Wire(command: "batch.send")
+        case .send: wire = Wire(command: "send")
         case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
-        case .ack(let batchID, let text): wire = Wire(command: "ack", id: batchID, text: text)
-        case .status(let commentID, let state): wire = Wire(command: "status", id: commentID, state: state.rawValue)
-        case .reply(let id, let text): wire = Wire(command: "reply", id: id, text: text)
-        case .ask(let commentID, let question, let waitSeconds):
-            wire = Wire(command: "ask", waitSeconds: waitSeconds, id: commentID, text: question)
-        case .threadAnswer(let commentID, let text): wire = Wire(command: "thread.answer", id: commentID, text: text)
+        case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
+        case .status(let messageID, let state): wire = Wire(command: "status", id: messageID, state: state.rawValue)
+        case .reply(let thread, let text): wire = Wire(command: "reply", text: text, thread: thread)
+        case .ask(let thread, let question, let waitSeconds):
+            wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
+        case .threadAnswer(let thread, let text): wire = Wire(command: "thread.answer", text: text, thread: thread)
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
         }
@@ -121,14 +121,14 @@ public struct ControlMessage: Equatable, Sendable {
             if let at = wire.at, !at.isFinite || at < 0 {
                 throw .unreadable("the control command `comment.add` needs its `at` to be 0 or more")
             }
-            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at, region: wire.region)
+            return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at, region: wire.region, thread: wire.thread)
         case "comment.edit":
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
             return .commentDelete(id: try field(wire.id, "id", of: wire))
         case "context.set":
             return .contextSet(text: try field(wire.text, "text", of: wire))
-        case "batch.send": return .batchSend
+        case "send": return .send
         case "wait":
             if let seconds = wire.timeoutSeconds, !(0...ControlRequest.longestListen).contains(seconds) {
                 throw .unreadable(
@@ -137,16 +137,16 @@ public struct ControlMessage: Equatable, Sendable {
             }
             return .wait(timeoutSeconds: wire.timeoutSeconds)
         case "ack":
-            return .ack(batchID: try field(wire.id, "id", of: wire), text: wire.text)
+            return .ack(sendID: try field(wire.id, "id", of: wire), text: wire.text)
         case "status":
             let id = try field(wire.id, "id", of: wire)
             let name = try field(wire.state, "state", of: wire)
             guard let state = ControlRequest.Status(rawValue: name) else {
                 throw .unreadable("the control command `status` has no state `\(name)`; it takes `working`, `done` or `failed`")
             }
-            return .status(commentID: id, state: state)
+            return .status(messageID: id, state: state)
         case "reply":
-            return .reply(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+            return .reply(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
         case "ask":
             if let seconds = wire.waitSeconds, !(0...ControlRequest.longestListen).contains(seconds) {
                 throw .unreadable(
@@ -154,11 +154,11 @@ public struct ControlMessage: Equatable, Sendable {
                 )
             }
             return .ask(
-                commentID: try field(wire.id, "id", of: wire), question: try field(wire.text, "text", of: wire),
+                thread: try field(wire.thread, "thread", of: wire), question: try field(wire.text, "text", of: wire),
                 waitSeconds: wire.waitSeconds
             )
         case "thread.answer":
-            return .threadAnswer(commentID: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
+            return .threadAnswer(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
         default: throw .unknownCommand(wire.command)
@@ -207,5 +207,6 @@ public struct ControlMessage: Equatable, Sendable {
         var timeoutSeconds: Int?
         var state: String?
         var name: String?
+        var thread: String?
     }
 }

@@ -29,24 +29,26 @@ struct CommandTests {
          .commentAdd(text: "This box", at: nil, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
         (["comment", "add", "--region", "0,0,1,1", "This box", "--at", "0:10"],
          .commentAdd(text: "This box", at: 10, region: .init(x: 0, y: 0, w: 1, h: 1))),
-        (["comment", "edit", "c-7f3a9c2e", "Slower here"], .commentEdit(id: "c-7f3a9c2e", text: "Slower here")),
-        (["comment", "delete", "c-7f3a9c2e"], .commentDelete(id: "c-7f3a9c2e")),
+        (["comment", "add", "Follow-up", "--thread", "t-f92cbb2a-1"], .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1")),
+        (["comment", "add", "--thread", "0", "In general"], .commentAdd(text: "In general", at: nil, thread: "0")),
+        (["comment", "edit", "m-f92cbb2a-1", "Slower here"], .commentEdit(id: "m-f92cbb2a-1", text: "Slower here")),
+        (["comment", "delete", "m-f92cbb2a-1"], .commentDelete(id: "m-f92cbb2a-1")),
         (["context", "set", "Compare with the old cut"], .contextSet(text: "Compare with the old cut")),
         (["context", "set", ""], .contextSet(text: "")),
-        (["batch", "send"], .batchSend),
+        (["send"], .send),
         (["wait"], .wait(timeoutSeconds: nil)),
         (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
-        (["ack", "b-5d0c2a91"], .ack(batchID: "b-5d0c2a91", text: nil)),
-        (["ack", "b-5d0c2a91", "On it"], .ack(batchID: "b-5d0c2a91", text: "On it")),
-        (["status", "c-7f3a9c2e", "working"], .status(commentID: "c-7f3a9c2e", state: .working)),
-        (["status", "c-7f3a9c2e", "done"], .status(commentID: "c-7f3a9c2e", state: .done)),
-        (["status", "c-7f3a9c2e", "failed"], .status(commentID: "c-7f3a9c2e", state: .failed)),
-        (["reply", "c-7f3a9c2e", "Slowed it down"], .reply(id: "c-7f3a9c2e", text: "Slowed it down")),
-        (["reply", "b-5d0c2a91", "All done"], .reply(id: "b-5d0c2a91", text: "All done")),
-        (["ask", "c-7f3a9c2e", "Which part?"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: nil)),
-        (["ask", "c-7f3a9c2e", "Which part?", "--wait", "30"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 30)),
-        (["ask", "--wait", "0", "c-7f3a9c2e", "Which part?"], .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 0)),
-        (["thread", "answer", "c-7f3a9c2e", "The intro"], .threadAnswer(commentID: "c-7f3a9c2e", text: "The intro")),
+        (["ack", "s-f92cbb2a-1"], .ack(sendID: "s-f92cbb2a-1", text: nil)),
+        (["ack", "s-f92cbb2a-1", "On it"], .ack(sendID: "s-f92cbb2a-1", text: "On it")),
+        (["status", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
+        (["status", "m-f92cbb2a-1", "done"], .status(messageID: "m-f92cbb2a-1", state: .done)),
+        (["status", "m-f92cbb2a-1", "failed"], .status(messageID: "m-f92cbb2a-1", state: .failed)),
+        (["reply", "t-f92cbb2a-1", "Slowed it down"], .reply(thread: "t-f92cbb2a-1", text: "Slowed it down")),
+        (["reply", "0", "All done"], .reply(thread: "0", text: "All done")),
+        (["ask", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil)),
+        (["ask", "t-f92cbb2a-1", "Which part?", "--wait", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
+        (["ask", "--wait", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
+        (["thread", "answer", "t-f92cbb2a-1", "The intro"], .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro")),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -156,20 +158,20 @@ struct CommandTests {
         ["comment"], ["comment", "add"], ["comment", "add", "Too", "fast"], ["comment", "add", "Too fast", "--at", "soon"],
         ["comment", "add", "Too fast", "--at"], ["comment", "add", "This box", "--region"],
         ["comment", "add", "This box", "--region", "0.25,0.2,0.3"], ["comment", "add", "This box", "--region", "left,top,0.3,0.25"],
-        ["comment", "edit"], ["comment", "edit", "c-7f3a9c2e"],
-        ["comment", "edit", "c-7f3a9c2e", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "c-1", "c-2"],
+        ["comment", "edit"], ["comment", "edit", "m-f92cbb2a-1"],
+        ["comment", "edit", "m-f92cbb2a-1", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "m-1", "m-2"],
         ["context"], ["context", "set"], ["context", "set", "two", "words"], ["context", "get"],
-        ["batch"], ["batch", "send", "now"], ["batch", "send", "--timeout", "5"],
+        ["batch", "send"], ["send", "now"], ["send", "--timeout", "5"], ["comment", "add", "x", "--thread"],
         ["wait", "now"], ["wait", "--timeout"], ["wait", "--timeout", "soon"], ["wait", "--timeout", "-1"],
         ["wait", "--timeout", "86401"], ["wait", "--wait", "5"],
-        ["ack"], ["ack", "b-5d0c2a91", "On", "it"], ["ack", "b-5d0c2a91", "--wait", "5"],
-        ["status"], ["status", "c-7f3a9c2e"], ["status", "c-7f3a9c2e", "acknowledged"], ["status", "c-7f3a9c2e", "sent"],
-        ["status", "c-7f3a9c2e", "done", "now"],
-        ["reply"], ["reply", "c-7f3a9c2e"], ["reply", "c-7f3a9c2e", "Slowed", "it"],
-        ["ask"], ["ask", "c-7f3a9c2e"], ["ask", "c-7f3a9c2e", "Which part?", "--wait"],
-        ["ask", "c-7f3a9c2e", "Which part?", "--wait", "soon"], ["ask", "c-7f3a9c2e", "Which part?", "--wait", "-1"],
-        ["ask", "c-7f3a9c2e", "Which part?", "--wait", "86401"], ["ask", "c-7f3a9c2e", "Which part?", "--timeout", "5"],
-        ["thread"], ["thread", "answer"], ["thread", "answer", "c-7f3a9c2e"], ["thread", "answer", "c-7f3a9c2e", "The", "intro"],
+        ["ack"], ["ack", "s-f92cbb2a-1", "On", "it"], ["ack", "s-f92cbb2a-1", "--wait", "5"],
+        ["status"], ["status", "m-f92cbb2a-1"], ["status", "m-f92cbb2a-1", "acknowledged"], ["status", "m-f92cbb2a-1", "sent"],
+        ["status", "m-f92cbb2a-1", "done", "now"],
+        ["reply"], ["reply", "t-f92cbb2a-1"], ["reply", "t-f92cbb2a-1", "Slowed", "it"],
+        ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "-1"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5"],
+        ["thread"], ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -202,9 +204,9 @@ struct CommandTests {
         return environment
     }
 
-    @Test("wait prints the batch the app answers with as it is, exit 0, and may be held for its whole timeout")
+    @Test("wait prints the send the app answers with as it is, exit 0, and may be held for its whole timeout")
     func waitPrints() {
-        let payload = "{\n  \"batch\" : {\n    \"id\" : \"b-5d0c2a91\"\n  }\n}\n"
+        let payload = "{\n  \"send\" : {\n    \"id\" : \"s-f92cbb2a-1\"\n  }\n}\n"
         let run = Run { _, _ in .success(.done(payload)) }
         defer { run.cleanUp() }
         #expect(run("wait", "--timeout", "600") == CommandResult(output: payload))
@@ -281,8 +283,8 @@ struct CommandTests {
     func askPrintsTheAnswer() {
         let run = Run { _, _ in .success(.done("The intro\n")) }
         defer { run.cleanUp() }
-        #expect(run("ask", "c-7f3a9c2e", "Which part?", "--wait", "600") == CommandResult(output: "The intro\n"))
-        #expect(run("ask", "c-7f3a9c2e", "Which part?") == CommandResult(output: "The intro\n"))
+        #expect(run("ask", "t-f92cbb2a-1", "Which part?", "--wait", "600") == CommandResult(output: "The intro\n"))
+        #expect(run("ask", "t-f92cbb2a-1", "Which part?") == CommandResult(output: "The intro\n"))
         #expect(run.transport.sent.map(\.message.request.holdSeconds) == [600, nil])
     }
 
@@ -290,14 +292,14 @@ struct CommandTests {
     func askRunsOutOrIsRefused() {
         let ranOut = Run { _, _ in .success(.ranOut) }
         defer { ranOut.cleanUp() }
-        #expect(ranOut("ask", "c-7f3a9c2e", "Which part?", "--wait", "5") == CommandResult(exitCode: 2))
-        #expect(ranOut("ask", "c-7f3a9c2e", "Which part?", "--wait", "5", "--json") == CommandResult(exitCode: 2))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5") == CommandResult(exitCode: 2))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5", "--json") == CommandResult(exitCode: 2))
 
         let line = "c-7f3a9c2e already has an open question"
         let refused = Run { _, _ in .success(.refused(line)) }
         defer { refused.cleanUp() }
-        #expect(refused("ask", "c-7f3a9c2e", "And how?") == CommandResult(error: line + "\n", exitCode: 1))
-        #expect(refused("status", "c-7f3a9c2e", "working") == CommandResult(error: line + "\n", exitCode: 1))
+        #expect(refused("ask", "t-f92cbb2a-1", "And how?") == CommandResult(error: line + "\n", exitCode: 1))
+        #expect(refused("status", "m-f92cbb2a-1", "working") == CommandResult(error: line + "\n", exitCode: 1))
     }
 
     @Test("--help prints the usage on standard output, and so do -h and --help with --json or before a command's name", arguments: [
@@ -322,13 +324,13 @@ struct CommandTests {
     }
 
     @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's name", arguments: [
-        (["reply", "c-7f3a9c2e", "--region now takes pixels"], ControlRequest.reply(id: "c-7f3a9c2e", text: "--region now takes pixels")),
+        (["reply", "t-f92cbb2a-1", "--region now takes pixels"], ControlRequest.reply(thread: "t-f92cbb2a-1", text: "--region now takes pixels")),
         (["comment", "add", "--at is wrong here", "--at", "5"], .commentAdd(text: "--at is wrong here", at: 5)),
         (["comment", "add", "--json is the default now"], .commentAdd(text: "--json is the default now", at: nil)),
         (["comment", "add", "-h"], .commentAdd(text: "-h", at: nil)),
-        (["reply", "c-7f3a9c2e", "-h"], .reply(id: "c-7f3a9c2e", text: "-h")),
-        (["reply", "c-7f3a9c2e", "--", "--region"], .reply(id: "c-7f3a9c2e", text: "--region")),
-        (["reply", "--", "c-7f3a9c2e", "--help"], .reply(id: "c-7f3a9c2e", text: "--help")),
+        (["reply", "t-f92cbb2a-1", "-h"], .reply(thread: "t-f92cbb2a-1", text: "-h")),
+        (["reply", "t-f92cbb2a-1", "--", "--region"], .reply(thread: "t-f92cbb2a-1", text: "--region")),
+        (["reply", "--", "t-f92cbb2a-1", "--help"], .reply(thread: "t-f92cbb2a-1", text: "--help")),
         (["comment", "add", "--at", "5", "--", "--json"], .commentAdd(text: "--json", at: 5)),
         (["context", "set", "--", "--"], .contextSet(text: "--")),
     ])
@@ -351,8 +353,8 @@ struct CommandTests {
         #expect(run.transport.requests == [.commentAdd(text: "Too fast here", at: 5), .commentAdd(text: "Too fast here", at: 5)])
         #expect(run.transport.sent.map(\.message.json) == [true, true])
         // A word too many is still refused, also after --.
-        #expect(run("reply", "c-7f3a9c2e", "--", "--region", "--json").exitCode == 64)
-        #expect(run("reply", "c-7f3a9c2e", "--region").exitCode == 64)
+        #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 64)
+        #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 64)
     }
 
     @Test("a reply that doesn't read, or none in time, exits 1 saying why")

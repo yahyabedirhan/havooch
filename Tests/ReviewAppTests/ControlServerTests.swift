@@ -21,45 +21,64 @@ struct ControlServerTests {
         var time = 0.0
         var playing = false
 
+        /// The open video's content hash, and its review, kept in memory.
+        static let hash = "abcdef0123"
+        static let layout = SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
+        var review = VideoReview(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: "/videos/sample.mp4"))
+        static let sentAt = Date(timeIntervalSince1970: 1_790_000_000)
+
         func state() -> StateReport {
             StateReport(
                 app: .init(version: "0.1.0", demo: true, support: "/demo"),
                 video: hasVideo
-                    ? .init(path: "/videos/sample.mp4", contentHash: "abc", title: "sample", duration: 21.233, contextNote: note) : nil,
+                    ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
-                comments: comments
+                threads: review.threads.map { StateReport.Thread($0, contentHash: Self.hash, layout: Self.layout) },
+                queue: review.queue.map(\.id.text),
+                sends: review.sends.map { StateReport.Send($0, in: review) }
             )
         }
 
-        var comments: [StateReport.Comment] = []
-
-        private func comment(_ id: String, _ call: String) throws(AppRefusal) -> Int {
+        private func change<Result>(_ call: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
             try record(call)
-            guard let index = comments.firstIndex(where: { $0.id == id }) else { throw AppRefusal("no comment `\(id)`") }
-            return index
+            do throws(ReviewRefusal) {
+                return try change(&review)
+            } catch {
+                throw AppRefusal(error.line)
+            }
         }
 
-        func addComment(text: String, at: Double?, region: Region?) async throws(AppRefusal) -> StateReport.Comment {
+        private func id(_ text: String) throws(AppRefusal) -> ItemID {
+            guard let id = ItemID(text) else { throw AppRefusal(ReviewRefusal.unknownID(text).line) }
+            return id
+        }
+
+        func addMessage(
+            text: String, at: Double?, region: Region?, thread: String?
+        ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread) {
             let place = region.map { " on \($0.text)" } ?? ""
-            try record("comment add \(text) at \(at.map { "\($0)" } ?? "the player's time")\(place)")
-            let id = "c-0000000\(comments.count + 1)"
-            let comment = StateReport.Comment(
-                id: id, time: at ?? time, text: text, state: "queued", keyframePath: "/demo/videos/abc/frames/\(id).png",
-                region: region, cropPath: region.map { _ in "/demo/videos/abc/crops/\(id).png" }
+            let on = thread.map { " on thread \($0)" } ?? ""
+            let written = try change("comment add \(text) at \(at.map { "\($0)" } ?? "the player's time")\(place)\(on)") {
+                review throws(ReviewRefusal) in
+                let target = try thread.flatMap(ThreadRef.init).map { ref throws(ReviewRefusal) in try review.threadID(ref) }
+                return try review.write(text: text, at: target == nil ? (at ?? time) : at, region: region, to: target, now: Self.sentAt)
+            }
+            return (
+                StateReport.Message(written.message, contentHash: Self.hash, layout: Self.layout),
+                StateReport.Thread(written.thread, contentHash: Self.hash, layout: Self.layout)
             )
-            comments.append(comment)
-            comments.sort { $0.time < $1.time }
-            return comment
         }
 
-        func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment {
-            let index = try comment(id, "comment edit \(id) \(text)")
-            comments[index].text = text
-            return comments[index]
+        func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message {
+            let messageID = try self.id(id)
+            let message = try change("comment edit \(id) \(text)") { review throws(ReviewRefusal) in try review.edit(messageID, text: text) }
+            return StateReport.Message(message, contentHash: Self.hash, layout: Self.layout)
         }
 
-        func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment {
-            comments.remove(at: try comment(id, "comment delete \(id)"))
+        func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message {
+            let messageID = try self.id(id)
+            let deleted = try change("comment delete \(id)") { review throws(ReviewRefusal) in try review.delete(messageID) }
+            return StateReport.Message(deleted.message, contentHash: Self.hash, layout: Self.layout)
         }
 
         var note = ""
@@ -70,22 +89,17 @@ struct ControlServerTests {
             return note
         }
 
-        func sendBatch() async throws(AppRefusal) -> StateReport.Batch {
-            try record("batch send")
-            let queued = comments.indices.filter { comments[$0].state == "queued" }
-            guard !queued.isEmpty else { throw AppRefusal("no comment is queued") }
-            for index in queued {
-                comments[index].state = "sent"
-                comments[index].batchId = "b-00000001"
-            }
-            return StateReport.Batch(
-                id: "b-00000001", sentAt: Date(timeIntervalSince1970: 1_790_000_000), commentIds: queued.map { comments[$0].id }
-            )
+        func sendQueue() async throws(AppRefusal) -> StateReport.Send {
+            let send = try change("send") { review throws(ReviewRefusal) in try review.send(at: Self.sentAt) }
+            return StateReport.Send(send, in: review)
         }
 
-        func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment {
-            let index = try comment(commentID, "thread answer \(commentID) \(text)")
-            return comments[index]
+        func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
+            let threadID = try id(thread)
+            let message = try change("thread answer \(thread) \(text)") { review throws(ReviewRefusal) in
+                try review.answer(threadID, text: text, now: Self.sentAt)
+            }
+            return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
         }
 
         private func record(_ call: String) throws(AppRefusal) {
@@ -131,7 +145,7 @@ struct ControlServerTests {
         ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
     }
 
-    /// A listener queue nobody sends a batch to: the fake app has no reviews.
+    /// A listener queue nobody sends to: the fake app has no reviews on disk.
     static func noListeners() -> ListenerQueue {
         ListenerQueue(
             desk: ReviewDesk(library: Library(layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true)))),
@@ -200,14 +214,17 @@ struct ControlServerTests {
         #expect(state["app"] as? [String: AnyHashable] == ["version": "0.1.0", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
-            == ["path": "/videos/sample.mp4", "contentHash": "abc", "title": "sample", "duration": 21.233, "contextNote": ""])
+            == ["path": "/videos/sample.mp4", "contentHash": "abcdef0123", "title": "sample", "duration": 21.233, "contextNote": ""])
         #expect(state["lease"] is NSNull)
-        #expect(state["draft"] is NSNull)
-        #expect(state["comments"] as? [AnyHashable] == [])
+        #expect(state["popover"] is NSNull)
+        #expect(state["threads"] as? [[String: AnyHashable]] == [[
+            "id": "t-abcdef01-0", "number": 0, "time": NSNull(), "state": NSNull(), "keyframePath": NSNull(),
+            "popoverFrame": NSNull(), "messages": [] as [String],
+        ]])
         #expect(state["queue"] as? [String] == [])
-        #expect(state["batches"] as? [AnyHashable] == [])
+        #expect(state["sends"] as? [AnyHashable] == [])
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingBatches": 0, "takenBatches": 0,
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0,
         ])
 
         app.hasVideo = false
@@ -223,8 +240,9 @@ struct ControlServerTests {
             player: paused at 0:00
             transcript: none
             lease: free
-            listener: absent, 0 batches waiting, 0 taken
-            comments: none
+            listener: absent, 0 sends waiting, 0 taken
+            threads: 1 (0 queued)
+              #0 General t-abcdef01-0 -
 
             """)
         #expect(await answer(.appStatus).reply.output == """
@@ -246,31 +264,38 @@ struct ControlServerTests {
         #expect(status["lease"] is NSNull)
     }
 
-    @Test("comment commands reach the app and answer one line")
+    @Test("comment commands reach the app and answer one line, with the message's id and its thread's number")
     func comments() async {
-        #expect(await answer(.commentAdd(text: "Too fast", at: 10)).reply == .done("c-00000001 queued at 0:10\n"))
-        #expect(await answer(.commentAdd(text: "Good", at: nil)).reply == .done("c-00000002 queued at 0:00\n"))
-        #expect(await answer(.commentEdit(id: "c-00000001", text: "Slower")).reply == .done("c-00000001 edited\n"))
-        #expect(await answer(.commentDelete(id: "c-00000002")).reply == .done("c-00000002 deleted\n"))
-        #expect(await answer(.commentDelete(id: "c-00000002")).reply == .refused("no comment `c-00000002`"))
+        #expect(await answer(.commentAdd(text: "Too fast", at: 10)).reply == .done("m-abcdef01-1 queued on #1 at 0:10\n"))
+        #expect(await answer(.commentAdd(text: "Same frame", at: 10)).reply == .done("m-abcdef01-2 queued on #1 at 0:10\n"))
+        #expect(await answer(.commentAdd(text: "Good", at: nil)).reply == .done("m-abcdef01-3 queued on #2 at 0:00\n"))
+        #expect(await answer(.commentAdd(text: "In general", at: nil, thread: "0")).reply == .done("m-abcdef01-4 queued on #0\n"))
+        #expect(await answer(.commentAdd(text: "Follow-up", at: nil, thread: "t-abcdef01-1")).reply
+            == .done("m-abcdef01-5 queued on #1 at 0:10\n"))
+        #expect(await answer(.commentEdit(id: "m-abcdef01-1", text: "Slower")).reply == .done("m-abcdef01-1 edited\n"))
+        #expect(await answer(.commentDelete(id: "m-abcdef01-2")).reply == .done("m-abcdef01-2 deleted\n"))
+        #expect(await answer(.commentDelete(id: "m-abcdef01-2")).reply == .refused(ReviewRefusal.unknownID("m-abcdef01-2").line))
         #expect(app.calls == [
-            "comment add Too fast at 10.0", "comment add Good at the player's time", "comment edit c-00000001 Slower",
-            "comment delete c-00000002", "comment delete c-00000002",
+            "comment add Too fast at 10.0", "comment add Same frame at 10.0", "comment add Good at the player's time",
+            "comment add In general at the player's time on thread 0", "comment add Follow-up at the player's time on thread t-abcdef01-1",
+            "comment edit m-abcdef01-1 Slower", "comment delete m-abcdef01-2", "comment delete m-abcdef01-2",
         ])
     }
 
-    @Test("a comment on a region reaches the app with its region, and answers with the region and the crop's path")
+    @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")
     func regionComment() async throws {
         let region = ControlRequest.Rectangle(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
         #expect(await answer(.commentAdd(text: "This box", at: 12.5, region: region)).reply
-            == .done("c-00000001 queued at 0:12.5 on the region 0.25,0.2,0.3,0.25\n"))
+            == .done("m-abcdef01-1 queued on #1 at 0:12.5 on the region 0.25,0.2,0.3,0.25\n"))
         #expect(app.calls == ["comment add This box at 12.5 on 0.25,0.2,0.3,0.25"])
 
-        let added = try object(await answer(.commentAdd(text: "That box", at: 3, region: region), json: true).reply.output)
-        let comment = try #require(added["comment"] as? [String: Any])
-        #expect(comment["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
-        #expect(comment["cropPath"] as? String == "/demo/videos/abc/crops/c-00000002.png")
-        #expect(await answer(.state).reply.output.contains("  c-00000001 0:12.5 region 0.25,0.2,0.3,0.25 queued: This box\n"))
+        let added = try object(await answer(.commentAdd(text: "That box", at: 12.5, region: region), json: true).reply.output)
+        #expect(Set(added.keys) == ["message", "thread"])
+        let message = try #require(added["message"] as? [String: Any])
+        #expect(message["region"] as? [String: Double] == ["x": 0.25, "y": 0.2, "w": 0.3, "h": 0.25])
+        #expect(message["cropPath"] as? String == "/demo/videos/abcdef0123/crops/m-abcdef01-2.png")
+        #expect(added["thread"] as? [String: AnyHashable] == ["id": "t-abcdef01-1", "number": 1])
+        #expect(await answer(.state).reply.output.contains("    m-abcdef01-1 person message queued region 0.25,0.2,0.3,0.25: This box\n"))
     }
 
     @Test("numbers that aren't a region of the frame are refused before the app is asked", arguments: [
@@ -284,31 +309,34 @@ struct ControlServerTests {
         #expect(app.calls.isEmpty)
     }
 
-    @Test("state --json lists the comments in time order, and the queue by id")
+    @Test("state --json lists the threads, General first then in time order, their messages and states, and the queue by id")
     func commentsJSON() async throws {
         let added = try object(await answer(.commentAdd(text: "Later", at: 12.5), json: true).reply.output)
-        #expect(added["comment"] as? [String: AnyHashable] == [
-            "id": "c-00000001", "time": 12.5, "text": "Later", "state": "queued",
-            "keyframePath": "/demo/videos/abc/frames/c-00000001.png", "region": NSNull(), "cropPath": NSNull(),
-            "batchId": NSNull(), "thread": [] as [String],
+        #expect(added["message"] as? [String: AnyHashable] == [
+            "id": "m-abcdef01-1", "author": "person", "kind": "message", "text": "Later", "at": "2026-09-21T14:13:20Z",
+            "state": "queued", "region": NSNull(), "cropPath": NSNull(), "sendId": NSNull(),
         ])
-        #expect(added.count == 1)
         _ = await answer(.commentAdd(text: "Earlier", at: 3))
 
         let state = try object(await answer(.state, json: true).reply.output)
-        let comments = try #require(state["comments"] as? [[String: Any]])
-        #expect(comments.map { $0["id"] as? String } == ["c-00000002", "c-00000001"])
-        #expect(comments.map { $0["time"] as? Double } == [3, 12.5])
-        #expect(state["queue"] as? [String] == ["c-00000002", "c-00000001"])
+        let threads = try #require(state["threads"] as? [[String: Any]])
+        #expect(threads.map { $0["id"] as? String } == ["t-abcdef01-0", "t-abcdef01-2", "t-abcdef01-1"])
+        #expect(threads.map { $0["time"] as? Double } == [nil, 3, 12.5])
+        #expect(threads.map { $0["state"] as? String } == [nil, "queued", "queued"])
+        #expect(threads[1]["keyframePath"] as? String == "/demo/videos/abcdef0123/frames/t-abcdef01-2.png")
+        #expect(state["queue"] as? [String] == ["m-abcdef01-2", "m-abcdef01-1"])
         #expect(await answer(.state).reply.output.hasSuffix("""
-            comments: 2 (2 queued)
-              c-00000002 0:03 queued: Earlier
-              c-00000001 0:12.5 queued: Later
+            threads: 3 (2 queued)
+              #0 General t-abcdef01-0 -
+              #2 at 0:03 t-abcdef01-2 queued
+                m-abcdef01-2 person message queued: Earlier
+              #1 at 0:12.5 t-abcdef01-1 queued
+                m-abcdef01-1 person message queued: Later
 
             """))
 
-        let deleted = try object(await answer(.commentDelete(id: "c-00000001"), json: true).reply.output)
-        #expect(deleted as? [String: String] == ["deleted": "c-00000001"])
+        let deleted = try object(await answer(.commentDelete(id: "m-abcdef01-1"), json: true).reply.output)
+        #expect(deleted as? [String: String] == ["deleted": "m-abcdef01-1"])
     }
 
     @Test("context set reaches the app and answers what it kept; with --json, the video with its note")
@@ -326,20 +354,21 @@ struct ControlServerTests {
             == .refused("no video is open; open one with `video-review player open <path>`"))
     }
 
-    @Test("batch send reaches the app and answers the batch's id and how many comments it carries")
-    func batchSend() async throws {
-        #expect(await answer(.batchSend).reply == .refused("no comment is queued"))
+    @Test("send reaches the app and answers the send's id, how many messages it carries and on how many threads")
+    func send() async throws {
+        #expect(await answer(.send).reply == .refused(ReviewRefusal.nothingQueued.line))
         _ = await answer(.commentAdd(text: "Too fast", at: 10))
+        _ = await answer(.commentAdd(text: "Here too", at: 10))
         _ = await answer(.commentAdd(text: "Good", at: 3))
 
-        #expect(await answer(.batchSend).reply == .done("b-00000001 sent with 2 comments, waiting for a listener\n"))
-        #expect(app.calls.suffix(1) == ["batch send"])
-        #expect(await answer(.state).reply.output.contains("  c-00000001 0:10 sent: Too fast\n"))
+        #expect(await answer(.send).reply == .done("s-abcdef01-1 sent: 3 messages on 2 threads, waiting for a listener\n"))
+        #expect(app.calls.suffix(1) == ["send"])
+        #expect(await answer(.state).reply.output.contains("    m-abcdef01-1 person message sent: Too fast\n"))
 
         _ = await answer(.commentAdd(text: "One more", at: 5))
-        let sent = try object(await answer(.batchSend, json: true).reply.output)
-        #expect(sent["batch"] as? [String: AnyHashable]
-            == ["id": "b-00000001", "sentAt": "2026-09-21T14:13:20Z", "commentIds": ["c-00000003"], "messages": [] as [String]])
+        let sent = try object(await answer(.send, json: true).reply.output)
+        #expect(sent["send"] as? [String: AnyHashable]
+            == ["id": "s-abcdef01-2", "sentAt": "2026-09-21T14:13:20Z", "messageIds": ["m-abcdef01-4"], "threadIds": ["t-abcdef01-3"]])
         #expect(sent.count == 1)
     }
 

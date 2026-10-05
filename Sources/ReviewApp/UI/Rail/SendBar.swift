@@ -1,17 +1,17 @@
 import ReviewCore
 import SwiftUI
 
-/// The words of the presence pill: whether an agent is there for a batch,
+/// The words of the presence pill: whether an agent is there for a send,
 /// and what happens to one sent now.
 struct PresencePill: Equatable {
     /// "Agent listening", "Agent working" or "No agent listening".
     var title: String
-    /// Who listens, and how many batches wait for a listener; with no
-    /// agent and nothing waiting, that a batch sent now waits.
+    /// Who listens, and how many sends wait for a listener; with no
+    /// agent and nothing waiting, that a send made now waits.
     var detail: String
 
-    init(presence: Presence, session: String?, pendingBatches: Int) {
-        let waiting = pendingBatches > 0 ? "\(pendingBatches) \(pendingBatches == 1 ? "batch" : "batches") waiting" : nil
+    init(presence: Presence, session: String?, pendingSends: Int) {
+        let waiting = pendingSends > 0 ? "\(pendingSends) \(pendingSends == 1 ? "send" : "sends") waiting" : nil
         switch presence {
         case .listening:
             title = "Agent listening"
@@ -21,7 +21,7 @@ struct PresencePill: Equatable {
             detail = [session, waiting].compactMap(\.self).joined(separator: " · ")
         case .absent:
             title = "No agent listening"
-            detail = waiting ?? "a batch will wait"
+            detail = waiting ?? "a send will wait"
         }
     }
 
@@ -30,8 +30,8 @@ struct PresencePill: Equatable {
 }
 
 /// The foot of the rail: whether an agent listens, and the Send button with
-/// how many comments it sends. Sending is safe either way: with no agent
-/// the batch waits for the next one.
+/// how many messages it sends. Sending is safe either way: with no agent
+/// the send waits for the next one.
 ///
 /// It is as tall as the timeline lane under the stage, so the line over it
 /// carries on the stage's lower edge across the window.
@@ -57,7 +57,7 @@ struct SendBar: View {
     private func presence(at time: Date) -> some View {
         let outbox = model.listeners.outbox
         let presence = outbox.presence(at: time)
-        let pill = PresencePill(presence: presence, session: outbox.session?.name, pendingBatches: outbox.pending.count)
+        let pill = PresencePill(presence: presence, session: outbox.session?.name, pendingSends: outbox.pending.count)
         return HStack(spacing: 6) {
             PresenceDot(presence: presence)
             Text(pill.title)
@@ -87,7 +87,7 @@ struct SendBar: View {
             HStack(spacing: 6) {
                 Image(systemName: "paperplane.fill")
                     .imageScale(.small)
-                Text(count == 0 ? "Send" : "Send \(count) comment\(count == 1 ? "" : "s")")
+                Text(count == 0 ? "Send" : "Send \(count) message\(count == 1 ? "" : "s")")
                     .fontWeight(.semibold)
                 Text("⌘↩")
                     .opacity(0.7)
@@ -98,15 +98,15 @@ struct SendBar: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .disabled(count == 0)
-        .help(count == 0 ? "Nothing is queued" : "Send the queue to your agent as one batch (Cmd+Return)")
-        .accessibilityLabel(count == 0 ? "Send" : "Send \(count) comment\(count == 1 ? "" : "s")")
+        .help(count == 0 ? "Nothing is queued" : "Send the queue to your agent at once (Cmd+Return)")
+        .accessibilityLabel(count == 0 ? "Send" : "Send \(count) message\(count == 1 ? "" : "s")")
     }
 
     private static func help(_ presence: Presence) -> String {
         switch presence {
-        case .listening: "An agent runs `video-review wait`: it gets your batch the moment you send it"
-        case .working: "The agent took a batch and works on it. A batch you send now waits for its next `video-review wait`"
-        case .absent: "No agent runs `video-review wait`. A batch you send waits for the next one"
+        case .listening: "An agent runs `video-review wait`: it gets your messages the moment you send them"
+        case .working: "The agent took a send and works on it. What you send now waits for its next `video-review wait`"
+        case .absent: "No agent runs `video-review wait`. What you send waits for the next one"
         }
     }
 }

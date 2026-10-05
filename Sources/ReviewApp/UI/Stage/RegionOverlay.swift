@@ -38,12 +38,12 @@ struct RegionOverlay: View {
     }
 
     /// The rectangle to draw: the one being drawn, else the shown region.
-    private var drawn: (rect: CGRect, isDraft: Bool, pin: (number: Int, state: CommentState)?)? {
+    private var drawn: (rect: CGRect, isDraft: Bool, pin: (number: Int, state: MessageState)?)? {
         if let drag, model.isDrawingRegion {
             return (geometry.rect(from: drag.start, to: drag.current), true, nil)
         }
         guard let shown = model.shownRegion else { return nil }
-        return (geometry.rect(of: shown.region), shown.number == nil, shown.number.map { (number: $0, state: shown.state) })
+        return (geometry.rect(of: shown.region), shown.number == nil, shown.number.map { (number: $0, state: shown.state ?? .queued) })
     }
 
     private var draw: some Gesture {
@@ -68,15 +68,15 @@ struct RegionOverlay: View {
 }
 
 /// A region on the picture: the rest of the picture dimmed, the rectangle
-/// outlined in the accent colour, and the comment's pin on its corner.
+/// outlined in the accent colour, and the thread's pin on its corner.
 private struct RegionFrame: View {
     let rect: CGRect
     /// The picture: only it is dimmed, not the letterbox.
     let within: CGRect
     /// A rectangle being drawn or written about dims the picture more than
-    /// a queued comment's, which is there to be looked at.
+    /// a queued message's, which is there to be looked at.
     let isDraft: Bool
-    var pin: (number: Int, state: CommentState)?
+    var pin: (number: Int, state: MessageState)?
     @Environment(\.palette) private var palette
 
     var body: some View {

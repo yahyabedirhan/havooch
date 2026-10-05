@@ -5,11 +5,11 @@ import ReviewTranscript
 
 /// The app's way to the transcripts: it remembers the videos opened in
 /// this run, starts a video's source when the video opens, and gives a
-/// comment its lines at the moment they're asked for, also for a video
+/// thread its lines at the moment they're asked for, also for a video
 /// that was last opened in an earlier run.
 final class TranscriptDesk {
     private let sources: any Transcriber
-    /// The videos opened in this run, by content hash: a batch of a video
+    /// The videos opened in this run, by content hash: a send of a video
     /// that's no longer the open one still gets its lines.
     private var videos: [String: VideoFile] = [:]
 
@@ -37,10 +37,10 @@ final class TranscriptDesk {
     /// as the source has them now. A video that wasn't opened in this run
     /// is read where it was last opened, at the frame rate kept with it;
     /// one kept with no frame rate has no lines.
-    func lines(around time: Double, of info: VideoInfo) -> [BatchPayload.Line] {
+    func lines(around time: Double, of info: VideoInfo) -> [SendPayload.Line] {
         guard let video = videos[info.contentHash] ?? Self.file(of: info) else { return [] }
         return sources.lines(for: video, in: TranscriptWindow.range(around: time, duration: video.duration))
-            .map { BatchPayload.Line(start: $0.start, end: $0.end, text: $0.text) }
+            .map { SendPayload.Line(start: $0.start, end: $0.end, text: $0.text) }
     }
 
     /// The video file `info` names, when its frame rate was kept.

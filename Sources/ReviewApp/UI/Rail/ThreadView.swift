@@ -1,14 +1,14 @@
 import ReviewCore
 import SwiftUI
 
-/// The words of one thread message's heading: who said it, and how.
+/// The words of one message's heading: who said it, and how.
 struct ThreadHeading: Equatable {
     /// "Claude Code asked", "You answered", "Claude Code".
     var title: String
     /// The symbol in the message's badge.
     var symbol: String
 
-    init(_ message: ThreadMessage, agent: String) {
+    init(_ message: Message, agent: String) {
         switch (message.author, message.kind) {
         case (.agent, .question): (title, symbol) = ("\(agent) asked", "questionmark")
         case (.agent, _): (title, symbol) = (agent, "sparkles")
@@ -18,22 +18,24 @@ struct ThreadHeading: Equatable {
     }
 }
 
-/// A thread: the agent's messages and questions and the person's answers,
-/// in the order written, with the answer box under an open question. A
-/// batch's own messages are drawn by the same view, with no answer box.
+/// A run of a thread's messages: the agent's messages and questions and the
+/// person's answers, in the order written, with the answer box under the
+/// thread's open question when it's among them.
 struct ThreadView: View {
-    let messages: [ThreadMessage]
+    let messages: [Message]
+    /// The thread's open question; nil when there's none.
+    var openQuestion: Message?
     /// The agent's name as people read it.
     let agent: String
     /// Sends the person's answer to the open question; false when it wasn't
-    /// taken. Nil where there's nothing to answer (a batch's messages).
+    /// taken. Nil where there's nothing to answer.
     var answer: ((String) -> Bool)?
     @Environment(\.palette) private var palette
 
     @State private var words = ""
 
     var body: some View {
-        let open = answer == nil ? nil : messages.openQuestion
+        let open = answer == nil ? nil : openQuestion.flatMap { question in messages.contains(question) ? question : nil }
         VStack(alignment: .leading, spacing: 10) {
             ForEach(messages) { message in
                 ThreadRow(message: message, agent: agent, isOpen: message.id == open?.id)
@@ -77,7 +79,7 @@ struct ThreadView: View {
 /// it and when, and the words in a soft bubble. An open question is picked
 /// out: the agent waits for it.
 struct ThreadRow: View {
-    let message: ThreadMessage
+    let message: Message
     let agent: String
     var isOpen = false
 

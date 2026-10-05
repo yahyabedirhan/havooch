@@ -34,17 +34,18 @@ struct ControlMessageTests {
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
         .commentAdd(text: "This box", at: 12.5, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
         .commentAdd(text: "This box", at: nil, region: .init(x: 0, y: 0, w: 1, h: 1)),
-        .commentEdit(id: "c-7f3a9c2e", text: "Slower"), .commentDelete(id: "c-7f3a9c2e"),
+        .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1"), .commentAdd(text: "In general", at: nil, thread: "0"),
+        .commentEdit(id: "m-f92cbb2a-1", text: "Slower"), .commentDelete(id: "m-f92cbb2a-1"),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
-        .batchSend, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
-        .ack(batchID: "b-5d0c2a91", text: nil), .ack(batchID: "b-5d0c2a91", text: "On it"),
-        .status(commentID: "c-7f3a9c2e", state: .working), .status(commentID: "c-7f3a9c2e", state: .done),
-        .status(commentID: "c-7f3a9c2e", state: .failed),
-        .reply(id: "c-7f3a9c2e", text: "Slowed it down"), .reply(id: "b-5d0c2a91", text: "All done"),
-        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: nil),
-        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 0),
-        .ask(commentID: "c-7f3a9c2e", question: "Which part?", waitSeconds: 600),
-        .threadAnswer(commentID: "c-7f3a9c2e", text: "The intro"),
+        .send, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
+        .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
+        .status(messageID: "m-f92cbb2a-1", state: .working), .status(messageID: "m-f92cbb2a-1", state: .done),
+        .status(messageID: "m-f92cbb2a-1", state: .failed),
+        .reply(thread: "t-f92cbb2a-1", text: "Slowed it down"), .reply(thread: "0", text: "All done"),
+        .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil),
+        .ask(thread: "1", question: "Which part?", waitSeconds: 0),
+        .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 600),
+        .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro"),
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
@@ -127,7 +128,7 @@ struct ControlMessageTests {
         #expect(refusal(fields("comment.add", [:])) == .unreadable("the control command `comment.add` needs its `text`"))
         #expect(refusal(fields("comment.add", ["text": "Too fast", "at": -1])) != nil)
         #expect(refusal(fields("comment.edit", ["text": "Slower"])) == .unreadable("the control command `comment.edit` needs its `id`"))
-        #expect(refusal(fields("comment.edit", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `comment.edit` needs its `text`"))
+        #expect(refusal(fields("comment.edit", ["id": "m-f92cbb2a-1"])) == .unreadable("the control command `comment.edit` needs its `text`"))
         #expect(refusal(fields("comment.delete", [:])) == .unreadable("the control command `comment.delete` needs its `id`"))
         #expect(refusal(fields("context.set", [:])) == .unreadable("the control command `context.set` needs its `text`"))
         #expect(refusal(fields("wait", ["timeoutSeconds": -1]))
@@ -135,20 +136,21 @@ struct ControlMessageTests {
         #expect(refusal(fields("wait", ["timeoutSeconds": 86401])) != nil)
         #expect(refusal(fields("ack", [:])) == .unreadable("the control command `ack` needs its `id`"))
         #expect(refusal(fields("status", ["state": "done"])) == .unreadable("the control command `status` needs its `id`"))
-        #expect(refusal(fields("status", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `status` needs its `state`"))
-        #expect(refusal(fields("status", ["id": "c-7f3a9c2e", "state": "acknowledged"]))
+        #expect(refusal(fields("status", ["id": "m-f92cbb2a-1"])) == .unreadable("the control command `status` needs its `state`"))
+        #expect(refusal(fields("status", ["id": "m-f92cbb2a-1", "state": "acknowledged"]))
             == .unreadable("the control command `status` has no state `acknowledged`; it takes `working`, `done` or `failed`"))
-        #expect(refusal(fields("reply", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `reply` needs its `text`"))
-        #expect(refusal(fields("reply", ["text": "Done"])) == .unreadable("the control command `reply` needs its `id`"))
-        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `ask` needs its `text`"))
-        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e", "text": "Which?", "waitSeconds": -1]))
+        #expect(refusal(fields("reply", ["thread": "1"])) == .unreadable("the control command `reply` needs its `text`"))
+        #expect(refusal(fields("reply", ["text": "Done"])) == .unreadable("the control command `reply` needs its `thread`"))
+        #expect(refusal(fields("ask", ["thread": "1"])) == .unreadable("the control command `ask` needs its `text`"))
+        #expect(refusal(fields("ask", ["thread": "1", "text": "Which?", "waitSeconds": -1]))
             == .unreadable("the control command `ask` needs a `waitSeconds` from 0 to 86400, not -1"))
-        #expect(refusal(fields("ask", ["id": "c-7f3a9c2e", "text": "Which?", "waitSeconds": 86401])) != nil)
-        #expect(refusal(fields("thread.answer", ["id": "c-7f3a9c2e"])) == .unreadable("the control command `thread.answer` needs its `text`"))
+        #expect(refusal(fields("ask", ["thread": "1", "text": "Which?", "waitSeconds": 86401])) != nil)
+        #expect(refusal(fields("thread.answer", ["text": "a"])) == .unreadable("the control command `thread.answer` needs its `thread`"))
+        #expect(refusal(fields("thread.answer", ["thread": "1"])) == .unreadable("the control command `thread.answer` needs its `text`"))
     }
 
     @Test("the listener's answers take no lease and are never held", arguments: [
-        ControlRequest.ack(batchID: "b-1", text: nil), .status(commentID: "c-1", state: .done), .reply(id: "c-1", text: "a"),
+        ControlRequest.ack(sendID: "s-1", text: nil), .status(messageID: "m-1", state: .done), .reply(thread: "1", text: "a"),
     ])
     func listenerAnswer(request: ControlRequest) {
         #expect(request.role == .listener)
@@ -157,11 +159,11 @@ struct ControlMessageTests {
 
     @Test("an ask takes no lease and may be held for its wait, or with no limit without one; thread answer is the operator's")
     func answers() {
-        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).role == .listener)
-        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: 30).holdSeconds == 30)
-        #expect(ControlRequest.ask(commentID: "c-1", question: "a", waitSeconds: nil).holdSeconds == nil)
-        #expect(ControlRequest.threadAnswer(commentID: "c-1", text: "a").role == .operator)
-        #expect(ControlRequest.threadAnswer(commentID: "c-1", text: "a").holdSeconds == 0)
+        #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: 30).role == .listener)
+        #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: 30).holdSeconds == 30)
+        #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: nil).holdSeconds == nil)
+        #expect(ControlRequest.threadAnswer(thread: "1", text: "a").role == .operator)
+        #expect(ControlRequest.threadAnswer(thread: "1", text: "a").holdSeconds == 0)
     }
 
     @Test("a listener's wait takes no lease, and may be held for its timeout, or with no limit without one")
@@ -169,8 +171,8 @@ struct ControlMessageTests {
         #expect(ControlRequest.wait(timeoutSeconds: 30).role == .listener)
         #expect(ControlRequest.wait(timeoutSeconds: 30).holdSeconds == 30)
         #expect(ControlRequest.wait(timeoutSeconds: nil).holdSeconds == nil)
-        #expect(ControlRequest.batchSend.role == .operator)
-        #expect(ControlRequest.batchSend.holdSeconds == 0)
+        #expect(ControlRequest.send.role == .operator)
+        #expect(ControlRequest.send.holdSeconds == 0)
     }
 
     @Test("reading the app and taking or releasing the lease are free", arguments: [
@@ -183,7 +185,7 @@ struct ControlMessageTests {
     @Test("only operator requests take the lease", arguments: [
         ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
-        .commentAdd(text: "a", at: nil), .commentEdit(id: "c-1", text: "a"), .commentDelete(id: "c-1"),
+        .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
         .contextSet(text: "a"),
     ])
     func operatorRole(request: ControlRequest) {

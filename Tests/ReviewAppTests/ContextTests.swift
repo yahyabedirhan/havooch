@@ -5,7 +5,7 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// The video context: where it's read from, and when a batch carries it.
+/// The video context: where it's read from, and when a send carries it.
 /// The app's model on a copy of the fixture video in a temporary folder,
 /// whose sidecar files the tests write, and the control server in front of
 /// it. No window, no socket.
@@ -40,7 +40,7 @@ struct ContextDeliveryTests {
     private func app() async throws -> (AppModel, ControlServer) {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: video.path) {
-            try FileManager.default.copyItem(at: CommentTests.fixture, to: video)
+            try FileManager.default.copyItem(at: MessageTests.fixture, to: video)
         }
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
         try await model.open(video)
@@ -55,13 +55,13 @@ struct ContextDeliveryTests {
         try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
     }
 
-    /// Sends one comment as a batch and takes it with a `wait`: the
+    /// Sends one message and takes it with a `wait`: the
     /// payload's `context`, nil for `null`.
-    private func contextOfNextBatch(
+    private func contextOfNextSend(
         _ model: AppModel, _ server: ControlServer, as holder: Holder = listener
     ) async throws -> String? {
-        _ = try await model.addComment(text: "A comment", at: 3)
-        _ = try await model.sendBatch()
+        _ = try await model.addMessage(text: "A message", at: 3)
+        _ = try await model.sendQueue()
         return try await contextOfWait(server, as: holder)
     }
 
@@ -101,7 +101,7 @@ struct ContextDeliveryTests {
 
     @Test("the fixture's own sidecar is found beside it")
     func fixtureSidecar() throws {
-        let sidecar = try #require(ContextReader.sidecar(beside: CommentTests.fixture))
+        let sidecar = try #require(ContextReader.sidecar(beside: MessageTests.fixture))
         #expect(sidecar.file.lastPathComponent == "sample.context.md")
         #expect(sidecar.text.hasPrefix("# Context: sample\n"))
         #expect(sidecar.text.hasSuffix("- yahyabedirhan/video-review"))
@@ -118,45 +118,45 @@ struct ContextDeliveryTests {
         #expect(ContextReader.noteHeading == Self.noteHeading)
     }
 
-    // MARK: - When a batch carries it
+    // MARK: - When a send carries it
 
-    @Test("the first batch of a listener session has the context, the next has null, and a new note or a changed sidecar puts it in again")
+    @Test("the first send of a listener session has the context, the next has null, and a new note or a changed sidecar puts it in again")
     func oncePerSession() async throws {
         defer { cleanUp() }
         try write("About the clip\n", to: "clip.context.md")
         let (model, server) = try await app()
 
-        #expect(try await contextOfNextBatch(model, server) == "About the clip")
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == "About the clip")
+        #expect(try await contextOfNextSend(model, server) == nil)
 
         // The note, as an operator sets it.
         let set = await server.reply(to: ControlRequest.contextSet(text: " Mind the intro\n").sent(by: Self.operatorAgent))
         #expect(set.reply == .done("context note set (14 characters)\n"))
         let state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect((state["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
-        #expect(try await contextOfNextBatch(model, server) == "About the clip\n\n\(Self.noteHeading)\n\nMind the intro")
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == "About the clip\n\n\(Self.noteHeading)\n\nMind the intro")
+        #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The sidecar changes on disk: nothing watches it, the next batch reads it.
+        // The sidecar changes on disk: nothing watches it, the next send reads it.
         try write("About the clip, second cut\n", to: "clip.context.md")
-        #expect(try await contextOfNextBatch(model, server) == "About the clip, second cut\n\n\(Self.noteHeading)\n\nMind the intro")
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == "About the clip, second cut\n\n\(Self.noteHeading)\n\nMind the intro")
+        #expect(try await contextOfNextSend(model, server) == nil)
 
         // The note cleared is a change too.
         let cleared = await server.reply(to: ControlRequest.contextSet(text: "").sent(by: Self.operatorAgent))
         #expect(cleared.reply == .done("context note cleared\n"))
-        #expect(try await contextOfNextBatch(model, server) == "About the clip, second cut")
+        #expect(try await contextOfNextSend(model, server) == "About the clip, second cut")
     }
 
-    @Test("a new listener session gets the context again, with the batch the last one didn't finish")
+    @Test("a new listener session gets the context again, with the send the last one didn't finish")
     func newSession() async throws {
         defer { cleanUp() }
         try write("About the clip\n", to: "clip.context.md")
         let (model, server) = try await app()
-        #expect(try await contextOfNextBatch(model, server) == "About the clip")
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == "About the clip")
+        #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The listener restarts under another key: both batches are in line again.
+        // The listener restarts under another key: both sends are in line again.
         #expect(try await contextOfWait(server, as: Self.restarted) == "About the clip")
         #expect(try await contextOfWait(server, as: Self.restarted) == nil)
         #expect(model.listeners.outbox.session?.key == Self.restarted.key)
@@ -167,8 +167,8 @@ struct ContextDeliveryTests {
         defer { cleanUp() }
         try write("About the clip\n", to: "clip.context.md")
         let (model, server) = try await app()
-        _ = try await model.addComment(text: "A comment", at: 3)
-        _ = try await model.sendBatch()
+        _ = try await model.addMessage(text: "A message", at: 3)
+        _ = try await model.sendQueue()
         let lost = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(try object(lost.reply.output)["context"] as? String == "About the clip")
 
@@ -183,14 +183,14 @@ struct ContextDeliveryTests {
         let (model, server) = try await app()
         #expect(model.sidecar == nil)
         #expect(model.contextText == nil)
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == nil)
 
         try model.setContextNote("The second scene is the one to fix")
 
         #expect(model.isContextDue)
-        #expect(try await contextOfNextBatch(model, server) == "\(Self.noteHeading)\n\nThe second scene is the one to fix")
+        #expect(try await contextOfNextSend(model, server) == "\(Self.noteHeading)\n\nThe second scene is the one to fix")
         #expect(!model.isContextDue)
-        #expect(try await contextOfNextBatch(model, server) == nil)
+        #expect(try await contextOfNextSend(model, server) == nil)
     }
 
     @Test("the folder's context.md serves a video with no sidecar of its own")
@@ -199,7 +199,7 @@ struct ContextDeliveryTests {
         try write("For every video here\n", to: "context.md")
         let (model, server) = try await app()
         #expect(model.sidecar?.file.lastPathComponent == "context.md")
-        #expect(try await contextOfNextBatch(model, server) == "For every video here")
+        #expect(try await contextOfNextSend(model, server) == "For every video here")
     }
 
     // MARK: - The note
@@ -216,7 +216,7 @@ struct ContextDeliveryTests {
 
         // The same content under another name, in another folder, is the
         // same video: its note is back.
-        try await model.open(CommentTests.fixture)
+        try await model.open(MessageTests.fixture)
         #expect(model.contextNote == "Mind the intro")
         #expect(model.sidecar?.file.lastPathComponent == "sample.context.md")
     }
@@ -237,7 +237,7 @@ struct ContextDeliveryTests {
         defer { cleanUp() }
         try write("About the clip\n", to: "clip.context.md")
         let (model, server) = try await app()
-        #expect(try await contextOfNextBatch(model, server) == "About the clip")
+        #expect(try await contextOfNextSend(model, server) == "About the clip")
         model.isContextShown = true
         // The file changed since the video opened: the popover reads it again.
         try write("About the clip, second cut\n", to: "clip.context.md")
@@ -249,7 +249,7 @@ struct ContextDeliveryTests {
         #expect(!model.isContextShown)
         #expect(model.contextNote == "Mind the intro")
         #expect(model.problem == nil)
-        #expect(try await contextOfNextBatch(model, server) == "About the clip, second cut\n\n\(Self.noteHeading)\n\nMind the intro")
+        #expect(try await contextOfNextSend(model, server) == "About the clip, second cut\n\n\(Self.noteHeading)\n\nMind the intro")
     }
 
     @Test("the popover says where the context comes from and when the agent gets it")
@@ -261,7 +261,7 @@ struct ContextDeliveryTests {
 
         let due = ContextWords(sidecar: "clip.context.md", names: names, hasContext: true, isDue: true)
         #expect(due.source == "clip.context.md")
-        #expect(due.delivery == "Goes to the agent with your next batch")
+        #expect(due.delivery == "Goes to the agent with your next send")
 
         let had = ContextWords(sidecar: "context.md", names: names, hasContext: true, isDue: false)
         #expect(had.source == "context.md")

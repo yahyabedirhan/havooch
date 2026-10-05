@@ -75,7 +75,7 @@ struct ImageFilesTests {
     func writes() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        let id = try #require(ItemID("c-7f3a9c2e"))
+        let id = try #require(ItemID("t-f92cbb2a-1"))
         let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
         try ImageFiles.write(try image(width: 320, height: 180), to: file)
 
@@ -101,7 +101,7 @@ struct ImageFilesTests {
         // A file where the folder should be.
         let blocker = scratch.folder.appendingPathComponent("videos")
         try Data().write(to: blocker)
-        let id = try #require(ItemID("c-7f3a9c2e"))
+        let id = try #require(ItemID("t-f92cbb2a-1"))
         let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
         #expect(throws: ImageFiles.Failure.self) { try ImageFiles.write(try image(width: 4, height: 4), to: file) }
     }

@@ -30,11 +30,11 @@ struct Palette: Equatable {
         )
     }
 
-    /// The colour of a comment state. A state is never told by colour
+    /// The colour of a message state. A state is never told by colour
     /// alone: `StateLook` gives its glyph and its name.
-    func state(_ state: CommentState) -> Color {
+    func state(_ state: MessageState) -> Color {
         switch state {
-        case .draft, .queued: self[.stateQueued]
+        case .queued: self[.stateQueued]
         case .sent: self[.stateSent]
         case .acknowledged: self[.stateAcknowledged]
         case .working: self[.stateWorking]

@@ -18,7 +18,7 @@ struct TimelineLane: View {
                 Scrubber(time: engine.time, duration: engine.duration) { model.scrub(to: $0) }
                     .padding(.top, Self.markerBand)
                 MarkerLayer(
-                    comments: model.comments, duration: engine.duration, selection: model.selection, unread: model.unread,
+                    threads: model.frameThreads, duration: engine.duration, selection: model.selection, unread: model.unread,
                     select: { model.select($0) },
                     stem: Self.markerBand - MarkerPin.size + Scrubber.trackTop
                 )

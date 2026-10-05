@@ -16,15 +16,15 @@ struct ContextWords: Equatable {
     ///   - sidecar: the name of the sidecar file that serves the video.
     ///   - names: the names a sidecar of this video may have.
     ///   - hasContext: whether there's anything to tell: a sidecar's text or a note.
-    ///   - isDue: whether the listener's next batch carries the context.
+    ///   - isDue: whether the listener's next send carries the context.
     init(sidecar: String?, names: [String], hasContext: Bool, isDue: Bool) {
         source = sidecar ?? "No \(names.joined(separator: " or ")) beside this video"
         if !hasContext {
             delivery = "Nothing to tell the agent yet"
             help = "Tell the agent what this video is about"
         } else if isDue {
-            delivery = "Goes to the agent with your next batch"
-            help = "What the agent is told about this video. It goes with your next batch"
+            delivery = "Goes to the agent with your next send"
+            help = "What the agent is told about this video. It goes with your next send"
         } else {
             delivery = "The agent has this. It goes again when it changes"
             help = "What the agent is told about this video. The agent has it"
@@ -98,7 +98,7 @@ struct ContextPopover: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Context for the agent")
                     .font(.headline)
-                Text("Sent with the first batch of a listening agent, and again when it changes.")
+                Text("Sent with the first send to a listening agent, and again when it changes.")
                     .font(.callout)
                     .foregroundStyle(palette[.textSecondary])
                     .fixedSize(horizontal: false, vertical: true)

@@ -1,6 +1,6 @@
 import Foundation
 
-/// One agent listening for batches: the holder of its `wait`. Its key tells
+/// One agent listening for sends: the holder of its `wait`. Its key tells
 /// one listener session from the next.
 public struct ListenerSession: Codable, Equatable, Sendable {
     public var key: String
@@ -16,22 +16,22 @@ public struct ListenerSession: Codable, Equatable, Sendable {
     }
 }
 
-/// Whether an agent is there for the person's batches.
+/// Whether an agent is there for the person's sends.
 public enum Presence: String, Codable, Sendable, CaseIterable {
-    /// A `wait` is open and the listener has no batch to work on.
+    /// A `wait` is open and the listener has no send to work on.
     case listening
-    /// The listener took a batch that isn't finished, and is alive.
+    /// The listener took a send that isn't finished, and is alive.
     case working
-    /// Nobody waits: a batch sent now waits for the next `wait`.
+    /// Nobody waits: a send made now waits for the next `wait`.
     case absent
 }
 
 /// The listener's side of the app as a pure value, given the time on each
-/// call, like the lease: the line of sent batches waiting for a `wait`
-/// (`pending`), the batches a listener took and hasn't finished (`taken`),
+/// call, like the lease: the line of sends waiting for a `wait`
+/// (`pending`), the sends a listener took and hasn't finished (`taken`),
 /// who the listener is (`session`), and whether it's there (`presence`).
 ///
-/// A batch goes `enqueue → deliverNext → finished`. A `wait` from another
+/// A send goes `enqueue → deliverNext → finished`. A `wait` from another
 /// holder key is a new listener session: what the last one took and didn't
 /// finish goes back to the front of the line, and it gets each video's
 /// context again (`contextSent`). `pending`, `taken`, `session` and
@@ -39,9 +39,9 @@ public enum Presence: String, Codable, Sendable, CaseIterable {
 /// the listener was last heard belong to one run of the app.
 public struct Outbox: Codable, Equatable, Sendable {
     /// Sent and not yet delivered, first in, first out.
-    public private(set) var pending: [BatchRef] = []
+    public private(set) var pending: [SendRef] = []
     /// Delivered and not finished.
-    public private(set) var taken: [BatchRef] = []
+    public private(set) var taken: [SendRef] = []
     /// The listener of the last `wait`; nil until the first one.
     public private(set) var session: ListenerSession?
     /// Whether a `wait` is open now.
@@ -54,7 +54,7 @@ public struct Outbox: Codable, Equatable, Sendable {
     /// the digest of the text it last got. Empty for a new session.
     public private(set) var contextSent: [String: String] = [:]
 
-    /// How long a listener with a taken batch counts as alive after its
+    /// How long a listener with a taken send counts as alive after its
     /// last command: it works between two commands.
     public static let workingGrace: TimeInterval = 120
     /// How long a listener with nothing taken counts as alive after its
@@ -72,19 +72,19 @@ public struct Outbox: Codable, Equatable, Sendable {
     /// missing reads as empty.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        pending = try container.decodeIfPresent([BatchRef].self, forKey: .pending) ?? []
-        taken = try container.decodeIfPresent([BatchRef].self, forKey: .taken) ?? []
+        pending = try container.decodeIfPresent([SendRef].self, forKey: .pending) ?? []
+        taken = try container.decodeIfPresent([SendRef].self, forKey: .taken) ?? []
         session = try container.decodeIfPresent(ListenerSession.self, forKey: .session)
         contextSent = try container.decodeIfPresent([String: String].self, forKey: .contextSent) ?? [:]
     }
 
     /// Makes the outbox agree with the reviews at launch. `unfinished` is
-    /// every batch on disk with a comment the listener hasn't finished, in
-    /// the order sent. A batch that's no longer one of them leaves
+    /// every send on disk with a message the listener hasn't finished, in
+    /// the order sent. A send that's no longer one of them leaves
     /// `pending` and `taken`; one that's in neither joins the end of the
     /// line. So a run that ended between saving a review and saving the
     /// outbox, or an outbox file that was lost, costs no feedback.
-    public mutating func reconcile(unfinished: [BatchRef]) {
+    public mutating func reconcile(unfinished: [SendRef]) {
         let known = Set(unfinished)
         pending.removeAll { !known.contains($0) }
         taken.removeAll { !known.contains($0) }
@@ -92,25 +92,25 @@ public struct Outbox: Codable, Equatable, Sendable {
         for ref in unfinished where present.insert(ref).inserted { pending.append(ref) }
     }
 
-    /// Whether `other` is the same on disk: the same line, taken batches,
+    /// Whether `other` is the same on disk: the same line, taken sends,
     /// session and context sent.
     public func isKeptAs(_ other: Outbox) -> Bool {
         pending == other.pending && taken == other.taken && session == other.session && contextSent == other.contextSent
     }
 
-    /// A batch the person sent joins the end of the line.
-    public mutating func enqueue(_ ref: BatchRef) {
+    /// A send the person made joins the end of the line.
+    public mutating func enqueue(_ ref: SendRef) {
         guard !pending.contains(ref), !taken.contains(ref) else { return }
         pending.append(ref)
     }
 
     /// A `wait` opened. From another key than the last one it's a new
-    /// listener session: every taken batch goes back to the front of the
-    /// line, in the order it was taken. Returns those batches, whose
-    /// unfinished comments the caller returns to `sent`.
+    /// listener session: every taken send goes back to the front of the
+    /// line, in the order it was taken. Returns those sends, whose
+    /// unfinished messages the caller returns to `sent`.
     @discardableResult
-    public mutating func waitOpened(by listener: ListenerSession, at now: Date) -> [BatchRef] {
-        var requeued: [BatchRef] = []
+    public mutating func waitOpened(by listener: ListenerSession, at now: Date) -> [SendRef] {
+        var requeued: [SendRef] = []
         if let session, session.key != listener.key {
             requeued = taken
             pending.insert(contentsOf: taken, at: 0)
@@ -124,7 +124,7 @@ public struct Outbox: Codable, Equatable, Sendable {
         return requeued
     }
 
-    /// The open `wait` closed with no batch: its time ran out, its client
+    /// The open `wait` closed with no send: its time ran out, its client
     /// went away, or a newer `wait` replaced it and closed in turn.
     public mutating func waitClosed(at now: Date) {
         guard isWaitOpen else { return }
@@ -132,10 +132,10 @@ public struct Outbox: Codable, Equatable, Sendable {
         lastHeard = now
     }
 
-    /// The batch the open `wait` gets: the first in line, which is taken
+    /// The send the open `wait` gets: the first in line, which is taken
     /// from now on. The `wait` is answered, so it's no longer open. Nil
     /// while no `wait` is open or nothing is in line.
-    public mutating func deliverNext(at now: Date) -> BatchRef? {
+    public mutating func deliverNext(at now: Date) -> SendRef? {
         guard isWaitOpen, !pending.isEmpty else { return nil }
         let ref = pending.removeFirst()
         taken.append(ref)
@@ -146,7 +146,7 @@ public struct Outbox: Codable, Equatable, Sendable {
 
     /// The reply that carried `ref` couldn't be written: the listener never
     /// got it, so it's first in line again.
-    public mutating func undelivered(_ ref: BatchRef) {
+    public mutating func undelivered(_ ref: SendRef) {
         guard let index = taken.firstIndex(of: ref) else { return }
         taken.remove(at: index)
         pending.insert(ref, at: 0)
@@ -155,20 +155,20 @@ public struct Outbox: Codable, Equatable, Sendable {
     }
 
     /// `ref` leaves the line undelivered: there's nothing of it to deliver.
-    public mutating func discard(_ ref: BatchRef) {
+    public mutating func discard(_ ref: SendRef) {
         pending.removeAll { $0 == ref }
     }
 
     /// The listener has nothing left to do on `ref`.
-    public mutating func finished(_ ref: BatchRef) {
+    public mutating func finished(_ ref: SendRef) {
         taken.removeAll { $0 == ref }
     }
 
     // MARK: - The video context
 
-    /// The payload's `context` for a batch of the video `contentHash`,
+    /// The payload's `context` for a send of the video `contentHash`,
     /// whose context is `text` now: the text when this session hasn't had
-    /// it (its first batch of the video, or the text changed since), which
+    /// it (its first send of the video, or the text changed since), which
     /// it has from now on; nil when the session has this very text, and
     /// when there's no text.
     public mutating func context(for contentHash: String, text: String?) -> String? {
@@ -177,7 +177,7 @@ public struct Outbox: Codable, Equatable, Sendable {
         return text
     }
 
-    /// Whether the next batch of the video `contentHash` carries `text`:
+    /// Whether the next send of the video `contentHash` carries `text`:
     /// there is a text, and it isn't the one this session last got.
     public func isContextDue(for contentHash: String, text: String?) -> Bool {
         guard let text, !text.isEmpty else { return false }
@@ -217,9 +217,9 @@ public struct Outbox: Codable, Equatable, Sendable {
     }
 
     /// Whether an agent is there at `now`. `working` while the listener has
-    /// a taken batch and is alive; `listening` while it's alive with
+    /// a taken send and is alive; `listening` while it's alive with
     /// nothing taken; `absent` otherwise. Alive is an open `wait` or
-    /// `ask`, or a last word less than `workingGrace` ago with a batch
+    /// `ask`, or a last word less than `workingGrace` ago with a send
     /// taken and less than `listeningGrace` ago without.
     public func presence(at now: Date) -> Presence {
         let grace = taken.isEmpty ? Self.listeningGrace : Self.workingGrace

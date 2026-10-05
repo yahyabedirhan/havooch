@@ -12,7 +12,7 @@ enum Invocation: Equatable, Sendable {
     case appOpen(demo: URL?)
     /// `app quit`: ask the app to quit, then wait until it's gone.
     case appQuit
-    /// `wait`: hold a request until a batch is sent, for `timeout` seconds
+    /// `wait`: hold a request until a send is made, for `timeout` seconds
     /// or with no limit, connecting again while the app isn't running.
     case wait(timeout: Int?)
 }

@@ -126,7 +126,7 @@ nonisolated final class SocketListener: @unchecked Sendable {
     /// half-closes once it has sent, so its hanging up shows only when
     /// something can't be written to it: a heartbeat, which tells the
     /// server the client is gone, or the reply, which hands back what it
-    /// carried (a granted lease, a delivered batch).
+    /// carried (a granted lease, a delivered send).
     private func serve(_ connection: Int32) {
         guard case .data(let request) = UnixSocket.readToEnd(connection, limit: ControlRequest.largestMessage), !request.isEmpty else {
             Darwin.close(connection)

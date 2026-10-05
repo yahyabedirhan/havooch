@@ -13,24 +13,35 @@ struct LibraryTests {
 
     private func id(_ text: String) throws -> ItemID { try #require(ItemID(text)) }
 
-    /// A review with everything a review can hold: a queued comment, a sent
-    /// batch of two comments (one on a region, with a question and its
-    /// answer, done; one working), a batch message and a note.
-    private func review(_ hash: String = hash, path: String = "/videos/sample.mp4", prefix: String = "0") throws -> VideoReview {
+    /// The id of `kind` and `number` on the video with `hash`.
+    private func item(_ kind: String, _ number: Int) throws -> ItemID {
+        try item(kind, Self.hash, number)
+    }
+
+    /// The id of `kind` and `number` on the video with `hash`.
+    private func item(_ kind: String, _ hash: String, _ number: Int) throws -> ItemID {
+        try id("\(kind)-\(hash.prefix(8))-\(number)")
+    }
+
+    /// A review with everything a review can hold: a send of two messages
+    /// on two threads (one on a region, with a question and its answer and
+    /// a reply, done; one working), the acknowledgement on General, a
+    /// queued message on a third thread, a popover frame and a note.
+    private func review(_ hash: String = hash, path: String = "/videos/sample.mp4") throws -> VideoReview {
         var review = VideoReview(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: path, frameRate: 30))
-        let first = try id("c-\(prefix)0000001")
-        let second = try id("c-\(prefix)0000002")
-        let batch = try id("b-\(prefix)0000001")
-        try review.addComment(id: first, time: 10, text: "Too fast here")
-        try review.addComment(id: second, time: 12.5, text: "This box", region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
-        try review.send(batchID: batch, at: at(1_800_000_000.25))
-        try review.acknowledge(batch, text: "On it", messageID: try id("m-\(prefix)0000001"), at: at(1_800_000_001))
-        try review.ask(second, question: "Which box?", messageID: try id("m-\(prefix)0000002"), at: at(1_800_000_002.5))
-        try review.answer(second, text: "The left one", messageID: try id("m-\(prefix)0000003"), at: at(1_800_000_003))
-        try review.reply(to: second, text: "Fixed in abc123", messageID: try id("m-\(prefix)0000004"), at: at(1_800_000_004))
-        try review.setStatus(second, .done)
-        try review.setStatus(first, .working)
-        try review.addComment(id: try id("c-\(prefix)0000003"), time: 3, text: "Still queued")
+        let first = try review.write(text: "Too fast here", at: 10, now: at(1_800_000_000)).message.id
+        let boxed = try review.write(
+            text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25), now: at(1_800_000_000)
+        )
+        let send = try review.send(at: at(1_800_000_000.25))
+        try review.acknowledge(send.id, text: "On it", now: at(1_800_000_001))
+        try review.ask(on: boxed.thread.id, question: "Which box?", now: at(1_800_000_002.5))
+        try review.answer(boxed.thread.id, text: "The left one", now: at(1_800_000_003))
+        try review.reply(on: boxed.thread.id, text: "Fixed in abc123", now: at(1_800_000_004))
+        try review.setState(boxed.message.id, .done)
+        try review.setState(first, .working)
+        try review.write(text: "Still queued", at: 3, now: at(1_800_000_005))
+        try review.setPopoverFrame(boxed.thread.id, PopoverFrame(x: 0.5, y: 0.1, w: 0.4, h: 0.3))
         review.note = "The pricing page"
         return review
     }
@@ -41,7 +52,7 @@ struct LibraryTests {
 
     // MARK: - Reviews
 
-    @Test("a review reads back the same in a new library: comments, the region, states, threads, batches, the note and the frame rate")
+    @Test("a review reads back the same in a new library: threads, messages, the region, states, sends, popover frames, the note and the frame rate")
     func reviewRoundTrip() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
@@ -52,9 +63,16 @@ struct LibraryTests {
 
         let read = try #require(try Library(layout: SupportLayout(root: scratch.folder)).load(Self.hash))
         #expect(read == review)
-        #expect(read.comments.map(\.state) == [.queued, .working, .done])
-        #expect(read.comments[2].thread.map(\.kind) == [.question, .answer, .message])
-        #expect(read.batches.first?.messages.map(\.text) == ["On it"])
+        #expect(read.threads.map(\.number) == [0, 3, 1, 2])
+        #expect(read.threads.map(\.state) == [nil, .queued, .working, .done])
+        #expect(read.thread(try item("t", 2))?.messages.map(\.kind) == [.message, .question, .answer, .message])
+        #expect(read.thread(try item("t", 2))?.popoverFrame == PopoverFrame(x: 0.5, y: 0.1, w: 0.4, h: 0.3))
+        #expect(read.general.messages.map(\.text) == ["On it"])
+        let sent: [[ItemID]] = [[try item("m", 1), try item("m", 2)]]
+        #expect(read.sends.map(\.messageIDs) == sent)
+        // The counters come back too: the next thread is #4.
+        var next = read
+        #expect(try next.write(text: "New", at: 1, now: at(1_800_000_010)).thread.number == 4)
         #expect(read.video.frameRate == 30)
         // Only the one file, with nothing temporary left beside it.
         #expect(files(under: scratch.folder) == ["videos", "videos/\(Self.hash)", "videos/\(Self.hash)/review.json"])
@@ -70,55 +88,45 @@ struct LibraryTests {
         let text = try String(contentsOf: library.layout.reviewFile(Self.hash), encoding: .utf8)
         let object = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         #expect(object["schemaVersion"] as? Int == 1)
-        #expect(Set(object.keys) == ["schemaVersion", "video", "note", "comments", "batches"])
+        #expect(Set(object.keys) == ["schemaVersion", "video", "note", "threads", "sends", "counters"])
         #expect(text.contains("\"sentAt\" : \"2027-01-15T08:00:00.250Z\""))
         #expect(text.contains("\"path\" : \"/videos/sample.mp4\""))
     }
 
-    @Test("a new library knows the video of every comment and batch on disk; a save keeps the index current")
+    @Test("a new library knows the video of every id on disk by its hash prefix; a save adds a new video")
     func index() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        var first = try review()
-        let second = try review(Self.other, prefix: "1")
-        try Library(layout: SupportLayout(root: scratch.folder)).save(first)
-        try Library(layout: SupportLayout(root: scratch.folder)).save(second)
+        try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
 
         let library = Library(layout: SupportLayout(root: scratch.folder))
-        #expect(library.contentHash(of: try id("c-00000001")) == Self.hash)
-        #expect(library.contentHash(of: try id("b-00000001")) == Self.hash)
-        #expect(library.contentHash(of: try id("c-10000002")) == Self.other)
-        #expect(library.contentHash(of: try id("b-10000001")) == Self.other)
-        #expect(library.contentHash(of: try id("c-99999999")) == nil)
-        // A message is found through its comment, not by its own id.
-        #expect(library.contentHash(of: try id("m-00000001")) == nil)
+        #expect(library.contentHash(prefix: "aaaaaaaa") == Self.hash)
+        #expect(library.contentHash(of: try item("t", 2)) == Self.hash)
+        #expect(library.contentHash(of: try item("m", 99)) == Self.hash)
+        #expect(library.contentHash(of: try item("s", 1)) == Self.hash)
+        #expect(library.contentHash(of: try item("t", Self.other, 1)) == nil)
 
-        try first.deleteComment(try id("c-00000003"))
-        try first.addComment(id: try id("c-00000009"), time: 1, text: "New")
-        try library.save(first)
-        #expect(library.contentHash(of: try id("c-00000003")) == nil)
-        #expect(library.contentHash(of: try id("c-00000009")) == Self.hash)
-        #expect(library.contentHash(of: try id("c-10000002")) == Self.other)
+        try library.save(try review(Self.other))
+        #expect(library.contentHash(of: try item("t", Self.other, 1)) == Self.other)
     }
 
-    @Test("a review written before a note, threads, messages and the frame rate existed still reads")
-    func olderFile() throws {
+    @Test("a prototype's review, with comments and batches, doesn't read and is left as it is")
+    func prototypeFile() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         let library = Library(layout: SupportLayout(root: scratch.folder))
         let file = library.layout.reviewFile(Self.hash)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data("""
+        let old = Data("""
         { "video": { "contentHash": "\(Self.hash)", "title": "sample", "duration": 21.233, "path": "/videos/sample.mp4" },
           "comments": [ { "id": "c-00000001", "time": 10, "text": "Too fast", "state": "sent", "batchID": "b-00000001" } ],
           "batches": [ { "id": "b-00000001", "sentAt": "2026-10-04T19:02:11Z", "commentIDs": ["c-00000001"] } ] }
-        """.utf8).write(to: file)
+        """.utf8)
+        try old.write(to: file)
 
-        let review = try #require(try library.load(Self.hash))
-        #expect(review.note == "")
-        #expect(review.comments.first?.thread == [])
-        #expect(review.batches.first?.sentAt == at(1_791_140_531))
-        #expect(review.video.frameRate == nil)
+        let failure = #expect(throws: Library.Failure.self) { try library.load(Self.hash) }
+        #expect(failure?.reason.contains("doesn't read") == true)
+        #expect(try Data(contentsOf: file) == old)
     }
 
     @Test("a review from a newer schema isn't read, is named in the reason, and is left as it is")
@@ -145,14 +153,14 @@ struct LibraryTests {
         let file = Library(layout: SupportLayout(root: scratch.folder)).layout.reviewFile(Self.hash)
         let half = try Data(contentsOf: file).prefix(200)
         try half.write(to: file)
-        try Library(layout: SupportLayout(root: scratch.folder)).save(try review(Self.other, prefix: "1"))
+        try Library(layout: SupportLayout(root: scratch.folder)).save(try review(Self.other))
 
         let library = Library(layout: SupportLayout(root: scratch.folder))
         let failure = #expect(throws: Library.Failure.self) { try library.load(Self.hash) }
         #expect(failure?.reason.contains("doesn't read") == true)
         #expect(try Data(contentsOf: file) == half)
-        #expect(library.contentHash(of: try id("c-00000001")) == nil)
-        #expect(library.contentHash(of: try id("c-10000001")) == Self.other)
+        #expect(library.contentHash(of: try item("m", 1)) == nil)
+        #expect(library.contentHash(of: try item("m", Self.other, 1)) == Self.other)
 
         // A folder copied by hand under another video's hash.
         let copied = library.layout.reviewFile(String(repeating: "c", count: 64))
@@ -207,14 +215,14 @@ struct LibraryTests {
         let library = Library(layout: SupportLayout(root: demo))
         try library.save(try review())
         var outbox = Outbox()
-        outbox.enqueue(BatchRef(batchID: try id("b-00000001"), contentHash: Self.hash))
+        outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
         try library.save(outbox)
         library.saveRecent(URL(fileURLWithPath: "/videos/sample.mp4"))
 
         #expect(!FileManager.default.fileExists(atPath: real.path))
         let other = Library(layout: SupportLayout(root: real))
         #expect(try other.load(Self.hash) == nil)
-        #expect(other.contentHash(of: try id("c-00000001")) == nil)
+        #expect(other.contentHash(of: try item("m", 1)) == nil)
         #expect(other.loadOutbox() == Outbox())
         #expect(other.recent() == nil)
         #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outbox.json", "recent.json"])
@@ -222,17 +230,17 @@ struct LibraryTests {
 
     // MARK: - The outbox
 
-    @Test("the outbox reads back with its line, its taken batches, its session and the context sent")
+    @Test("the outbox reads back with its line, its taken sends, its session and the context sent")
     func outboxRoundTrip() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
-        var second = try review(Self.other, prefix: "1")
-        try second.send(batchID: try id("b-10000002"), at: at(1_800_000_100))
+        var second = try review(Self.other)
+        try second.send(at: at(1_800_000_100))
         try Library(layout: SupportLayout(root: scratch.folder)).save(second)
-        let taken = BatchRef(batchID: try id("b-00000001"), contentHash: Self.hash)
-        let waiting = BatchRef(batchID: try id("b-10000002"), contentHash: Self.other)
-        let alsoWaiting = BatchRef(batchID: try id("b-10000001"), contentHash: Self.other)
+        let taken = SendRef(sendID: try item("s", 1), contentHash: Self.hash)
+        let waiting = SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other)
+        let alsoWaiting = SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other)
         var outbox = Outbox()
         outbox.enqueue(taken)
         outbox.enqueue(waiting)
@@ -256,21 +264,22 @@ struct LibraryTests {
         #expect(text.contains("\"schemaVersion\" : 1"))
     }
 
-    @Test("with no outbox file, or one that doesn't read, every unfinished batch on disk is in line, in the order sent")
+    @Test("with no outbox file, or one that doesn't read, every unfinished send on disk is in line, in the order sent")
     func outboxRebuilt() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        var later = try review(Self.other, prefix: "1")
-        try later.send(batchID: try id("b-10000002"), at: at(1_900_000_000))
+        var later = try review(Self.other)
+        try later.send(at: at(1_900_000_000))
         try Library(layout: SupportLayout(root: scratch.folder)).save(later)
         try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
-        var finished = try review(String(repeating: "c", count: 64), prefix: "2")
-        try finished.setStatus(try id("c-20000001"), .failed)
+        let third = String(repeating: "c", count: 64)
+        var finished = try review(third)
+        try finished.setState(try item("m", third, 1), .failed)
         try Library(layout: SupportLayout(root: scratch.folder)).save(finished)
         let expected = [
-            BatchRef(batchID: try id("b-00000001"), contentHash: Self.hash),
-            BatchRef(batchID: try id("b-10000001"), contentHash: Self.other),
-            BatchRef(batchID: try id("b-10000002"), contentHash: Self.other),
+            SendRef(sendID: try item("s", 1), contentHash: Self.hash),
+            SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other),
+            SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other),
         ]
 
         #expect(Set(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox().pending.prefix(2)) == Set(expected.prefix(2)))
@@ -291,7 +300,7 @@ struct LibraryTests {
 
         var outbox = library.loadOutbox()
         #expect(outbox == Outbox())
-        outbox.enqueue(BatchRef(batchID: try id("b-00000001"), contentHash: Self.hash))
+        outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
         #expect(throws: Library.Failure.self) { try library.save(outbox) }
         #expect(try Data(contentsOf: library.layout.outboxFile) == newer)
     }

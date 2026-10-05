@@ -6,10 +6,10 @@ import ReviewTranscript
 import ReviewWire
 import UniformTypeIdentifiers
 
-/// The orchestrator: which video is open, the comment being written, the
-/// selection, and every action a person or an operator can take. The UI and
-/// the control server call the same methods, so a click and its CLI command
-/// are one code path.
+/// The orchestrator: which video is open, the message being written, the
+/// selected thread, and every action a person or an operator can take. The
+/// UI and the control server call the same methods, so a click and its CLI
+/// command are one code path.
 @Observable
 final class AppModel: AppControlling {
     /// The video that's open.
@@ -21,8 +21,8 @@ final class AppModel: AppControlling {
         var contentHash: String
     }
 
-    /// The comment still in the comment box: it has a time, and no id and
-    /// no keyframe until it's queued.
+    /// The message still in the popover: view state only, never kept. It
+    /// has a frame time, and no id and no keyframe until it's queued.
     struct Draft: Equatable {
         var time: Double
         var text: String
@@ -30,14 +30,15 @@ final class AppModel: AppControlling {
         var region: Region?
     }
 
-    /// A region drawn on the frame, and what it belongs to.
+    /// A region drawn on the frame, and the thread it belongs to.
     struct ShownRegion: Equatable {
         var region: Region
-        /// The comment's number in time order, as on its marker; nil for
-        /// the comment still in the comment box.
+        /// The thread's number, as on its pin; nil for the message still
+        /// in the popover.
         var number: Int?
-        /// The comment's state, which its pin is drawn by.
-        var state = CommentState.draft
+        /// The thread's state, which its pin is drawn by; nil for the
+        /// message still in the popover.
+        var state: MessageState?
     }
 
     /// Why the last thing the person asked for didn't work.
@@ -49,7 +50,7 @@ final class AppModel: AppControlling {
     let engine = PlayerEngine()
     /// The open video's review, and the one path for changing it.
     let desk: ReviewDesk
-    /// The listener's side: the batches in line and whether an agent is
+    /// The listener's side: the sends in line and whether an agent is
     /// there for them.
     let listeners: ListenerQueue
     /// The transcripts of the videos opened in this run.
@@ -61,10 +62,10 @@ final class AppModel: AppControlling {
     /// Whether this run is on demo data (`app open --demo`).
     let isDemo: Bool
     private(set) var video: OpenVideo?
-    /// The comment being written; nil while the comment box is closed.
+    /// The message being written; nil while the popover is closed.
     var draft: Draft?
-    /// The comment whose marker and row are picked out.
-    private(set) var selection: ItemID?
+    /// The thread whose pin and section are picked out.
+    private(set) var selection: ThreadID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the rail is shown beside the stage.
@@ -77,14 +78,14 @@ final class AppModel: AppControlling {
     var problem: Problem?
     /// What the agent just said, shown on the stage: the newest last.
     private(set) var notices: [Notice] = []
-    /// The comments with an agent message the person hasn't looked at.
-    private(set) var unread: Set<ItemID> = []
+    /// The threads with an agent message the person hasn't looked at.
+    private(set) var unread: Set<ThreadID> = []
 
     @ObservationIgnored private let layout: SupportLayout
-    /// The comment the comment box is queueing: its keyframe is being
+    /// The message the popover is queueing: its pictures are being
     /// written. A send waits for it.
     @ObservationIgnored private var committing: Task<Void, Never>?
-    /// How many comments from the comment box are on their way into the queue.
+    /// How many messages from the popover are on their way into the queue.
     private var commitsUnderWay = 0
     /// Whether a send the person asked for is on its way.
     @ObservationIgnored private var isSending = false
@@ -112,21 +113,24 @@ final class AppModel: AppControlling {
         video.flatMap { transcripts.report(of: $0.contentHash) }
     }
 
-    /// The open video's comments, in time order.
-    var comments: [Comment] { desk.review?.comments ?? [] }
+    /// The open video's threads: General first, then in time order.
+    var threads: [ReviewThread] { desk.review?.threads ?? [] }
 
-    /// The open video's batches, in the order they were sent.
-    var batches: [Batch] { desk.review?.batches ?? [] }
+    /// The open video's threads on a frame: every one but General.
+    var frameThreads: [ReviewThread] { threads.filter { !$0.isGeneral } }
 
-    /// Whether Cmd+Return has something to send: a queued comment, one on
-    /// its way into the queue, or words in the comment box.
+    /// The open video's sends, in the order they were sent.
+    var sends: [Send] { desk.review?.sends ?? [] }
+
+    /// Whether Cmd+Return has something to send: a queued message, one on
+    /// its way into the queue, or words in the popover.
     var canSend: Bool {
         sendCount > 0
     }
 
-    /// How many comments a send would deliver now.
+    /// How many messages a send would deliver now.
     var sendCount: Int {
-        comments.count { $0.state == .queued } + commitsUnderWay + (draft.map { Self.hasWords($0.text) } == true ? 1 : 0)
+        (desk.review?.queue.count ?? 0) + commitsUnderWay + (draft.map { Self.hasWords($0.text) } == true ? 1 : 0)
     }
 
     // MARK: - Actions, for the person and the operator alike
@@ -146,13 +150,13 @@ final class AppModel: AppControlling {
         let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
         try await engine.load(url)
         // The review as it is now, not as it was before the load: a
-        // listener may have answered one of its comments meanwhile.
+        // listener may have answered on one of its threads meanwhile.
         var review = desk.review(of: contentHash) ?? found
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         draft = nil
         selection = nil
         isDrawingRegion = false
-        // They point at comments of the video that was open.
+        // They point at threads of the video that was open.
         notices = []
         unread = []
         isContextShown = false
@@ -203,37 +207,79 @@ final class AppModel: AppControlling {
         await engine.seek(to: seconds)
     }
 
-    /// Queues a comment at `at`, or where the player is, on `region` of
-    /// the frame when it has one. As a person would, it pauses and moves
-    /// the player to the comment's time first.
-    func addComment(text: String, at: Double?, region: Region? = nil) async throws(AppRefusal) -> StateReport.Comment {
+    /// `comment add`: queues a message, as a person would. On `thread` (a
+    /// thread id or a number of the open video) it's written on that
+    /// thread, and the player moves to the thread's frame. Otherwise it
+    /// joins the thread of the frame at `at`, or where the player is, or
+    /// starts one. `at` beside a thread must be the thread's frame. Every
+    /// refusal comes before the player moves or an image is written.
+    func addMessage(
+        text: String, at: Double?, region: Region? = nil, thread ref: String? = nil
+    ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread) {
         try needVideo()
         try needWords(text)
         if let at { try needInside(at) }
+        guard let review = desk.review else { throw Self.noVideo }
+        var thread: ReviewThread?
+        if let ref {
+            guard let parsed = ThreadRef(ref) else {
+                throw AppRefusal("`\(ref)` isn't a thread; give a thread id (t-…) or a number of the open video, 0 for General")
+            }
+            do throws(ReviewRefusal) {
+                thread = review.thread(try review.threadID(parsed))
+            } catch {
+                throw AppRefusal(error.line)
+            }
+        }
+        let time = at.map(engine.frameTime(of:)) ?? (thread.map(\.time) ?? engine.frameTime(of: engine.time))
+        // A message the review refuses leaves the player where it is.
+        var trial = review
+        do throws(ReviewRefusal) {
+            _ = try trial.write(text: text, at: time, region: region, to: thread?.id, now: Date())
+        } catch {
+            throw AppRefusal(error.line)
+        }
         engine.pause()
-        if let at { await engine.seek(to: at) }
-        return try await queueComment(text: text, time: at ?? currentCommentTime, region: region)
+        if let time { await engine.seek(to: time) }
+        let written = try await queueMessage(text: text, time: time, region: region, thread: thread?.id)
+        guard let video else { throw Self.noVideo }
+        return (
+            StateReport.Message(written.message, contentHash: video.contentHash, layout: layout),
+            StateReport.Thread(written.thread, contentHash: video.contentHash, layout: layout)
+        )
     }
 
-    func editComment(_ id: String, text: String) throws(AppRefusal) -> StateReport.Comment {
-        let id = try commentID(id)
-        return report(try desk.change { review throws(ReviewRefusal) in try review.editComment(id, text: text) })
+    /// `comment edit` and a row's Save: a queued message's new text.
+    func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message {
+        let id = try messageID(id)
+        let message = try desk.change { review throws(ReviewRefusal) in try review.edit(id, text: text) }
+        return report(message)
     }
 
-    func deleteComment(_ id: String) throws(AppRefusal) -> StateReport.Comment {
-        let id = try commentID(id)
-        let comment = try desk.change { review throws(ReviewRefusal) in try review.deleteComment(id) }
-        let report = report(comment)
-        ImageFiles.remove(URL(fileURLWithPath: report.keyframePath))
+    /// `comment delete` and a row's Delete: a queued message goes, with its
+    /// crop; a thread that loses its last message goes, with its keyframe.
+    func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message {
+        let id = try messageID(id)
+        let deleted = try desk.change { review throws(ReviewRefusal) in try review.delete(id) }
+        let report = report(deleted.message)
         if let crop = report.cropPath { ImageFiles.remove(URL(fileURLWithPath: crop)) }
-        if selection == id { selection = nil }
+        if deleted.removedThread, let video {
+            ImageFiles.remove(layout.keyframe(deleted.thread, of: video.contentHash))
+            if selection == deleted.thread { selection = nil }
+        }
         return report
+    }
+
+    /// The end of a drag or a resize of a thread's popover: where it
+    /// opens from now on.
+    func movePopover(_ thread: ThreadID, to frame: PopoverFrame?) throws(AppRefusal) {
+        try desk.change { review throws(ReviewRefusal) in try review.setPopoverFrame(thread, frame) }
     }
 
     /// The context popover's Save and `context set`: the open video's
     /// context note, kept without the space around it. The listener gets
-    /// it under the sidecar's text with the next batch. An empty text
-    /// clears the note.
+    /// it under the sidecar's text with the next send. An empty text clears
+    /// the note.
     @discardableResult
     func setContextNote(_ text: String) throws(AppRefusal) -> String {
         let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -241,48 +287,46 @@ final class AppModel: AppControlling {
         return note
     }
 
-    /// Cmd+Return and `batch send`: every queued comment of the open video
-    /// goes out as one batch, which the listener's `wait` gets, now or when
-    /// it next opens. Words still in the comment box are queued first, so
-    /// nothing is left behind. Refused when nothing is queued.
-    func sendBatch() async throws(AppRefusal) -> StateReport.Batch {
+    /// Cmd+Return and `send`: every queued message of the open video goes
+    /// out as one send, which the listener's `wait` gets, now or when it
+    /// next opens. Words still in the popover are queued first, so nothing
+    /// is left behind. Refused when nothing is queued.
+    func sendQueue() async throws(AppRefusal) -> StateReport.Send {
         try needVideo()
-        // A comment whose keyframe is still being written joins the batch.
+        // A message whose pictures are still being written joins the send.
         await committing?.value
         if let draft, Self.hasWords(draft.text) {
             self.draft = nil
             do throws(AppRefusal) {
-                _ = try await queueComment(text: draft.text, time: draft.time, region: draft.region)
+                _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil)
             } catch {
-                // The words aren't lost: the box opens again with them.
+                // The words aren't lost: the popover opens again with them.
                 if self.draft == nil { self.draft = draft }
                 throw error
             }
         }
-        let batch = try desk.change { review throws(ReviewRefusal) in
-            try review.send(batchID: ItemID.make(.batch), at: Date())
-        }
-        if let video { listeners.enqueue(BatchRef(batchID: batch.id, contentHash: video.contentHash)) }
-        return report(batch)
+        let send = try desk.change { review throws(ReviewRefusal) in try review.send(at: Date()) }
+        guard let video, let review = desk.review else { throw Self.noVideo }
+        listeners.enqueue(SendRef(sendID: send.id, contentHash: video.contentHash))
+        return StateReport.Send(send, in: review)
     }
 
-    /// The answer box and `thread answer`: the person's answer to the open
-    /// question of a comment. The `ask` that waits for it exits with it.
-    func answer(_ commentID: String, text: String) throws(AppRefusal) -> StateReport.Comment {
-        let id = try self.commentID(commentID)
-        guard let hash = desk.contentHash(of: id) else { throw AppRefusal(ReviewRefusal.unknownComment(commentID).line) }
-        let message = try desk.change(hash) { review throws(ReviewRefusal) in
-            try review.answer(id, text: text, messageID: ItemID.make(.message), at: Date())
-        }
-        listeners.answered(id, with: message)
+    /// The answer field and `thread answer`: the person's answer to the
+    /// open question on a thread. The `ask` that waits for it exits with it.
+    func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
+        let (id, hash) = try desk.threadID(thread)
+        let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.answer(id, text: text, now: Date()) }
+        let report = StateReport.Message(message, contentHash: hash, layout: layout)
+        listeners.answered(id, with: report)
         // Whoever answers has read the thread.
         unread.remove(id)
-        notices.removeAll { $0.subject == .comment(id) && $0.kind == .question }
-        guard let comment = desk.review(of: hash)?.comment(id) else { throw AppRefusal(ReviewRefusal.unknownComment(commentID).line) }
-        return StateReport.Comment(comment, contentHash: hash, layout: layout)
+        notices.removeAll { $0.thread == id && $0.kind == .question }
+        return (report, id.number)
     }
 
     func state() -> StateReport {
+        let hash = video?.contentHash ?? ""
+        let review = desk.review
         var report = StateReport(
             app: .init(version: Version.app, demo: isDemo, support: support.path),
             video: video.map {
@@ -292,90 +336,114 @@ final class AppModel: AppControlling {
                 )
             },
             player: .init(time: engine.time, playing: engine.isPlaying),
-            draft: draft.map { .init(time: $0.time, text: $0.text, region: $0.region) },
-            comments: comments.map(report),
-            batches: batches.map(report)
+            popover: draft.map {
+                .init(
+                    thread: review?.thread(atFrame: $0.time)?.number ?? review?.nextThreadNumber,
+                    time: $0.time, text: $0.text, region: $0.region
+                )
+            },
+            threads: threads.map { StateReport.Thread($0, contentHash: hash, layout: layout) },
+            queue: review?.queue.map(\.id.text) ?? [],
+            sends: review.map { review in sends.map { StateReport.Send($0, in: review) } } ?? []
         )
         report.transcript = transcript
         report.theme = themes.report
         return report
     }
 
-    private func report(_ batch: Batch) -> StateReport.Batch {
-        StateReport.Batch(batch)
-    }
+    // MARK: - Messages
 
-    // MARK: - Comments
-
-    /// The time a comment made now gets: the player's, raised to the next
-    /// millisecond.
-    private var currentCommentTime: Double {
-        Self.commentTime(player: engine.time, duration: engine.duration)
-    }
-
-    /// The player's time as a comment keeps it: to the millisecond, and
-    /// never before the frame on screen. A frame rarely starts on a whole
-    /// millisecond (7.2333… s at 30 frames a second); rounding down would
-    /// name the frame before it.
-    static func commentTime(player: Double, duration: Double) -> Double {
-        // The player's own noise, far below a millisecond, isn't raised.
-        let milliseconds = (max(player, 0) * 1000 - 1e-6).rounded(.up)
-        return min(milliseconds / 1000, duration)
-    }
-
-    /// Writes the keyframe and the region's crop, then queues the comment
-    /// and selects it. A comment never exists without its pictures.
-    private func queueComment(text: String, time: Double, region: Region?) async throws(AppRefusal) -> StateReport.Comment {
-        guard let video, let asset = engine.asset else { throw Self.noVideo }
-        try needWords(text)
-        let id = ItemID.make(.comment)
-        let file = layout.keyframe(id, of: video.contentHash)
-        let cropFile = layout.crop(id, of: video.contentHash)
-        try await FrameGrabber.writeImages(
-            of: asset, at: time, duration: engine.duration, frameDuration: engine.frameDuration,
-            keyframe: file, region: region, crop: cropFile
-        )
-        do throws(AppRefusal) {
-            guard self.video == video else { throw AppRefusal("another video opened before the comment was queued") }
-            let comment = try desk.change { review throws(ReviewRefusal) in
-                try review.addComment(id: id, time: time, text: text, region: region)
-            }
-            selection = id
-            return report(comment)
+    /// Writes the pictures a message needs, then queues it. A thread's
+    /// keyframe and a region's crop exist before the message does, so the
+    /// listener never gets one without its pictures. The pictures are
+    /// written under names of their own and take the ids the review gives
+    /// once it has the message, so a message written meanwhile (a
+    /// listener's reply) can't take their place.
+    private func queueMessage(
+        text: String, time: Double?, region: Region?, thread: ThreadID?
+    ) async throws(AppRefusal) -> VideoReview.Written {
+        guard let video, let asset = engine.asset, var trial = desk.review else { throw Self.noVideo }
+        // What the write will do, refused before any picture is written.
+        let planned: VideoReview.Written
+        do throws(ReviewRefusal) {
+            planned = try trial.write(text: text, at: time, region: region, to: thread, now: Date())
         } catch {
-            ImageFiles.remove(file)
-            ImageFiles.remove(cropFile)
-            throw error
+            throw AppRefusal(error.line)
         }
+        let hash = video.contentHash
+        let token = UUID().uuidString
+        let pendingKeyframe = planned.startedThread ? layout.pendingImage("\(token)-keyframe", of: hash) : nil
+        let pendingCrop = region == nil ? nil : layout.pendingImage("\(token)-crop", of: hash)
+        if let frame = planned.thread.time, pendingKeyframe != nil || pendingCrop != nil {
+            try await FrameGrabber.writeImages(
+                of: asset, at: frame, duration: engine.duration, frameDuration: engine.frameDuration,
+                keyframe: pendingKeyframe, region: region, crop: pendingCrop
+            )
+        }
+        defer {
+            // Whatever wasn't moved into place isn't needed.
+            if let pendingKeyframe { ImageFiles.remove(pendingKeyframe) }
+            if let pendingCrop { ImageFiles.remove(pendingCrop) }
+        }
+        guard self.video == video else { throw AppRefusal("another video opened before the message was queued") }
+        let written = try desk.change { review throws(ReviewRefusal) in
+            try review.write(text: text, at: time, region: region, to: thread, now: Date())
+        }
+        let keyframe = layout.keyframe(written.thread.id, of: hash)
+        if !written.thread.isGeneral, !FileManager.default.fileExists(atPath: keyframe.path) {
+            if let pendingKeyframe {
+                try? FileManager.default.moveItem(at: pendingKeyframe, to: keyframe)
+            } else if let frame = written.thread.time {
+                // The thread it was to join went meanwhile; this one gets its keyframe now.
+                try? await FrameGrabber.writeImages(
+                    of: asset, at: frame, duration: engine.duration, frameDuration: engine.frameDuration,
+                    keyframe: keyframe, region: nil, crop: nil
+                )
+            }
+        }
+        if let pendingCrop {
+            do {
+                let crop = layout.crop(written.message.id, of: hash)
+                try FileManager.default.createDirectory(at: crop.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: pendingCrop, to: crop)
+            } catch {
+                // A region message never stays without its crop.
+                _ = try? desk.change { review throws(ReviewRefusal) in try review.delete(written.message.id) }
+                throw AppRefusal("couldn't keep the crop of the region: \(error.localizedDescription)")
+            }
+        }
+        selection = written.thread.id
+        return written
     }
 
-    private func report(_ comment: Comment) -> StateReport.Comment {
-        StateReport.Comment(comment, contentHash: video?.contentHash ?? "", layout: layout)
+    private func report(_ message: Message) -> StateReport.Message {
+        StateReport.Message(message, contentHash: video?.contentHash ?? "", layout: layout)
     }
 
-    /// The keyframe PNG of `comment` on the open video.
-    func keyframe(of comment: Comment) -> URL? {
-        video.map { layout.keyframe(comment.id, of: $0.contentHash) }
+    /// The keyframe PNG of `thread` on the open video; nil for General.
+    func keyframe(of thread: ReviewThread) -> URL? {
+        guard !thread.isGeneral, let video else { return nil }
+        return layout.keyframe(thread.id, of: video.contentHash)
     }
 
-    /// The PNG of `comment`'s region on the open video; nil for a comment
+    /// The PNG of `message`'s region on the open video; nil for a message
     /// on the whole frame.
-    func crop(of comment: Comment) -> URL? {
-        guard comment.region != nil, let video else { return nil }
-        return layout.crop(comment.id, of: video.contentHash)
+    func crop(of message: Message) -> URL? {
+        guard message.region != nil, let video else { return nil }
+        return layout.crop(message.id, of: video.contentHash)
     }
 
-    /// The region to draw on the frame: the one of the comment in the
-    /// comment box, else the selected comment's while the player stands on
-    /// that comment's frame, paused. Once the video moves on, the frame
-    /// isn't the one the region was drawn on.
+    /// The region to draw on the frame: the one of the message in the
+    /// popover, else the latest region of the selected thread while the
+    /// player stands on that thread's frame, paused. Once the video moves
+    /// on, the frame isn't the one the region was drawn on.
     var shownRegion: ShownRegion? {
         if let draft { return draft.region.map { ShownRegion(region: $0, number: nil) } }
-        guard let selection, !engine.isPlaying,
-              let index = comments.firstIndex(where: { $0.id == selection }), let region = comments[index].region,
-              abs(engine.time - comments[index].time) < engine.frameDuration / 2
+        guard let selection, !engine.isPlaying, let thread = desk.review?.thread(selection), let time = thread.time,
+              let region = thread.messages.last(where: { $0.region != nil })?.region,
+              abs(engine.time - time) < engine.frameDuration / 2
         else { return nil }
-        return ShownRegion(region: region, number: index + 1, state: comments[index].state)
+        return ShownRegion(region: region, number: thread.number, state: thread.state)
     }
 
     // MARK: - What an action needs
@@ -402,9 +470,9 @@ final class AppModel: AppControlling {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func commentID(_ text: String) throws(AppRefusal) -> ItemID {
-        guard let id = ItemID(text), id.kind == .comment else {
-            throw AppRefusal(ReviewRefusal.unknownComment(text).line)
+    private func messageID(_ text: String) throws(AppRefusal) -> MessageID {
+        guard let id = ItemID(text), id.kind == .message else {
+            throw AppRefusal(ReviewRefusal.unknownID(text).line)
         }
         return id
     }
@@ -439,9 +507,9 @@ final class AppModel: AppControlling {
         Task { await engine.seek(to: target) }
     }
 
-    /// C, Return and the Comment button: pauses and opens the comment box
-    /// at the player's time. With `region`, the rectangle the person drew:
-    /// the box opens on that region, and a box that's already open takes
+    /// C, Return and the Comment button: pauses and opens the popover at
+    /// the frame on screen. With `region`, the rectangle the person drew:
+    /// the popover opens on that region, and one that's already open takes
     /// the new region and keeps its words.
     func startDraft(region: Region? = nil) {
         guard video != nil else { return }
@@ -449,20 +517,20 @@ final class AppModel: AppControlling {
             guard let region else { return }
             // The rectangle is on the frame on screen now.
             draft?.region = region
-            draft?.time = currentCommentTime
+            draft?.time = engine.frameTime(of: engine.time)
             return
         }
         engine.pause()
-        draft = Draft(time: currentCommentTime, text: "", region: region)
+        draft = Draft(time: engine.frameTime(of: engine.time), text: "", region: region)
     }
 
-    /// Escape in the comment box: the comment and its region are dropped.
+    /// Escape in the popover: the message and its region are dropped.
     func cancelDraft() {
         draft = nil
     }
 
-    /// A click on the frame: plays or pauses. While the comment box is
-    /// open it does nothing: a comment is about the frame on screen.
+    /// A click on the frame: plays or pauses. While the popover is open it
+    /// does nothing: a message is about the frame on screen.
     func clickFrame() {
         if draft == nil { togglePlay() }
     }
@@ -475,8 +543,8 @@ final class AppModel: AppControlling {
         isDrawingRegion = true
     }
 
-    /// The pointer lets go: the comment box opens on `region`. A drag
-    /// that Escape cancelled, or one too small to be a region (nil), opens
+    /// The pointer lets go: the popover opens on `region`. A drag that
+    /// Escape cancelled, or one too small to be a region (nil), opens
     /// nothing.
     func endRegion(_ region: Region?) {
         guard isDrawingRegion else { return }
@@ -484,8 +552,8 @@ final class AppModel: AppControlling {
         if let region { startDraft(region: region) }
     }
 
-    /// Escape: drops the rectangle being drawn, else the comment in the
-    /// comment box with its region. False when there was neither.
+    /// Escape: drops the rectangle being drawn, else the message in the
+    /// popover with its region. False when there was neither.
     @discardableResult
     func escape() -> Bool {
         if isDrawingRegion {
@@ -497,8 +565,8 @@ final class AppModel: AppControlling {
         return true
     }
 
-    /// Return in the comment box: queues the draft. A draft with no words
-    /// stays open.
+    /// Return in the popover: queues the draft on the thread of its frame.
+    /// A draft with no words stays open.
     func commitDraft() {
         guard let draft, Self.hasWords(draft.text) else { return }
         self.draft = nil
@@ -508,17 +576,17 @@ final class AppModel: AppControlling {
             defer { commitsUnderWay -= 1 }
             await before?.value
             do throws(AppRefusal) {
-                _ = try await queueComment(text: draft.text, time: draft.time, region: draft.region)
+                _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil)
             } catch {
-                // The words aren't lost: the box opens again with them.
+                // The words aren't lost: the popover opens again with them.
                 if self.draft == nil { self.draft = draft }
-                problem = Problem(title: "The comment wasn't queued", reason: error.reason)
+                problem = Problem(title: "The message wasn't queued", reason: error.reason)
             }
         }
     }
 
     /// Cmd+Return and the Send button: sends the queue, with the words in
-    /// the comment box. With nothing to send it does nothing.
+    /// the popover. With nothing to send it does nothing.
     func send() {
         // A second press while the first is on its way has nothing to add.
         guard canSend, !isSending else { return }
@@ -526,31 +594,32 @@ final class AppModel: AppControlling {
         Task {
             defer { isSending = false }
             do throws(AppRefusal) {
-                _ = try await sendBatch()
+                _ = try await sendQueue()
             } catch {
-                problem = Problem(title: "The comments weren't sent", reason: error.reason)
+                problem = Problem(title: "The messages weren't sent", reason: error.reason)
             }
         }
     }
 
-    /// A click on a marker or a row: selects the comment, pauses and
-    /// moves the player to its time.
-    func select(_ id: ItemID) {
-        guard let comment = desk.review?.comment(id) else { return }
+    /// A click on a pin or a thread: selects the thread, pauses and moves
+    /// the player to its frame. General has no frame to move to.
+    func select(_ id: ThreadID) {
+        guard let thread = desk.review?.thread(id) else { return }
         selection = id
-        // Its thread opens with the row: the person sees what the agent said.
+        // Its conversation shows: the person sees what the agent said.
         unread.remove(id)
         engine.pause()
-        move(to: comment.time)
+        if let time = thread.time { move(to: time) }
     }
 
-    /// Up and Down: the marker before or after the player's time.
+    /// Up and Down: the pin before or after the player's time.
     func jumpToMarker(forward: Bool) {
-        // Half a frame: the marker the player stands on isn't its own neighbour.
+        // Half a frame: the pin the player stands on isn't its own neighbour.
         let slack = engine.frameDuration / 2
+        let pinned = frameThreads
         let next = forward
-            ? comments.first { $0.time > engine.time + slack }
-            : comments.last { $0.time < engine.time - slack }
+            ? pinned.first { ($0.time ?? 0) > engine.time + slack }
+            : pinned.last { ($0.time ?? 0) < engine.time - slack }
         if let next { select(next.id) }
     }
 
@@ -561,11 +630,11 @@ final class AppModel: AppControlling {
     var agentName: String { listeners.outbox.session?.name ?? "Agent" }
 
     /// The agent said something: a notice goes up on the stage, and the
-    /// comment it's about is marked until the person looks at it. A notice
+    /// thread it's on is marked until the person looks at it. A notice
     /// that isn't a question goes by itself.
     func raise(_ notice: Notice) {
         notices.append(notice)
-        if case .comment(let id) = notice.subject, id != selection || !isRailVisible { unread.insert(id) }
+        if notice.thread != selection || !isRailVisible { unread.insert(notice.thread) }
         guard let expires = notice.expires else { return }
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(expires.timeIntervalSinceNow, 0)))
@@ -578,22 +647,22 @@ final class AppModel: AppControlling {
         notices.removeAll { $0.id == id }
     }
 
-    /// A click on a notice: it goes, the rail shows, and the comment it's
-    /// about is selected, so its thread is open with the answer box under
-    /// a question.
+    /// A click on a notice: it goes, the rail shows, and the thread it's
+    /// on is selected, so its conversation is open with the answer field
+    /// under a question.
     func openNotice(_ id: UUID) {
         guard let notice = notices.first(where: { $0.id == id }) else { return }
         dismiss(id)
         isRailVisible = true
-        if case .comment(let comment) = notice.subject { select(comment) }
+        select(notice.thread)
     }
 
-    /// Return in an answer box and its button: the person's answer to the
-    /// comment's open question. False when it wasn't taken.
+    /// Return in an answer field and its button: the person's answer to
+    /// the thread's open question. False when it wasn't taken.
     @discardableResult
-    func answerQuestion(_ id: ItemID, text: String) -> Bool {
+    func answerQuestion(_ thread: ThreadID, text: String) -> Bool {
         do throws(AppRefusal) {
-            _ = try answer(id.text, text: text)
+            _ = try answer(thread.text, text: text)
             return true
         } catch {
             problem = Problem(title: "The answer wasn't sent", reason: error.reason)
@@ -601,21 +670,21 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// Save on a row: the comment's new text.
-    func edit(_ id: ItemID, text: String) {
+    /// Save on a row: the message's new text.
+    func edit(_ id: MessageID, text: String) {
         do throws(AppRefusal) {
-            _ = try editComment(id.text, text: text)
+            _ = try editMessage(id.text, text: text)
         } catch {
-            problem = Problem(title: "The comment didn't change", reason: error.reason)
+            problem = Problem(title: "The message didn't change", reason: error.reason)
         }
     }
 
     /// Delete on a row.
-    func delete(_ id: ItemID) {
+    func delete(_ id: MessageID) {
         do throws(AppRefusal) {
-            _ = try deleteComment(id.text)
+            _ = try deleteMessage(id.text)
         } catch {
-            problem = Problem(title: "The comment wasn't deleted", reason: error.reason)
+            problem = Problem(title: "The message wasn't deleted", reason: error.reason)
         }
     }
 
@@ -630,7 +699,7 @@ final class AppModel: AppControlling {
         ContextReader.text(sidecar: sidecar?.text, note: contextNote)
     }
 
-    /// Whether the listener's next batch of the open video carries the
+    /// Whether the listener's next send of the open video carries the
     /// context: there is one, and this listener session hasn't had it.
     var isContextDue: Bool {
         guard let video else { return false }

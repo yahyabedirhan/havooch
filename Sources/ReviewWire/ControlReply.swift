@@ -6,7 +6,7 @@ import ReviewLease
 /// refusal (`ok` false) whose `error` says why. The reply to `app.quit` may
 /// carry the lease the quit renewed (`lease`), for a relaunch to hand over
 /// to the app it launches. The reply to a `wait` whose time ran out with no
-/// batch says so (`timedOut`), which the command exits 2 on. Every other
+/// send says so (`timedOut`), which the command exits 2 on. Every other
 /// reply leaves both out.
 public struct ControlReply: Codable, Equatable, Sendable {
     public var ok: Bool

@@ -20,14 +20,14 @@ enum Metrics {
     static let railPadding: CGFloat = 16
 }
 
-/// How a comment state shows besides its colour: a glyph and a name, so a
+/// How a message state shows besides its colour: a glyph and a name, so a
 /// state is never told by colour alone. Its colour is `Palette.state`.
 enum StateLook {
     /// The glyph on a marker's pin for a state the agent set; nil for a
-    /// state before the agent has the comment.
-    static func pinGlyph(_ state: CommentState) -> String? {
+    /// state before the agent has the message.
+    static func pinGlyph(_ state: MessageState) -> String? {
         switch state {
-        case .draft, .queued, .sent: nil
+        case .queued, .sent: nil
         case .acknowledged, .done: "checkmark"
         case .working: "ellipsis"
         case .failed: "xmark"
@@ -35,9 +35,8 @@ enum StateLook {
     }
 
     /// The state's glyph, an SF Symbol.
-    static func glyph(_ state: CommentState) -> String {
+    static func glyph(_ state: MessageState) -> String {
         switch state {
-        case .draft: "pencil.circle"
         case .queued: "circle.dashed"
         case .sent: "arrow.up.circle.fill"
         case .acknowledged: "checkmark.circle"
@@ -48,9 +47,8 @@ enum StateLook {
     }
 
     /// The state's name as the rail shows it.
-    static func name(_ state: CommentState) -> String {
+    static func name(_ state: MessageState) -> String {
         switch state {
-        case .draft: "Draft"
         case .queued: "Queued"
         case .sent: "Sent"
         case .acknowledged: "Acknowledged"

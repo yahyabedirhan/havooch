@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The brief notices in the stage's top-right corner: what the agent just
 /// said. A message goes by itself after a few seconds; a question stays
-/// until it's clicked or answered. A click selects the comment it's about.
+/// until it's clicked or answered. A click opens the thread it's on.
 struct Toasts: View {
     let model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -15,7 +15,7 @@ struct Toasts: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             ForEach(model.notices.suffix(Self.most)) { notice in
-                Toast(notice: notice, number: number(of: notice)) { model.openNotice(notice.id) }
+                Toast(notice: notice) { model.openNotice(notice.id) }
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -23,18 +23,11 @@ struct Toasts: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.3), value: model.notices)
     }
-
-    /// The number of the comment a notice is about, as on its marker.
-    private func number(of notice: Notice) -> Int? {
-        guard case .comment(let id) = notice.subject else { return nil }
-        return model.comments.firstIndex { $0.id == id }.map { $0 + 1 }
-    }
 }
 
-/// One notice: who said what, about which comment.
+/// One notice: who said what, on which thread.
 private struct Toast: View {
     let notice: Notice
-    let number: Int?
     let open: () -> Void
     @Environment(\.palette) private var palette
 
@@ -48,7 +41,7 @@ private struct Toast: View {
                     .background(tint, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(notice.title(number: number))
+                    Text(notice.title)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(palette[.noticeText])
                     Text(notice.text)

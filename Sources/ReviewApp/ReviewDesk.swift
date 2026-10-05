@@ -8,7 +8,7 @@ import ReviewStore
 /// that can't be saved, leaves the review as it was, in memory and on disk.
 ///
 /// A review is read from the `Library` the first time it's asked for and
-/// kept in memory from then on, by content hash, so a batch of a video
+/// kept in memory from then on, by content hash, so a send of a video
 /// that's not open, or wasn't opened in this run, can still be delivered
 /// and answered.
 @Observable
@@ -50,11 +50,33 @@ final class ReviewDesk {
         try? kept(contentHash)
     }
 
-    /// The content hash of the video whose review has the comment or the
-    /// batch `id`; nil when no review has it. A listener's command names
-    /// an item and no video.
+    /// The content hash of the video the thread, message or send `id` is
+    /// on, by its prefix; nil when no review is that video's. A listener's command names
+    /// an id and no video.
     func contentHash(of id: ItemID) -> String? {
         library.contentHash(of: id)
+    }
+
+    /// The thread a command names, and its video's content hash: a full id
+    /// names its video by its prefix, a bare number is the open video's
+    /// (`0` is General). Refused for what isn't a thread of a review.
+    func threadID(_ text: String) throws(AppRefusal) -> (ThreadID, String) {
+        let ref = ThreadRef(text)
+        let hash: String? = switch ref {
+        case .id(let id): contentHash(of: id)
+        case .number: review?.video.contentHash
+        case nil: nil
+        }
+        guard let ref, let hash, let review = review(of: hash) else {
+            throw AppRefusal(
+                "no thread `\(text)`; give a thread id from the send `video-review wait` printed, or a number of the open video"
+            )
+        }
+        do throws(ReviewRefusal) {
+            return (try review.threadID(ref), hash)
+        } catch {
+            throw AppRefusal(error.line)
+        }
     }
 
     /// Runs `change` on the open review, saves and publishes the result.

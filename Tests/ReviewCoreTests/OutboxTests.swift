@@ -5,15 +5,15 @@ import Testing
 /// The listener's outbox, driven by the time the test gives it.
 @Suite("The listener's outbox")
 struct OutboxTests {
-    static let first = BatchRef(batchID: ItemID("b-00000001")!, contentHash: "abc")
-    static let second = BatchRef(batchID: ItemID("b-00000002")!, contentHash: "abc")
-    static let third = BatchRef(batchID: ItemID("b-00000003")!, contentHash: "def")
+    static let first = SendRef(sendID: ItemID("s-00000000-1")!, contentHash: "abc")
+    static let second = SendRef(sendID: ItemID("s-00000000-2")!, contentHash: "abc")
+    static let third = SendRef(sendID: ItemID("s-00000000-3")!, contentHash: "def")
     static let one = ListenerSession(key: "listener-1", name: "Claude Code", place: "/work")
     static let two = ListenerSession(key: "listener-2", name: "Claude Code", place: "/work")
 
     private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
-    @Test("a batch sent while a wait is open is delivered to it, and is taken from then on")
+    @Test("a send made while a wait is open is delivered to it, and is taken from then on")
     func deliversToTheOpenWait() {
         var outbox = Outbox()
         outbox.waitOpened(by: Self.one, at: at(0))
@@ -24,14 +24,14 @@ struct OutboxTests {
 
         #expect(outbox.pending.isEmpty)
         #expect(outbox.taken == [Self.first])
-        // The wait was answered: the next batch needs the next wait.
+        // The wait was answered: the next send needs the next wait.
         #expect(!outbox.isWaitOpen)
         outbox.enqueue(Self.second)
         #expect(outbox.deliverNext(at: at(6)) == nil)
         #expect(outbox.pending == [Self.second])
     }
 
-    @Test("a batch sent with no listener waits, and the next wait gets it; batches go out first in, first out, one per wait")
+    @Test("a send made with no listener waits, and the next wait gets it; sends go out first in, first out, one per wait")
     func waitsForTheNextWait() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -47,7 +47,7 @@ struct OutboxTests {
         #expect(outbox.taken == [Self.first, Self.second])
     }
 
-    @Test("a batch is in line once")
+    @Test("a send is in line once")
     func enqueuedOnce() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -59,7 +59,7 @@ struct OutboxTests {
         #expect(outbox.pending.isEmpty)
     }
 
-    @Test("a wait from another holder is a new listener session: the taken batches are first in line again, in the order taken")
+    @Test("a wait from another holder is a new listener session: the taken sends are first in line again, in the order taken")
     func listenerRestart() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -79,7 +79,7 @@ struct OutboxTests {
         #expect(outbox.deliverNext(at: at(30)) == Self.first)
     }
 
-    @Test("a wait from the same holder keeps what it took: the listener waits again before it works on a batch")
+    @Test("a wait from the same holder keeps what it took: the listener waits again before it works on a send")
     func sameSession() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -96,7 +96,7 @@ struct OutboxTests {
         #expect(fresh.waitOpened(by: Self.one, at: at(0)).isEmpty)
     }
 
-    @Test("a batch whose reply couldn't be written is first in line again; a finished one is gone")
+    @Test("a send whose reply couldn't be written is first in line again; a finished one is gone")
     func undeliveredAndFinished() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -107,7 +107,7 @@ struct OutboxTests {
         outbox.undelivered(Self.first)
         #expect(outbox.taken.isEmpty)
         #expect(outbox.pending == [Self.first, Self.second])
-        // Only a taken batch goes back.
+        // Only a taken send goes back.
         outbox.undelivered(Self.third)
         #expect(outbox.pending == [Self.first, Self.second])
 
@@ -115,7 +115,7 @@ struct OutboxTests {
         _ = outbox.deliverNext(at: at(1))
         outbox.finished(Self.first)
         #expect(outbox.taken.isEmpty)
-        // A finished batch isn't requeued for the next session.
+        // A finished send isn't requeued for the next session.
         #expect(outbox.waitOpened(by: Self.two, at: at(2)).isEmpty)
 
         outbox.discard(Self.second)
@@ -141,7 +141,7 @@ struct OutboxTests {
         #expect(outbox.presence(at: at(3610)) == .listening)
     }
 
-    @Test("presence is working while a batch is taken and the listener was heard in the last 120 s or waits again")
+    @Test("presence is working while a send is taken and the listener was heard in the last 120 s or waits again")
     func presenceWhileWorking() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -188,7 +188,7 @@ struct OutboxTests {
     @Test("an outbox written with a key missing reads with that part empty")
     func missingKeys() throws {
         let read = try JSONDecoder().decode(Outbox.self, from: Data("""
-        { "pending": [ { "batchID": "b-00000001", "contentHash": "abc" } ], "taken": [] }
+        { "pending": [ { "sendID": "s-00000000-1", "contentHash": "abc" } ], "taken": [] }
         """.utf8))
         #expect(read.pending == [Self.first])
         #expect(read.session == nil)
@@ -196,7 +196,7 @@ struct OutboxTests {
         #expect(try JSONDecoder().decode(Outbox.self, from: Data("{}".utf8)) == Outbox())
     }
 
-    @Test("after a restart, a taken batch stays with the same listener and goes back in line for a new one")
+    @Test("after a restart, a taken send stays with the same listener and goes back in line for a new one")
     func takenAcrossARestart() throws {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -213,7 +213,7 @@ struct OutboxTests {
         #expect(new.deliverNext(at: at(60)) == Self.first)
     }
 
-    @Test("at launch the outbox is made to agree with the reviews: a batch that's gone or finished leaves, an unfinished one that's missing joins the line")
+    @Test("at launch the outbox is made to agree with the reviews: a send that's gone or finished leaves, an unfinished one that's missing joins the line")
     func reconcile() {
         var outbox = Outbox()
         outbox.enqueue(Self.first)
@@ -227,8 +227,8 @@ struct OutboxTests {
         #expect(outbox == before)
         #expect(outbox.isKeptAs(before))
 
-        // The taken batch was finished and the outbox wasn't saved after;
-        // a batch was sent and the outbox wasn't saved after.
+        // The taken send was finished and the outbox wasn't saved after;
+        // a send was made and the outbox wasn't saved after.
         outbox.reconcile(unfinished: [Self.second, Self.third])
         #expect(outbox.taken.isEmpty)
         #expect(outbox.pending == [Self.second, Self.third])
@@ -239,7 +239,7 @@ struct OutboxTests {
         #expect(outbox.session == Self.one)
     }
 
-    @Test("what's kept is the line, the taken batches, the session and the context sent; not the open wait or the last word")
+    @Test("what's kept is the line, the taken sends, the session and the context sent; not the open wait or the last word")
     func whatIsKept() {
         var outbox = Outbox()
         let empty = outbox

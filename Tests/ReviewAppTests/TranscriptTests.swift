@@ -42,7 +42,7 @@ struct TranscriptDeliveryTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for name in ["sample.mp4"] + sidecars {
             try FileManager.default.copyItem(
-                at: CommentTests.fixture.deletingLastPathComponent().appendingPathComponent(name),
+                at: MessageTests.fixture.deletingLastPathComponent().appendingPathComponent(name),
                 to: folder.appendingPathComponent(name)
             )
         }
@@ -74,12 +74,12 @@ struct TranscriptDeliveryTests {
     /// Sends the queue and takes it as the listener: each comment's
     /// transcript in the payload `wait` prints, in time order.
     private func delivered(_ server: ControlServer) async throws -> [[[String: AnyHashable]]] {
-        let sent = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         #expect(sent.reply.ok)
         let wait = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(wait.reply.ok)
-        let comments = try #require(try object(wait.reply.output)["comments"] as? [[String: Any]])
-        return try comments.map { try #require($0["transcript"] as? [[String: AnyHashable]]) }
+        let messages = try #require(try object(wait.reply.output)["messages"] as? [[String: Any]])
+        return try messages.map { try #require($0["transcript"] as? [[String: AnyHashable]]) }
     }
 
     private func transcriptState(_ server: ControlServer) async throws -> [String: AnyHashable]? {
@@ -93,9 +93,9 @@ struct TranscriptDeliveryTests {
     @Test("the fixture with voiceover.json: a comment gets the narration of its scene, with the scene's times, and of the scenes within 15 s")
     func voiceover() async throws {
         defer { cleanUp() }
-        let (model, server) = try await app(CommentTests.fixture)
-        _ = try await model.addComment(text: "In the send scene", at: 10)
-        _ = try await model.addComment(text: "At the very end", at: 21.2)
+        let (model, server) = try await app(MessageTests.fixture)
+        _ = try await model.addMessage(text: "In the send scene", at: 10)
+        _ = try await model.addMessage(text: "At the very end", at: 21.2)
 
         let transcripts = try await delivered(server)
 
@@ -111,8 +111,8 @@ struct TranscriptDeliveryTests {
         defer { cleanUp() }
         let speech = SlowRecognizer()
         let (model, server) = try await app(try copy(sidecars: ["sample.srt"]), speech: speech)
-        _ = try await model.addComment(text: "In the send scene", at: 10)
-        _ = try await model.addComment(text: "At the very end", at: 21.2)
+        _ = try await model.addMessage(text: "In the send scene", at: 10)
+        _ = try await model.addMessage(text: "At the very end", at: 21.2)
 
         let transcripts = try await delivered(server)
 
@@ -135,26 +135,26 @@ struct TranscriptDeliveryTests {
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 0, "problem": NSNull()])
 
         // Nothing is transcribed yet: the comment isn't held back, and gets no lines.
-        _ = try await model.addComment(text: "Right away", at: 3)
+        _ = try await model.addMessage(text: "Right away", at: 3)
         #expect(try await delivered(server) == [[]])
 
         // The first line is there, the rest isn't.
         speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review."))
         await eventually { model.transcript?.lines == 1 }
-        _ = try await model.addComment(text: "A little later", at: 4)
+        _ = try await model.addMessage(text: "A little later", at: 4)
         #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Video Review."]]])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 1, "problem": NSNull()])
 
-        // A batch sent now and taken only once the transcript is whole gets
+        // A send made now and taken only once the transcript is whole gets
         // every line of its window: the window is read when a wait takes it.
-        _ = try await model.addComment(text: "Taken later", at: 5)
-        _ = await server.reply(to: ControlRequest.batchSend.sent(by: Self.operatorAgent))
+        _ = try await model.addMessage(text: "Taken later", at: 5)
+        _ = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         speech.say(TranscriptLine(start: 6.4, end: 13.4, text: "Your comments queue up."))
         speech.say(TranscriptLine(start: 20.5, end: 21, text: "The end."))
         speech.finish()
         await eventually { model.transcript?.complete == true }
         let wait = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
-        let comment = try #require((try object(wait.reply.output)["comments"] as? [[String: Any]])?.first)
+        let comment = try #require((try object(wait.reply.output)["messages"] as? [[String: Any]])?.first)
         #expect((comment["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Video Review.", "Your comments queue up."])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": true, "lines": 3, "problem": NSNull()])
     }
@@ -177,7 +177,7 @@ struct TranscriptDeliveryTests {
         let later = SlowRecognizer()
         let (again, server) = try await app(video, speech: later)
         await eventually { again.transcript?.complete == true }
-        _ = try await again.addComment(text: "After a restart", at: 3)
+        _ = try await again.addMessage(text: "After a restart", at: 3)
         #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Video Review."]]])
         #expect(later.runs == 0)
     }
@@ -193,7 +193,7 @@ struct TranscriptDeliveryTests {
         #expect(try await transcriptState(server) == [
             "source": "speech", "complete": false, "lines": 0, "problem": "no model for this language",
         ])
-        _ = try await model.addComment(text: "Still sent", at: 3)
+        _ = try await model.addMessage(text: "Still sent", at: 3)
         #expect(try await delivered(server) == [[]])
         let lines = await server.reply(to: ControlRequest.state.sent(by: Self.listener)).reply.output
         #expect(lines.contains("transcript: speech, 0 lines, stopped: no model for this language\n"))
@@ -209,7 +209,7 @@ struct TranscriptDeliveryTests {
         #expect(try object(empty.state().json)["transcript"] is NSNull)
         #expect(empty.state().lines.contains("transcript: none\n"))
 
-        let (model, _) = try await app(CommentTests.fixture)
+        let (model, _) = try await app(MessageTests.fixture)
         #expect(model.state().lines.contains("transcript: voiceover, 3 lines, complete\n"))
     }
 

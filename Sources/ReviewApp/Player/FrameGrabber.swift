@@ -2,9 +2,9 @@ import AVFoundation
 import ReviewCore
 import ReviewStore
 
-/// A comment's pictures: the keyframe, which is the frame of the video at
-/// the comment's time, and the crop of its region. Both are read from the
-/// asset and not from the window. A comment from the UI and one from the
+/// A message's pictures: the keyframe, which is the frame of the video at
+/// its thread's time, and the crop of its region. Both are read from the
+/// asset and not from the window. A message from the UI and one from the
 /// CLI therefore get the same pixels, at the video's own size, whatever the
 /// window's size, and with no screen permission.
 enum FrameGrabber {
@@ -34,21 +34,21 @@ enum FrameGrabber {
         return crop
     }
 
-    /// The keyframe written as a PNG at `file`, and the crop of `region`
-    /// at `cropFile` when the comment has one, off the main actor. When
-    /// either can't be written, neither is left behind.
+    /// The keyframe written as a PNG at `file` when it's given, and the
+    /// crop of `region` at `cropFile` when both are given, off the main
+    /// actor. When either can't be written, neither is left behind.
     @concurrent
     nonisolated static func writeImages(
         of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double,
-        keyframe file: URL, region: Region?, crop cropFile: URL
+        keyframe file: URL?, region: Region?, crop cropFile: URL?
     ) async throws(AppRefusal) {
         let image = try await keyframe(of: asset, at: seconds, duration: duration, frameDuration: frameDuration)
         do {
-            try ImageFiles.write(image, to: file)
-            if let region { try ImageFiles.write(try crop(image, to: region), to: cropFile) }
+            if let file { try ImageFiles.write(image, to: file) }
+            if let region, let cropFile { try ImageFiles.write(try crop(image, to: region), to: cropFile) }
         } catch {
-            ImageFiles.remove(file)
-            ImageFiles.remove(cropFile)
+            if let file { ImageFiles.remove(file) }
+            if let cropFile { ImageFiles.remove(cropFile) }
             throw (error as? AppRefusal) ?? AppRefusal((error as? ImageFiles.Failure)?.reason ?? "\(error)")
         }
     }

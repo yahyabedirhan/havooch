@@ -1,14 +1,14 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | edit | delete`, `context set`, `batch send`
-/// and `thread answer`.
+/// `video-review comment add | edit | delete`, `context set`, `send` and
+/// `thread answer`.
 enum CommentCommands {
     static let commands: [Command] = [
         Command(
-            name: "comment add", synopsis: "comment add <text> [--at <time>] [--region x,y,w,h]",
-            summary: "queue a comment at a time, or where the player is; --region is 0 to 1 from the frame's top-left corner",
-            valuedOptions: ["--at", "--region"]
+            name: "comment add", synopsis: "comment add <text> [--at <time>] [--region x,y,w,h] [--thread <thread>]",
+            summary: "queue a message on the thread of a frame (or a new one), at a time or where the player is; --region is 0 to 1 from the frame's top-left corner; --thread takes a thread id or number, 0 for General",
+            valuedOptions: ["--at", "--region", "--thread"]
         ) { arguments, _ throws(UsageError) in
             let text = try arguments.one("<text>")
             var at: Double?
@@ -27,16 +27,16 @@ enum CommentCommands {
                 }
                 region = rectangle
             }
-            return .send(.commentAdd(text: text, at: at, region: region))
+            return .send(.commentAdd(text: text, at: at, region: region, thread: arguments.options["--thread"]))
         },
-        Command(name: "comment edit", synopsis: "comment edit <id> <text>", summary: "change a queued comment's text") {
+        Command(name: "comment edit", synopsis: "comment edit <message-id> <text>", summary: "change a queued message's text") {
             arguments, _ throws(UsageError) in
-            let words = try arguments.exactly(["<id>", "<text>"])
+            let words = try arguments.exactly(["<message-id>", "<text>"])
             return .send(.commentEdit(id: words[0], text: words[1]))
         },
-        Command(name: "comment delete", synopsis: "comment delete <id>", summary: "remove a queued comment") {
+        Command(name: "comment delete", synopsis: "comment delete <message-id>", summary: "remove a queued message") {
             arguments, _ throws(UsageError) in
-            .send(.commentDelete(id: try arguments.one("<id>")))
+            .send(.commentDelete(id: try arguments.one("<message-id>")))
         },
         Command(
             name: "context set", synopsis: "context set <text>",
@@ -44,17 +44,17 @@ enum CommentCommands {
         ) { arguments, _ throws(UsageError) in
             .send(.contextSet(text: try arguments.one("<text>")))
         },
-        Command(name: "batch send", synopsis: "batch send", summary: "send every queued comment as one batch, which `wait` gets") {
+        Command(name: "send", synopsis: "send", summary: "send every queued message at once, which `wait` gets") {
             arguments, _ throws(UsageError) in
             try arguments.none()
-            return .send(.batchSend)
+            return .send(.send)
         },
         Command(
-            name: "thread answer", synopsis: "thread answer <comment-id> <text>",
-            summary: "answer the agent's open question on a comment, as the person does in the answer box"
+            name: "thread answer", synopsis: "thread answer <thread> <text>",
+            summary: "answer the agent's open question on a thread (an id, or a number of the open video), as the person does"
         ) { arguments, _ throws(UsageError) in
-            let words = try arguments.exactly(["<comment-id>", "<text>"])
-            return .send(.threadAnswer(commentID: words[0], text: words[1]))
+            let words = try arguments.exactly(["<thread>", "<text>"])
+            return .send(.threadAnswer(thread: words[0], text: words[1]))
         },
     ]
 }

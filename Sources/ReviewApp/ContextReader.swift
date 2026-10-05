@@ -3,7 +3,7 @@ import ReviewCore
 
 /// The video context the listener is told: the text of the sidecar file in
 /// the video's folder, then the person's note under its own heading. It's
-/// read when a `wait` takes a batch, so nothing watches the file.
+/// read when a `wait` takes a send, so nothing watches the file.
 enum ContextReader {
     /// The sidecar file that serves a video, and its text.
     struct Sidecar: Equatable {

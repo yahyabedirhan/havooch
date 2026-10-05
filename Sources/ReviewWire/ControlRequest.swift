@@ -29,44 +29,47 @@ public enum ControlRequest: Equatable, Sendable {
     /// `video-review player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
-    /// `video-review comment add <text> [--at <time>] [--region x,y,w,h]`: a
-    /// comment queued at `at` seconds, or at the player's time when it's
-    /// nil, on `region` of the frame when it has one.
-    case commentAdd(text: String, at: Double?, region: Rectangle? = nil)
-    /// `video-review comment edit <id> <text>`: a queued comment's new text.
+    /// `video-review comment add <text> [--at <time>] [--region x,y,w,h]
+    /// [--thread <thread>]`: a message queued at `at` seconds, or at the
+    /// player's time when it's nil, on `region` of the frame when it has
+    /// one. It joins the thread of that frame or starts one; with `thread`
+    /// (a thread id, or a number of the open video, `0` for General) it's
+    /// written on that thread.
+    case commentAdd(text: String, at: Double?, region: Rectangle? = nil, thread: String? = nil)
+    /// `video-review comment edit <message-id> <text>`: a queued message's
+    /// new text.
     case commentEdit(id: String, text: String)
-    /// `video-review comment delete <id>`: a queued comment removed.
+    /// `video-review comment delete <message-id>`: a queued message removed.
     case commentDelete(id: String)
     /// `video-review context set <text>`: the open video's context note,
     /// which the listener gets with the sidecar's text. An empty `text`
     /// clears it.
     case contextSet(text: String)
-    /// `video-review batch send`: every queued comment of the open video
-    /// sent as one batch, which the listener's `wait` gets.
-    case batchSend
-    /// `video-review wait [--timeout <seconds>]`: the next batch as its
-    /// JSON payload. The app holds the request until a batch is sent, up to
+    /// `video-review send`: every queued message of the open video sent as
+    /// one send, which the listener's `wait` gets.
+    case send
+    /// `video-review wait [--timeout <seconds>]`: the next send as its
+    /// JSON payload. The app holds the request until a send is made, up to
     /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
     /// listener, present while its `wait` is open.
     case wait(timeoutSeconds: Int?)
-    /// `video-review ack <batch-id> [<text>]`: the listener has the batch.
-    /// Its comments are acknowledged, and `text` is a message for the full
-    /// batch.
-    case ack(batchID: String, text: String?)
-    /// `video-review status <comment-id> working|done|failed`: how far the
-    /// listener is with a comment.
-    case status(commentID: String, state: Status)
-    /// `video-review reply <comment-id|batch-id> <text>`: the listener's
-    /// message on a comment's thread, or for the full batch.
-    case reply(id: String, text: String)
-    /// `video-review ask <comment-id> <question> [--wait <seconds>]`: the
-    /// listener's question on a comment's thread. The app holds the request
-    /// until the person answers, up to `waitSeconds`, or with no limit when
-    /// it's nil.
-    case ask(commentID: String, question: String, waitSeconds: Int?)
-    /// `video-review thread answer <comment-id> <text>`: the answer to a
-    /// comment's open question, as the person gives it in the answer box.
-    case threadAnswer(commentID: String, text: String)
+    /// `video-review ack <send-id> [<text>]`: the listener has the send.
+    /// Its messages are acknowledged, and `text` is the agent's message on
+    /// the General thread.
+    case ack(sendID: String, text: String?)
+    /// `video-review status <message-id> working|done|failed`: how far the
+    /// listener is with a message.
+    case status(messageID: String, state: Status)
+    /// `video-review reply <thread> <text>`: the listener's message on a
+    /// thread (a thread id, or a number of the open video).
+    case reply(thread: String, text: String)
+    /// `video-review ask <thread> <question> [--wait <seconds>]`: the
+    /// listener's question on a thread. The app holds the request until the
+    /// person answers, up to `waitSeconds`, or with no limit when it's nil.
+    case ask(thread: String, question: String, waitSeconds: Int?)
+    /// `video-review thread answer <thread> <text>`: the answer to a
+    /// thread's open question, as the person gives it in the app.
+    case threadAnswer(thread: String, text: String)
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--hide-agent-indicator]`: the app's window written as a PNG at the
     /// absolute `path`, in `appearance` when it's set, as the Mac shows it
@@ -104,7 +107,7 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
-    /// What `status` can say of a comment.
+    /// What `status` can say of a message.
     public enum Status: String, Equatable, Sendable, CaseIterable {
         case working, done, failed
     }
@@ -120,7 +123,7 @@ public enum ControlRequest: Equatable, Sendable {
         case free
         /// An agent that drives the UI: one at a time, under the lease.
         case `operator`
-        /// The agent that receives batches, beside the person: no lease.
+        /// The agent that receives sends, beside the person: no lease.
         case listener
     }
 
@@ -132,7 +135,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .themeSet: .operator
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
-        case .commentAdd, .commentEdit, .commentDelete, .batchSend: .operator
+        case .commentAdd, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }
@@ -140,7 +143,7 @@ public enum ControlRequest: Equatable, Sendable {
 
     /// How long the app may keep the connection before it answers, past the
     /// client's usual timeout; nil for no limit. A `take` waits in line for
-    /// its `waitSeconds`, a `wait` for a batch for its `timeoutSeconds`,
+    /// its `waitSeconds`, a `wait` for a send for its `timeoutSeconds`,
     /// and an `ask` for its answer for its `waitSeconds`.
     public var holdSeconds: TimeInterval? {
         switch self {

@@ -2,17 +2,17 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// When a batch carries the video context: once per listener session and
+/// When a send carries the video context: once per listener session and
 /// video, and again when the text changed.
 @Suite("The context, once per listener session")
 struct ContextTests {
     static let one = ListenerSession(key: "listener-1", name: "Claude Code", place: "/work")
     static let two = ListenerSession(key: "listener-2", name: "Claude Code", place: "/work")
-    static let batch = BatchRef(batchID: ItemID("b-00000001")!, contentHash: "abc")
+    static let send = SendRef(sendID: ItemID("s-00000000-1")!, contentHash: "abc")
 
     private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
-    @Test("the first batch of a session has the text, and the next has none")
+    @Test("the first send of a session has the text, and the next has none")
     func oncePerSession() {
         var outbox = Outbox()
         outbox.waitOpened(by: Self.one, at: at(0))
@@ -83,16 +83,16 @@ struct ContextTests {
         #expect(outbox.context(for: "abc", text: "About the sample") == nil)
     }
 
-    @Test("a batch whose reply couldn't be written takes its video's context back with it")
+    @Test("a send whose reply couldn't be written takes its video's context back with it")
     func undelivered() {
         var outbox = Outbox()
-        outbox.enqueue(Self.batch)
+        outbox.enqueue(Self.send)
         outbox.waitOpened(by: Self.one, at: at(0))
-        #expect(outbox.deliverNext(at: at(0)) == Self.batch)
+        #expect(outbox.deliverNext(at: at(0)) == Self.send)
         _ = outbox.context(for: "abc", text: "About the sample")
         _ = outbox.context(for: "def", text: "About the other")
 
-        outbox.undelivered(Self.batch)
+        outbox.undelivered(Self.send)
 
         // The listener never read that payload: the next one carries the text.
         #expect(outbox.context(for: "abc", text: "About the sample") == "About the sample")

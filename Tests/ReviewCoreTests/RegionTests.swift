@@ -4,7 +4,7 @@ import Testing
 
 @Suite("A region of the frame")
 struct RegionTests {
-    static let video = VideoInfo(contentHash: "abc", title: "sample", duration: 21.233, path: "/videos/sample.mp4")
+    static let video = VideoInfo(contentHash: "f92cbb2a00", title: "sample", duration: 21.233, path: "/videos/sample.mp4")
 
     @Test("a rectangle inside the frame is a region", arguments: [
         [0.25, 0.2, 0.3, 0.25], [0, 0, 1, 1], [0.7, 0.9, 0.3, 0.1], [0.999, 0.999, 0.001, 0.001],
@@ -51,12 +51,13 @@ struct RegionTests {
         #expect(try Region(x: 0.999, y: 0.999, w: 0.001, h: 0.001).pixels(width: 100, height: 100) == (99, 99, 1, 1))
     }
 
-    @Test("a comment keeps its region, and a comment without one has none")
-    func comment() throws {
+    @Test("a message keeps its region, and a message without one has none")
+    func message() throws {
         var review = VideoReview(video: Self.video)
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
-        let pointed = try review.addComment(id: ItemID("c-00000001")!, time: 12.5, text: "This box", region: region)
-        let plain = try review.addComment(id: ItemID("c-00000002")!, time: 3, text: "Too fast")
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let pointed = try review.write(text: "This box", at: 12.5, region: region, now: now).message
+        let plain = try review.write(text: "Too fast", at: 3, now: now).message
         #expect(pointed.region == region)
         #expect(plain.region == nil)
         #expect(try JSONDecoder().decode(VideoReview.self, from: JSONEncoder().encode(review)) == review)

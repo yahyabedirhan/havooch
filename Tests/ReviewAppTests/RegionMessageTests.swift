@@ -114,16 +114,16 @@ struct VideoFrameGeometryTests {
     }
 }
 
-/// Region comments through the app's model, on the fixture video, in a
+/// Region messages through the app's model, on the fixture video, in a
 /// temporary support folder. No window, no socket.
-@Suite("Comments on a region", .serialized)
-struct RegionCommentTests {
+@Suite("Messages on a region", .serialized)
+struct RegionMessageTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("video-review-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> AppModel {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
-        try await model.open(CommentTests.fixture)
+        try await model.open(MessageTests.fixture)
         return model
     }
 
@@ -154,19 +154,20 @@ struct RegionCommentTests {
         }
     }
 
-    @Test("a comment on a region keeps the region and a crop PNG that is that part of its keyframe")
+    @Test("a message on a region keeps the region and a crop PNG that is that part of its thread's keyframe")
     func crop() async throws {
         defer { cleanUp() }
         let model = try await model()
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
-        let comment = try await model.addComment(text: "This box", at: 12.5, region: region)
+        let added = try await model.addMessage(text: "This box", at: 12.5, region: region)
+        let comment = added.message
 
         #expect(comment.region == region)
         let hash = try #require(model.video?.contentHash)
         let cropPath = try #require(comment.cropPath)
         #expect(cropPath == support.appendingPathComponent("videos/\(hash)/crops/\(comment.id).png").path)
 
-        let keyframe = try image(comment.keyframePath)
+        let keyframe = try image(try #require(added.thread.keyframePath))
         let crop = try image(cropPath)
         let part = region.pixels(width: keyframe.width, height: keyframe.height)
         #expect(crop.width == part.width)
@@ -175,34 +176,36 @@ struct RegionCommentTests {
         #expect(try pixels(crop) == pixels(same))
         // It's a part of the picture, not the picture made small.
         #expect(crop.width < keyframe.width)
-        #expect(model.state().comments == [comment])
+        #expect(model.state().threads.last?.messages == [comment])
 
-        // A comment on the whole frame has neither.
-        let plain = try await model.addComment(text: "Too fast", at: 3)
+        // A message on the whole frame has neither.
+        let plain = try await model.addMessage(text: "Too fast", at: 3).message
         #expect(plain.region == nil)
         #expect(plain.cropPath == nil)
     }
 
-    @Test("the crop is the same picture from the comment box and from the CLI's path")
+    @Test("the crop is the same picture from the popover and from the CLI's path")
     func sameFromBoth() async throws {
         defer { cleanUp() }
         let model = try await model()
         let region = try Region(x: 0.1, y: 0.55, w: 0.42, h: 0.3)
-        let fromCLI = try await model.addComment(text: "from the CLI", at: 12.5, region: region)
+        let fromCLI = try await model.addMessage(text: "from the CLI", at: 12.5, region: region).message
 
         // As a person does: at the same moment, drag, write, Return.
         try await model.seek(to: 12.5)
         model.beginRegion()
         model.endRegion(region)
         #expect(model.draft == AppModel.Draft(time: 12.5, text: "", region: region))
-        #expect(model.state().draft == StateReport.Draft(time: 12.5, text: "", region: region))
+        #expect(model.state().popover == StateReport.Popover(thread: 1, time: 12.5, text: "", region: region))
         model.draft?.text = "from the box"
         model.commitDraft()
-        await eventually { model.comments.count == 2 }
-        let fromBox = try #require(model.state().comments.first { $0.text == "from the box" })
+        await eventually { model.state().queue.count == 2 }
+        let thread = try #require(model.state().threads.last)
+        let fromBox = try #require(thread.messages.first { $0.text == "from the box" })
 
+        // One frame, one thread.
+        #expect(thread.messages.count == 2)
         #expect(fromBox.region == fromCLI.region)
-        #expect(fromBox.time == fromCLI.time)
         let (a, b) = (try image(try #require(fromCLI.cropPath)), try image(try #require(fromBox.cropPath)))
         #expect(a.width == b.width)
         #expect(a.height == b.height)
@@ -254,7 +257,7 @@ struct RegionCommentTests {
         #expect(model.escape())
         #expect(model.draft == nil)
         #expect(model.shownRegion == nil)
-        #expect(model.comments.isEmpty)
+        #expect(model.state().queue.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: support.appendingPathComponent("videos").path))
 
         // With nothing to cancel, Escape isn't taken.
@@ -304,21 +307,21 @@ struct RegionCommentTests {
         #expect(model.draft?.region == second)
     }
 
-    @Test("a selected comment's region shows on the frame while the player stands on its frame")
+    @Test("a selected thread's region shows on the frame while the player stands on its frame")
     func shownRegion() async throws {
         defer { cleanUp() }
         let model = try await model()
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
-        let plain = try await model.addComment(text: "Too fast", at: 3)
-        let pointed = try await model.addComment(text: "This box", at: 12.5, region: region)
-        // The new comment is selected and the player is on its frame.
+        let plain = try await model.addMessage(text: "Too fast", at: 3)
+        let pointed = try await model.addMessage(text: "This box", at: 12.5, region: region)
+        // The new thread is selected and the player is on its frame.
         #expect(model.shownRegion == AppModel.ShownRegion(region: region, number: 2, state: .queued))
 
-        model.select(try #require(ItemID(plain.id)))
+        model.select(try #require(ItemID(plain.thread.id)))
         await eventually { model.engine.time == 3 }
         #expect(model.shownRegion == nil)
 
-        model.select(try #require(ItemID(pointed.id)))
+        model.select(try #require(ItemID(pointed.thread.id)))
         await eventually { model.engine.time == 12.5 }
         #expect(model.shownRegion?.region == region)
 
@@ -327,23 +330,23 @@ struct RegionCommentTests {
         #expect(model.shownRegion == nil)
     }
 
-    @Test("deleting a comment on a region removes its crop with its keyframe")
+    @Test("deleting the only message, on a region, removes its crop, and its thread's keyframe with the thread")
     func delete() async throws {
         defer { cleanUp() }
         let model = try await model()
-        let comment = try await model.addComment(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
-        let crop = try #require(comment.cropPath)
+        let added = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
+        let crop = try #require(added.message.cropPath)
         #expect(FileManager.default.fileExists(atPath: crop))
-        _ = try model.deleteComment(comment.id)
+        _ = try model.deleteMessage(added.message.id)
         #expect(!FileManager.default.fileExists(atPath: crop))
-        #expect(!FileManager.default.fileExists(atPath: comment.keyframePath))
+        #expect(!FileManager.default.fileExists(atPath: try #require(added.thread.keyframePath)))
     }
 
     @Test("the player knows the picture's size")
     func videoSize() async throws {
         defer { cleanUp() }
         let model = try await model()
-        let track = try #require(try await AVURLAsset(url: CommentTests.fixture).loadTracks(withMediaType: .video).first)
+        let track = try #require(try await AVURLAsset(url: MessageTests.fixture).loadTracks(withMediaType: .video).first)
         #expect(model.engine.videoSize == (try await track.load(.naturalSize)))
     }
 }

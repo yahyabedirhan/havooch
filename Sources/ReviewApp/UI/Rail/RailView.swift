@@ -1,79 +1,71 @@
 import ReviewCore
+import ReviewWire
 import SwiftUI
 
-/// The rail beside the stage: the queue on top, then each batch, newest
-/// first, with the agent's messages about it and its comments as rows in
-/// time order, then the send bar.
+/// The rail beside the stage: the General thread when it has messages,
+/// then each thread in time order, with its messages in the order written,
+/// then the send bar.
 ///
-/// Nothing in the rail is a bordered card. Each section starts with a
-/// header band, rows are split by hairlines, and the selected row is told by
-/// its fill; only thread messages sit in bubbles, as in a chat.
+/// Nothing in the rail is a bordered card. Each thread starts with a
+/// header band, the person's messages are rows, and only the agent's
+/// messages and the answers sit in bubbles, as in a chat.
 struct RailView: View {
     let model: AppModel
 
-    /// One section of rows: the queue, or a batch.
-    struct CardGroup: Equatable, Identifiable {
-        /// The batch; nil for the queue.
-        var batch: Batch?
-        /// The group's comments in time order, each with its number in
-        /// time order among all the video's comments, as on its marker.
-        var cards: [Card]
+    /// One part of a thread's conversation: a person's message, drawn as
+    /// a row, or a run of the agent's messages and the answers, drawn as
+    /// bubbles.
+    enum Part: Identifiable {
+        case work(Message)
+        case talk([Message])
 
-        var id: String { batch?.id.text ?? "queue" }
-    }
-
-    struct Card: Equatable, Identifiable {
-        var number: Int
-        var comment: Comment
-
-        var id: ItemID { comment.id }
-    }
-
-    /// The rail's groups for `comments` (in time order) and `batches` (in
-    /// the order sent): the queue first, also when it's empty, then the
-    /// batches from the newest to the oldest.
-    static func groups(comments: [Comment], batches: [Batch]) -> [CardGroup] {
-        let cards = comments.enumerated().map { Card(number: $0.offset + 1, comment: $0.element) }
-        let queue = CardGroup(batch: nil, cards: cards.filter { $0.comment.batchID == nil })
-        return [queue] + batches.reversed().map { batch in
-            CardGroup(batch: batch, cards: cards.filter { $0.comment.batchID == batch.id })
+        var id: String {
+            switch self {
+            case .work(let message): message.id.text
+            case .talk(let messages): "talk-" + (messages.first?.id.text ?? "")
+            }
         }
     }
 
-    /// What a batch's header says beside its time: how many comments, and
-    /// how many of them are finished once one is.
-    static func progress(of comments: [Comment]) -> String {
-        let finished = comments.count { $0.state.isFinal }
-        if finished > 0 { return "\(finished) of \(comments.count) done" }
-        return "\(comments.count) comment\(comments.count == 1 ? "" : "s")"
+    /// `messages` cut into parts, in the order written.
+    static func parts(of messages: [Message]) -> [Part] {
+        var parts: [Part] = []
+        for message in messages {
+            if message.isWork {
+                parts.append(.work(message))
+            } else if case .talk(let run) = parts.last {
+                parts[parts.count - 1] = .talk(run + [message])
+            } else {
+                parts.append(.talk([message]))
+            }
+        }
+        return parts
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let groups = Self.groups(comments: model.comments, batches: model.batches)
+        let threads = model.threads.filter { !$0.messages.isEmpty }
         VStack(spacing: 0) {
-            if model.comments.isEmpty {
-                sectionHeader { queueTitle(count: 0) }
+            if threads.isEmpty {
                 empty
             } else {
-                list(groups)
+                list(threads)
             }
             SendBar(model: model)
         }
     }
 
-    private func list(_ groups: [CardGroup]) -> some View {
+    private func list(_ threads: [ReviewThread]) -> some View {
         ScrollViewReader { scroll in
             ScrollView {
-                // Not lazy: a row that moves from the queue to its batch
-                // must be drawn again in its new state, and a review has
-                // tens of comments, not thousands. Pinned section headers
-                // need a lazy stack, so the headers scroll with their rows.
+                // Not lazy: a review has tens of threads, not thousands,
+                // and a row that changes state must be drawn again.
                 VStack(spacing: 0) {
-                    ForEach(groups) { group in
-                        section(group)
+                    ForEach(threads) { thread in
+                        section(thread)
+                            .id(thread.id)
                     }
                 }
                 .padding(.bottom, 12)
@@ -89,24 +81,22 @@ struct RailView: View {
         }
     }
 
-    /// One section: its header band, the batch's own messages, then its
-    /// rows with a hairline between each two.
-    private func section(_ group: CardGroup) -> some View {
+    /// One thread: its header band, then its conversation.
+    private func section(_ thread: ReviewThread) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let batch = group.batch {
-                sectionHeader { batchTitle(batch, group.cards.map(\.comment)) }
-                if !batch.messages.isEmpty { batchMessages(batch) }
-            } else {
-                sectionHeader { queueTitle(count: group.cards.count) }
-                if group.cards.isEmpty { nothingQueued }
-            }
-            ForEach(group.cards) { card in
-                CommentRow(model: model, comment: card.comment, number: card.number)
-                    .id(card.id)
-                if card.id != group.cards.last?.id {
-                    palette[.separator]
-                        .frame(height: 1)
-                        .padding(.leading, CommentRow.textInset)
+            sectionHeader { threadTitle(thread) }
+                .contentShape(Rectangle())
+                .onTapGesture { model.select(thread.id) }
+            ForEach(Self.parts(of: thread.messages)) { part in
+                switch part {
+                case .work(let message):
+                    CommentRow(model: model, message: message, thread: thread)
+                case .talk(let messages):
+                    ThreadView(messages: messages, openQuestion: thread.openQuestion, agent: model.agentName) {
+                        model.answerQuestion(thread.id, text: $0)
+                    }
+                    .padding(.horizontal, Metrics.railPadding)
+                    .padding(.vertical, 12)
                 }
             }
         }
@@ -126,55 +116,19 @@ struct RailView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
+    /// A thread's title: its number and frame, or General, and its state.
     @ViewBuilder
-    private func queueTitle(count: Int) -> some View {
-        Text("Queue")
-            .font(.subheadline.weight(.semibold))
+    private func threadTitle(_ thread: ReviewThread) -> some View {
+        MarkerPin(
+            number: thread.number, state: thread.state ?? .queued, isSelected: model.selection == thread.id,
+            badge: MarkerPin.Badge(thread, unread: model.unread)
+        )
+        Text(thread.time.map { TimeCode.text($0) } ?? "General")
+            .font(.subheadline.weight(.semibold).monospacedDigit())
         Spacer(minLength: 8)
-        if count > 0 {
-            Text("\(count) comment\(count == 1 ? "" : "s")")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(palette[.textSecondary])
+        if let state = thread.state {
+            StateChip(state: state)
         }
-    }
-
-    /// A batch's title: when it was sent, how far it is, and whether it
-    /// still waits for an agent.
-    @ViewBuilder
-    private func batchTitle(_ batch: Batch, _ comments: [Comment]) -> some View {
-        let waits = model.listeners.outbox.pending.contains { $0.batchID == batch.id }
-        Image(systemName: waits ? "clock" : "paperplane")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(palette[.textSecondary])
-            .accessibilityHidden(true)
-        // Two digits for the hour: "Sent at 00:13" can't be read as a
-        // time in the video.
-        Text("Sent at \(batch.sentAt.formatted(.dateTime.hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits)))")
-            .font(.subheadline.weight(.semibold))
-        Spacer(minLength: 8)
-        Text(waits ? "\(Self.progress(of: comments)) · waiting for an agent" : Self.progress(of: comments))
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(palette[.textSecondary])
-            .lineLimit(1)
-    }
-
-    /// What the agent said about the batch as one, under its header, as
-    /// chat bubbles.
-    private func batchMessages(_ batch: Batch) -> some View {
-        ThreadView(messages: batch.messages, agent: model.agentName)
-            .padding(.horizontal, Metrics.railPadding)
-            .padding(.vertical, 12)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("The agent's messages about the whole batch")
-    }
-
-    private var nothingQueued: some View {
-        Text("Nothing queued. Press C to comment on the moment you're watching.")
-            .font(.callout)
-            .foregroundStyle(palette[.textSecondary])
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Metrics.railPadding)
-            .padding(.vertical, 12)
     }
 
     private var empty: some View {
@@ -183,9 +137,9 @@ struct RailView: View {
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(palette[.textTertiary])
                 .padding(.bottom, 2)
-            Text("No comments yet")
+            Text("No threads yet")
                 .font(.headline)
-            Text("Press C to comment on the moment you're watching, or drag on the frame to comment on a part of it. Comments queue here, then go to your agent as one batch.")
+            Text("Press C to write on the frame you're watching, or drag on the frame to point at a part of it. Each frame gets its thread; your messages queue, then go to your agent at once.")
                 .font(.callout)
                 .foregroundStyle(palette[.textSecondary])
                 .multilineTextAlignment(.center)
