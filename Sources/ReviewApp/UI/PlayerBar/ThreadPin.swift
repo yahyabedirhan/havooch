@@ -76,8 +76,8 @@ struct ThreadPin: View {
         let color = look.color(in: palette)
         ZStack {
             if look.isRing {
-                // Filled with the bar's colour, so the track doesn't show through the ring.
-                shape.fill(palette[.bar])
+                // Filled with the window's colour, so the track doesn't show through the ring.
+                shape.fill(palette[.window])
                 shape.strokeBorder(color, lineWidth: size / 5)
             } else {
                 shape.fill(color)

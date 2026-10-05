@@ -38,10 +38,14 @@ public struct Message: Codable, Equatable, Sendable, Identifiable {
     public internal(set) var state: MessageState?
     /// The send a person's message went out in; nil while it's queued.
     public internal(set) var sendID: SendID?
+    /// The name of the listener session an agent's message was written
+    /// under, so a later listener doesn't rename it; nil for the person's
+    /// messages, and for an agent's message kept before names were.
+    public let sessionName: String?
 
     public init(
         id: MessageID, author: Author, kind: Kind, text: String, at: Date,
-        region: Region? = nil, state: MessageState? = nil, sendID: SendID? = nil
+        region: Region? = nil, state: MessageState? = nil, sendID: SendID? = nil, sessionName: String? = nil
     ) {
         self.id = id
         self.author = author
@@ -51,6 +55,7 @@ public struct Message: Codable, Equatable, Sendable, Identifiable {
         self.region = region
         self.state = state
         self.sendID = sendID
+        self.sessionName = sessionName
     }
 
     /// Whether the message is a work item: a person's `message`.

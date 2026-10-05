@@ -41,7 +41,7 @@ struct ThemeFilesTests {
         for name in [ThemeCatalog.defaultLight, ThemeCatalog.defaultDark] {
             let file = files.first { $0.name == name }
             for token in ThemeToken.allCases {
-                #expect(file?.tokens[token.rawValue].flatMap(ThemeColor.init) != nil, "\(name) has no colour for \(token)")
+                #expect(file?.tokens[token.rawValue].map { ThemeCatalog.reads($0, for: token) } == true, "\(name) has no value for \(token)")
             }
             let unknown = Set((file?.tokens ?? [:]).keys).subtracting(ThemeToken.allCases.map(\.rawValue))
             #expect(unknown.isEmpty, "\(name) names a token the app doesn't know")
@@ -69,79 +69,21 @@ struct ThemeFilesTests {
         for file in files {
             for (token, text) in file.tokens {
                 #expect(ThemeToken(rawValue: token) != nil, "\(file.name) names \(token), a token the app doesn't know")
-                #expect(ThemeColor(text) != nil, "\(file.name) \(token) is \(text), a colour that doesn't read")
+                #expect(ThemeToken(rawValue: token).map { ThemeCatalog.reads(text, for: $0) } != false, "\(file.name) \(token) is \(text), a value that doesn't read")
             }
             let theme = try catalog.resolve(file.name)
-            #expect(theme.colors.count == ThemeToken.allCases.count, "\(file.name) leaves a token unresolved")
+            #expect(theme.isComplete, "\(file.name) leaves a token unresolved")
         }
     }
 
-    @Test("in every shipped theme the text reads on each surface, and each state stands apart from the surfaces, its glyph and the other states, and the question from every state and the bar")
-    func everyThemeReads() throws {
+    @Test("Default Light and Default Dark draw native surfaces; Dimmed and the VS Code themes paint them all; no shipped theme mixes the two")
+    func nativeOrPainted() throws {
         let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: [])
-        let states: [ThemeToken] = [.stateQueued, .stateSent, .stateAcknowledged, .stateWorking, .stateDone, .stateFailed]
         for name in catalog.names {
             let theme = try catalog.resolve(name)
-            func colour(_ token: ThemeToken) throws -> ThemeColor { try #require(theme[token]) }
-            for surface: ThemeToken in [.window, .sidebar, .popover, .bar, .header] {
-                let primary = Self.contrast(try colour(.textPrimary), try colour(surface))
-                let secondary = Self.contrast(try colour(.textSecondary), try colour(surface))
-                #expect(primary >= 6,"\(name): textPrimary on \(surface) is \(primary):1")
-                #expect(secondary >= 4.5, "\(name): textSecondary on \(surface) is \(secondary):1")
-            }
-            for token in states + [.accent, .question] {
-                for surface: ThemeToken in [.sidebar, .popover] {
-                    let ratio = Self.contrast(try colour(token), try colour(surface))
-                    #expect(ratio >= 2.5, "\(name): \(token) on \(surface) is \(ratio):1")
-                }
-                let glyph = Self.contrast(try colour(.textOnAccent), try colour(token))
-                #expect(glyph >= 3, "\(name): textOnAccent on \(token) is \(glyph):1")
-            }
-            // The question's pin on the player bar stands apart from every
-            // state's pin, and shows on the bar as a mark should (3:1).
-            let questionOnBar = Self.contrast(try colour(.question), try colour(.bar))
-            #expect(questionOnBar >= 3, "\(name): question on bar is \(questionOnBar):1")
-            for state in states {
-                let distance = Self.distance(try colour(.question), try colour(state))
-                #expect(distance >= 10, "\(name): question and \(state) are \(distance) apart")
-            }
-            for (index, one) in states.enumerated() {
-                for other in states[(index + 1)...] {
-                    let distance = Self.distance(try colour(one), try colour(other))
-                    #expect(distance >= 10, "\(name): \(one) and \(other) are \(distance) apart")
-                }
-            }
+            let isDefault = name == ThemeCatalog.defaultLight || name == ThemeCatalog.defaultDark
+            #expect(theme.system == (isDefault ? ThemeToken.systemSurfaces : []), "\(name) has \(theme.system.map(\.rawValue).sorted()) native")
         }
-    }
-
-    /// The WCAG contrast ratio of two opaque colours, from 1 to 21.
-    private static func contrast(_ one: ThemeColor, _ other: ThemeColor) -> Double {
-        let (a, b) = (luminance(one), luminance(other))
-        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
-    }
-
-    private static func linear(_ byte: UInt8) -> Double {
-        let c = Double(byte) / 255
-        return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-    }
-
-    private static func luminance(_ color: ThemeColor) -> Double {
-        0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
-    }
-
-    /// How far apart two colours look: the CIE76 distance in CIELAB.
-    private static func distance(_ one: ThemeColor, _ other: ThemeColor) -> Double {
-        let (a, b) = (lab(one), lab(other))
-        return ((a.0 - b.0) * (a.0 - b.0) + (a.1 - b.1) * (a.1 - b.1) + (a.2 - b.2) * (a.2 - b.2)).squareRoot()
-    }
-
-    private static func lab(_ color: ThemeColor) -> (Double, Double, Double) {
-        let (r, g, b) = (linear(color.red), linear(color.green), linear(color.blue))
-        let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
-        let y = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
-        func f(_ t: Double) -> Double { t > 0.008856 ? cbrt(t) : 7.787 * t + 16.0 / 116 }
-        return (116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z)))
     }
 
     /// A saturated hue between magenta and rose.
@@ -169,6 +111,39 @@ struct ThemeFilesTests {
         #expect(reading.found.first?.url.lastPathComponent == "b.json")
         #expect(reading.problems.count == 1)
         #expect(reading.problems.first?.contains("a.json") == true)
+    }
+
+    /// The surface tokens 0.1.0 had and the one-surface window removed, and
+    /// `controlPressed`, which the native buttons left with no view.
+    static let removedSurfaces = ["stage", "bar", "sidebar", "sidebarSection", "sidebarRowHover", "sidebarRowSelected", "header", "controlPressed"]
+
+    @Test("the window is one surface: no token or built-in theme names a surface of its own for the header, the stage, the bar or the sidebar")
+    func oneSurface() {
+        for name in Self.removedSurfaces {
+            #expect(ThemeToken(rawValue: name) == nil, "\(name) is still a token")
+        }
+        for file in ThemeFiles.read(Self.shipped).files {
+            let left = Set(file.tokens.keys).intersection(Self.removedSurfaces)
+            #expect(left.isEmpty, "\(file.name) still sets \(left.sorted())")
+        }
+    }
+
+    @Test("a person's theme that still sets a removed surface token loads with no problem, and its other tokens apply")
+    func removedTokensStillLoad() throws {
+        let layout = try temporaryLayout()
+        try FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
+        let old = Self.removedSurfaces.map { "\"\($0)\": \"#123456\"" }.joined(separator: ", ")
+        try Data(##"{"name": "Old", "kind": "dark", "extends": "Default Dark", "tokens": {\##(old), "accent": "#a0522d"}}"##.utf8)
+            .write(to: layout.themesFolder.appendingPathComponent("old.json"))
+
+        let reading = ThemeFiles.user(layout)
+        #expect(reading.problems.isEmpty)
+        let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: reading.files)
+        #expect(catalog.problems.isEmpty)
+        let theme = try catalog.resolve("Old")
+        #expect(theme[.accent] == ThemeColor("#a0522d"))
+        #expect(theme[.window] == (try catalog.resolve(ThemeCatalog.defaultDark))[.window])
+        #expect(theme.isComplete)
     }
 
     @Test("with no settings file the settings are the defaults; they round-trip, with the pin as null while it follows the system")

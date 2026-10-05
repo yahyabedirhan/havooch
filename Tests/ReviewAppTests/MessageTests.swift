@@ -247,7 +247,7 @@ struct MessageTests {
         _ = try await model.addMessage(text: "general", at: nil, thread: "0")
         let firstID = try #require(ItemID(first.thread.id))
 
-        model.select(firstID)
+        model.showThread(firstID)
         await eventually { model.engine.time == 2 }
         #expect(model.engine.time == 2)
         #expect(model.selection == firstID)
@@ -321,24 +321,24 @@ struct MessageTests {
 
     @Test("the comment popover stays inside the stage, with its notch on the player bar's playhead")
     func composerPlacement() {
-        let middle = Composer.placement(playhead: 500, stageWidth: 1000)
-        #expect(middle.leading == 500 - Composer.width / 2)
-        #expect(middle.notch == Composer.width / 2)
-        let start = Composer.placement(playhead: 0, stageWidth: 1000)
+        let middle = CommentPopover.placement(playhead: 500, stageWidth: 1000)
+        #expect(middle.leading == 500 - CommentPopover.width / 2)
+        #expect(middle.notch == CommentPopover.width / 2)
+        let start = CommentPopover.placement(playhead: 0, stageWidth: 1000)
         #expect(start.leading == 10)
         #expect(start.notch == 22)
-        let end = Composer.placement(playhead: 1000, stageWidth: 1000)
-        #expect(end.leading == 1000 - Composer.width - 10)
-        #expect(end.notch == Composer.width - 22)
+        let end = CommentPopover.placement(playhead: 1000, stageWidth: 1000)
+        #expect(end.leading == 1000 - CommentPopover.width - 10)
+        #expect(end.notch == CommentPopover.width - 22)
 
         // The track sits in the bar between its buttons, not under the
         // stage's whole width: the playhead is on the track.
         let stage = CGRect(x: 12, y: 40, width: 1000, height: 560)
         let track = CGRect(x: 160, y: 620, width: 700, height: 30)
-        #expect(Composer.playhead(fraction: 0, track: track, stage: stage) == 148)
-        #expect(Composer.playhead(fraction: 0.5, track: track, stage: stage) == 498)
-        #expect(Composer.playhead(fraction: 1, track: track, stage: stage) == 848)
+        #expect(CommentPopover.playhead(fraction: 0, track: track, stage: stage) == 148)
+        #expect(CommentPopover.playhead(fraction: 0.5, track: track, stage: stage) == 498)
+        #expect(CommentPopover.playhead(fraction: 1, track: track, stage: stage) == 848)
         // Before the track is laid out, the stage stands for it.
-        #expect(Composer.playhead(fraction: 0.5, track: .zero, stage: stage) == 500)
+        #expect(CommentPopover.playhead(fraction: 0.5, track: .zero, stage: stage) == 500)
     }
 }

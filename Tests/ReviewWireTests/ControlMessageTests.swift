@@ -29,6 +29,7 @@ struct ControlMessageTests {
         ControlRequest.appStatus, .state, .appOpen, .appQuit,
         .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
         .screenshot(path: "/tmp/shot.png", appearance: .light, hideAgentIndicator: true),
+        .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
@@ -37,6 +38,8 @@ struct ControlMessageTests {
         .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1"), .commentAdd(text: "In general", at: nil, thread: "0"),
         .commentEdit(id: "m-f92cbb2a-1", text: "Slower"), .commentDelete(id: "m-f92cbb2a-1"),
         .commentOpen(text: ""), .commentOpen(text: "This box", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
+        .commentCompose(text: ""), .commentCompose(text: "This box", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
+        .commentCompose(text: "Overall", general: true),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .send, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
         .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
@@ -48,7 +51,7 @@ struct ControlMessageTests {
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 600),
         .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro"),
         .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
-        .threadExpand(thread: "t-f92cbb2a-1"), .threadExpand(thread: "0"),
+        .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
@@ -123,6 +126,8 @@ struct ControlMessageTests {
             == .unreadable("the control command `screenshot` needs an absolute `path`, not `shot.png`"))
         #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "appearance": "sepia"]))
             == .unreadable("the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"))
+        #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "window": "about"]))
+            == .unreadable("the control command `screenshot` has no window `about`; it takes `main` or `settings`"))
         #expect(refusal(fields("control.take", ["waitSeconds": -1]))
             == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)
@@ -167,7 +172,8 @@ struct ControlMessageTests {
         #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: nil).holdSeconds == nil)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").role == .operator)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").holdSeconds == 0)
-        #expect(ControlRequest.threadExpand(thread: "1").role == .operator)
+        #expect(ControlRequest.threadShow(thread: "1").role == .operator)
+        #expect(ControlRequest.threadList.role == .operator)
     }
 
     @Test("a listener's wait takes no lease, and may be held for its timeout, or with no limit without one")
@@ -190,7 +196,7 @@ struct ControlMessageTests {
         ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
-        .commentOpen(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),
+        .commentOpen(text: "a"), .commentCompose(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),
     ])
     func operatorRole(request: ControlRequest) {
         #expect(request.role == .operator)

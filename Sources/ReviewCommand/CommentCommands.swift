@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | open | edit | delete`, `context set`, `send` and
+/// `video-review comment add | open | compose | edit | delete`, `context set`, `send` and
 /// `thread answer`.
 enum CommentCommands {
     static let commands: [Command] = [
@@ -28,6 +28,19 @@ enum CommentCommands {
         ) { arguments, _ throws(UsageError) in
             guard arguments.words.count <= 1 else { throw UsageError("unexpected `\(arguments.words[1])`") }
             return .send(.commentOpen(text: arguments.words.first ?? "", region: try CommentCommands.region(arguments)))
+        },
+        Command(
+            name: "comment compose", synopsis: "comment compose [<text>] [--region x,y,w,h] [--general]",
+            summary: "put <text> in the composer at the sidebar's foot, as the person types it, for the target it shows; --region adds a region chip on the player's frame; --general turns the General toggle on in the thread list",
+            valuedOptions: ["--region"], flags: ["--general"]
+        ) { arguments, _ throws(UsageError) in
+            guard arguments.words.count <= 1 else { throw UsageError("unexpected `\(arguments.words[1])`") }
+            return .send(
+                .commentCompose(
+                    text: arguments.words.first ?? "", region: try CommentCommands.region(arguments),
+                    general: arguments.flags.contains("--general")
+                )
+            )
         },
         Command(name: "comment edit", synopsis: "comment edit <message-id> <text>", summary: "change a queued message's text") {
             arguments, _ throws(UsageError) in
@@ -74,10 +87,17 @@ enum CommentCommands {
             return .send(.threadOpen(thread: thread, frame: frame))
         },
         Command(
-            name: "thread expand", synopsis: "thread expand <thread>",
-            summary: "show a thread (an id, or a number of the open video) expanded in the sidebar, as a click on its row does"
+            name: "thread show", synopsis: "thread show <thread>",
+            summary: "show a thread's view (an id, or a number of the open video) in the sidebar, as a click on its row does: the player pauses on its frame"
         ) { arguments, _ throws(UsageError) in
-            .send(.threadExpand(thread: try arguments.one("<thread>")))
+            .send(.threadShow(thread: try arguments.one("<thread>")))
+        },
+        Command(
+            name: "thread list", synopsis: "thread list",
+            summary: "show the thread list in the sidebar, as Back in a thread view does"
+        ) { arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.threadList)
         },
     ]
 

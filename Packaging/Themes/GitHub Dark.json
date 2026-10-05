@@ -3,13 +3,6 @@
   "kind": "dark",
   "tokens": {
     "window": "#0d1117",
-    "stage": "#0d1117",
-    "bar": "#010409",
-    "sidebar": "#010409",
-    "sidebarSection": "#161b22",
-    "sidebarRowHover": "#0f1217",
-    "sidebarRowSelected": "#112135",
-    "header": "#0d1117",
     "popover": "#161b22",
     "field": "#0d1117",
     "track": "#30363d",

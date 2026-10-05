@@ -11,7 +11,7 @@ struct StageView: View {
 
     /// The popover's size as it was last laid out, for placing it beside a
     /// region, and as the size a first drag or resize starts from.
-    @State private var boxSize = CGSize(width: Composer.width, height: 150)
+    @State private var boxSize = CGSize(width: CommentPopover.width, height: 150)
     /// The drag on the popover's header under way: how far it has gone.
     @State private var moving: CGSize = .zero
     /// The drag on the popover's corner grip under way.
@@ -33,7 +33,7 @@ struct StageView: View {
                 // The threads on this frame: outlines and badges.
                 FrameMarks(model: model, geometry: geometry)
                 if let draft = model.draft {
-                    composer(draft, geometry: geometry, stage: proxy.size)
+                    commentPopover(draft, geometry: geometry, stage: proxy.size)
                 }
                 // What the agent just said, over everything on the stage.
                 Notices(model: model)
@@ -63,10 +63,10 @@ struct StageView: View {
     /// popover, else beside the region for a message on one, else above
     /// the playhead at the foot of the stage. One view in every place, so
     /// a drag that starts from where it opened keeps going.
-    private func composer(_ draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
+    private func commentPopover(_ draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
         let thread = model.draftThread
         let place = placement(draft, thread: thread, geometry: geometry, stage: stage, moving: moving, growing: growing)
-        return Composer(
+        return CommentPopover(
             model: model, draft: draft, notch: place.notch, thread: thread, size: place.size,
             move: thread.map { thread in
                 { translation, ended in
@@ -115,12 +115,12 @@ struct StageView: View {
         // A thread opened from its pin or badge sits beside its first region.
         if let region = draft.region ?? thread?.messages.lazy.compactMap(\.region).first {
             let rect = geometry.rect(of: region)
-            let origin = Composer.placement(beside: rect, box: boxSize, stage: stage)
+            let origin = CommentPopover.placement(beside: rect, box: boxSize, stage: stage)
             natural = Placement(origin: origin, arrival: Self.side(of: rect, from: origin, box: boxSize))
         } else {
             let fraction = model.engine.duration > 0 ? draft.time / model.engine.duration : 0
-            let place = Composer.placement(
-                playhead: Composer.playhead(fraction: fraction, track: model.trackArea, stage: model.stageArea),
+            let place = CommentPopover.placement(
+                playhead: CommentPopover.playhead(fraction: fraction, track: model.trackArea, stage: model.stageArea),
                 stageWidth: stage.width
             )
             natural = Placement(

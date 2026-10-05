@@ -251,10 +251,10 @@ public struct VideoReview: Codable, Equatable, Sendable {
 
     /// The listener has the send `id`: each of its messages still `sent`
     /// moves to `acknowledged`, and one further on stays where it is.
-    /// Words that come with it are the agent's message on General. Returns
-    /// the send.
+    /// Words that come with it are the agent's message on General, under
+    /// the name of the listener `session`. Returns the send.
     @discardableResult
-    public mutating func acknowledge(_ id: SendID, text: String? = nil, now: Date) throws(ReviewRefusal) -> Send {
+    public mutating func acknowledge(_ id: SendID, text: String? = nil, session: String? = nil, now: Date) throws(ReviewRefusal) -> Send {
         guard id.hash8 == hash8 else { throw .otherVideo(id.text) }
         guard let send = send(id) else { throw .unknownID(id.text) }
         for thread in threads.indices {
@@ -264,7 +264,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
             }
         }
         if let words = text?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty {
-            threads[0].messages.append(Message(id: nextID(.message), author: .agent, kind: .message, text: words, at: Self.kept(now)))
+            threads[0].messages.append(Message(id: nextID(.message), author: .agent, kind: .message, text: words, at: Self.kept(now), sessionName: session))
         }
         return send
     }
@@ -287,25 +287,29 @@ public struct VideoReview: Codable, Equatable, Sendable {
         return threads[thread].messages[index]
     }
 
-    /// The agent's message on `thread`. It needs something sent on the
-    /// thread; General takes one always.
+    /// The agent's message on `thread`, under the name of the listener
+    /// `session`. It needs something sent on the thread; General takes one
+    /// always.
     @discardableResult
-    public mutating func reply(on thread: ThreadID, text: String, now: Date) throws(ReviewRefusal) -> Message {
+    public mutating func reply(on thread: ThreadID, text: String, session: String? = nil, now: Date) throws(ReviewRefusal) -> Message {
         let index = try answerableIndex(thread)
-        let message = Message(id: nextID(.message), author: .agent, kind: .message, text: try Self.trimmed(text, or: .emptyMessage), at: Self.kept(now))
+        let message = Message(
+            id: nextID(.message), author: .agent, kind: .message, text: try Self.trimmed(text, or: .emptyMessage), at: Self.kept(now),
+            sessionName: session
+        )
         threads[index].messages.append(message)
         return message
     }
 
-    /// The agent's question on `thread`. Refused while the thread has a
-    /// question with no answer: an answer names a thread, so it must have
-    /// one question to go to.
+    /// The agent's question on `thread`, under the name of the listener
+    /// `session`. Refused while the thread has a question with no answer:
+    /// an answer names a thread, so it must have one question to go to.
     @discardableResult
-    public mutating func ask(on thread: ThreadID, question: String, now: Date) throws(ReviewRefusal) -> Message {
+    public mutating func ask(on thread: ThreadID, question: String, session: String? = nil, now: Date) throws(ReviewRefusal) -> Message {
         let index = try answerableIndex(thread)
         let words = try Self.trimmed(question, or: .emptyMessage)
         guard threads[index].openQuestion == nil else { throw .questionOpen(thread) }
-        let message = Message(id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now))
+        let message = Message(id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now), sessionName: session)
         threads[index].messages.append(message)
         return message
     }

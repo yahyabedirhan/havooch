@@ -42,6 +42,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// addition to the spec's contract: the popover and its region can be
     /// shown, checked and screenshotted without a click.
     case commentOpen(text: String, region: Rectangle? = nil)
+    /// `video-review comment compose [<text>] [--region x,y,w,h]
+    /// [--general]`: the composer at the sidebar's foot holds `text`, as
+    /// the person types it, with a region chip on the player's frame and
+    /// the General toggle. An addition to the contract: the composer can
+    /// be shown, checked and screenshotted without typing.
+    case commentCompose(text: String, region: Rectangle? = nil, general: Bool = false)
     /// `video-review comment edit <message-id> <text>`: a queued message's
     /// new text.
     case commentEdit(id: String, text: String)
@@ -83,15 +89,20 @@ public enum ControlRequest: Equatable, Sendable {
     /// resize leave it. An addition to the spec's contract: the CLI can't
     /// click, drag or resize.
     case threadOpen(thread: String, frame: Rectangle? = nil)
-    /// `video-review thread expand <thread>`: the thread shows expanded in
-    /// the sidebar, as a click on its row shows it.
-    case threadExpand(thread: String)
+    /// `video-review thread show <thread>`: the sidebar shows the thread's
+    /// view, as a click on its row in the thread list shows it.
+    case threadShow(thread: String)
+    /// `video-review thread list`: the sidebar shows the thread list, as
+    /// Back in a thread view shows it.
+    case threadList
     /// `video-review screenshot <abs.png> [--appearance light|dark]
-    /// [--hide-agent-indicator]`: the app's window written as a PNG at the
-    /// absolute `path`, in `appearance` when it's set, as the Mac shows it
-    /// otherwise. The agent-control indicator shows as the person sees it,
-    /// unless `hideAgentIndicator` leaves it out.
-    case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false)
+    /// [--hide-agent-indicator] [--window main|settings]`: the app's
+    /// `window` written as a PNG at the absolute `path`, in `appearance`
+    /// when it's set, as the Mac shows it otherwise. The agent-control
+    /// indicator shows as the person sees it, unless `hideAgentIndicator`
+    /// leaves it out. The Settings window is opened for the capture, as
+    /// ⌘, opens it, and closed again when it was closed before.
+    case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false, window: Window = .main)
     /// `video-review theme list`: every theme the app knows, and which one
     /// is active and pinned.
     case themeList
@@ -133,6 +144,11 @@ public enum ControlRequest: Equatable, Sendable {
         case light, dark
     }
 
+    /// The window `screenshot` captures: the player's, or Settings.
+    public enum Window: String, Equatable, Sendable, CaseIterable {
+        case main, settings
+    }
+
     /// Who may send a request.
     public enum Role: Equatable, Sendable {
         /// Anyone, at any time: it changes nothing a person sees.
@@ -151,8 +167,8 @@ public enum ControlRequest: Equatable, Sendable {
         case .themeSet: .operator
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
-        case .commentAdd, .commentOpen, .commentEdit, .commentDelete, .send: .operator
-        case .threadAnswer, .threadOpen, .threadExpand: .operator
+        case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
+        case .threadAnswer, .threadOpen, .threadShow, .threadList: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }
     }

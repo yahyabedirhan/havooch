@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The window: the header at the top, the stage with the player bar under
 /// it, and the sidebar at the side with its footer under it. With no
-/// video, a place to open one.
+/// video, a place to open one. All of it is on one surface, the theme's
+/// `window`; hairlines, not background colours, separate the parts.
 struct RootView: View {
     @Bindable var model: AppModel
     /// The lease as the header's agent-control icon draws it, and its Stop.
@@ -27,7 +28,6 @@ struct RootView: View {
                 }
             }
             .frame(minWidth: 480, maxWidth: .infinity)
-            .background(palette[.stage])
             if sidebarShown {
                 SidebarColumn(model: model)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
@@ -48,7 +48,7 @@ struct RootView: View {
         // app's appearance, which the theme follows already. SwiftUI sets
         // the window's appearance on each update from this preference: an
         // AppKit view that set it as well fought SwiftUI in a loop.
-        .preferredColorScheme(windowScheme(palette))
+        .preferredColorScheme(Self.scheme(of: model.themes))
         // The window's title stays for the Window menu and VoiceOver; the
         // header draws its own, with icons.
         .navigationTitle(model.video?.title ?? AppIdentity.appName)
@@ -60,8 +60,10 @@ struct RootView: View {
             .sharedBackgroundVisibility(.hidden)
             FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)
         }
-        .toolbarBackground(palette[.header], for: .windowToolbar)
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        // A painted theme paints the toolbar band in `window`; a native
+        // one leaves it to the system, so the macOS toolbar shows.
+        .toolbarBackground(palette[.window], for: .windowToolbar)
+        .toolbarBackgroundVisibility(palette.isNative ? .automatic : .visible, for: .windowToolbar)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             model.openForPerson(url)
@@ -76,10 +78,11 @@ struct RootView: View {
         .environment(\.palette, palette)
     }
 
-    /// The window's colour scheme: a pinned theme's kind, else the app's.
-    private func windowScheme(_ palette: Palette) -> ColorScheme? {
-        guard model.themes.pinned != nil else { return nil }
-        return palette.theme.kind == .dark ? .dark : .light
+    /// A window's colour scheme: a pinned theme's kind, else the app's.
+    /// Settings takes it too.
+    static func scheme(of themes: ThemeDesk) -> ColorScheme? {
+        guard themes.pinned != nil else { return nil }
+        return themes.theme.kind == .dark ? .dark : .light
     }
 
     /// Whether the agent-control icon is in the header: while an agent
@@ -101,8 +104,9 @@ struct RootView: View {
     }
 }
 
-/// The sidebar column: the threads above the footer, resizable from its
-/// leading edge between `Metrics.sidebarWidthRange`'s bounds.
+/// The sidebar column: the threads, the composer and the footer, resizable from its
+/// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
+/// on that edge separates it from the stage.
 struct SidebarColumn: View {
     let model: AppModel
     /// The width while the person drags; nil shows the kept width.
@@ -121,10 +125,13 @@ struct SidebarColumn: View {
         VStack(spacing: 0) {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
+            // One composer for the list and the thread view alike (L41).
+            Composer(model: model)
             SidebarFooter(model: model)
         }
         .frame(width: width)
-        .background(palette[.sidebar])
+        .background(palette[.window])
+        .overlay(alignment: .leading) { Hairline(axis: .vertical) }
         .overlay(alignment: .leading) { resizeHandle }
     }
 
@@ -151,6 +158,22 @@ struct SidebarColumn: View {
                         dragged = nil
                     }
             )
+            .accessibilityHidden(true)
+    }
+}
+
+/// A hairline in the theme's `separator`, one pixel thick on the screen it
+/// shows on. It separates two parts of the window's one surface.
+struct Hairline: View {
+    let axis: Axis
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        let thickness = 1 / max(displayScale, 1)
+        Rectangle()
+            .fill(palette[.separator])
+            .frame(width: axis == .vertical ? thickness : nil, height: axis == .horizontal ? thickness : nil)
             .accessibilityHidden(true)
     }
 }

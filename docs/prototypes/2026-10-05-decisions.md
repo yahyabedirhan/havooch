@@ -1,6 +1,6 @@
 # Decisions from the prototype round
 
-The itemized decisions for Video Review 0.1.0, taken from the maintainer's feedback in [round 1](2026-10-05-feedback-round-1-screenshots.md) and [round 2](2026-10-05-feedback-round-2-ux.md). The spec `Spec: Video Review 0.1.0` holds the same decisions in structured form. Where an item says *default*, the agent chose it and the maintainer did not object.
+The itemized decisions for Video Review 0.1.0, taken from the maintainer's feedback in [round 1](2026-10-05-feedback-round-1-screenshots.md) and [round 2](2026-10-05-feedback-round-2-ux.md). The spec `Spec: Video Review 0.1.0` holds the same decisions in structured form. Where an item says *default*, the agent chose it and the maintainer did not object. The [0.2.0 decisions](2026-10-05-decisions-0.2.0.md) continue the numbering and replace 3.3, 3.4, 3.5, 3.6 and 5.9.
 
 Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), `proto-3` (PR #19). The code assessment of each is in [assessments.md](assessments.md).
 
@@ -70,10 +70,10 @@ Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), 
 |---|---|
 | 3.1 | One thread per keyframe. A moment message and every region message on the same frame are messages in that thread. |
 | 3.2 | No batches in the UI. Cmd+Enter still sends the queue at once. |
-| 3.3 | Threads are collapsed by default: number, keyframe thumbnail, state, the start of the last message. A click expands one. |
-| 3.4 | proto-2's message style: avatar, name ("Claude Code" / you), time, bubble. |
-| 3.5 | The conversation reads in order. Each region message shows its own crop as an attachment at that point. The keyframe image is in the thread's header. |
-| 3.6 | An expanded thread has a field at its bottom. Follow-ups queue (2.13); answers go at once (2.16). |
+| 3.3 | *Replaced in 0.2.0 by [3.10 to 3.12](2026-10-05-decisions-0.2.0.md).* Threads are collapsed by default: number, keyframe thumbnail, state, the start of the last message. A click expands one. |
+| 3.4 | *Replaced in 0.2.0 by [3.14](2026-10-05-decisions-0.2.0.md).* proto-2's message style: avatar, name ("Claude Code" / you), time, bubble. |
+| 3.5 | *Replaced in 0.2.0 by [3.12 and 3.14](2026-10-05-decisions-0.2.0.md).* The conversation reads in order. Each region message shows its own crop as an attachment at that point. The keyframe image is in the thread's header. |
+| 3.6 | *Replaced in 0.2.0 by [3.15](2026-10-05-decisions-0.2.0.md).* An expanded thread has a field at its bottom. Follow-ups queue (2.13); answers go at once (2.16). |
 | 3.7 | A **General** thread at the top, with no keyframe, for open conversation. The agent's messages about a whole send go there. |
 | 3.8 | *Default:* the same keyframe means the exact same frame. A message on that frame joins its thread; one frame later starts a new thread. |
 | 3.9 | *Default:* each person message has its own state. The thread shows the state of its latest open message. |
@@ -105,6 +105,6 @@ Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), 
 | 5.6 | Theme files reload when they change on disk. |
 | 5.7 | Built-in themes for 0.1.0: Default Light, Default Dark (natural backgrounds, pastel state colours, no pink) and Dimmed (proto-2's softer background). |
 | 5.8 | Themes cover colours only in 0.1.0. |
-| 5.9 | proto-3's structure: background colour segments the UI, not bordered cards. Bubbles only for messages. |
+| 5.9 | *Replaced in 0.2.0 by [5.12](2026-10-05-decisions-0.2.0.md).* proto-3's structure: background colour segments the UI, not bordered cards. Bubbles only for messages. |
 | 5.10 | *Default:* the sidebar is resizable within limits, keeps its width, and collapses with the toggle. |
 | 5.11 | *Default:* the empty first screen is a drop target with "Open a video" and "Try the demo". It is reviewed after 0.1.0 runs. |

@@ -1,12 +1,29 @@
 #!/bin/bash
-# The 0.1.0 acceptance scenario of the spec (`Spec: Video Review 0.1.0`), in
-# its 10 steps, through the `video-review` CLI only, against the installed
-# app in demo mode with the fixture video.
+# The 0.2.0 acceptance scenario (`Spec: Video Review 0.2.0`, #36): the 10
+# steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
+# `video-review` CLI only, against the installed app in demo mode with the
+# fixture video.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
-# It uses only the spec's CLI contract, so it runs against another build by
-# naming that build's command:
+# Beside the 0.1.0 checks (threads, the send, the listener's payload, the
+# question and answer, the follow-up, the themes, persistence, screenshots),
+# each step checks the sidebar:
+#
+#   - which view it shows: `sidebar.thread` of `state --json`, the shown
+#     thread's id or null for the thread list, and `thread show <thread>` and
+#     `thread list` to change it;
+#   - the group each thread is in on the thread list (Needs you, With agent,
+#     Queued, Done), worked out from the threads of `state --json` by the
+#     rule of the spec (`group` below);
+#   - what the composer at the foot of the sidebar says it writes to:
+#     "New thread at 0:10", "Reply on #1", "Follow up on #1", "Answer #1 ·
+#     goes at once", `sidebar.composer.target` of `state --json` (#42). A
+#     build that doesn't report it makes each of these checks PENDING, not
+#     failed, and the run ends with exit 4.
+#
+# It uses only the CLI contract, so it runs against another build by naming
+# that build's command:
 #
 #   VIDEO_REVIEW_CLI=/path/to/video-review scripts/acceptance.sh
 #
@@ -18,15 +35,17 @@
 #
 # Each run has its own folder, .scratch/acceptance/<run>/ (ACCEPTANCE_DIR
 # moves it): the demo data in demo/, the two sends in send-1.json and
-# send-2.json, and every command's output in logs/. Step 10's screenshots go
-# to assets/screenshots/0.1.0/acceptance/ (ACCEPTANCE_SHOTS moves them).
+# send-2.json, and every command's output in logs/. Step 10's screenshots
+# (the thread list and a thread view, in light and dark) go to
+# assets/screenshots/0.2.0/acceptance/ (ACCEPTANCE_SHOTS moves them).
 #
 # The script never touches the person's data: it stops at once, with exit 3,
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
 # Exit codes: 0 all 10 steps passed, 1 a step failed, 3 the app is not on
-# demo data, 69 something the script needs is missing.
+# demo data, 4 every step passed but a composer check is pending, 69
+# something the script needs is missing.
 
 set -u
 
@@ -66,12 +85,36 @@ run_id="$(date +%Y%m%d-%H%M%S)-$$"
 out="${ACCEPTANCE_DIR:-$root/.scratch/acceptance}/$run_id"
 demo="$out/demo"
 logs="$out/logs"
-shots="${ACCEPTANCE_SHOTS:-$root/assets/screenshots/0.1.0/acceptance}"
+shots="${ACCEPTANCE_SHOTS:-$root/assets/screenshots/0.2.0/acceptance}"
 
 operator_key="${VIDEO_REVIEW_CONTROL_KEY:-acceptance-operator-$run_id}"
 listener_key="${VIDEO_REVIEW_LISTENER_KEY:-acceptance-listener-$run_id}"
 operator() { VIDEO_REVIEW_CONTROL_KEY="$operator_key" "$cli" "$@"; }
 listener() { VIDEO_REVIEW_CONTROL_KEY="$listener_key" "$cli" "$@"; }
+
+# The thread list's rule (spec 0.2.0, L38), over a thread of `state --json`:
+# Needs you (the last question has no answer after it), With agent (a
+# person's message sent, acknowledged or working), Queued (a queued one),
+# Done (the rest). `list` is the thread list: each group that has a thread,
+# in the groups' order, with its threads' numbers in the order of `state`
+# (General first, then time order).
+jq_defs='
+def open_question:
+    . as $t
+    | ([$t.messages | to_entries[] | select(.value.kind == "question") | .key] | last) as $i
+    | $i != null and ([$t.messages[$i:][] | select(.kind == "answer")] == []);
+def group:
+    if open_question then "needs you"
+    else [.messages[] | select(.author == "person" and .kind == "message") | .state] as $s
+        | if any($s[]; . == "sent" or . == "acknowledged" or . == "working") then "with agent"
+          elif any($s[]; . == "queued") then "queued"
+          else "done" end
+    end;
+def list:
+    .threads as $threads
+    | ["needs you", "with agent", "queued", "done"]
+    | map(. as $g | [$threads[] | select(group == $g) | .number] | select(. != []) | [$g, .]);
+'
 
 # --- reporting ---------------------------------------------------------------
 
@@ -239,6 +282,46 @@ clean_up() {
 }
 trap clean_up EXIT
 
+
+# --- the sidebar -------------------------------------------------------------
+
+# on_list <state file>: the sidebar shows the thread list.
+on_list() {
+    holds "the sidebar shows the thread list (sidebar.thread is null)" "$1" \
+        '(.sidebar | type) == "object" and .sidebar.thread == null'
+}
+
+# on_thread <state file> <thread id> <what>: the sidebar shows that thread's view.
+on_thread() {
+    holds "the sidebar shows the thread view of $3" "$1" '.sidebar.thread == $id' --arg id "$2"
+}
+
+# grouped <what> <state file> <list as JSON>: the thread list's groups, each
+# with its threads' numbers, in order.
+grouped() {
+    local what="$1" file="$2" expected="$3"
+    if jq -e --argjson expected "$expected" "$jq_defs list == \$expected" "$file" >/dev/null 2>&1; then
+        ok "$what"
+    else
+        bad "$what: the list is $(jq -c "$jq_defs list" "$file" 2>/dev/null), not $expected"
+    fi
+}
+
+# composer_says <target>: what the composer at the foot of the sidebar says
+# it writes to: `sidebar.composer.target` of `state --json` (#42). With a
+# build that doesn't report it, the check is PENDING: it is listed at the
+# end and the run exits 4, never 0.
+composer_pending=()
+composer_says() {
+    local file="$logs/composer-$commands.json"
+    operator state --json >"$file" 2>/dev/null
+    if ! jq -e '.sidebar.composer.target? != null' "$file" >/dev/null 2>&1; then
+        printf '  PEND  the composer says "%s" (state --json has no sidebar.composer.target)\n' "$1"
+        composer_pending+=("step $step: \"$1\"")
+        return
+    fi
+    holds "the composer says \"$1\"" "$file" '.sidebar.composer.target == $target' --arg target "$1"
+}
 # --- before the first step ---------------------------------------------------
 
 for tool in jq sips xxd awk; do
@@ -257,14 +340,14 @@ if [ ! -f "$video" ] || [ ! -f "$context_file" ]; then
 fi
 mkdir -p "$logs" "$shots"
 
-echo "Video Review 0.1.0 acceptance scenario"
+echo "Video Review 0.2.0 acceptance scenario"
 echo "cli:   $cli ($("$cli" --version 2>/dev/null))"
 echo "video: $video"
 echo "run:   $out"
 
 # --- step 1 --------------------------------------------------------------------
 
-begin 1 "Run app open --demo <folder> with the fixture"
+begin 1 "Run app open --demo <folder> with the fixture. Check that the sidebar shows the thread list"
 # A running app answers only to the lease holder: take it first. With no
 # app running, the open launches one and the lease is taken from it.
 if operator app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
@@ -285,13 +368,16 @@ holds "the video is the fixture, of $duration s" "$stdout" \
     '.video.path == $path and ((.video.duration - $duration) | fabs) < 0.1' --arg path "$video" --argjson duration "$duration"
 holds "no thread but General, and an empty queue" "$stdout" \
     '[.threads[] | select(.number != 0)] == [] and .queue == []'
+on_list "$stdout"
+grouped "the thread list holds General alone, in Done" "$stdout" '[["done", [0]]]'
 finish
 
 # --- step 2 --------------------------------------------------------------------
 
-begin 2 "Seek to a frame. Add a message, then a message with a region at the same frame. Check that both are in one thread"
+begin 2 "Seek to a frame. Add a message, then a message with a region at the same frame. Check that both are in one thread, in Queued, and the sidebar stays on the list"
 run operator player seek "$first_time"
 exits 0 "player seek $first_time"
+composer_says "New thread at 0:$first_time"
 run operator comment add "$first_text" --json
 exits 0 "comment add"
 first_message="$(value "$stdout" '.message.id')"
@@ -311,11 +397,14 @@ holds "the first message has no region; the second has $first_region" "$stdout" 
     '[.threads[] | select(.id == $id) | .messages[] | .region | if . == null then null else ([.x, .y, .w, .h] | map(tostring) | join(",")) end] == [null, $region]' \
     --arg id "$first_thread" --arg region "$first_region"
 holds "both messages are in the queue" "$stdout" '.queue == [$a, $b]' --arg a "$first_message" --arg b "$first_region_message"
+on_list "$stdout"
+grouped "the thread list: #1 in Queued, General in Done" "$stdout" '[["queued", [1]], ["done", [0]]]'
+composer_says "Reply on #1"
 finish
 
 # --- step 3 --------------------------------------------------------------------
 
-begin 3 "Seek to another frame. Add a message with a region. Check that it starts a second thread"
+begin 3 "Seek to another frame. Add a message with a region. Check that it starts a second thread, after #1 in Queued"
 run operator player seek "$second_time"
 exits 0 "player seek $second_time"
 run operator comment add "$second_text" --region "$second_region" --json
@@ -331,11 +420,28 @@ holds "thread #2 has the one region message, queued" "$stdout" \
     '[.threads[] | select(.id == $id) | .messages[] | [.id, .state, (.region != null)]] == [[$m, "queued", true]]' \
     --arg id "$second_thread" --arg m "$second_message"
 holds "three messages in the queue" "$stdout" '(.queue | length) == 3'
+on_list "$stdout"
+grouped "the thread list: #1 and #2 in Queued, in time order" "$stdout" '[["queued", [1, 2]], ["done", [0]]]'
 finish
 
 # --- step 4 --------------------------------------------------------------------
 
-begin 4 "Run send"
+begin 4 "Show thread #1's view, then the thread list again. Run send. Check that both threads move to With agent"
+run operator player seek "$second_time"
+exits 0 "player seek $second_time (away from #1's frame)"
+run operator thread show 1 --json
+exits 0 "thread show 1"
+holds "thread show answers with the shown thread" "$stdout" '.sidebar.thread == $id' --arg id "$first_thread"
+state
+on_thread "$stdout" "$first_thread" "#1"
+holds "the player is paused on #1's frame, at $first_time s" "$stdout" \
+    '.player.playing == false and ((.player.time - $time) | fabs) < 0.05' --argjson time "$first_time"
+composer_says "Follow up on #1"
+run operator thread list --json
+exits 0 "thread list"
+holds "thread list answers with no shown thread" "$stdout" '.sidebar.thread == null'
+state
+on_list "$stdout"
 # The listener's `wait` is open before the send, in a second process.
 first_payload="$out/send-1.json"
 listen "$first_payload"
@@ -348,6 +454,7 @@ state
 holds "the queue is empty and every message is sent in that send" "$stdout" \
     '.queue == [] and ([.threads[].messages[] | select(.author == "person")] | length == 3 and all(.state == "sent" and .sendId == $send))' \
     --arg send "$send_id"
+grouped "the thread list: #1 and #2 in With agent" "$stdout" '[["with agent", [1, 2]], ["done", [0]]]'
 finish
 
 # --- step 5 --------------------------------------------------------------------
@@ -386,7 +493,7 @@ finish
 
 # --- step 6 --------------------------------------------------------------------
 
-begin 6 "Run ack. Then ask on the first thread, answer it with thread answer, reply on both threads and set every message to done"
+begin 6 "Run ack. Then ask on the first thread: check it moves to Needs you, answer it in its thread view, reply on both threads and set every message to done"
 run listener ack "$send_id" "$ack_text"
 exits 0 "ack"
 state
@@ -409,7 +516,14 @@ for _ in $(seq 1 20); do
     sleep 0.5
 done
 if [ "$asked" -eq 1 ]; then ok "ask puts the agent's question on thread #1"; else bad "ask puts the agent's question on thread #1"; fi
+state
+grouped "the thread list: #1 in Needs you, #2 in With agent" "$stdout" '[["needs you", [1]], ["with agent", [2]], ["done", [0]]]'
 
+run operator thread show "$first_thread" --json
+exits 0 "thread show $first_thread"
+state
+on_thread "$stdout" "$first_thread" "#1"
+composer_says "Answer #1 · goes at once"
 run operator thread answer "$first_thread" "$answer"
 exits 0 "thread answer"
 wait "$ask_pid"
@@ -422,6 +536,9 @@ if [ "$(cat "$answer_file")" = "$answer" ]; then
 else
     bad "ask prints \"$(cat "$answer_file")\", not the person's answer"
 fi
+state
+grouped "the answer takes #1 out of Needs you, back to With agent" "$stdout" '[["with agent", [1, 2]], ["done", [0]]]'
+composer_says "Follow up on #1"
 
 run listener reply "$first_thread" "$first_reply"
 exits 0 "reply on thread #1"
@@ -444,18 +561,22 @@ holds "thread #1 reads: two messages, the question, the answer, the reply" "$std
 holds "thread #2 reads: the message, the reply" "$stdout" \
     '[.threads[] | select(.id == $id) | .messages[] | [.author, .text]] == [["person", $m], ["agent", $r]]' \
     --arg id "$second_thread" --arg m "$second_text" --arg r "$second_reply"
+grouped "the thread list: every thread in Done" "$stdout" '[["done", [0, 1, 2]]]'
+on_thread "$stdout" "$first_thread" "#1, still: the agent's messages leave the view as it is"
 earlier="$(value "$stdout" '[.threads[] | select(.id == $id) | .messages[].id]' --arg id "$first_thread" -c)"
 finish
 
 # --- step 7 --------------------------------------------------------------------
 
-begin 7 "Add a follow-up on the first thread with comment add --thread. Send it. Check that wait returns it with the earlier messages in history[] and no context"
+begin 7 "Follow up on the first thread from its view with comment add --thread. Send it. Check that wait returns it with the earlier messages in history[] and no context"
 run operator comment add "$follow_up" --thread "$first_thread" --json
 exits 0 "comment add --thread $first_thread"
 follow_up_message="$(value "$stdout" '.message.id')"
 holds "the follow-up goes on thread #1" "$stdout" '.thread.id == $id and .thread.number == 1' --arg id "$first_thread"
 state
 holds "thread #1 is active again: queued" "$stdout" '[.threads[] | select(.id == $id) | .state] == ["queued"]' --arg id "$first_thread"
+grouped "the thread list: #1 in Queued again" "$stdout" '[["queued", [1]], ["done", [0, 2]]]'
+on_thread "$stdout" "$first_thread" "#1, still: a written message leaves the view as it is"
 second_payload="$out/send-2.json"
 listen "$second_payload"
 run operator send --json
@@ -483,6 +604,8 @@ run listener reply "$first_thread" "$follow_up_reply"
 exits 0 "reply on thread #1"
 run listener status "$follow_up_message" "done"
 exits 0 "status $follow_up_message done"
+state
+grouped "the thread list: every thread in Done again" "$stdout" '[["done", [0, 1, 2]]]'
 finish
 
 # --- step 8 --------------------------------------------------------------------
@@ -502,7 +625,7 @@ finish
 
 # --- step 9 --------------------------------------------------------------------
 
-begin 9 "Quit and open the app again. Check that state --json shows the threads, messages, states and theme"
+begin 9 "Quit and open the app again. Check that state --json shows the threads, messages, states and theme, and the sidebar opens on the thread list"
 state
 before="$stdout"
 run operator app quit
@@ -516,8 +639,8 @@ require_demo
 take
 state
 after="$stdout"
-# The lease, the listener's presence and the player are of one run;
-# everything the person and the agent wrote must be the same.
+# The lease, the listener's presence, the player and the sidebar's view are
+# of one run; everything the person and the agent wrote must be the same.
 kept='{video: (.video | {path, contentHash}), threads, queue, sends, theme: (.theme | {active, pinned})}'
 jq -S "$kept" "$before" >"$out/state-before-quit.json" 2>/dev/null
 jq -S "$kept" "$after" >"$out/state-after-open.json" 2>/dev/null
@@ -532,32 +655,54 @@ holds "thread #1 has its 7 messages and the person's answer" "$after" \
     '[.threads[] | select(.id == $id) | .messages | length] == [7] and any(.threads[] | select(.id == $id) | .messages[]; .author == "person" and .kind == "answer" and .text == $a)' \
     --arg id "$first_thread" --arg a "$answer"
 holds "Default Dark is still the theme" "$after" '.theme.active == "Default Dark" and .theme.pinned == "Default Dark"'
+on_list "$after"
 finish
 
 # --- step 10 -------------------------------------------------------------------
 
-begin 10 "Take screenshots in light and dark"
-# The theme follows the appearance again, so the two pictures are of
-# Default Light and Default Dark.
+begin 10 "Take screenshots of the thread list and of thread #1's view in light and dark"
+# The theme follows the appearance again, so the pictures are of Default
+# Light and Default Dark.
 run operator theme set system
 exits 0 "theme set system"
 run operator player seek "$first_time"
 exits 0 "player seek $first_time (thread #1's frame)"
-run operator screenshot "$shots/light.png" --appearance light
-exits 0 "screenshot --appearance light"
-png "the light screenshot" "$shots/light.png"
-run operator screenshot "$shots/dark.png" --appearance dark
-exits 0 "screenshot --appearance dark"
-png "the dark screenshot" "$shots/dark.png"
-if [ -f "$shots/light.png" ] && [ -f "$shots/dark.png" ] && ! cmp -s "$shots/light.png" "$shots/dark.png"; then
-    ok "the two appearances are two pictures"
+# The notices of the last replies go after 5 s.
+sleep 6
+for view in list thread; do
+    if [ "$view" = thread ]; then
+        run operator thread show "$first_thread"
+        exits 0 "thread show $first_thread"
+        sleep 1
+    fi
+    for appearance in light dark; do
+        run operator screenshot "$shots/$view-$appearance.png" --appearance "$appearance" --hide-agent-indicator
+        exits 0 "screenshot of the $view view --appearance $appearance"
+        png "the $view view in $appearance" "$shots/$view-$appearance.png"
+    done
+    if [ -f "$shots/$view-light.png" ] && [ -f "$shots/$view-dark.png" ] && ! cmp -s "$shots/$view-light.png" "$shots/$view-dark.png"; then
+        ok "the $view view's two appearances are two pictures"
+    else
+        bad "the $view view's two appearances are two pictures"
+    fi
+done
+if ! cmp -s "$shots/list-light.png" "$shots/thread-light.png"; then
+    ok "the thread list and the thread view are two pictures"
 else
-    bad "the two appearances are two pictures"
+    bad "the thread list and the thread view are two pictures"
 fi
+run operator thread list
+exits 0 "thread list"
 run operator control release
 exits 0 "control release"
 holds_lease=0
 finish
 
+if [ "${#composer_pending[@]}" -gt 0 ]; then
+    printf '\nPASS: all 10 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '  %s\n' "${composer_pending[@]}"
+    printf 'Screenshots: %s\n' "$shots"
+    exit 4
+fi
 printf '\nPASS: all 10 steps. Screenshots: %s\n' "$shots"
 exit 0

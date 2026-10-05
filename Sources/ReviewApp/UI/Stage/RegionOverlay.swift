@@ -6,7 +6,8 @@ import SwiftUI
 /// rectangle, as Cmd+Shift+4 does, with no drawing mode: the video pauses,
 /// the rectangle shows its size in the frame's pixels while it's drawn
 /// (D 2.4), and letting go opens the popover beside it. The layer
-/// also shows the region of the message in the popover.
+/// also shows the region of the message in the popover, else the region
+/// chip of the composer at the sidebar's foot (L41).
 struct RegionOverlay: View {
     let model: AppModel
     let geometry: VideoFrameGeometry
@@ -45,7 +46,8 @@ struct RegionOverlay: View {
             let rect = geometry.rect(from: drag.start, to: drag.current)
             return (rect, Self.size(of: rect, within: geometry.frame, video: model.engine.videoSize))
         }
-        guard let region = model.draft?.region else { return nil }
+        // With no popover open, the composer's region chip (L41).
+        guard let region = model.draft?.region ?? (model.draft == nil ? model.composerRegion : nil) else { return nil }
         return (geometry.rect(of: region), nil)
     }
 

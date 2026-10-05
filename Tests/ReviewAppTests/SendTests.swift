@@ -472,4 +472,15 @@ struct SidebarWordsTests {
         // Before anyone listened, the hover still says who: an agent.
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))
     }
+
+    @Test("the presence pill shows the listener's harness logo while it listens or works, and its glyph otherwise")
+    func pillLogo() {
+        #expect(PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0).logo == .claude)
+        #expect(PresencePill(presence: .working, session: "Codex CLI", pendingSends: 1).logo == .codex)
+        // No listener: the last session's logo would say someone listens.
+        #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 0).logo == nil)
+        // An unknown harness, or none yet: the glyph.
+        #expect(PresencePill(presence: .listening, session: "pipeline", pendingSends: 0).logo == nil)
+        #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).logo == nil)
+    }
 }

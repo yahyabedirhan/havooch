@@ -2,7 +2,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The popover, for a new message and for a thread alike: one component
+/// The comment popover, for a new message and for a thread alike: one component
 /// for a new message and for an existing thread (D 2.7, D 2.9). For a
 /// message on a moment it floats at the foot of the stage, above the
 /// playhead, with a notch that points at the moment. For a message on a
@@ -16,7 +16,7 @@ import SwiftUI
 /// (L14), and the popover stays on its thread; the × and Escape drop them.
 /// A click outside and a change of the moment close it through
 /// `AppModel.closePopover`, which owns the rules.
-struct Composer: View {
+struct CommentPopover: View {
     let model: AppModel
     let draft: AppModel.Draft
     /// Where the notch points, from the box's leading edge; nil for a box
@@ -77,7 +77,7 @@ struct Composer: View {
                     .gesture(Self.drag(resize))
             }
         }
-        .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), fill: palette[.popover], border: palette[.popoverBorder])
+        .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), surface: palette.surface(.popover), border: palette[.popoverBorder])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
     }
@@ -105,10 +105,11 @@ struct Composer: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(palette[.textSecondary])
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(QuietButtonStyle())
+            .buttonStyle(.borderless)
             .help("Discard (Esc)")
             .accessibilityLabel("Discard")
         }
@@ -202,25 +203,29 @@ private struct KeyHint: View {
 
 /// A rounded box with a notch on its lower edge.
 extension View {
-    /// The surface the popover and the notices share: a solid fill in
-    /// `shape`, its border and the theme's shadow. Solid, since over a
-    /// video a material takes the picture's colours, and the words on it
-    /// stop being readable.
-    func popoverChrome(_ shape: some Shape, fill: Color, border: Color, lineWidth: CGFloat = 1) -> some View {
-        modifier(PopoverChrome(shape: shape, fill: fill, border: border, lineWidth: lineWidth))
+    /// The surface the popover and the notices share: the palette's
+    /// `surface` in `shape` (a painted colour, or a material under the
+    /// window colour in a native theme), its border and the theme's shadow.
+    func popoverChrome(_ shape: some Shape, surface: Palette.Surface, border: Color, lineWidth: CGFloat = 1) -> some View {
+        modifier(PopoverChrome(shape: shape, surface: surface, border: border, lineWidth: lineWidth))
     }
 }
 
 private struct PopoverChrome<S: Shape>: ViewModifier {
     let shape: S
-    let fill: Color
+    let surface: Palette.Surface
     let border: Color
     let lineWidth: CGFloat
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
-            .background(fill, in: shape)
+            .background {
+                ZStack {
+                    if let material = surface.material { shape.fill(material) }
+                    shape.fill(surface.fill)
+                }
+            }
             .overlay { shape.stroke(border, lineWidth: lineWidth) }
             .shadow(color: palette[.shadow], radius: 14, y: 5)
     }

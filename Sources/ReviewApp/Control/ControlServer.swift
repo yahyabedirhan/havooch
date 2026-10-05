@@ -42,8 +42,14 @@ protocol AppControlling: AnyObject {
     /// Opens a thread's popover on its frame, as a click on its pin does,
     /// first keeping it at `frame` when there is one.
     func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover
-    /// Shows a thread expanded in the sidebar, as a click on its row does.
-    func expandThread(_ thread: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
+    /// Shows a thread's view in the sidebar, as a click on its row does:
+    /// the player pauses on the thread's frame.
+    func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
+    /// Shows the thread list in the sidebar, as Back does.
+    func showThreadList() -> StateReport.Sidebar
+    /// Puts words, a region chip and the General toggle in the composer at
+    /// the sidebar's foot, as the person types, draws and clicks.
+    func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
     /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
@@ -204,8 +210,10 @@ final class ControlServer {
                 try await app.seek(to: seconds)
                 let player = app.state().player
                 return done(TimeCode.text(player.time), Output(player: player), json)
-            case .screenshot(let path, let appearance, let hideAgentIndicator):
-                try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator)
+            case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
+                try await screenshotter.capture(
+                    to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window
+                )
                 return done(path, Output(path: path), json)
             case .commentAdd(let text, let at, let rectangle, let thread):
                 let region = try Self.region(rectangle)
@@ -221,6 +229,10 @@ final class ControlServer {
                 let thread = popover.thread.map { " on #\($0)" } ?? ""
                 let area = popover.region.map { " on the region \($0.text)" } ?? ""
                 return done("popover open\(thread) at \(TimeCode.text(popover.time))\(area)", Output(popover: popover), json)
+            case .commentCompose(let text, let rectangle, let general):
+                let composer = try app.compose(text: text, region: try Self.region(rectangle), general: general)
+                let area = composer.region.map { " with the region \($0.text)" } ?? ""
+                return done("the composer says \"\(composer.target)\"\(area)", Output(composer: composer), json)
             case .commentEdit(let id, let text):
                 let message = try app.editMessage(id, text: text)
                 return done("\(message.id) edited", Output(message: message), json)
@@ -282,9 +294,12 @@ final class ControlServer {
                 let popover = try await app.openThread(thread, frame: frame)
                 let number = popover.thread.map { "#\($0)" } ?? thread
                 return done("popover open on \(number) at \(TimeCode.text(popover.time))", Output(popover: popover), json)
-            case .threadExpand(let thread):
-                let expanded = try app.expandThread(thread)
-                return done("#\(expanded.number) expanded", Output(sidebar: expanded.sidebar), json)
+            case .threadShow(let thread):
+                let shown = try await app.showThread(thread)
+                return done("the sidebar shows #\(shown.number)", Output(sidebar: shown.sidebar), json)
+            case .threadList:
+                let sidebar = app.showThreadList()
+                return done("the sidebar shows the thread list", Output(sidebar: sidebar), json)
             case .themeList:
                 let list = app.themeList()
                 return done(json ? StateReport.json(list) : list.lines)
@@ -313,6 +328,7 @@ final class ControlServer {
         var theme: StateReport.Theme?
         var popover: StateReport.Popover?
         var sidebar: StateReport.Sidebar?
+        var composer: StateReport.Sidebar.Composer?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {

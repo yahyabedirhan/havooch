@@ -6,7 +6,7 @@ import ReviewLease
 /// naming the protocol's `version`, the `command` and the `holder`, with the
 /// command's own fields beside them:
 ///
-///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":2}
+///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":3}
 ///
 /// The wire format is a contract between a `video-review` and the app of
 /// the same build.
@@ -36,14 +36,18 @@ public struct ControlMessage: Equatable, Sendable {
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
         case .playerSeek(let seconds): wire = Wire(command: "player.seek", seconds: seconds)
-        case .screenshot(let path, let appearance, let hideAgentIndicator):
+        case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
             wire = Wire(
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
+            // The player's window is the default and goes unsaid.
+            wire.window = window == .main ? nil : window.rawValue
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
+        case .commentCompose(let text, let region, let general):
+            wire = Wire(command: "comment.compose", text: text, region: region, general: general ? true : nil)
         case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
@@ -56,7 +60,8 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
         case .threadAnswer(let thread, let text): wire = Wire(command: "thread.answer", text: text, thread: thread)
         case .threadOpen(let thread, let frame): wire = Wire(command: "thread.open", thread: thread, frame: frame)
-        case .threadExpand(let thread): wire = Wire(command: "thread.expand", thread: thread)
+        case .threadShow(let thread): wire = Wire(command: "thread.show", thread: thread)
+        case .threadList: wire = Wire(command: "thread.list")
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
         }
@@ -119,7 +124,16 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            return .screenshot(path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false)
+            var window = ControlRequest.Window.main
+            if let name = wire.window {
+                guard let known = ControlRequest.Window(rawValue: name) else {
+                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main` or `settings`")
+                }
+                window = known
+            }
+            return .screenshot(
+                path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false, window: window
+            )
         case "comment.add":
             if let at = wire.at, !at.isFinite || at < 0 {
                 throw .unreadable("the control command `comment.add` needs its `at` to be 0 or more")
@@ -127,6 +141,8 @@ public struct ControlMessage: Equatable, Sendable {
             return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at, region: wire.region, thread: wire.thread)
         case "comment.open":
             return .commentOpen(text: wire.text ?? "", region: wire.region)
+        case "comment.compose":
+            return .commentCompose(text: wire.text ?? "", region: wire.region, general: wire.general ?? false)
         case "comment.edit":
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":
@@ -166,7 +182,8 @@ public struct ControlMessage: Equatable, Sendable {
             return .threadAnswer(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
         case "thread.open":
             return .threadOpen(thread: try field(wire.thread, "thread", of: wire), frame: wire.frame)
-        case "thread.expand": return .threadExpand(thread: try field(wire.thread, "thread", of: wire))
+        case "thread.show": return .threadShow(thread: try field(wire.thread, "thread", of: wire))
+        case "thread.list": return .threadList
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
         default: throw .unknownCommand(wire.command)
@@ -208,6 +225,8 @@ public struct ControlMessage: Equatable, Sendable {
         var appearance: String?
         var waitSeconds: Int?
         var hideAgentIndicator: Bool?
+        /// `screenshot --window`: the window captured, when not the player's.
+        var window: String?
         var id: String?
         var text: String?
         var at: Double?
@@ -218,5 +237,7 @@ public struct ControlMessage: Equatable, Sendable {
         var thread: String?
         /// `thread open --frame`: where the thread's popover is kept.
         var frame: ControlRequest.Rectangle?
+        /// `comment compose --general`: the composer writes to General.
+        var general: Bool?
     }
 }

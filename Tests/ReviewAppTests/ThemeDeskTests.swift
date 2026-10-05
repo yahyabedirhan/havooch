@@ -55,7 +55,7 @@ struct ThemeDeskTests {
         defer { cleanUp() }
         let (model, _) = model()
         #expect(model.themes.theme.name == "Default Light")
-        #expect(model.themes.theme.colors.count == ThemeToken.allCases.count)
+        #expect(model.themes.theme.isComplete)
         model.themes.setAppearance(.dark)
         #expect(model.themes.theme.name == "Default Dark")
         #expect(model.themes.theme.kind == .dark)
@@ -183,24 +183,42 @@ struct ThemeDeskTests {
         #expect(model.themes.reloads > before)
     }
 
-    @Test("no view uses a raw colour: every colour comes from the palette")
+    @Test("no view uses a raw colour: every colour comes from the palette, which makes colours from numbers and system surfaces only")
     func noRawColours() throws {
         let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/ReviewApp", isDirectory: true)
         let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
             .compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "Palette.swift" }
+            .filter { $0.pathExtension == "swift" }
         #expect(files.count > 20)
+        #expect(files.contains { $0.lastPathComponent == "Palette.swift" })
         var found: [String] = []
         for file in files {
+            let isPalette = file.lastPathComponent == "Palette.swift"
             let lines = try String(contentsOf: file, encoding: .utf8).components(separatedBy: "\n")
             for (number, line) in lines.enumerated() {
                 let code = line.components(separatedBy: "//").first ?? ""
-                if RawColour.matches(code) { found.append("\(file.lastPathComponent):\(number + 1): \(line.trimmingCharacters(in: .whitespaces))") }
+                if RawColour.matches(code, inPalette: isPalette) {
+                    found.append("\(file.lastPathComponent):\(number + 1): \(line.trimmingCharacters(in: .whitespaces))")
+                }
             }
         }
-        #expect(found.isEmpty, "raw colours outside the palette:\n\(found.joined(separator: "\n"))")
+        #expect(found.isEmpty, "raw colours outside the palette's own ways:\n\(found.joined(separator: "\n"))")
+    }
+
+    @Test("the palette may make a colour from numbers or a system surface; the same code anywhere else is a raw colour, and a named colour is raw in the palette too", arguments: [
+        "Color(nsColor: Self.systemColor(token))", "AnyShapeStyle(.ultraThickMaterial), fill: AnyShapeStyle(self[token].opacity(0.8)))", "Color(.sRGB, white: 0.5)",
+        "Color(nsColor: .keyboardFocusIndicatorColor)",
+        "NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)", "func nsColor(_ token: ThemeToken) -> NSColor {", "return Color(", "return NSColor(",
+        "green: Double(color.green) / 255",
+    ])
+    func paletteAllowances(code: String) {
+        #expect(RawColour.matches(code))
+        #expect(!RawColour.matches(code, inPalette: true))
+        #expect(RawColour.matches("\(code) Color.black", inPalette: true))
+        #expect(RawColour.matches("AnyShapeStyle(.ultraThinMaterial)", inPalette: true))
+        #expect(RawColour.matches("Color(nsColor: .controlAccentColor)", inPalette: true))
     }
 
     @Test("the raw-colour check finds the ways a view could name a colour, and lets tokens and font weights pass", arguments: [
@@ -229,7 +247,28 @@ enum RawColour {
         #"\b\w*Material\b"#,
     ].map { try! NSRegularExpression(pattern: $0) }
 
-    static func matches(_ code: String) -> Bool {
+    /// What `Palette.swift` alone may write: a colour from a theme's
+    /// numbers (and the grey of a missing token), the `NSColor` it returns,
+    /// a `system` surface through `systemColor` or the ultra-thick material,
+    /// and the system's focus ring.
+    private static let paletteAllowances = [
+        #"\bColor\(\s*($|\.sRGB\b|nsColor:\s*Self\.systemColor\(|nsColor:\s*\.keyboardFocusIndicatorColor\))"#,
+        #"\bNSColor\(\s*($|(srgbRed|white):)"#,
+        #"->\s*NSColor\b"#,
+        // A theme colour's own components.
+        #"\bcolor\.(red|green|blue|alpha)\b"#,
+        #"AnyShapeStyle\(\.ultraThickMaterial\)"#,
+    ].map { try! NSRegularExpression(pattern: $0) }
+
+    /// Whether `code` names a raw colour; in the palette, after taking out
+    /// what the palette alone may write.
+    static func matches(_ code: String, inPalette: Bool = false) -> Bool {
+        var code = code
+        if inPalette {
+            for allowance in paletteAllowances {
+                code = allowance.stringByReplacingMatches(in: code, range: NSRange(code.startIndex..., in: code), withTemplate: "")
+            }
+        }
         let range = NSRange(code.startIndex..., in: code)
         return patterns.contains { $0.firstMatch(in: code, range: range) != nil }
     }

@@ -4,9 +4,11 @@ import AppKit
 /// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
 /// comma and the period move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a message,
-/// Escape drops a rectangle that's being drawn. They're off while a text
+/// Escape drops a rectangle that's being drawn, else the popover, else goes
+/// back from a thread view to the thread list. They're off while a text
 /// view has the focus, so typing never reaches the player. Cmd+Return sends
-/// the queue, also while the person types.
+/// the queue, also while the person types. While a row of the thread list
+/// has the keyboard focus, Space and Return open its thread instead.
 enum Shortcuts {
     /// The seconds Left and Right move.
     static let skip: Double = 5
@@ -22,20 +24,27 @@ enum Shortcuts {
         case marker(forward: Bool)
         case startMessage
         /// Escape: drops the rectangle being drawn, or the popover
-        /// when its text view lost the focus.
+        /// when its text view lost the focus, or the thread view.
         case cancel
         /// Cmd+Return: sends the queue, with the words in the popover.
         case send
+        /// Space or Return on the row of the thread list that has the
+        /// keyboard focus: opens its thread, as a click does.
+        case openRow
     }
 
     /// The action of the key `keyCode` with `modifiers`, if it has one.
     /// While the person types (`isTyping`: a text view has the focus) no
     /// key has one but Cmd+Return, which sends from anywhere: every other
-    /// key is the text view's.
-    static func action(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, isTyping: Bool = false) -> Action? {
+    /// key is the text view's. While a row has the keyboard focus
+    /// (`isRowFocused`), Space, Return and Enter are the row's.
+    static func action(
+        keyCode: UInt16, modifiers: NSEvent.ModifierFlags, isTyping: Bool = false, isRowFocused: Bool = false
+    ) -> Action? {
         let held = modifiers.intersection([.command, .option, .control, .shift])
         if held == .command, keyCode == 36 || keyCode == 76 { return .send } // Return, Enter
         guard !isTyping, held.isDisjoint(with: [.command, .option, .control]) else { return nil }
+        if isRowFocused, held.isEmpty, [49, 36, 76].contains(keyCode) { return .openRow } // Space, Return, Enter
         let shift = modifiers.contains(.shift)
         switch keyCode {
         case 49, 40: return shift ? nil : .togglePlay // Space, K
@@ -69,7 +78,8 @@ enum Shortcuts {
         guard model.video != nil, !model.isContextShown,
               let window = event.window, window.isKeyWindow, window.attachedSheet == nil,
               let action = action(
-                  keyCode: event.keyCode, modifiers: event.modifierFlags, isTyping: window.firstResponder is NSText
+                  keyCode: event.keyCode, modifiers: event.modifierFlags, isTyping: window.firstResponder is NSText,
+                  isRowFocused: model.focusedRow != nil
               )
         else { return false }
         switch action {
@@ -81,6 +91,7 @@ enum Shortcuts {
         // With nothing to cancel, Escape stays the window's.
         case .cancel: return model.escape()
         case .send: model.send()
+        case .openRow: if let row = model.focusedRow { model.perform(.open, on: row) }
         }
         return true
     }

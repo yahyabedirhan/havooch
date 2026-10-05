@@ -96,7 +96,7 @@ struct PopoverCloseTests {
             case .togglePlay: model.togglePlay()
             case .frameStep: model.step(frames: 1)
             case .skip: model.skip(by: 5)
-            case .threadClick: model.select(thread)
+            case .threadClick: model.showThread(thread)
             }
         }
     }

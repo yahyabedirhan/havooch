@@ -40,12 +40,7 @@ private struct NoticeCard: View {
     var body: some View {
         Button(action: open) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(palette[.textOnAccent])
-                    .frame(width: 22, height: 22)
-                    .background(tint, in: Circle())
-                    .accessibilityHidden(true)
+                AgentAvatar(agent: notice.knownAgent, size: 22, symbol: symbol, fill: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(notice.title)
                         .font(.callout.weight(.semibold))
@@ -67,13 +62,15 @@ private struct NoticeCard: View {
             .padding(12)
             .frame(width: Notices.width)
             .popoverChrome(
-                shape, fill: palette[.notice],
+                shape, surface: palette.surface(.notice),
                 border: notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder],
                 lineWidth: notice.kind == .question ? 1.5 : 1
             )
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        // A native borderless button: the card dims while pressed and
+        // takes the focus ring under keyboard navigation.
+        .buttonStyle(.borderless)
         .help(notice.kind == .question ? "Show the question and answer it" : "Show the message")
         .accessibilityElement(children: .combine)
     }
@@ -82,6 +79,7 @@ private struct NoticeCard: View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
     }
 
+    /// The symbol an unknown agent's notice shows.
     private var symbol: String {
         switch notice.kind {
         case .acknowledgement: "checkmark"

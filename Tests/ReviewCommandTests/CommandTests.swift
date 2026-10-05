@@ -22,6 +22,8 @@ struct CommandTests {
         (["screenshot", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
         (["screenshot", "/tmp/shot.png", "--appearance", "dark"], .screenshot(path: "/tmp/shot.png", appearance: .dark)),
         (["screenshot", "--appearance", "light", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: .light)),
+        (["screenshot", "/tmp/set.png", "--window", "settings"], .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings)),
+        (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
         (["comment", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
         (["comment", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
         (["comment", "add", "--at", "12.5", "Too fast here"], .commentAdd(text: "Too fast here", at: 12.5)),
@@ -36,6 +38,10 @@ struct CommandTests {
         (["comment", "open"], .commentOpen(text: "")),
         (["comment", "open", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
          .commentOpen(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
+        (["comment", "compose"], .commentCompose(text: "")),
+        (["comment", "compose", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
+         .commentCompose(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
+        (["comment", "compose", "--general", "Overall"], .commentCompose(text: "Overall", general: true)),
         (["context", "set", "Compare with the old cut"], .contextSet(text: "Compare with the old cut")),
         (["context", "set", ""], .contextSet(text: "")),
         (["send"], .send),
@@ -55,7 +61,8 @@ struct CommandTests {
         (["thread", "open", "3"], .threadOpen(thread: "3")),
         (["thread", "open", "t-f92cbb2a-3", "--frame", "0.55,0.1,0.4,0.5"],
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
-        (["thread", "expand", "3"], .threadExpand(thread: "3")),
+        (["thread", "show", "3"], .threadShow(thread: "3")),
+        (["thread", "list"], .threadList),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -158,6 +165,7 @@ struct CommandTests {
         ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
+        ["screenshot", "/tmp/shot.png", "--window", "about"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
@@ -321,13 +329,13 @@ struct CommandTests {
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("--version prints 0.1.0 without asking the app, as JSON with --json")
+    @Test("--version prints 0.2.0 without asking the app, as JSON with --json")
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(VideoReviewCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.1.0\n"))
+        #expect(VideoReviewCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
         #expect(VideoReviewCLI.run(["--version", "--json"], environment: run.environment)
-            == CommandResult(output: "{\n  \"version\" : \"0.1.0\"\n}\n"))
+            == CommandResult(output: "{\n  \"version\" : \"0.2.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
 

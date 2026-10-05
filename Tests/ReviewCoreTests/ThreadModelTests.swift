@@ -192,6 +192,38 @@ struct ThreadModelTests {
     }
 }
 
+@Suite("Who wrote an agent's message")
+struct SessionNameTests {
+    @Test("a reply, a question and an acknowledgement keep the name of the listener session they were written under")
+    func kept() throws {
+        var review = newReview()
+        try review.write(text: "Too fast", at: 10, now: now)                                   // m-1
+        let sent = try review.send(at: now)
+        try review.acknowledge(sent.id, text: "On it", session: "Claude Code", now: now)        // m-2 on General
+        try review.ask(on: thread(1), question: "Which part?", session: "Codex CLI", now: now)  // m-3
+        try review.answer(thread(1), text: "The start", now: now)                               // m-4
+        try review.reply(on: thread(1), text: "Slowed it", session: "Codex CLI", now: now)      // m-5
+        try review.reply(on: thread(1), text: "With no session", now: now)                       // m-6
+
+        let messages = review.threads.flatMap(\.messages)
+        // General first: the acknowledgement, then thread 1 in the order written.
+        #expect(messages.map(\.id) == [2, 1, 3, 4, 5, 6].map(message))
+        #expect(messages.map(\.sessionName) == ["Claude Code", nil, "Codex CLI", nil, "Codex CLI", nil])
+
+        let read = try JSONDecoder().decode(VideoReview.self, from: try JSONEncoder().encode(review))
+        #expect(read.threads.flatMap(\.messages).map(\.sessionName) == messages.map(\.sessionName))
+    }
+
+    @Test("a message kept before the name was recorded reads with no name")
+    func oldFile() throws {
+        let read = try JSONDecoder().decode(Message.self, from: Data("""
+        { "id": "m-f92cbb2a-5", "author": "agent", "kind": "message", "text": "Fixed", "at": 0 }
+        """.utf8))
+        #expect(read.sessionName == nil)
+        #expect(read.text == "Fixed")
+    }
+}
+
 @Suite("Ids")
 struct ItemIDTests {
     @Test("an id carries its kind, the video's hash prefix and its counter", arguments: [

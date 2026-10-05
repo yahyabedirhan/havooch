@@ -198,8 +198,8 @@ final class ListenerQueue {
             throw AppRefusal("no send `\(sendID)`; the send `video-review wait` printed names its id")
         }
         let before = desk.review(of: hash)?.general.messages.count ?? 0
-        let send = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
-            try review.acknowledge(id, text: text, now: time)
+        let send = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
+            try review.acknowledge(id, text: text, session: session, now: time)
         }
         guard let review = desk.review(of: hash) else { throw AppRefusal("there's no review of the video \(hash)") }
         let count = send.messageIDs.count
@@ -228,8 +228,8 @@ final class ListenerQueue {
     func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
         let (id, hash) = try desk.threadID(thread)
-        let message = try desk.change(hash) { [time = now()] review throws(ReviewRefusal) in
-            try review.reply(on: id, text: text, now: time)
+        let message = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
+            try review.reply(on: id, text: text, session: session, now: time)
         }
         notify(id, .message, message.text)
         return StateReport.Message(message, contentHash: hash, layout: layout)
@@ -243,8 +243,8 @@ final class ListenerQueue {
         outbox.heard(at: now())
         let (id, hash) = try desk.threadID(thread)
         let time = now()
-        let message = try desk.change(hash) { review throws(ReviewRefusal) in
-            try review.ask(on: id, question: question, now: time)
+        let message = try desk.change(hash) { [session = outbox.session?.name] review throws(ReviewRefusal) in
+            try review.ask(on: id, question: question, session: session, now: time)
         }
         notify(id, .question, message.text)
         if waitSeconds == 0 { return .ranOut }

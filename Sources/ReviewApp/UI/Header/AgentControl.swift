@@ -82,6 +82,7 @@ struct AgentControlButton: View {
                 isOpen = false
                 stop()
             }
+            .popoverSurface(palette)
         }
         .onAppear {
             if !reduceMotion { hasArrived = true }

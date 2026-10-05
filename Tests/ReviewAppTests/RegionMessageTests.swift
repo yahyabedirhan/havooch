@@ -89,26 +89,26 @@ struct VideoFrameGeometryTests {
         let stage = CGSize(width: 1000, height: 560)
         let box = CGSize(width: 340, height: 150)
         // Room on the right: beside the rectangle, level with its top.
-        #expect(Composer.placement(beside: CGRect(x: 100, y: 80, width: 300, height: 200), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(x: 100, y: 80, width: 300, height: 200), box: box, stage: stage)
             == CGPoint(x: 412, y: 80))
         // None on the right: on the left.
-        #expect(Composer.placement(beside: CGRect(x: 600, y: 80, width: 300, height: 200), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(x: 600, y: 80, width: 300, height: 200), box: box, stage: stage)
             == CGPoint(x: 248, y: 80))
         // A wide rectangle: below it.
-        #expect(Composer.placement(beside: CGRect(x: 50, y: 40, width: 900, height: 200), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(x: 50, y: 40, width: 900, height: 200), box: box, stage: stage)
             == CGPoint(x: 50, y: 252))
         // Wide and low: above it.
-        #expect(Composer.placement(beside: CGRect(x: 50, y: 300, width: 900, height: 240), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(x: 50, y: 300, width: 900, height: 240), box: box, stage: stage)
             == CGPoint(x: 50, y: 138))
         // The whole frame: the lower right corner.
-        #expect(Composer.placement(beside: CGRect(origin: .zero, size: stage), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(origin: .zero, size: stage), box: box, stage: stage)
             == CGPoint(x: 648, y: 398))
         // A rectangle at the foot of the stage: the box stays inside.
-        #expect(Composer.placement(beside: CGRect(x: 100, y: 500, width: 200, height: 50), box: box, stage: stage)
+        #expect(CommentPopover.placement(beside: CGRect(x: 100, y: 500, width: 200, height: 50), box: box, stage: stage)
             == CGPoint(x: 312, y: 398))
         for rect in [CGRect(x: 0, y: 0, width: 20, height: 20), CGRect(x: 980, y: 540, width: 20, height: 20),
                      CGRect(x: 0, y: 540, width: 1000, height: 20), CGRect(x: 400, y: 200, width: 200, height: 100)] {
-            let origin = Composer.placement(beside: rect, box: box, stage: stage)
+            let origin = CommentPopover.placement(beside: rect, box: box, stage: stage)
             #expect(CGRect(origin: .zero, size: stage).contains(CGRect(origin: origin, size: box)), "\(rect)")
         }
     }
@@ -333,7 +333,7 @@ struct RegionMessageTests {
         // The player is on #2's frame: one badge, two outlines.
         #expect(model.frameMarks == [AppModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
 
-        model.select(try #require(ItemID(plain.thread.id)))
+        model.showThread(try #require(ItemID(plain.thread.id)))
         await eventually { model.engine.time == 3 }
         #expect(model.frameMarks.map(\.number) == [1])
         #expect(model.frameMarks.first?.regions == [])

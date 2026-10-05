@@ -6,26 +6,14 @@
 /// (`Packaging/Themes/`); the test of the shipped themes fails until both
 /// defaults have it.
 public enum ThemeToken: String, CaseIterable, Codable, Sendable {
-    // Surfaces: the UI is segmented by these backgrounds, not by borders.
+    // Surfaces: the whole window is one surface; hairlines and space, not
+    // background colours, separate its parts.
 
-    /// The window behind everything.
+    /// The one surface of the window: the header, the stage, the player
+    /// bar, the sidebar and its footer.
     case window
-    /// The area around the video.
-    case stage
     /// The bars beside the video in its frame.
     case letterbox
-    /// The player bar under the stage: transport and timeline.
-    case bar
-    /// The sidebar of threads.
-    case sidebar
-    /// A band that heads a part of the sidebar.
-    case sidebarSection
-    /// A sidebar row under the pointer.
-    case sidebarRowHover
-    /// The selected sidebar row.
-    case sidebarRowSelected
-    /// The header above the stage.
-    case header
     /// A popover or a notice floating over the video.
     case popover
     /// The thin edge of a popover, so it stays apart from a video of the
@@ -33,7 +21,8 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     case popoverBorder
     /// A text field.
     case field
-    /// A part set apart inside a popover, such as the lease's details.
+    /// A part set apart on a surface: the lease's details in a popover,
+    /// the sidebar row of the thread on the stage.
     case well
     /// The timeline's track.
     case track
@@ -41,10 +30,8 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     case knob
     /// The shadow under a floating surface.
     case shadow
-    /// A symbol button under the pointer.
+    /// A sidebar row or a message under the pointer.
     case controlHover
-    /// A symbol button being pressed.
-    case controlPressed
 
     // Text.
 
@@ -56,11 +43,12 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
 
     // Accent.
 
-    /// The app's accent: the scrubber, a selection, a focused field, Send.
+    /// The app's accent: the scrubber, a selection, Send.
     case accent
     /// The agent-control icon while an agent holds the lease.
     case control
-    /// A hairline between two parts that share a background.
+    /// A hairline between two parts of the one surface: the stage and the
+    /// sidebar, the threads and the footer.
     case separator
 
     // Messages.
@@ -103,4 +91,14 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
 
     case notice
     case noticeText
+
+    /// The tokens a theme may set to `system`, the native macOS part in
+    /// place of a painted colour: the window's background (and with it the
+    /// native toolbar), the material of a popover and of a notice, a text
+    /// field's background, and the hairline between the parts. Each shipped
+    /// theme sets them all to `system` or none, so its window never mixes
+    /// native and painted surfaces (a test checks it). Nothing stops a
+    /// person's theme from mixing them: one that extends a default and
+    /// paints `window` alone keeps the default's native popovers.
+    public static let systemSurfaces: Set<ThemeToken> = [.window, .popover, .notice, .field, .separator]
 }
