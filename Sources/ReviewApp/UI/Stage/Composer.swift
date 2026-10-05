@@ -105,10 +105,11 @@ struct Composer: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(palette[.textSecondary])
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(QuietButtonStyle())
+            .buttonStyle(.borderless)
             .help("Discard (Esc)")
             .accessibilityLabel("Discard")
         }

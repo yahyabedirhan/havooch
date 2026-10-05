@@ -3,7 +3,7 @@ import ReviewLease
 import ReviewWire
 import SwiftUI
 
-/// The app: one window, one video at a time.
+/// The app: one window, one video at a time, and Settings (⌘,).
 @main
 struct VideoReviewApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
@@ -11,6 +11,7 @@ struct VideoReviewApp: App {
     var body: some Scene {
         Window(AppIdentity.appName, id: "main") {
             RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
+                .modifier(SettingsOpener(settings: delegate.settings))
         }
         // A 16:9 video fills the stage beside the sidebar with no letterbox.
         .defaultSize(width: 1360, height: 730)
@@ -21,6 +22,9 @@ struct VideoReviewApp: App {
             }
             PlaybackCommands(model: delegate.model)
             ThemeMenu(model: delegate.model)
+        }
+        SwiftUI.Settings {
+            SettingsView(model: delegate.model)
         }
     }
 }
@@ -57,33 +61,14 @@ private struct PlaybackCommands: Commands {
 }
 
 /// View > Theme: follow the system appearance, or pin one theme. The
-/// same choice as `video-review theme set`.
+/// same choice as Settings and `video-review theme set`.
 private struct ThemeMenu: Commands {
     let model: AppModel
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
-            Picker("Theme", selection: selection) {
-                Text("Follow the System").tag(ThemeDesk.system)
-                Divider()
-                ForEach(model.themes.catalog.names, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
+            ThemePicker(model: model)
         }
-    }
-
-    private var selection: Binding<String> {
-        Binding(
-            get: { model.themes.pinned ?? ThemeDesk.system },
-            set: { name in
-                do throws(AppRefusal) {
-                    _ = try model.setTheme(name)
-                } catch {
-                    model.problem = AppModel.Problem(title: "The theme didn't change", reason: error.reason)
-                }
-            }
-        )
     }
 }
 
@@ -92,6 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel(environment: ProcessInfo.processInfo.environment)
     /// The lease as the agent-control icon draws it; the control server writes it.
     let lease = AgentControlIcon()
+    /// The Settings window, for app control's screenshots of it.
+    let settings = SettingsWindow()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
@@ -102,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.themes.followSystemAppearance()
         let server = ControlServer(
             socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,
-            screenshotter: Screenshotter(indicator: lease),
+            screenshotter: Screenshotter(indicator: lease, settings: settings),
             // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
             lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
             indicator: lease,

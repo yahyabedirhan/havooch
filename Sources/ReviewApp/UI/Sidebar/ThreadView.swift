@@ -152,10 +152,13 @@ private struct ThreadViewBar: View {
         } label: {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette[.textSecondary])
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(QuietButtonStyle())
+        // A native borderless button: it dims while pressed and when
+        // disabled, and takes the focus ring with keyboard navigation.
+        .buttonStyle(.borderless)
         .disabled(model.neighbour(forward: forward) == nil)
         .help(title)
         .accessibilityLabel(title)

@@ -71,6 +71,12 @@ struct Palette: Equatable {
         }
     }
 
+    /// The system's keyboard focus ring, around a focused field (L42). It
+    /// follows the Mac's accent colour, as every app's ring does.
+    var focusRing: Color {
+        Color(nsColor: .keyboardFocusIndicatorColor)
+    }
+
     /// The colour of a message state. A state is never told by colour
     /// alone: `StateLook` gives its glyph and its name.
     func state(_ state: MessageState) -> Color {

@@ -48,7 +48,7 @@ struct RootView: View {
         // app's appearance, which the theme follows already. SwiftUI sets
         // the window's appearance on each update from this preference: an
         // AppKit view that set it as well fought SwiftUI in a loop.
-        .preferredColorScheme(windowScheme(palette))
+        .preferredColorScheme(Self.scheme(of: model.themes))
         // The window's title stays for the Window menu and VoiceOver; the
         // header draws its own, with icons.
         .navigationTitle(model.video?.title ?? AppIdentity.appName)
@@ -78,10 +78,11 @@ struct RootView: View {
         .environment(\.palette, palette)
     }
 
-    /// The window's colour scheme: a pinned theme's kind, else the app's.
-    private func windowScheme(_ palette: Palette) -> ColorScheme? {
-        guard model.themes.pinned != nil else { return nil }
-        return palette.theme.kind == .dark ? .dark : .light
+    /// A window's colour scheme: a pinned theme's kind, else the app's.
+    /// Settings takes it too.
+    static func scheme(of themes: ThemeDesk) -> ColorScheme? {
+        guard themes.pinned != nil else { return nil }
+        return themes.theme.kind == .dark ? .dark : .light
     }
 
     /// Whether the agent-control icon is in the header: while an agent

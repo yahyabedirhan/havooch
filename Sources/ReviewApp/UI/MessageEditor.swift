@@ -8,16 +8,20 @@ import SwiftUI
 /// to type into. An answer box waits for a click instead (`takesFocus`
 /// false): a question arrives while the person does something else.
 ///
-/// Return commits, Shift+Return makes a new line, Escape cancels.
+/// Return commits, Shift+Return makes a new line, Escape cancels. Tab and
+/// Shift+Tab move the focus to the next and the previous control, as in a
+/// text field, so the keyboard reaches past the editor. `focusChanged` hears when the text view takes and gives up the focus,
+/// so the field around it draws the focus ring.
 struct MessageEditor: NSViewRepresentable {
     @Binding var text: String
     var takesFocus = true
+    var focusChanged: ((Bool) -> Void)? = nil
     let commit: () -> Void
     let cancel: () -> Void
 
     /// What a key does in the editor.
     enum KeyAction: Equatable {
-        case commit, newLine, cancel
+        case commit, newLine, cancel, nextControl, previousControl
     }
 
     /// The action of the text view's command `selector`, if the editor
@@ -26,6 +30,8 @@ struct MessageEditor: NSViewRepresentable {
         switch selector {
         case #selector(NSResponder.insertNewline(_:)): shift ? .newLine : .commit
         case #selector(NSResponder.cancelOperation(_:)): .cancel
+        case #selector(NSResponder.insertTab(_:)): .nextControl
+        case #selector(NSResponder.insertBacktab(_:)): .previousControl
         default: nil
         }
     }
@@ -35,12 +41,24 @@ struct MessageEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
+        let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
-        guard let view = scroll.documentView as? NSTextView else { return scroll }
+        // As `NSTextView.scrollableTextView()` builds it, with the text
+        // view that reports its focus.
+        let size = scroll.contentSize
+        let view = FocusTextView(frame: NSRect(origin: .zero, size: size))
+        view.minSize = .zero
+        view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        view.isVerticallyResizable = true
+        view.isHorizontallyResizable = false
+        view.autoresizingMask = [.width]
+        view.textContainer?.containerSize = NSSize(width: size.width, height: .greatestFiniteMagnitude)
+        view.textContainer?.widthTracksTextView = true
+        scroll.documentView = view
+        view.focusChanged = focusChanged
         view.delegate = context.coordinator
         view.isRichText = false
         view.allowsUndo = true
@@ -64,6 +82,7 @@ struct MessageEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let view = scroll.documentView as? NSTextView else { return }
+        (view as? FocusTextView)?.focusChanged = focusChanged
         // The theme may change while the editor is open.
         let ink = context.environment.palette.nsColor(.textPrimary)
         if view.textColor != ink {
@@ -95,6 +114,8 @@ struct MessageEditor: NSViewRepresentable {
             switch MessageEditor.keyAction(for: selector, shift: shift) {
             case .commit: parent.commit()
             case .newLine: textView.insertNewlineIgnoringFieldEditor(nil)
+            case .nextControl: textView.window?.selectNextKeyView(nil)
+            case .previousControl: textView.window?.selectPreviousKeyView(nil)
             case .cancel:
                 parent.cancel()
                 // A box that stays on screen gives the keys back to the player.
@@ -106,18 +127,46 @@ struct MessageEditor: NSViewRepresentable {
     }
 }
 
-/// The editor with its placeholder, in the field look both of its places
-/// share.
+/// A text view that says when it takes and gives up the focus.
+final class FocusTextView: NSTextView {
+    var focusChanged: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let took = super.becomeFirstResponder()
+        if took { report(true) }
+        return took
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let gave = super.resignFirstResponder()
+        if gave { report(false) }
+        return gave
+    }
+
+    /// After the responder change, never inside a SwiftUI update.
+    private func report(_ focused: Bool) {
+        guard let focusChanged else { return }
+        Task { @MainActor in focusChanged(focused) }
+    }
+}
+
+/// The editor with its placeholder, in the field look every place shares:
+/// the field colour with a hairline at rest, and the system focus ring
+/// while it has the focus in the key window (L42).
 struct MessageField: View {
     @Binding var text: String
     var placeholder = "Add a message…"
     var takesFocus = true
     let commit: () -> Void
     let cancel: () -> Void
+    @State private var isFocused = false
     @Environment(\.palette) private var palette
+    @Environment(\.controlActiveState) private var activeState
+
+    private static let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
 
     var body: some View {
-        MessageEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
+        MessageEditor(text: $text, takesFocus: takesFocus, focusChanged: { isFocused = $0 }, commit: commit, cancel: cancel)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
@@ -128,9 +177,28 @@ struct MessageField: View {
                         .allowsHitTesting(false)
                 }
             }
-            .background(palette[.field], in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(palette[.field], in: Self.shape)
+            .overlay { Self.shape.strokeBorder(palette[.separator], lineWidth: 1) }
             .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(palette[.accent].opacity(0.55), lineWidth: 1.5)
+                if isFocused, activeState == .key {
+                    FocusRing(cornerRadius: 7)
+                }
             }
+    }
+}
+
+/// The system's keyboard focus ring around a rounded field: a band
+/// `FocusRing.width` wide outside its edge, in the system's focus colour.
+struct FocusRing: View {
+    let cornerRadius: CGFloat
+    static let width: CGFloat = 3
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius + Self.width / 2, style: .continuous)
+            .stroke(palette.focusRing, lineWidth: Self.width)
+            .padding(-Self.width / 2)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

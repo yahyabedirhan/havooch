@@ -209,6 +209,7 @@ struct ThemeDeskTests {
 
     @Test("the palette may make a colour from numbers or a system surface; the same code anywhere else is a raw colour, and a named colour is raw in the palette too", arguments: [
         "Color(nsColor: Self.systemColor(token))", "AnyShapeStyle(.ultraThickMaterial), fill: AnyShapeStyle(self[token].opacity(0.8)))", "Color(.sRGB, white: 0.5)",
+        "Color(nsColor: .keyboardFocusIndicatorColor)",
         "NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)", "func nsColor(_ token: ThemeToken) -> NSColor {", "return Color(", "return NSColor(",
         "green: Double(color.green) / 255",
     ])
@@ -248,9 +249,10 @@ enum RawColour {
 
     /// What `Palette.swift` alone may write: a colour from a theme's
     /// numbers (and the grey of a missing token), the `NSColor` it returns,
-    /// and a `system` surface through `systemColor` or the ultra-thick material.
+    /// a `system` surface through `systemColor` or the ultra-thick material,
+    /// and the system's focus ring.
     private static let paletteAllowances = [
-        #"\bColor\(\s*($|\.sRGB\b|nsColor:\s*Self\.systemColor\()"#,
+        #"\bColor\(\s*($|\.sRGB\b|nsColor:\s*Self\.systemColor\(|nsColor:\s*\.keyboardFocusIndicatorColor\))"#,
         #"\bNSColor\(\s*($|(srgbRed|white):)"#,
         #"->\s*NSColor\b"#,
         // A theme colour's own components.

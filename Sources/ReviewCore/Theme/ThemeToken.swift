@@ -45,7 +45,7 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
 
     // Accent.
 
-    /// The app's accent: the scrubber, a selection, a focused field, Send.
+    /// The app's accent: the scrubber, a selection, Send.
     case accent
     /// The agent-control icon while an agent holds the lease.
     case control

@@ -6,10 +6,12 @@ import UniformTypeIdentifiers
 
 /// What the control server asks for a `video-review screenshot`.
 protocol Screenshotting: AnyObject {
-    /// The app's window written as a PNG at `file`, in `appearance` when
+    /// The app's `window` written as a PNG at `file`, in `appearance` when
     /// it's set (and back to the app's own afterwards). The agent-control
     /// icon is left out when `hideAgentIndicator` asks.
-    func capture(to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool) async throws(AppRefusal)
+    func capture(
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+    ) async throws(AppRefusal)
 }
 
 /// Captures the app's own window through ScreenCaptureKit, limited to this
@@ -23,21 +25,26 @@ final class Screenshotter: Screenshotting {
 
     /// The agent-control icon, hidden for a capture that leaves it out.
     private let indicator: AgentControlIcon
+    /// Opens and finds the Settings window, for `--window settings`.
+    private let settings: SettingsWindow
 
-    init(indicator: AgentControlIcon) {
+    init(indicator: AgentControlIcon, settings: SettingsWindow) {
         self.indicator = indicator
+        self.settings = settings
     }
 
     /// The capture before this one. Captures take turns: each one changes
     /// the app's appearance and puts it back.
     private var last: Task<Void, Never>?
 
-    func capture(to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool) async throws(AppRefusal) {
+    func capture(
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+    ) async throws(AppRefusal) {
         let before = last
         let turn = Task { () -> AppRefusal? in
             await before?.value
             do throws(AppRefusal) {
-                try await self.captureNow(to: file, appearance: appearance, hideAgentIndicator: hideAgentIndicator)
+                try await self.captureNow(to: file, appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window)
                 return nil
             } catch {
                 return error
@@ -47,8 +54,18 @@ final class Screenshotter: Screenshotting {
         if let refusal = await turn.value { throw refusal }
     }
 
-    private func captureNow(to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool) async throws(AppRefusal) {
-        guard let window = Self.appWindow else { throw AppRefusal("the app's window isn't on screen") }
+    private func captureNow(
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window which: ControlRequest.Window
+    ) async throws(AppRefusal) {
+        // Settings opens for the capture, as ⌘, opens it, and closes after
+        // it when it was closed before.
+        let opened = which == .settings && settings.window == nil
+        if which == .settings { try await settings.show() }
+        defer { if opened { settings.window?.close() } }
+        let found = which == .settings ? settings.window : Self.appWindow
+        guard let window = found else {
+            throw AppRefusal(which == .settings ? "the Settings window didn't open" : "the app's window isn't on screen")
+        }
         let previous = NSApp.appearance
         if let appearance {
             NSApp.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
@@ -63,9 +80,12 @@ final class Screenshotter: Screenshotting {
         try Self.write(image, to: file)
     }
 
-    /// The player's window: the one titled window the app shows.
+    /// The player's window: the titled window the app shows that isn't
+    /// Settings.
     private static var appWindow: NSWindow? {
-        NSApp.windows.first { $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel) }
+        NSApp.windows.first {
+            $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel) && !SettingsWindow.isSettings($0)
+        }
     }
 
     /// The window `windowID` names, captured from this process's shareable

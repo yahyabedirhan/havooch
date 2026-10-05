@@ -58,12 +58,14 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: .shift, isTyping: true) == nil)
     }
 
-    @Test("in the comment box Return commits, Shift+Return makes a new line, Escape cancels")
+    @Test("in the comment box Return commits, Shift+Return makes a new line, Escape cancels, Tab and Shift+Tab move to the next and the previous control")
     func editorKeys() {
         let newline = #selector(NSResponder.insertNewline(_:))
         #expect(MessageEditor.keyAction(for: newline, shift: false) == .commit)
         #expect(MessageEditor.keyAction(for: newline, shift: true) == .newLine)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.insertTab(_:)), shift: false) == .nextControl)
+        #expect(MessageEditor.keyAction(for: #selector(NSResponder.insertBacktab(_:)), shift: true) == .previousControl)
         // Every other command is the text view's own: typing, moving, deleting.
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.deleteBackward(_:)), shift: false) == nil)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.moveLeft(_:)), shift: false) == nil)

@@ -163,8 +163,13 @@ struct ControlServerTests {
     final class FakeScreenshotter: Screenshotting {
         var calls: [String] = []
 
-        func capture(to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool) async throws(AppRefusal) {
-            calls.append("\(file.path) \(appearance?.rawValue ?? "as is")" + (hideAgentIndicator ? " without the indicator" : ""))
+        func capture(
+            to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+        ) async throws(AppRefusal) {
+            calls.append(
+                "\(file.path) \(appearance?.rawValue ?? "as is")" + (hideAgentIndicator ? " without the indicator" : "")
+                    + (window == .main ? "" : " of \(window.rawValue)")
+            )
         }
     }
 
@@ -467,7 +472,8 @@ struct ControlServerTests {
     func screenshot() async {
         #expect(await answer(.screenshot(path: "/tmp/shot.png", appearance: .dark)).reply == .done("/tmp/shot.png\n"))
         #expect(await answer(.screenshot(path: "/tmp/shot.png", appearance: nil)).reply == .done("/tmp/shot.png\n"))
-        #expect(screenshotter.calls == ["/tmp/shot.png dark", "/tmp/shot.png as is"])
+        #expect(await answer(.screenshot(path: "/tmp/set.png", appearance: .light, window: .settings)).reply == .done("/tmp/set.png\n"))
+        #expect(screenshotter.calls == ["/tmp/shot.png dark", "/tmp/shot.png as is", "/tmp/set.png light of settings"])
     }
 
     @Test("app quit answers first, and says the app quits")

@@ -19,8 +19,8 @@
 #   sidebar         thread #3's view, with an agent reply and an open question;
 #                   the composer answers it ("Answer #3 · goes at once")
 #   follow-up       thread #1's view, done; the composer follows up on it
-#   settings        the Settings window with the theme picker (PENDING: no
-#                   command opens it yet)
+#   settings        the Settings window with the theme picker
+#                   (`screenshot --window settings`)
 #   thread-popover  a thread's popover on the video
 #   agent-control   the header with the agent-control icon, and the footer with
 #                   the listener's presence, the queued count and Send
@@ -30,7 +30,7 @@
 # The themes: every built-in theme of `theme list`, pinned in turn, on the
 # threads scene, in three views: `list` (the thread list and its composer),
 # `thread` (thread #3's view, the composer in answer mode) and `settings`
-# (PENDING, as above). A pinned theme looks the same in both appearances, so
+# (the Settings window, as above). A pinned theme looks the same in both appearances, so
 # each view has one picture, named after the theme in lowercase with hyphens
 # (`Atom One Light` is atom-one-light-list.png).
 #
@@ -207,9 +207,10 @@ sleep 1
 echo "a done thread's view, the composer following up:"
 pair follow-up --hide-agent-indicator
 
-# PENDING (#43): no command opens the Settings window. Put the command here
-# when one exists, then `pair settings --hide-agent-indicator`.
-pending settings "#43" "no CLI command opens the Settings window"
+# The Settings window: `--window settings` opens it as Cmd+, does, and
+# closes it again after the picture.
+echo "the Settings window:"
+pair settings --window settings
 operator thread show "$(thread "$keys")" >/dev/null
 
 # Thread #3's popover, as a click on its pin opens it: its conversation with
@@ -251,12 +252,12 @@ while IFS= read -r name; do
     operator thread show "$(thread "$keys")" >/dev/null
     sleep 1
     operator screenshot "$theme_shots/$slug-thread.png" --hide-agent-indicator >/dev/null
+    operator screenshot "$theme_shots/$slug-settings.png" --window settings >/dev/null
     echo "  $theme_shots/$slug-list.png"
     echo "  $theme_shots/$slug-thread.png"
+    echo "  $theme_shots/$slug-settings.png"
     taken+=("theme:$slug")
 done <<< "$themes"
-# PENDING (#43): Settings in every theme, as the settings state above.
-pending "themes/*-settings" "#43" "no CLI command opens the Settings window"
 operator thread list >/dev/null
 operator theme set system >/dev/null
 

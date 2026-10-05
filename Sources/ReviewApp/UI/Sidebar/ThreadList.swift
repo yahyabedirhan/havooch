@@ -68,23 +68,15 @@ struct ThreadList: View {
             .padding(.trailing, ThreadRow.padding)
     }
 
-    /// Under General while no frame has a thread: how one starts.
+    /// Under General while no frame has a thread: how one starts, as the
+    /// native empty state (L42).
     private var empty: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(palette[.textTertiary])
-                .padding(.bottom, 2)
-            Text("No threads yet")
-                .font(.headline)
+        ContentUnavailableView {
+            Label("No Threads Yet", systemImage: "text.bubble")
+        } description: {
             Text("Press C to write on the frame you're watching, or drag on the frame to point at a part of it. Each frame gets its thread; your messages queue, then go to your agent at once.")
-                .font(.callout)
-                .foregroundStyle(palette[.textSecondary])
-                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 40)
-        .frame(maxWidth: .infinity)
+        .padding(.top, 16)
     }
 }
 

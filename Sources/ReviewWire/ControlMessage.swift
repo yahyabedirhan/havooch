@@ -36,11 +36,13 @@ public struct ControlMessage: Equatable, Sendable {
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
         case .playerSeek(let seconds): wire = Wire(command: "player.seek", seconds: seconds)
-        case .screenshot(let path, let appearance, let hideAgentIndicator):
+        case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
             wire = Wire(
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
+            // The player's window is the default and goes unsaid.
+            wire.window = window == .main ? nil : window.rawValue
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
@@ -120,7 +122,16 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            return .screenshot(path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false)
+            var window = ControlRequest.Window.main
+            if let name = wire.window {
+                guard let known = ControlRequest.Window(rawValue: name) else {
+                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main` or `settings`")
+                }
+                window = known
+            }
+            return .screenshot(
+                path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false, window: window
+            )
         case "comment.add":
             if let at = wire.at, !at.isFinite || at < 0 {
                 throw .unreadable("the control command `comment.add` needs its `at` to be 0 or more")
@@ -210,6 +221,8 @@ public struct ControlMessage: Equatable, Sendable {
         var appearance: String?
         var waitSeconds: Int?
         var hideAgentIndicator: Bool?
+        /// `screenshot --window`: the window captured, when not the player's.
+        var window: String?
         var id: String?
         var text: String?
         var at: Double?

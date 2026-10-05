@@ -29,6 +29,7 @@ struct ControlMessageTests {
         ControlRequest.appStatus, .state, .appOpen, .appQuit,
         .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
         .screenshot(path: "/tmp/shot.png", appearance: .light, hideAgentIndicator: true),
+        .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
@@ -123,6 +124,8 @@ struct ControlMessageTests {
             == .unreadable("the control command `screenshot` needs an absolute `path`, not `shot.png`"))
         #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "appearance": "sepia"]))
             == .unreadable("the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"))
+        #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "window": "about"]))
+            == .unreadable("the control command `screenshot` has no window `about`; it takes `main` or `settings`"))
         #expect(refusal(fields("control.take", ["waitSeconds": -1]))
             == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)

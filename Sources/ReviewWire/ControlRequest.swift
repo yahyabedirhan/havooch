@@ -90,11 +90,13 @@ public enum ControlRequest: Equatable, Sendable {
     /// Back in a thread view shows it.
     case threadList
     /// `video-review screenshot <abs.png> [--appearance light|dark]
-    /// [--hide-agent-indicator]`: the app's window written as a PNG at the
-    /// absolute `path`, in `appearance` when it's set, as the Mac shows it
-    /// otherwise. The agent-control indicator shows as the person sees it,
-    /// unless `hideAgentIndicator` leaves it out.
-    case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false)
+    /// [--hide-agent-indicator] [--window main|settings]`: the app's
+    /// `window` written as a PNG at the absolute `path`, in `appearance`
+    /// when it's set, as the Mac shows it otherwise. The agent-control
+    /// indicator shows as the person sees it, unless `hideAgentIndicator`
+    /// leaves it out. The Settings window is opened for the capture, as
+    /// ⌘, opens it, and closed again when it was closed before.
+    case screenshot(path: String, appearance: Appearance?, hideAgentIndicator: Bool = false, window: Window = .main)
     /// `video-review theme list`: every theme the app knows, and which one
     /// is active and pinned.
     case themeList
@@ -134,6 +136,11 @@ public enum ControlRequest: Equatable, Sendable {
     /// The appearance `screenshot` draws in.
     public enum Appearance: String, Equatable, Sendable, CaseIterable {
         case light, dark
+    }
+
+    /// The window `screenshot` captures: the player's, or Settings.
+    public enum Window: String, Equatable, Sendable, CaseIterable {
+        case main, settings
     }
 
     /// Who may send a request.

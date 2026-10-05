@@ -207,8 +207,10 @@ final class ControlServer {
                 try await app.seek(to: seconds)
                 let player = app.state().player
                 return done(TimeCode.text(player.time), Output(player: player), json)
-            case .screenshot(let path, let appearance, let hideAgentIndicator):
-                try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator)
+            case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
+                try await screenshotter.capture(
+                    to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window
+                )
                 return done(path, Output(path: path), json)
             case .commentAdd(let text, let at, let rectangle, let thread):
                 let region = try Self.region(rectangle)
