@@ -3,7 +3,9 @@ import VRReview
 
 /// The bar under the comments: whether a listener is there, how many
 /// comments are queued, and the button that sends them. Sending with no
-/// listener is allowed; the bar then says the batch waits.
+/// listener is allowed; a line above the bar then says the batch waits. The
+/// bar itself is the transport bar's height, so the two line up along the
+/// window's bottom; the line goes above it, never into it.
 struct SendBar: View {
     let model: ReviewModel
 
@@ -13,7 +15,18 @@ struct SendBar: View {
             let presence = model.presence
             let queued = model.session?.queue.count ?? 0
             let waiting = model.outbox.parcels.filter { $0.delivery == .pending }.count
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(spacing: 0) {
+                if let note = Self.note(failure: model.sendFailure, presence: presence, queued: queued, waiting: waiting) {
+                    Divider()
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(model.sendFailure == nil ? Color.secondary : Color.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, Theme.edge)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Divider()
                 HStack(spacing: 8) {
                     PresenceChip(presence: presence, name: model.outbox.listener?.name)
                     Spacer()
@@ -25,16 +38,9 @@ struct SendBar: View {
                         .disabled(queued == 0 && model.composing == nil)
                         .help("Send the queued comments as one batch (⌘↩)")
                 }
-                if let note = Self.note(failure: model.sendFailure, presence: presence, queued: queued, waiting: waiting) {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(model.sendFailure == nil ? Color.secondary : Color.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                .padding(.horizontal, Theme.edge)
+                .frame(height: Theme.footerHeight)
             }
-            .padding(.horizontal, Theme.edge)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .background(.bar)
         }
     }

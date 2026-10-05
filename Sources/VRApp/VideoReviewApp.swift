@@ -9,11 +9,12 @@ struct VideoReviewApp: App {
 
     var body: some Scene {
         Window(AppIdentity.name, id: "main") {
-            MainWindow(model: AppServices.shared.model, controller: AppServices.shared.player)
-                // The lease's banner tops the window, whatever it shows.
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    LeaseBanner(indicator: AppServices.shared.leaseIndicator) { AppServices.shared.server.stopLease() }
-                }
+            MainWindow(
+                model: AppServices.shared.model,
+                controller: AppServices.shared.player,
+                lease: AppServices.shared.leaseIndicator,
+                stopLease: { AppServices.shared.server.stopLease() }
+            )
         }
         .defaultSize(width: 1100, height: 700)
         .commands {

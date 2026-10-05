@@ -2,11 +2,16 @@ import SwiftUI
 import VRWire
 
 /// The window: once a video is open, the stage with the transport bar under
-/// it and the review sidebar beside them; the empty state before. A video
-/// file dropped anywhere opens.
+/// it and the review sidebar beside them; the empty state before. The
+/// toolbar holds the video's context and, while an agent holds the lease,
+/// its sign at the top right, whatever the window shows. A video file
+/// dropped anywhere opens.
 struct MainWindow: View {
     let model: ReviewModel
     let controller: PlayerController
+    let lease: LeaseIndicator
+    /// Takes the app back from the lease's holder.
+    let stopLease: () -> Void
 
     var body: some View {
         Group {
@@ -31,6 +36,12 @@ struct MainWindow: View {
             if model.video != nil {
                 ToolbarItem(placement: .primaryAction) {
                     ContextButton(model: model)
+                }
+            }
+            // The last item, so it sits in the window's top right corner.
+            if lease.isHeld {
+                ToolbarItem(placement: .primaryAction) {
+                    LeaseButton(indicator: lease, stop: stopLease)
                 }
             }
         }

@@ -13,7 +13,7 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
 /// The server's side of the lease, with a fake player and a clock the test
 /// sets: the gate before every operator request, `control take` and
 /// `release`, the line of waiting takes, the person's Stop, and what the
-/// banner reads. The rules themselves are `ControlLeaseTests`'.
+/// toolbar button reads. The rules themselves are `ControlLeaseTests`'.
 @MainActor
 @Suite struct LeaseGateTests {
     @Test(arguments: [
@@ -143,7 +143,7 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         #expect(rig.server.lease.current(at: rig.clock.now)?.holder == agent)
     }
 
-    @Test func whenTheLeaseRunsOutWithNoRequestTheFirstWaitingTakeGetsItAndTheBannerFollows() async throws {
+    @Test func whenTheLeaseRunsOutWithNoRequestTheFirstWaitingTakeGetsItAndTheToolbarButtonFollows() async throws {
         let rig = Rig()
         _ = await rig.send(.playerOpen(path: fixtureVideo.path), by: agent)
         let waiting = try await rig.queue(other, seconds: 120, as: 1, json: true)
@@ -158,7 +158,7 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
             == LeaseStatus(holder: "codex", place: "Herdr pane w1-2", secondsLeft: 300, waiting: 0))
     }
 
-    @Test func theBannerShowsFromTheRequestThatTakesTheLeaseAndGoesOnceItEnds() async {
+    @Test func theLeaseButtonShowsFromTheRequestThatTakesTheLeaseAndGoesOnceItEnds() async {
         let rig = Rig()
         let indicator = rig.server.indicator
         #expect(indicator.lease.status(at: rig.clock.now) == nil)
@@ -166,9 +166,9 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
         _ = await rig.send(.playerOpen(path: fixtureVideo.path), by: agent)
         rig.clock.set(12)
 
-        #expect(indicator.lease.status(at: rig.clock.now).map(LeaseIndicator.Banner.init)?.text
+        #expect(indicator.lease.status(at: rig.clock.now).map(LeaseIndicator.Summary.init)?.text
             == "Claude Code controls this app · shop · 48s")
-        // The words follow the time they're made at, so the strip goes at the end without the server.
+        // The words follow the time they're made at, so the button goes at the end without the server.
         #expect(indicator.lease.status(at: Date(timeIntervalSince1970: 60)) == nil)
         rig.clock.set(60)
         rig.server.settleLease()
@@ -243,8 +243,8 @@ private let third = Holder(key: "process:310@900000000", name: "aider", place: "
          "Codex controls this app · Herdr pane w1-2 · 4m 05s · 2 waiting"),
         (LeaseStatus(holder: "aider", place: "/", secondsLeft: 60, waiting: 1), "Aider controls this app · / · 1m 00s · 1 waiting"),
     ])
-    func theBannersWords(status: LeaseStatus, text: String) {
-        #expect(LeaseIndicator.Banner(status).text == text)
+    func theLeaseSummarysWords(status: LeaseStatus, text: String) {
+        #expect(LeaseIndicator.Summary(status).text == text)
     }
 }
 

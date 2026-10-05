@@ -53,7 +53,7 @@ final class ControlServer {
     private(set) var lease: ControlLease {
         didSet { leaseChanged() }
     }
-    /// The banner, which follows the lease.
+    /// The toolbar button, which follows the lease.
     let indicator: LeaseIndicator
     /// Takes back the end of the lease at its time, set when it last changed.
     private var settling: Later.Cancel?
@@ -283,7 +283,7 @@ final class ControlServer {
 
     // MARK: - The person taking the app back
 
-    /// The banner's Stop: the holder's lease ends and it's barred
+    /// The lease popover's Stop: the holder's lease ends and it's barred
     /// (`ControlLease.stop`), and the first waiter in line gets the lease,
     /// its `take` answered as the lease changes. The person's only way into
     /// the lease.
@@ -294,8 +294,8 @@ final class ControlServer {
     // MARK: - The lease's end
 
     /// Ends the lease if it has run out by now, handing it to the first
-    /// waiter in line. A timer calls it at the lease's end, so the banner
-    /// goes, and the waiter gets the lease, with no request.
+    /// waiter in line. A timer calls it at the lease's end, so the toolbar
+    /// button goes, and the waiter gets the lease, with no request.
     func settleLease() {
         _ = lease.settle(at: now())
     }

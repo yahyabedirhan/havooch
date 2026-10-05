@@ -15,7 +15,7 @@ final class AppServices {
     let player: PlayerController
     let model: ReviewModel
     let server: ControlServer
-    /// The lease as the banner reads it; the control server writes it.
+    /// The lease as the toolbar button reads it; the control server writes it.
     let leaseIndicator = LeaseIndicator()
     private let shortcuts: Shortcuts
 

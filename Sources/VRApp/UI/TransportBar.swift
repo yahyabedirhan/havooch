@@ -45,7 +45,7 @@ struct TransportBar: View {
             .help("Comment at this time (C)")
         }
         .padding(.horizontal, Theme.edge)
-        .frame(height: Theme.transportHeight)
+        .frame(height: Theme.footerHeight)
         .background(.bar)
     }
 }

@@ -2,11 +2,11 @@ import Foundation
 import Observation
 import VRLease
 
-/// What the person sees of the lease: the banner under the title bar, drawn
-/// while an agent holds it. The control server, which owns the lease, writes
-/// each change here and settles it when it runs out, so the banner follows
-/// the lease's start and end with no request. Of the person's clicks, only
-/// the banner's Stop reaches the lease (`ControlServer.stopLease`); the
+/// What the person sees of the lease: the toolbar's button at the window's
+/// top right, there while an agent holds it. The control server, which owns
+/// the lease, writes each change here and settles it when it runs out, so
+/// the button follows the lease's start and end with no request. Of the
+/// person's clicks, only the popover's Stop reaches the lease (`ControlServer.stopLease`); the
 /// views only read it here.
 @MainActor
 @Observable
@@ -14,9 +14,14 @@ final class LeaseIndicator {
     /// The lease as the control server last left it.
     var lease = ControlLease()
 
-    /// The banner's words, made from the lease's status at the moment drawn,
-    /// so the countdown ticks with the time it's made at.
-    struct Banner: Equatable {
+    /// Whether an agent holds the lease now. The server settles the lease at
+    /// its end, so a view that reads this redraws when it goes.
+    var isHeld: Bool { lease.status(at: .now) != nil }
+
+    /// The words of the toolbar button and its popover, made from the
+    /// lease's status at the moment drawn, so the countdown ticks with the
+    /// time it's made at.
+    struct Summary: Equatable {
         /// "Claude Code controls this app".
         var title: String
         /// Where the holder runs, short: a working folder's last component
@@ -41,7 +46,7 @@ final class LeaseIndicator {
             ([place, timeLeft] + (waiting.map { [$0] } ?? [])).joined(separator: " · ")
         }
 
-        /// The banner as one line, for VoiceOver.
+        /// The summary as one line, for the tooltip and VoiceOver.
         var text: String { "\(title) · \(detail)" }
     }
 }

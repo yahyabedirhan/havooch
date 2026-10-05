@@ -88,7 +88,6 @@ struct Sidebar: View {
                     }
                 }
             }
-            Divider()
             SendBar(model: model)
         }
         .frame(width: Theme.sidebarWidth)

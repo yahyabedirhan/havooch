@@ -8,8 +8,10 @@ enum Theme {
     static let gap: CGFloat = 12
     /// The space between a bar's content and the window's edge.
     static let edge: CGFloat = 16
-    static let transportHeight: CGFloat = 52
-    static let bannerHeight: CGFloat = 32
+    /// The height of the bars along the window's bottom: the transport bar
+    /// under the stage and the send bar under the comments, so the two line
+    /// up as one band.
+    static let footerHeight: CGFloat = 52
     static let trackHeight: CGFloat = 4
     static let thumbSize: CGFloat = 12
     /// A comment's pin above the track, and the pin of the selected one.
@@ -51,6 +53,10 @@ enum Theme {
 
     /// The colour of an open question: the agent waits for the person.
     static let question = Color.orange
+
+    /// The tint of the toolbar's sign that an agent controls the app: a
+    /// soft orange, so it shows without shouting.
+    static let agent = Color.orange.mix(with: .gray, by: 0.3)
 
     /// Who wrote a thread message and what it is, as a word in a card.
     static func label(for message: ThreadMessage) -> String {
