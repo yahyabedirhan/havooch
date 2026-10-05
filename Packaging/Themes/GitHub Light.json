@@ -3,13 +3,6 @@
   "kind": "light",
   "tokens": {
     "window": "#ffffff",
-    "stage": "#ffffff",
-    "bar": "#f6f8fa",
-    "sidebar": "#f6f8fa",
-    "sidebarSection": "#eaeef2",
-    "sidebarRowHover": "#eef1f4",
-    "sidebarRowSelected": "#dae7f6",
-    "header": "#ffffff",
     "popover": "#ffffff",
     "field": "#ffffff",
     "track": "#d0d7de",

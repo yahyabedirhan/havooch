@@ -31,7 +31,7 @@ struct ThemeTests {
 
     @Test("a token the theme sets wins; a missing one comes from the theme it extends, then from the default of its kind")
     func extendsThenFallback() throws {
-        let base = ThemeFile(name: "Base", kind: .dark, tokens: ["accent": "#111111", "stage": "#222222"])
+        let base = ThemeFile(name: "Base", kind: .dark, tokens: ["accent": "#111111", "letterbox": "#222222"])
         let child = ThemeFile(name: "Child", kind: .dark, extends: "Base", tokens: ["accent": "#333333"])
         let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [base, child])
 
@@ -39,8 +39,8 @@ struct ThemeTests {
         #expect(theme.name == "Child")
         #expect(theme.kind == .dark)
         #expect(theme[.accent] == Self.colour("#333333"))
-        #expect(theme[.stage] == Self.colour("#222222"))
-        #expect(theme[.sidebar] == Self.colour("#000000"))
+        #expect(theme[.letterbox] == Self.colour("#222222"))
+        #expect(theme[.window] == Self.colour("#000000"))
         #expect(theme.colors.count == ThemeToken.allCases.count)
     }
 
@@ -59,10 +59,10 @@ struct ThemeTests {
     func overrides() throws {
         let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [])
         let theme = try catalog.resolve(
-            ThemeCatalog.defaultDark, overrides: ["accent": "#abcdef", "nonsense": "#ffffff", "stage": "blue"]
+            ThemeCatalog.defaultDark, overrides: ["accent": "#abcdef", "nonsense": "#ffffff", "letterbox": "blue"]
         )
         #expect(theme[.accent] == Self.colour("#abcdef"))
-        #expect(theme[.stage] == Self.colour("#000000"))
+        #expect(theme[.letterbox] == Self.colour("#000000"))
     }
 
     @Test("a colour in a theme that doesn't read counts as missing; a token name the app doesn't know is ignored")
@@ -96,7 +96,7 @@ struct ThemeTests {
         let theme = try catalog.resolve("Default Dark")
         #expect(theme[.accent] == Self.colour("#654321"))
         // Its missing tokens still come from the built-in default it replaced.
-        #expect(theme[.stage] == Self.colour("#000000"))
+        #expect(theme[.letterbox] == Self.colour("#000000"))
     }
 
     @Test("the active theme is the pinned one while it exists, else the default of the system appearance")

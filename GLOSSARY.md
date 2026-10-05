@@ -107,5 +107,5 @@ A named set of colours of one kind, light or dark, that can extend another theme
 _Avoid_: skin, colour scheme, appearance (the appearance is the system's light or dark mode)
 
 **Token**:
-One semantic colour name, such as the background of the sidebar or the colour of the done state, that a theme gives a value.
+One semantic colour name, such as the surface of the window or the colour of the done state, that a theme gives a value.
 _Avoid_: colour variable, swatch

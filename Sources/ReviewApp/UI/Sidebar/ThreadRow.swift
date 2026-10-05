@@ -84,7 +84,7 @@ struct ThreadRow: View {
         .padding(.horizontal, Metrics.sidebarPadding)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovered ? palette[.sidebarRowHover] : Color.clear)
+        .background(isHovered ? palette[.controlHover] : Color.clear)
         .animation(.smooth(duration: 0.12), value: isHovered)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
@@ -103,7 +103,7 @@ struct ThreadRow: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(palette[.textSecondary])
                 .frame(width: Self.thumbnail.width, height: Self.thumbnail.height)
-                .background(palette[.sidebarSection], in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(palette[.well], in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .accessibilityHidden(true)
         } else {
             SidebarPicture(file: model.keyframe(of: thread), side: Self.thumbnail.width, fills: true)

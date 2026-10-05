@@ -76,21 +76,21 @@ struct ThemeFilesTests {
         }
     }
 
-    @Test("in every shipped theme the text reads on each surface, and each state stands apart from the surfaces, its glyph and the other states, and the question from every state and the bar")
+    @Test("in every shipped theme the text reads on each surface, and each state stands apart from the surfaces, its glyph and the other states, and the question from every state and the window")
     func everyThemeReads() throws {
         let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: [])
         let states: [ThemeToken] = [.stateQueued, .stateSent, .stateAcknowledged, .stateWorking, .stateDone, .stateFailed]
         for name in catalog.names {
             let theme = try catalog.resolve(name)
             func colour(_ token: ThemeToken) throws -> ThemeColor { try #require(theme[token]) }
-            for surface: ThemeToken in [.window, .sidebar, .popover, .bar, .header] {
+            for surface: ThemeToken in [.window, .popover] {
                 let primary = Self.contrast(try colour(.textPrimary), try colour(surface))
                 let secondary = Self.contrast(try colour(.textSecondary), try colour(surface))
                 #expect(primary >= 6,"\(name): textPrimary on \(surface) is \(primary):1")
                 #expect(secondary >= 4.5, "\(name): textSecondary on \(surface) is \(secondary):1")
             }
             for token in states + [.accent, .question] {
-                for surface: ThemeToken in [.sidebar, .popover] {
+                for surface: ThemeToken in [.window, .popover] {
                     let ratio = Self.contrast(try colour(token), try colour(surface))
                     #expect(ratio >= 2.5, "\(name): \(token) on \(surface) is \(ratio):1")
                 }
@@ -98,9 +98,9 @@ struct ThemeFilesTests {
                 #expect(glyph >= 3, "\(name): textOnAccent on \(token) is \(glyph):1")
             }
             // The question's pin on the player bar stands apart from every
-            // state's pin, and shows on the bar as a mark should (3:1).
-            let questionOnBar = Self.contrast(try colour(.question), try colour(.bar))
-            #expect(questionOnBar >= 3, "\(name): question on bar is \(questionOnBar):1")
+            // state's pin, and shows on the window's surface as a mark should (3:1).
+            let questionOnWindow = Self.contrast(try colour(.question), try colour(.window))
+            #expect(questionOnWindow >= 3, "\(name): question on window is \(questionOnWindow):1")
             for state in states {
                 let distance = Self.distance(try colour(.question), try colour(state))
                 #expect(distance >= 10, "\(name): question and \(state) are \(distance) apart")
@@ -169,6 +169,38 @@ struct ThemeFilesTests {
         #expect(reading.found.first?.url.lastPathComponent == "b.json")
         #expect(reading.problems.count == 1)
         #expect(reading.problems.first?.contains("a.json") == true)
+    }
+
+    /// The surface tokens 0.1.0 had and the one-surface window removed.
+    static let removedSurfaces = ["stage", "bar", "sidebar", "sidebarSection", "sidebarRowHover", "sidebarRowSelected", "header"]
+
+    @Test("the window is one surface: no token or built-in theme names a surface of its own for the header, the stage, the bar or the sidebar")
+    func oneSurface() {
+        for name in Self.removedSurfaces {
+            #expect(ThemeToken(rawValue: name) == nil, "\(name) is still a token")
+        }
+        for file in ThemeFiles.read(Self.shipped).files {
+            let left = Set(file.tokens.keys).intersection(Self.removedSurfaces)
+            #expect(left.isEmpty, "\(file.name) still sets \(left.sorted())")
+        }
+    }
+
+    @Test("a person's theme that still sets a removed surface token loads with no problem, and its other tokens apply")
+    func removedTokensStillLoad() throws {
+        let layout = try temporaryLayout()
+        try FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
+        let old = Self.removedSurfaces.map { "\"\($0)\": \"#123456\"" }.joined(separator: ", ")
+        try Data(##"{"name": "Old", "kind": "dark", "extends": "Default Dark", "tokens": {\##(old), "accent": "#a0522d"}}"##.utf8)
+            .write(to: layout.themesFolder.appendingPathComponent("old.json"))
+
+        let reading = ThemeFiles.user(layout)
+        #expect(reading.problems.isEmpty)
+        let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: reading.files)
+        #expect(catalog.problems.isEmpty)
+        let theme = try catalog.resolve("Old")
+        #expect(theme[.accent] == ThemeColor("#a0522d"))
+        #expect(theme[.window] == (try catalog.resolve(ThemeCatalog.defaultDark))[.window])
+        #expect(theme.colors.count == ThemeToken.allCases.count)
     }
 
     @Test("with no settings file the settings are the defaults; they round-trip, with the pin as null while it follows the system")

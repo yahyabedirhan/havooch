@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The window: the header at the top, the stage with the player bar under
 /// it, and the sidebar at the side with its footer under it. With no
-/// video, a place to open one.
+/// video, a place to open one. All of it is on one surface, the theme's
+/// `window`; hairlines, not background colours, separate the parts.
 struct RootView: View {
     @Bindable var model: AppModel
     /// The lease as the header's agent-control icon draws it, and its Stop.
@@ -27,7 +28,6 @@ struct RootView: View {
                 }
             }
             .frame(minWidth: 480, maxWidth: .infinity)
-            .background(palette[.stage])
             if sidebarShown {
                 SidebarColumn(model: model)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
@@ -60,7 +60,7 @@ struct RootView: View {
             .sharedBackgroundVisibility(.hidden)
             FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)
         }
-        .toolbarBackground(palette[.header], for: .windowToolbar)
+        .toolbarBackground(palette[.window], for: .windowToolbar)
         .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
@@ -102,7 +102,8 @@ struct RootView: View {
 }
 
 /// The sidebar column: the threads above the footer, resizable from its
-/// leading edge between `Metrics.sidebarWidthRange`'s bounds.
+/// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
+/// on that edge separates it from the stage.
 struct SidebarColumn: View {
     let model: AppModel
     /// The width while the person drags; nil shows the kept width.
@@ -124,7 +125,8 @@ struct SidebarColumn: View {
             SidebarFooter(model: model)
         }
         .frame(width: width)
-        .background(palette[.sidebar])
+        .background(palette[.window])
+        .overlay(alignment: .leading) { Hairline(axis: .vertical) }
         .overlay(alignment: .leading) { resizeHandle }
     }
 
@@ -151,6 +153,22 @@ struct SidebarColumn: View {
                         dragged = nil
                     }
             )
+            .accessibilityHidden(true)
+    }
+}
+
+/// A hairline in the theme's `separator`, one pixel thick on the screen it
+/// shows on. It separates two parts of the window's one surface.
+struct Hairline: View {
+    let axis: Axis
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        let thickness = 1 / max(displayScale, 1)
+        Rectangle()
+            .fill(palette[.separator])
+            .frame(width: axis == .vertical ? thickness : nil, height: axis == .horizontal ? thickness : nil)
             .accessibilityHidden(true)
     }
 }

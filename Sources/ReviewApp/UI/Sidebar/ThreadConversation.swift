@@ -51,7 +51,8 @@ struct ThreadConversation: View {
             .padding(.top, 10)
             .padding(.bottom, 14)
         }
-        .background(palette[.sidebarRowSelected])
+        // The thread on the stage: expanding it moved the player to its frame.
+        .background(palette[.well])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.isGeneral ? "General thread" : "Thread \(thread.number)")
     }
@@ -83,7 +84,6 @@ struct ThreadConversation: View {
         .padding(.horizontal, Metrics.sidebarPadding)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette[.sidebarSection])
         .contentShape(Rectangle())
         .onTapGesture { model.expandThread(thread.id) }
         .accessibilityElement(children: .combine)

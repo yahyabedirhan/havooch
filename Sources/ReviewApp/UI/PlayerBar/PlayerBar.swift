@@ -68,7 +68,7 @@ struct PlayerBar: View {
         .foregroundStyle(palette[.textPrimary])
         .padding(.horizontal, Metrics.barPadding)
         .frame(height: Metrics.barHeight)
-        .background(palette[.bar])
+        .background(palette[.window])
     }
 
     /// `seconds` as the bar shows it: whole seconds, `m:ss`.

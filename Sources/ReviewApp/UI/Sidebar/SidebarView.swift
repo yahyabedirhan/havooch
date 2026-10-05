@@ -6,10 +6,10 @@ import SwiftUI
 /// collapsed row; the one the person picked shows expanded, with its
 /// conversation and its field (L33).
 ///
-/// Background colour segments the sidebar, not bordered cards: a header
-/// band over the expanded thread, its own fill under it, and only the
-/// messages in bubbles (D 5.9). Its column (`SidebarColumn`) keeps the
-/// width the person gives it (D 5.10).
+/// The sidebar is on the window's one surface: a row under the pointer
+/// takes `controlHover`, the expanded thread (the one on the stage) sits
+/// in a `well`, and only the messages are in bubbles. Its column
+/// (`SidebarColumn`) keeps the width the person gives it (D 5.10).
 struct SidebarView: View {
     let model: AppModel
 

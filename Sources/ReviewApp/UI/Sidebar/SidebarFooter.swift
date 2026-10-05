@@ -5,8 +5,10 @@ import SwiftUI
 /// many messages are queued, and Send. Sending is safe either way: with no
 /// agent the send waits for the next one.
 ///
-/// As tall as the player bar under the stage, on the same background, so
-/// the two meet on one line across the window (D 4.9).
+/// As tall as the player bar under the stage, on the window's one
+/// surface, so the two meet on one line across the window (D 4.9). A
+/// hairline above it separates it from the threads; it lies inside that
+/// height.
 struct SidebarFooter: View {
     let model: AppModel
     @Environment(\.palette) private var palette
@@ -37,6 +39,7 @@ struct SidebarFooter: View {
         .padding(.horizontal, Metrics.sidebarPadding)
         .frame(maxWidth: .infinity)
         .frame(height: Metrics.barHeight)
-        .background(palette[.bar])
+        .background(palette[.window])
+        .overlay(alignment: .top) { Hairline(axis: .horizontal) }
     }
 }
