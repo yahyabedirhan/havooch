@@ -116,6 +116,8 @@ enum RelativeTime {
 /// two-line preview of its last message. General has a symbol in the
 /// keyframe's place. A click shows the thread's view and moves the player
 /// to its frame. The row of the thread on the stage sits in a `well`.
+/// Keyboard navigation reaches the row, with the system focus ring, and
+/// Space or Return opens it as a click does.
 struct ThreadRow: View {
     let model: AppModel
     let thread: ReviewThread
@@ -123,6 +125,7 @@ struct ThreadRow: View {
     let isOnStage: Bool
 
     @State private var isHovered = false
+    @FocusState private var isFocused: Bool
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var colorScheme
 
@@ -134,45 +137,60 @@ struct ThreadRow: View {
 
     var body: some View {
         let summary = ThreadSummary(thread, agent: model.agentName)
-        HStack(alignment: .top, spacing: Self.spacing) {
-            picture
-            VStack(alignment: .leading, spacing: 2) {
-                firstLine(summary)
-                preview(summary)
+        // A button, so keyboard navigation reaches the row and the system
+        // draws its focus ring; the style keeps the row's own look.
+        Button { model.perform(.open, on: thread.id) } label: {
+            HStack(alignment: .top, spacing: Self.spacing) {
+                picture
+                VStack(alignment: .leading, spacing: 2) {
+                    firstLine(summary)
+                    preview(summary)
+                }
+            }
+            .padding(.horizontal, Self.padding)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(fill, in: Self.shape)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowButtonStyle())
+        .contentShape(.focusEffect, Self.shape)
+        .focused($isFocused)
+        // Space and Return reach the player's keys first (`Shortcuts`),
+        // which open the focused row's thread.
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                model.focusedRow = thread.id
+            } else if model.focusedRow == thread.id {
+                model.focusedRow = nil
             }
         }
-        .padding(.horizontal, Self.padding)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onDisappear {
+            if model.focusedRow == thread.id { model.focusedRow = nil }
+        }
         .animation(.smooth(duration: 0.12), value: isHovered)
-        .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onTapGesture { model.showThread(thread.id) }
         .contextMenu {
             ForEach(model.rowActions(for: thread)) { action in
-                Button(action.title, systemImage: action.symbol, role: action == .deleteQueued ? .destructive : nil) { perform(action) }
+                Button(action.title, systemImage: action.symbol, role: action == .deleteQueued ? .destructive : nil) {
+                    model.perform(action, on: thread.id)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.text)
         .accessibilityHint("Shows the conversation")
         .accessibilityAddTraits(isOnStage ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { model.showThread(thread.id) }
+        .accessibilityAction { model.perform(.open, on: thread.id) }
         .accessibilityActions {
             ForEach(model.rowActions(for: thread).filter { $0 != .open }) { action in
-                Button(action.title) { perform(action) }
+                Button(action.title) { model.perform(action, on: thread.id) }
             }
         }
     }
 
-    private func perform(_ action: RowAction) {
-        switch action {
-        case .open: model.showThread(thread.id)
-        case .showOnVideo: model.showOnVideo(thread.id)
-        case .deleteQueued: model.deleteQueued(on: thread.id)
-        }
-    }
+    /// The row's outline: its fill, and the focus ring around it.
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
     /// The thread on the stage, else the one under the pointer.
     private var fill: Color {
@@ -256,5 +274,14 @@ struct ThreadRow: View {
             )
             .frame(width: Self.thumbnail.width, height: Self.thumbnail.height)
         }
+    }
+}
+
+/// A thread row's button: the row as it is drawn, with no button chrome
+/// and no look of its own while pressed. The system focus ring still goes
+/// around it under keyboard navigation.
+private struct RowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
