@@ -240,7 +240,7 @@ Sources/
     PlayerCommands.swift           player open | play | pause | seek
     CommentCommands.swift          comment add | edit | delete, send, thread answer, context set
     ThemeCommands.swift            theme list | set
-    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--with-control-icon]
+    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator]
     ListenerCommands.swift         wait, ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services; the AppLaunching seam
   ReviewCLI/
@@ -349,18 +349,18 @@ proto-1's split (D A.7): `Holder`, `ProcessTable` and `LeaseTerm` move here from
 
 As proto-2, with these changes:
 
-- `AppIdentity` has no variant: `appName` "Video Review", `bundleID` "com.yahyabedirhan.video-review", support folder `~/Library/Application Support/Video Review/` (D A.10).
-- `Version.app` is "0.1.0"; `video-review --version` prints it. `Version.protocol` is 2 (L1).
+- `AppIdentity` has no variant: `appName` "Video Review", `bundleID` "com.yahyabedirhan.video-review", support folder `~/Library/Application Support/Video Review/` (D A.10). The name's one definition is `ControlLease.appName`, since the lease's refusals name the app and `ReviewLease` depends on nothing; `AppIdentity.appName` is that value, and the `Makefile` reads it there.
+- `Version.app` is "0.1.0"; `video-review --version` prints it. `Version.controlProtocol` is 2 (L1).
 - `ControlRequest` follows the spec's contract:
 
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
-| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, withControlIcon)` | takes or renews |
+| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?)` | none |
 
 - A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
-- `ControlClient` reads to the end and skips leading spaces, which are the server's heartbeat (D A.8). Its timeout is an idle timeout of 15 s; the heartbeat keeps a held request alive however long it waits.
+- `ControlClient` reads to the end; the server's heartbeat spaces before the reply are skipped as JSON allows, and a reply of spaces only is an app that went away (D A.8). Its timeout is proto-2's, applied to each read: 15 s plus the request's `holdSeconds`, and no limit for a `wait` or an `ask` with no limit. With the heartbeat no read of a healthy held request waits more than 2 s.
 
 ### ReviewCommand
 
@@ -582,9 +582,9 @@ public struct SupportLayout: Sendable {
 - `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `undelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s; a question stays until answered or clicked). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or expands General in the sidebar.
 - `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. A `DispatchSource` on `Themes/` and on `settings.json` rebuilds the catalog when a file changes (D 5.6). `Palette` turns the resolved tokens into `Color`s and is the only colour source a view has (D 5.1); a raw colour in a view is a review finding. The letterbox is a token too.
-- `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written cancels the task, which ends a held `wait` or `ask` as `gone`. It then writes the reply and tells the server `written` or `undelivered`.
+- `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that cannot be written goes back to the server as `undelivered`. The `written` outcome comes with the in-flight rule (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
 - `ControlServer` only decodes, checks the lease, dispatches and keeps the queued `take`s. It owns the one `ControlLease` and settles it on a timer. It depends on the `AppControlling` protocol, which `AppModel` implements and the tests fake.
-- `LeaseIndicator` is the lease as the agent-control icon shows it. `AgentControl` is the icon, left of Context, only while an agent holds the lease, and its popover: who, where, time left, how many wait, Stop (D 4.7). The icon is hidden in screenshots unless `--with-control-icon` (L10).
+- `LeaseIndicator` is the lease as the agent-control icon shows it. `AgentControl` is the icon, left of Context, only while an agent holds the lease, and its popover: who, where, time left, how many wait, Stop (D 4.7). The icon shows in screenshots unless `--hide-agent-indicator` (L10).
 - `StateReport` builds `state --json`:
 
 ```json
@@ -866,7 +866,7 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L7 | `history[]` is every message of the thread that is not in this send's `messages[]` and not queued, in order, also agent messages written after an earlier delivery. | "The conversation so far" (D 2.15). A redelivery then includes the agent's own partial replies. |
 | L8 | The payload's and the state's `video.title` is the file name with its extension. | One title everywhere, as the header shows it (D 4.1). Replaces proto-2's D23. |
 | L9 | Store files start at `schemaVersion` 1 again. The prototypes' data is never migrated. | Different support folders; the spec asks for no migration. |
-| L10 | The agent-control icon is left out of screenshots, unless `--with-control-icon` is given. | proto-2's D28: the agent that takes a screenshot holds the lease. The option is an addition to the contract, so an agent can still prove the icon shows. |
+| L10 | The agent-control icon shows in screenshots by default, as the person sees the window. `screenshot --hide-agent-indicator` leaves it out. | The maintainer's decision, which replaces proto-2's D28 (the icon left out unless `--with-control-icon`). The option is an addition to the contract. |
 | L11 | Theme resolution lives in `ReviewCore/Theme/`, theme files in `ReviewStore`, the watch and the `Palette` in the app. The built-in themes are JSON files in `Packaging/Themes/`, copied into the bundle's resources. | The spec keeps eight targets and wants the resolution unit-tested without the app, on Linux. Plain files in the bundle avoid SwiftPM resource bundles and are examples for user themes. |
 | L12 | Settings live in `settings.json`: the pinned theme (`null` follows the system), the overrides, the sidebar width. `theme set system` unpins. The app watches it beside `Themes/`. | The contract has one `theme set`; one word must return to the default (D 5.4). Overrides are edited in the file, so the file must reload. |
 | L13 | Thread state with no person message (General with only agent messages) is no state; General has no pin. | D 3.9 defines state from person messages only. General has no keyframe to pin. |
