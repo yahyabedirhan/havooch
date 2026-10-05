@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The stage: the video on its black letterbox, the layer that takes the
 /// mouse and shows regions, the comment box over it while a comment is
-/// written, and the notices of what the agent says. A click on the frame plays or pauses; a drag draws a region.
+/// written, the threads on the frame, and the notices of what the agent
+/// says. A click on the frame plays or pauses; a drag draws a region.
 struct StageView: View {
     let model: AppModel
 
@@ -23,6 +24,8 @@ struct StageView: View {
                 PlayerSurface(player: model.engine.player)
                 // Above the picture, which takes no events itself.
                 RegionOverlay(model: model, geometry: geometry)
+                // The threads on this frame: outlines and badges.
+                FrameMarks(model: model, geometry: geometry)
                 if let draft = model.draft {
                     composer(draft, geometry: geometry, stage: proxy.size)
                 }
@@ -32,6 +35,9 @@ struct StageView: View {
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.2), value: model.draft == nil)
         }
         .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
+        // Where a click is on the stage, which closes the popover by its own
+        // gestures; a click anywhere else is outside it (`OutsideClicks`).
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.stageArea = $0 }
         .padding([.top, .horizontal], Metrics.gutter)
         .accessibilityLabel("Video")
     }
@@ -48,8 +54,9 @@ struct StageView: View {
                 .offset(x: origin.x, y: origin.y)
                 .transition(arrival(from: Self.side(of: rect, from: origin, box: boxSize)))
         } else {
+            let fraction = model.engine.duration > 0 ? draft.time / model.engine.duration : 0
             let place = Composer.placement(
-                fraction: model.engine.duration > 0 ? draft.time / model.engine.duration : 0,
+                playhead: Composer.playhead(fraction: fraction, track: model.trackArea, stage: model.stageArea),
                 stageWidth: stage.width
             )
             Composer(model: model, draft: draft, notch: place.notch)

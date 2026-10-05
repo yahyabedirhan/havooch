@@ -69,6 +69,11 @@ struct ControlServerTests {
             )
         }
 
+        func openPopover(text: String, region: Region?) throws(AppRefusal) -> StateReport.Popover {
+            try record("comment open \(text)\(region.map { " on \($0.text)" } ?? "")")
+            return StateReport.Popover(thread: review.nextThreadNumber, time: time, text: text, region: region)
+        }
+
         func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message {
             let messageID = try self.id(id)
             let message = try change("comment edit \(id) \(text)") { review throws(ReviewRefusal) in try review.edit(messageID, text: text) }
@@ -280,6 +285,24 @@ struct ControlServerTests {
             "comment add In general at the player's time on thread 0", "comment add Follow-up at the player's time on thread t-abcdef01-1",
             "comment edit m-abcdef01-1 Slower", "comment delete m-abcdef01-2", "comment delete m-abcdef01-2",
         ])
+    }
+
+    @Test("comment open reaches the app with its words and region, and answers with the thread number and the time")
+    func commentOpen() async throws {
+        app.time = 12.5
+        #expect(await answer(.commentOpen(text: "")).reply == .done("popover open on #1 at 0:12.5\n"))
+        let region = ControlRequest.Rectangle(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
+        #expect(await answer(.commentOpen(text: "This box", region: region)).reply
+            == .done("popover open on #1 at 0:12.5 on the region 0.25,0.2,0.3,0.25\n"))
+        let opened = try object(await answer(.commentOpen(text: "Again"), json: true).reply.output)
+        let popover = try #require(opened["popover"] as? [String: Any])
+        #expect(popover["thread"] as? Int == 1)
+        #expect(popover["text"] as? String == "Again")
+        #expect(popover["region"] is NSNull)
+        // Numbers that aren't a region are refused before the app is asked.
+        let outside = ControlRequest.Rectangle(x: 0.9, y: 0, w: 0.5, h: 0.5)
+        #expect(await answer(.commentOpen(text: "", region: outside)).reply.ok == false)
+        #expect(app.calls == ["comment open ", "comment open This box on 0.25,0.2,0.3,0.25", "comment open Again"])
     }
 
     @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")

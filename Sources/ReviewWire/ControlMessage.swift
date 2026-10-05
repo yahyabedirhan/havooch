@@ -43,6 +43,7 @@ public struct ControlMessage: Equatable, Sendable {
             )
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
+        case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
         case .commentEdit(let id, let text): wire = Wire(command: "comment.edit", id: id, text: text)
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
@@ -122,6 +123,8 @@ public struct ControlMessage: Equatable, Sendable {
                 throw .unreadable("the control command `comment.add` needs its `at` to be 0 or more")
             }
             return .commentAdd(text: try field(wire.text, "text", of: wire), at: wire.at, region: wire.region, thread: wire.thread)
+        case "comment.open":
+            return .commentOpen(text: wire.text ?? "", region: wire.region)
         case "comment.edit":
             return .commentEdit(id: try field(wire.id, "id", of: wire), text: try field(wire.text, "text", of: wire))
         case "comment.delete":

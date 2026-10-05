@@ -9,8 +9,6 @@ enum Metrics {
     static let railWidthRange: ClosedRange<CGFloat> = 300...460
     /// The space around the stage and beside the timeline.
     static let gutter: CGFloat = 12
-    /// How far the composer's pointer is inset from the stage's sides.
-    static let laneInset: CGFloat = 4
     static let stageCorner: CGFloat = 12
     /// The height of the player bar under the stage and of the sidebar's
     /// footer, so the two meet on one line across the window (D 4.9).

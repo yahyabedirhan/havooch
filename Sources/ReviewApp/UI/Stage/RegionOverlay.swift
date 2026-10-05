@@ -2,10 +2,11 @@ import ReviewCore
 import SwiftUI
 
 /// The layer above the picture that takes the mouse. A click plays or
-/// pauses. A drag draws a rectangle, as Cmd+Shift+4 does, with no drawing
-/// mode: the video pauses, and letting go opens the comment box beside the
-/// rectangle. The layer also shows the region of the comment being written
-/// and of the selected comment.
+/// pauses, or closes an open popover as a click outside it. A drag draws a
+/// rectangle, as Cmd+Shift+4 does, with no drawing mode: the video pauses,
+/// the rectangle shows its size in the frame's pixels while it's drawn
+/// (D 2.4), and letting go opens the comment popover beside it. The layer
+/// also shows the region of the message in the popover.
 struct RegionOverlay: View {
     let model: AppModel
     let geometry: VideoFrameGeometry
@@ -24,26 +25,37 @@ struct RegionOverlay: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(draw)
-            // One frame for the rectangle being drawn and the region shown,
-            // so letting go hands the rectangle to the comment box in place
-            // instead of fading one frame out and another in.
+            // One frame for the rectangle being drawn and the popover's
+            // region, so letting go hands the rectangle to the popover in
+            // place instead of fading one frame out and another in.
             if let shown = drawn {
-                RegionFrame(rect: shown.rect, within: geometry.frame, isDraft: shown.isDraft, pin: shown.pin)
+                RegionFrame(rect: shown.rect, within: geometry.frame, label: shown.label)
                     .transition(.opacity)
             }
         }
-        // Only a change of the shown region animates; the rectangle being
-        // drawn follows the pointer as it moves.
-        .animation(.smooth(duration: 0.15), value: model.shownRegion)
+        // Only a change of the popover's region animates; the rectangle
+        // being drawn follows the pointer as it moves.
+        .animation(.smooth(duration: 0.15), value: model.draft?.region)
     }
 
-    /// The rectangle to draw: the one being drawn, else the shown region.
-    private var drawn: (rect: CGRect, isDraft: Bool, pin: (number: Int, state: MessageState)?)? {
+    /// The rectangle to draw: the one being drawn, with its size, else the
+    /// region of the message in the popover.
+    private var drawn: (rect: CGRect, label: String?)? {
         if let drag, model.isDrawingRegion {
-            return (geometry.rect(from: drag.start, to: drag.current), true, nil)
+            let rect = geometry.rect(from: drag.start, to: drag.current)
+            return (rect, Self.size(of: rect, within: geometry.frame, video: model.engine.videoSize))
         }
-        guard let shown = model.shownRegion else { return nil }
-        return (geometry.rect(of: shown.region), shown.number == nil, shown.number.map { (number: $0, state: shown.state ?? .queued) })
+        guard let region = model.draft?.region else { return nil }
+        return (geometry.rect(of: region), nil)
+    }
+
+    /// `412 × 236`: the rectangle `rect` on a picture shown at `frame`, in
+    /// the pixels of a video `video` in size, as the crop will be.
+    static func size(of rect: CGRect, within frame: CGRect, video: CGSize) -> String? {
+        guard frame.width > 0, frame.height > 0, video.width > 0, video.height > 0 else { return nil }
+        let width = Int((rect.width / frame.width * video.width).rounded())
+        let height = Int((rect.height / frame.height * video.height).rounded())
+        return "\(width) × \(height)"
     }
 
     private var draw: some Gesture {
@@ -67,16 +79,14 @@ struct RegionOverlay: View {
     }
 }
 
-/// A region on the picture: the rest of the picture dimmed, the rectangle
-/// outlined in the accent colour, and the thread's pin on its corner.
+/// The region being drawn or written about: the rest of the picture
+/// dimmed, the rectangle outlined, and while it's drawn its size under it.
 private struct RegionFrame: View {
     let rect: CGRect
     /// The picture: only it is dimmed, not the letterbox.
     let within: CGRect
-    /// A rectangle being drawn or written about dims the picture more than
-    /// a queued message's, which is there to be looked at.
-    let isDraft: Bool
-    var pin: (number: Int, state: MessageState)?
+    /// The rectangle's size in the frame's pixels, while it's drawn.
+    let label: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -85,7 +95,34 @@ private struct RegionFrame: View {
                 path.addRect(within)
                 path.addRect(rect)
             }
-            .fill(palette[.regionDim].opacity(isDraft ? 1 : 0.76), style: FillStyle(eoFill: true))
+            .fill(palette[.regionDim], style: FillStyle(eoFill: true))
+            RegionOutline(rect: rect)
+            if let label {
+                Text(label)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(palette[.sizeLabel])
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(palette[.regionDim], in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .fixedSize()
+                    // Under the rectangle's lower left corner, where the pointer isn't.
+                    .offset(x: rect.minX, y: rect.maxY + 6)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement()
+        .accessibilityLabel(label.map { "Region of the new message, \($0) pixels" } ?? "Region of the new message")
+    }
+}
+
+/// A region's outline: the outline colour over a thin shadow line, so the
+/// edge reads on any picture.
+struct RegionOutline: View {
+    let rect: CGRect
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
             Rectangle()
                 .strokeBorder(palette[.shadow], lineWidth: 1)
                 .frame(width: rect.width + 6, height: rect.height + 6)
@@ -94,13 +131,7 @@ private struct RegionFrame: View {
                 .strokeBorder(palette[.regionOutline], lineWidth: 2)
                 .frame(width: rect.width + 4, height: rect.height + 4)
                 .offset(x: rect.minX - 2, y: rect.minY - 2)
-            if let pin {
-                MarkerPin(number: pin.number, state: pin.state, isSelected: true)
-                    .offset(x: rect.minX - MarkerPin.size / 2, y: rect.minY - MarkerPin.size / 2)
-            }
         }
         .allowsHitTesting(false)
-        .accessibilityElement()
-        .accessibilityLabel(pin.map { "Region of comment \($0.number)" } ?? "Region of the new comment")
     }
 }

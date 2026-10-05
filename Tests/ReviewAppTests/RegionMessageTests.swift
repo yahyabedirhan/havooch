@@ -232,7 +232,7 @@ struct RegionMessageTests {
         #expect(!model.isDrawingRegion)
         #expect(model.draft?.region == region)
         #expect(model.draft?.text == "")
-        #expect(model.shownRegion == AppModel.ShownRegion(region: region, number: nil))
+        #expect(model.state().popover?.region == region)
         #expect(!model.engine.isPlaying)
     }
 
@@ -248,7 +248,6 @@ struct RegionMessageTests {
         #expect(!model.isDrawingRegion)
         model.endRegion(region)
         #expect(model.draft == nil)
-        #expect(model.shownRegion == nil)
 
         // With the comment box open: the box and the region go, and nothing is queued.
         model.beginRegion()
@@ -256,7 +255,7 @@ struct RegionMessageTests {
         model.draft?.text = "never mind"
         #expect(model.escape())
         #expect(model.draft == nil)
-        #expect(model.shownRegion == nil)
+        #expect(model.state().popover == nil)
         #expect(model.state().queue.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: support.appendingPathComponent("videos").path))
 
@@ -284,50 +283,77 @@ struct RegionMessageTests {
         await eventually { !model.engine.isPlaying }
         #expect(!model.engine.isPlaying)
 
-        // While the comment box is open, a click leaves the frame where it is.
+        // While the popover is open, a click on the frame is a click
+        // outside it: the popover closes and the frame stays where it is.
         model.startDraft()
         model.clickFrame()
+        #expect(model.draft == nil)
         #expect(!model.engine.isPlaying)
     }
 
-    @Test("drawing again while the comment box is open moves the region and keeps the words")
+    @Test("drawing again while the popover is open is a click outside it: words are queued on their region, an empty popover just closes")
     func redraw() async throws {
         defer { cleanUp() }
         let model = try await model()
         let first = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
         let second = try Region(x: 0.5, y: 0.5, w: 0.2, h: 0.2)
+        let third = try Region(x: 0.1, y: 0.1, w: 0.2, h: 0.2)
         model.beginRegion()
         model.endRegion(first)
-        model.draft?.text = "this one"
+        // An empty popover goes with its region; the new one opens on the new region.
         model.beginRegion()
+        #expect(model.draft == nil)
         model.endRegion(second)
-        #expect(model.draft == AppModel.Draft(time: 0, text: "this one", region: second))
-        // C with the box open changes nothing.
+        #expect(model.draft == AppModel.Draft(time: 0, text: "", region: second))
+        // C with the popover open changes nothing.
         model.startDraft()
         #expect(model.draft?.region == second)
+
+        model.draft?.text = "this one"
+        model.beginRegion()
+        model.endRegion(third)
+        #expect(model.draft == AppModel.Draft(time: 0, text: "", region: third))
+        await eventually { model.state().queue.count == 1 }
+        let queued = try #require(model.state().threads.last?.messages.last)
+        #expect(queued.text == "this one")
+        #expect(queued.region == second)
     }
 
-    @Test("a selected thread's region shows on the frame while the player stands on its frame")
-    func shownRegion() async throws {
+    @Test("the threads on the frame on screen show their region outlines and their badge, and only on that frame")
+    func frameMarks() async throws {
         defer { cleanUp() }
         let model = try await model()
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
+        let other = try Region(x: 0.6, y: 0.6, w: 0.2, h: 0.2)
         let plain = try await model.addMessage(text: "Too fast", at: 3)
         let pointed = try await model.addMessage(text: "This box", at: 12.5, region: region)
-        // The new thread is selected and the player is on its frame.
-        #expect(model.shownRegion == AppModel.ShownRegion(region: region, number: 2, state: .queued))
+        _ = try await model.addMessage(text: "And this one", at: 12.5, region: other)
+        _ = try await model.addMessage(text: "The whole frame", at: 12.5)
+        let pointedID = try #require(ItemID(pointed.thread.id))
+        // The player is on #2's frame: one badge, two outlines.
+        #expect(model.frameMarks == [AppModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
 
         model.select(try #require(ItemID(plain.thread.id)))
         await eventually { model.engine.time == 3 }
-        #expect(model.shownRegion == nil)
+        #expect(model.frameMarks.map(\.number) == [1])
+        #expect(model.frameMarks.first?.regions == [])
 
-        model.select(try #require(ItemID(pointed.thread.id)))
-        await eventually { model.engine.time == 12.5 }
-        #expect(model.shownRegion?.region == region)
-
-        // Another frame isn't the one the region was drawn on.
+        // Another frame isn't the one the threads were written on.
         try await model.seek(to: 14)
-        #expect(model.shownRegion == nil)
+        #expect(model.frameMarks.isEmpty)
+        // One frame later is another frame too.
+        try await model.seek(to: 12.5 + model.engine.frameDuration)
+        #expect(model.frameMarks.isEmpty)
+    }
+
+    @Test("the size of a rectangle being drawn is in the video's pixels, at any size the picture is shown at")
+    func sizeLabel() {
+        let video = CGSize(width: 1920, height: 1080)
+        let small = CGRect(x: 0, y: 0, width: 960, height: 540)
+        #expect(RegionOverlay.size(of: CGRect(x: 10, y: 10, width: 206, height: 118), within: small, video: video) == "412 × 236")
+        let large = CGRect(x: 100, y: 0, width: 1920, height: 1080)
+        #expect(RegionOverlay.size(of: CGRect(x: 300, y: 10, width: 412, height: 236), within: large, video: video) == "412 × 236")
+        #expect(RegionOverlay.size(of: small, within: small, video: .zero) == nil)
     }
 
     @Test("deleting the only message, on a region, removes its crop, and its thread's keyframe with the thread")

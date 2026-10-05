@@ -276,8 +276,8 @@ Sources/
   ReviewApp/
     VideoReviewApp.swift           @main; the one window; the menu commands
     AppModel.swift                 the orchestrator; every action a person or an operator can take
-    Draft.swift                    the open popover's text, region, moment and thread (view state, never saved);
-                                   until #29 it is `AppModel.Draft` (time, text, region)
+    Draft.swift                    `AppModel.Draft`: the open popover's time, text and region (view state, never
+                                   saved; its thread number is `AppModel.draftThreadNumber`); `PopoverClose`; `FrameMark`
     ReviewDesk.swift               change a review, save it, publish it
     ListenerQueue.swift            open waits and asks; delivery; payload assembly; presence; the listener's answers
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
@@ -312,10 +312,12 @@ Sources/
       Stage/
         StageView.swift            the video, the overlay, the popover, the notices
         FrameGeometry.swift        view points to normalized frame coordinates and back (pure)
-        RegionOverlay.swift        draw a rectangle with its size label; takes the mouse
+        RegionOverlay.swift        draw a rectangle with its size label; takes the mouse; the popover's region
         FrameMarks.swift           each thread's region outlines and number badge on the current frame
-        ThreadPopover.swift        the popover: number, time, conversation, field; drag and resize
-        PopoverPlacement.swift     where a popover opens for a region or a moment, kept inside the stage (pure)
+        OutsideClicks.swift        a click in the window outside the stage closes the popover as a click outside
+        Composer.swift             the comment popover (#29): `#3 · 0:12`, ×, a field that fills it, quiet hints;
+                                   where it opens beside a region or above the bar's playhead (pure)
+        ThreadPopover.swift        the popover: number, time, conversation, field; drag and resize (#31, from Composer)
         Notices.swift              the brief notices that name the thread
       PlayerBar/
         PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button
@@ -375,6 +377,7 @@ As proto-2, with the spec's names and outputs:
 | `comment add <text> [--at] [--region] [--thread]` | `m-f92cbb2a-3 queued on #2 at 0:12` (`… on the region 0.25,0.2,0.3,0.25`) | `{"message": {…}, "thread": {"id", "number"}}` |
 | `comment edit <message-id> <text>` | `m-f92cbb2a-3 edited` | `{"message": {…}}` |
 | `comment delete <message-id>` | `m-f92cbb2a-3 deleted` | `{"deleted": "m-…"}` |
+| `comment open [<text>] [--region]` (L22) | `popover open on #1 at 0:12.5` (`… on the region 0.25,0.2,0.3,0.25`) | `{"popover": {"thread", "time", "text", "region"}}` |
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
 | `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks; then `left out: <reason>` per file left out | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}], "problems": ["…"]}` |
@@ -567,9 +570,10 @@ public struct SupportLayout: Sendable {
 | Method | Rules it owns | Refuses |
 |---|---|---|
 | `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, remember as recent; closes any popover | a file AVPlayer cannot play; a review that does not read |
-| `play()`, `pause()`, `seek(seconds)`, `step(frames)` | each one is a **moment change**: it first calls `closePopover(.momentChanged)` (D 2.2, D 2.3) | no video; a time outside the video |
-| `startMessage(region?)` | C, the Comment button, the end of a drag: pause, fix the frame time, open the popover on the thread at that frame (or the next number) with an empty draft | no video |
-| `closePopover(reason)` | `.clickOutside`: queue the text; `.discard` (× or Escape): drop it; `.momentChanged`: queue text at its own time and region, drop an empty draft and its region. An empty draft is only closed in every case (D 1.4) | |
+| `play()`, `seek(seconds)`, `togglePlay()` to play, `scrub`, `skip`, `step(frames)`, `select(thread)` with a frame, `addMessage` that seeks, `open(url)` | each one is a **moment change**: it first calls `closePopover(.momentChanged)` (D 2.2, D 2.3); `seek` and `open` wait until those words are queued. Pausing is none (L23) | no video; a time outside the video |
+| `startDraft(region?)` | C, the Comment button, the end of a drag: pause, fix the frame time, open the popover on the thread at that frame (or the next number) with an empty draft. C over an open popover does nothing; a new region closes it as a click outside (L24) | no video |
+| `closePopover(reason)` | `.clickOutside`: queue the text; `.discard` (× or Escape): drop it; `.momentChanged`: queue text at its own time and region, drop an empty draft and its region. An empty draft is only closed in every case (D 1.4). A click on the frame, the start of a drag, and `OutsideClicks` are clicks outside | |
+| `openPopover(text, region?)` | `comment open` (L22): an open popover closes as a click outside, then `startDraft(region)` with `text` in the field | no video |
 | `submitDraft()` | Return in the field: on a thread with an open question the text is an `answer` at once (D 2.16), else it is queued; the popover stays open on its thread | empty text |
 | `addMessage(text, at?, region?, thread?)` | the CLI's path: pause, seek to `at`, snap to the frame, write the images, write the message | no video; empty text; bad time, region or thread |
 | `editMessage`, `deleteMessage` | through `ReviewDesk`; delete removes the crop, and the keyframe when the thread goes | not queued; unknown id |
@@ -581,7 +585,7 @@ public struct SupportLayout: Sendable {
 | `setContextNote(text)` | as proto-2 | no video |
 | `setTheme(name)` | through `ThemeDesk`; `system` unpins | unknown theme |
 
-- `Draft` is view state only: `thread` (an id, or the number a new thread will take), `time`, `region`, `text`. It is never saved (D 1.4). `state --json` reports it as `popover`.
+- `Draft` is view state only: `time`, `region`, `text`. The thread it writes to is computed (`draftThreadNumber`: the thread at that frame, or the number a new thread will take). It is never saved (D 1.4). `state --json` reports it as `popover`, with that number.
 - **Frame time** (L2): `PlayerEngine.frameTime(of: t)` is the start of the frame shown at `t` (from the track's nominal frame rate), raised to the next millisecond, as proto-2 raised a comment's time (D46). Every thread time goes through it, from the UI and from `--at`. The frame length comes from the nominal rate snapped to a whole or an NTSC rate (L20).
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
 - `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `written`, `undelivered`, `isDelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
@@ -622,6 +626,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 |---|---|---|
 | Player bar | proto-1's bar: play/pause, `m:ss / m:ss`, speed, the timeline with ticks and labels, the Comment button. One `ThreadPin` per thread (not General): a rounded square when any message has a region, else a circle; the colour is the thread state's token; hover shows `#3 · 0:12 · 2 regions · Working` (`1 region`, `no region`). A queued pin is a ring; a later state fills it, with the state's glyph in `textOnAccent`. A click calls `select`. Its height is `Metrics.barHeight`, which the sidebar footer shares. | D 1.1, D 1.3, D 1.6 |
 | Region | proto-2's drag selection with proto-1's live `412 × 236` size label in frame pixels; the popover header names the thread number it writes to. | D 2.1, D 2.4 |
+| Comment popover (#29) | proto-2's `Composer` with 8 pt padding, a field across its whole width, `#3 · 0:12` (whole seconds, as the bar) and ×, quiet `textTertiary` key hints. On a moment its notch points at the player bar's playhead (`trackArea`, L25); on a region it sits beside the rectangle. | D 1.2, D 1.7, D 1.8 |
 | Frame marks | On the current frame, while paused or playing: each thread's region outlines and one number badge per thread (at its first region's corner, or the frame's top-left corner for a thread without a region). A badge click is `openThread`. Nothing opens by itself. | D 2.6, D 2.11 |
 | Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame. Opens at its kept frame, else at `PopoverPlacement` beside the region or above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |
 | Sidebar | General first, then threads in time order. A collapsed `ThreadRow`: number, keyframe thumbnail, state, the start of the last message. One expanded thread at a time: keyframe header, `MessageBubble`s in order (avatar, name, time, bubble; a region message shows its crop), edit and delete on queued messages, a field at the bottom (answer at once when a question is open, else queue). Resizable between `Metrics.sidebarMin` and `sidebarMax`, width kept in settings, proto-1's animation for open and close. | D 3.1 to D 3.7, D 4.5, D 5.10 |
@@ -888,3 +893,7 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L19 | A message's pictures are written under a pending name in `frames/` and renamed to `frames/<thread-id>.png` and `crops/<message-id>.png` once the review gave the ids. | The ids come from the review's counters, and a listener's `reply` written while the frame is read takes the next message number. Predicted names could be taken or overwritten; a rename on the main actor right after the write can't. |
 | L20 | `PlayerEngine` snaps the track's nominal frame rate to a whole rate or an NTSC rate (n × 1000 / 1001) when it is within 0.001 of one. | AVFoundation gives the rate as a `Float` a hair off (29.999998 for 30), which put 10.0 s in the frame before. |
 | L21 | `--thread 0` with `--at` or `--region` is refused (`noFrame`); without `--thread` a message always has a frame time. | General has no keyframe, so a time or a region on it means nothing. |
+| L22 | `comment open [<text>] [--region x,y,w,h]` opens the comment popover at the player's frame, as C or a drawn rectangle does. An operator command, an addition to the contract. | The CLI cannot click or draw. Without it the popover, a drawn region and the close rules can't be shown, checked or screenshotted in the real app. |
+| L23 | Pausing is no change of the moment: the popover stays open. | The popover only opens on a paused frame, so a pause changes no frame (D 2.3 lists seek, scrub, play, timeline click, frame step). |
+| L24 | A drag on the frame with the popover open is a click outside it: the words are queued on their region, or an empty popover goes, and the new rectangle opens a new popover. | D 1.4 for every click outside. proto-2 moved the open popover to the new region instead. |
+| L25 | The popover on a moment points at the playhead on the player bar's track, whose frame in the window the bar reports (`AppModel.trackArea`). | The bar's track sits between its buttons, not under the stage's whole width. |

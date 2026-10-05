@@ -1,7 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `video-review comment add | edit | delete`, `context set`, `send` and
+/// `video-review comment add | open | edit | delete`, `context set`, `send` and
 /// `thread answer`.
 enum CommentCommands {
     static let commands: [Command] = [
@@ -18,16 +18,16 @@ enum CommentCommands {
                 }
                 at = seconds
             }
-            var region: ControlRequest.Rectangle?
-            if let numbers = arguments.options["--region"] {
-                guard let rectangle = ControlRequest.Rectangle(numbers) else {
-                    throw UsageError(
-                        "`\(numbers)` isn't a region; write x,y,w,h as four numbers from 0 to 1, from the frame's top-left corner (`0.25,0.2,0.3,0.25`)"
-                    )
-                }
-                region = rectangle
-            }
+            let region = try CommentCommands.region(arguments)
             return .send(.commentAdd(text: text, at: at, region: region, thread: arguments.options["--thread"]))
+        },
+        Command(
+            name: "comment open", synopsis: "comment open [<text>] [--region x,y,w,h]",
+            summary: "open the comment popover at the player's frame, as C or a drawn rectangle does, with <text> in its field; a seek or play then closes it by the popover's rules",
+            valuedOptions: ["--region"]
+        ) { arguments, _ throws(UsageError) in
+            guard arguments.words.count <= 1 else { throw UsageError("unexpected `\(arguments.words[1])`") }
+            return .send(.commentOpen(text: arguments.words.first ?? "", region: try CommentCommands.region(arguments)))
         },
         Command(name: "comment edit", synopsis: "comment edit <message-id> <text>", summary: "change a queued message's text") {
             arguments, _ throws(UsageError) in
@@ -57,4 +57,15 @@ enum CommentCommands {
             return .send(.threadAnswer(thread: words[0], text: words[1]))
         },
     ]
+
+    /// The `--region x,y,w,h` written, if any.
+    private static func region(_ arguments: Arguments) throws(UsageError) -> ControlRequest.Rectangle? {
+        guard let numbers = arguments.options["--region"] else { return nil }
+        guard let rectangle = ControlRequest.Rectangle(numbers) else {
+            throw UsageError(
+                "`\(numbers)` isn't a region; write x,y,w,h as four numbers from 0 to 1, from the frame's top-left corner (`0.25,0.2,0.3,0.25`)"
+            )
+        }
+        return rectangle
+    }
 }

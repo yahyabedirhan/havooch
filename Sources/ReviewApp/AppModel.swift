@@ -21,26 +21,6 @@ final class AppModel: AppControlling {
         var contentHash: String
     }
 
-    /// The message still in the popover: view state only, never kept. It
-    /// has a frame time, and no id and no keyframe until it's queued.
-    struct Draft: Equatable {
-        var time: Double
-        var text: String
-        /// The rectangle the person drew; nil for the whole frame.
-        var region: Region?
-    }
-
-    /// A region drawn on the frame, and the thread it belongs to.
-    struct ShownRegion: Equatable {
-        var region: Region
-        /// The thread's number, as on its pin; nil for the message still
-        /// in the popover.
-        var number: Int?
-        /// The thread's state, which its pin is drawn by; nil for the
-        /// message still in the popover.
-        var state: MessageState?
-    }
-
     /// Why the last thing the person asked for didn't work.
     struct Problem: Equatable {
         var title: String
@@ -80,6 +60,14 @@ final class AppModel: AppControlling {
     private(set) var notices: [Notice] = []
     /// The threads with an agent message the person hasn't looked at.
     private(set) var unread: Set<ThreadID> = []
+
+    /// The stage in the window, from its top-left corner, as it was last
+    /// laid out. A click on the stage closes the popover by the stage's own
+    /// gestures; a click anywhere else in the window is outside it.
+    @ObservationIgnored var stageArea: CGRect = .zero
+    /// The player bar's track in the window, from its top-left corner: the
+    /// popover on a moment points at the playhead on it.
+    var trackArea: CGRect = .zero
 
     @ObservationIgnored private let layout: SupportLayout
     /// The message the popover is queueing: its pictures are being
@@ -147,6 +135,10 @@ final class AppModel: AppControlling {
         // video shut, and the one that was open stays open.
         // The file's name with its extension, the same in the header, the state and the payload.
         let title = url.lastPathComponent
+        // Another video is a change of the moment: words in the popover are
+        // queued on the video they were written on, before it goes.
+        closePopover(.momentChanged)
+        await committing?.value
         let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
         try await engine.load(url)
         // The review as it is now, not as it was before the load: a
@@ -193,6 +185,7 @@ final class AppModel: AppControlling {
 
     func play() throws(AppRefusal) {
         try needVideo()
+        closePopover(.momentChanged)
         engine.play()
     }
 
@@ -204,6 +197,10 @@ final class AppModel: AppControlling {
     func seek(to seconds: Double) async throws(AppRefusal) {
         try needVideo()
         try needInside(seconds)
+        closePopover(.momentChanged)
+        // `seek` answers once the popover's words are in the queue, so
+        // `state` after it shows them.
+        await committing?.value
         await engine.seek(to: seconds)
     }
 
@@ -240,7 +237,12 @@ final class AppModel: AppControlling {
             throw AppRefusal(error.line)
         }
         engine.pause()
-        if let time { await engine.seek(to: time) }
+        if let time {
+            // The words in the popover are queued at their own frame first.
+            closePopover(.momentChanged)
+            await committing?.value
+            await engine.seek(to: time)
+        }
         let written = try await queueMessage(text: text, time: time, region: region, thread: thread?.id)
         guard let video else { throw Self.noVideo }
         return (
@@ -340,12 +342,7 @@ final class AppModel: AppControlling {
                 )
             },
             player: .init(time: engine.time, playing: engine.isPlaying),
-            popover: draft.map {
-                .init(
-                    thread: review?.thread(atFrame: $0.time)?.number ?? review?.nextThreadNumber,
-                    time: $0.time, text: $0.text, region: $0.region
-                )
-            },
+            popover: draft.map { .init(thread: draftThreadNumber, time: $0.time, text: $0.text, region: $0.region) },
             threads: threads.map { StateReport.Thread($0, contentHash: hash, layout: layout) },
             queue: review?.queue.map(\.id.text) ?? [],
             sends: review.map { review in sends.map { StateReport.Send($0, in: review) } } ?? []
@@ -437,17 +434,28 @@ final class AppModel: AppControlling {
         return layout.crop(message.id, of: video.contentHash)
     }
 
-    /// The region to draw on the frame: the one of the message in the
-    /// popover, else the latest region of the selected thread while the
-    /// player stands on that thread's frame, paused. Once the video moves
-    /// on, the frame isn't the one the region was drawn on.
-    var shownRegion: ShownRegion? {
-        if let draft { return draft.region.map { ShownRegion(region: $0, number: nil) } }
-        guard let selection, !engine.isPlaying, let thread = desk.review?.thread(selection), let time = thread.time,
-              let region = thread.messages.last(where: { $0.region != nil })?.region,
-              abs(engine.time - time) < engine.frameDuration / 2
-        else { return nil }
-        return ShownRegion(region: region, number: thread.number, state: thread.state)
+    /// The threads on the frame on screen, paused or playing: each one's
+    /// region outlines and number badge (D 2.6). Once the video moves on,
+    /// the frame isn't the one they were written on, and they go.
+    var frameMarks: [FrameMark] {
+        guard video != nil else { return [] }
+        let frame = engine.frameTime(of: engine.time)
+        // A thousandth of a second: thread times are kept in milliseconds.
+        return frameThreads.compactMap { thread in
+            guard let time = thread.time, abs(time - frame) < 0.0005 else { return nil }
+            return FrameMark(
+                thread: thread.id, number: thread.number, state: thread.state ?? .queued,
+                regions: thread.messages.compactMap(\.region)
+            )
+        }
+    }
+
+    /// The number of the thread the popover writes to: the thread of its
+    /// frame, or the number a new thread will take (D 2.1). Nil while the
+    /// popover is closed.
+    var draftThreadNumber: Int? {
+        guard let draft, let review = desk.review else { return nil }
+        return review.thread(atFrame: draft.time)?.number ?? review.nextThreadNumber
     }
 
     // MARK: - What an action needs
@@ -483,10 +491,16 @@ final class AppModel: AppControlling {
 
     // MARK: - The person's gestures
 
-    /// Space, K, a click on the frame, the play button.
+    /// Space, K, a click on the frame, the play button. Play is a change
+    /// of the moment: the popover closes by its rules first.
     func togglePlay() {
         guard video != nil else { return }
-        if engine.isPlaying { engine.pause() } else { engine.play() }
+        if engine.isPlaying {
+            engine.pause()
+        } else {
+            closePopover(.momentChanged)
+            engine.play()
+        }
     }
 
     /// Left, Right, J and L: `seconds` back or forward, kept inside the video.
@@ -510,44 +524,54 @@ final class AppModel: AppControlling {
         move(to: seconds)
     }
 
+    /// Every move of the person's: a change of the moment, so the popover
+    /// closes by its rules before the player moves (D 2.2, D 2.3).
     private func move(to seconds: Double) {
         guard video != nil else { return }
+        closePopover(.momentChanged)
         let target = min(max(seconds, 0), engine.duration)
         Task { await engine.seek(to: target) }
     }
 
     /// C, Return and the Comment button: pauses and opens the popover at
     /// the frame on screen. With `region`, the rectangle the person drew:
-    /// the popover opens on that region, and one that's already open takes
-    /// the new region and keeps its words.
+    /// the popover opens on that region. C with the popover open changes
+    /// nothing; a new region closes the open popover as a click outside it
+    /// does, and opens on the region.
     func startDraft(region: Region? = nil) {
         guard video != nil else { return }
         if draft != nil {
-            guard let region else { return }
-            // The rectangle is on the frame on screen now.
-            draft?.region = region
-            draft?.time = engine.frameTime(of: engine.time)
-            return
+            guard region != nil else { return }
+            closePopover(.clickOutside)
         }
         engine.pause()
         draft = Draft(time: engine.frameTime(of: engine.time), text: "", region: region)
     }
 
-    /// Escape in the popover: the message and its region are dropped.
-    func cancelDraft() {
-        draft = nil
+    /// Closes the popover by `reason` (D 1.4, D 2.3): a click outside and
+    /// a change of the moment queue its words at its own frame and region;
+    /// the × and Escape drop them. A popover with no words only closes, and
+    /// its region goes with it. With no popover it does nothing.
+    func closePopover(_ reason: PopoverClose) {
+        guard let draft else { return }
+        self.draft = nil
+        guard reason != .discard, Self.hasWords(draft.text) else { return }
+        queue(draft)
     }
 
     /// A click on the frame: plays or pauses. While the popover is open it
-    /// does nothing: a message is about the frame on screen.
+    /// is a click outside the popover, which closes it and leaves the
+    /// video still.
     func clickFrame() {
-        if draft == nil { togglePlay() }
+        if draft == nil { togglePlay() } else { closePopover(.clickOutside) }
     }
 
     /// The pointer starts to drag on the frame: the video pauses, so the
-    /// rectangle is drawn on a still frame.
+    /// rectangle is drawn on a still frame. An open popover closes, as a
+    /// click outside it does.
     func beginRegion() {
         guard video != nil else { return }
+        closePopover(.clickOutside)
         engine.pause()
         isDrawingRegion = true
     }
@@ -561,8 +585,8 @@ final class AppModel: AppControlling {
         if let region { startDraft(region: region) }
     }
 
-    /// Escape: drops the rectangle being drawn, else the message in the
-    /// popover with its region. False when there was neither.
+    /// Escape: drops the rectangle being drawn, else the popover's words
+    /// with its region. False when there was neither.
     @discardableResult
     func escape() -> Bool {
         if isDrawingRegion {
@@ -570,15 +594,34 @@ final class AppModel: AppControlling {
             return true
         }
         guard draft != nil else { return false }
-        cancelDraft()
+        closePopover(.discard)
         return true
     }
 
-    /// Return in the popover: queues the draft on the thread of its frame.
-    /// A draft with no words stays open.
+    /// Return in the popover and its Queue button: queues the words on the
+    /// thread of the popover's frame, and the popover closes. A popover
+    /// with no words stays open.
     func commitDraft() {
         guard let draft, Self.hasWords(draft.text) else { return }
-        self.draft = nil
+        closePopover(.clickOutside)
+    }
+
+    /// `comment open`: the popover opens at the player's frame, on
+    /// `region` when there is one, with `text` in its field, as C or a
+    /// drawn rectangle opens it. An open popover closes first, as a click
+    /// outside it does.
+    func openPopover(text: String, region: Region?) throws(AppRefusal) -> StateReport.Popover {
+        try needVideo()
+        closePopover(.clickOutside)
+        startDraft(region: region)
+        draft?.text = text
+        guard let popover = state().popover else { throw Self.noVideo }
+        return popover
+    }
+
+    /// Queues the popover's words in a task, after the ones before it, so
+    /// the popover closes at once while the pictures are written.
+    private func queue(_ draft: Draft) {
         let before = committing
         commitsUnderWay += 1
         committing = Task {
@@ -618,6 +661,7 @@ final class AppModel: AppControlling {
         // Its conversation shows: the person sees what the agent said.
         unread.remove(id)
         engine.pause()
+        // A move to the thread's frame is a change of the moment.
         if let time = thread.time { move(to: time) }
     }
 

@@ -26,6 +26,9 @@ protocol AppControlling: AnyObject {
     func addMessage(
         text: String, at: Double?, region: Region?, thread: String?
     ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread)
+    /// Opens the comment popover at the player's frame, on `region` when
+    /// it has one, with `text` in its field, as C or a drawn rectangle does.
+    func openPopover(text: String, region: Region?) throws(AppRefusal) -> StateReport.Popover
     func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message
     func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message
     /// Sets the open video's context note, without the space around it,
@@ -200,16 +203,7 @@ final class ControlServer {
                 try await screenshotter.capture(to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator)
                 return done(path, Output(path: path), json)
             case .commentAdd(let text, let at, let rectangle, let thread):
-                // Numbers that aren't a region of the frame are refused
-                // before the app is asked for anything.
-                var region: Region?
-                if let rectangle {
-                    do throws(ReviewRefusal) {
-                        region = try Region(x: rectangle.x, y: rectangle.y, w: rectangle.w, h: rectangle.h)
-                    } catch {
-                        throw AppRefusal(error.line)
-                    }
-                }
+                let region = try Self.region(rectangle)
                 let added = try await app.addMessage(text: text, at: at, region: region, thread: thread)
                 let place = added.thread.time.map { " at \(TimeCode.text($0))" } ?? ""
                 let area = added.message.region.map { " on the region \($0.text)" } ?? ""
@@ -217,6 +211,11 @@ final class ControlServer {
                     "\(added.message.id) queued on #\(added.thread.number)\(place)\(area)",
                     Output(message: added.message, thread: Output.ThreadRef(id: added.thread.id, number: added.thread.number)), json
                 )
+            case .commentOpen(let text, let rectangle):
+                let popover = try app.openPopover(text: text, region: try Self.region(rectangle))
+                let thread = popover.thread.map { " on #\($0)" } ?? ""
+                let area = popover.region.map { " on the region \($0.text)" } ?? ""
+                return done("popover open\(thread) at \(TimeCode.text(popover.time))\(area)", Output(popover: popover), json)
             case .commentEdit(let id, let text):
                 let message = try app.editMessage(id, text: text)
                 return done("\(message.id) edited", Output(message: message), json)
@@ -298,6 +297,7 @@ final class ControlServer {
         var send: StateReport.Send?
         var answer: StateReport.Message?
         var theme: StateReport.Theme?
+        var popover: StateReport.Popover?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {
@@ -312,6 +312,17 @@ final class ControlServer {
         case .number(let number): "#\(number)"
         case .id(let id): "#\(id.number)"
         case nil: nil
+        }
+    }
+
+    /// The region `rectangle` names. Numbers that aren't a region of the
+    /// frame are refused before the app is asked for anything.
+    private static func region(_ rectangle: ControlRequest.Rectangle?) throws(AppRefusal) -> Region? {
+        guard let rectangle else { return nil }
+        do throws(ReviewRefusal) {
+            return try Region(x: rectangle.x, y: rectangle.y, w: rectangle.w, h: rectangle.h)
+        } catch {
+            throw AppRefusal(error.line)
         }
     }
 

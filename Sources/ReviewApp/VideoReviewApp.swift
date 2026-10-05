@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
         Shortcuts.install(for: model)
+        OutsideClicks.install(for: model)
         model.themes.followSystemAppearance()
         let server = ControlServer(
             socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,

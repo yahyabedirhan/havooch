@@ -36,6 +36,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// (a thread id, or a number of the open video, `0` for General) it's
     /// written on that thread.
     case commentAdd(text: String, at: Double?, region: Rectangle? = nil, thread: String? = nil)
+    /// `video-review comment open [<text>] [--region x,y,w,h]`: the comment
+    /// popover opened at the player's frame, as C or a drawn rectangle
+    /// opens it, on `region` when it has one, with `text` in its field. An
+    /// addition to the spec's contract: the popover and its region can be
+    /// shown, checked and screenshotted without a click.
+    case commentOpen(text: String, region: Rectangle? = nil)
     /// `video-review comment edit <message-id> <text>`: a queued message's
     /// new text.
     case commentEdit(id: String, text: String)
@@ -135,7 +141,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .themeSet: .operator
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
-        case .commentAdd, .commentEdit, .commentDelete, .send: .operator
+        case .commentAdd, .commentOpen, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }

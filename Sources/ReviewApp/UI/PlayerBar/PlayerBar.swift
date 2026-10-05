@@ -34,6 +34,9 @@ struct PlayerBar: View {
                 time: engine.time, duration: engine.duration, threads: model.frameThreads, selection: model.selection,
                 scrub: { model.scrub(to: $0) }, select: { model.select($0) }
             )
+            // Where the track is, for the comment popover's notch to point
+            // at the playhead from the stage above.
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.trackArea = $0 }
 
             Button {
                 model.startDraft()

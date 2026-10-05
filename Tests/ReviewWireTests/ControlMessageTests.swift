@@ -36,6 +36,7 @@ struct ControlMessageTests {
         .commentAdd(text: "This box", at: nil, region: .init(x: 0, y: 0, w: 1, h: 1)),
         .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1"), .commentAdd(text: "In general", at: nil, thread: "0"),
         .commentEdit(id: "m-f92cbb2a-1", text: "Slower"), .commentDelete(id: "m-f92cbb2a-1"),
+        .commentOpen(text: ""), .commentOpen(text: "This box", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .send, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
         .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
@@ -186,7 +187,7 @@ struct ControlMessageTests {
         ControlRequest.appOpen, .appQuit, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
-        .contextSet(text: "a"),
+        .commentOpen(text: "a"), .contextSet(text: "a"),
     ])
     func operatorRole(request: ControlRequest) {
         #expect(request.role == .operator)

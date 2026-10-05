@@ -208,7 +208,7 @@ struct MessageTests {
         model.startDraft()
         #expect(model.state().popover?.thread == 1)
         model.draft?.text = "never mind"
-        model.cancelDraft()
+        model.closePopover(.discard)
         #expect(model.draft == nil)
         #expect(model.state().queue.count == 1)
     }
@@ -319,16 +319,26 @@ struct MessageTests {
         #expect(PlayerEngine.exact(21.233).seconds == 21.233)
     }
 
-    @Test("the comment box stays inside the stage, with its notch on the playhead")
+    @Test("the comment popover stays inside the stage, with its notch on the player bar's playhead")
     func composerPlacement() {
-        let middle = Composer.placement(fraction: 0.5, stageWidth: 1000)
+        let middle = Composer.placement(playhead: 500, stageWidth: 1000)
         #expect(middle.leading == 500 - Composer.width / 2)
         #expect(middle.notch == Composer.width / 2)
-        let start = Composer.placement(fraction: 0, stageWidth: 1000)
+        let start = Composer.placement(playhead: 0, stageWidth: 1000)
         #expect(start.leading == 10)
         #expect(start.notch == 22)
-        let end = Composer.placement(fraction: 1, stageWidth: 1000)
+        let end = Composer.placement(playhead: 1000, stageWidth: 1000)
         #expect(end.leading == 1000 - Composer.width - 10)
         #expect(end.notch == Composer.width - 22)
+
+        // The track sits in the bar between its buttons, not under the
+        // stage's whole width: the playhead is on the track.
+        let stage = CGRect(x: 12, y: 40, width: 1000, height: 560)
+        let track = CGRect(x: 160, y: 620, width: 700, height: 30)
+        #expect(Composer.playhead(fraction: 0, track: track, stage: stage) == 148)
+        #expect(Composer.playhead(fraction: 0.5, track: track, stage: stage) == 498)
+        #expect(Composer.playhead(fraction: 1, track: track, stage: stage) == 848)
+        // Before the track is laid out, the stage stands for it.
+        #expect(Composer.playhead(fraction: 0.5, track: .zero, stage: stage) == 500)
     }
 }
