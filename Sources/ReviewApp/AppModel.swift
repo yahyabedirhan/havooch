@@ -857,6 +857,10 @@ final class AppModel: AppControlling {
     /// listener's, or "Agent" before anyone listened.
     var agentName: String { listeners.outbox.session?.name ?? "Agent" }
 
+    /// The agent harness the listener's name says, for its logo; nil before
+    /// anyone listened, or for a name no known agent has.
+    var agent: KnownAgent? { listeners.outbox.session?.agent }
+
     /// The agent said something: a notice goes up on the stage. Every
     /// notice goes by itself; a question stays open on its thread.
     func raise(_ notice: Notice) {

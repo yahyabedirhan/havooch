@@ -40,12 +40,7 @@ private struct NoticeCard: View {
     var body: some View {
         Button(action: open) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(palette[.textOnAccent])
-                    .frame(width: 22, height: 22)
-                    .background(tint, in: Circle())
-                    .accessibilityHidden(true)
+                AgentAvatar(agent: notice.knownAgent, size: 22, symbol: symbol, fill: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(notice.title)
                         .font(.callout.weight(.semibold))
@@ -82,6 +77,7 @@ private struct NoticeCard: View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
     }
 
+    /// The symbol an unknown agent's notice shows.
     private var symbol: String {
         switch notice.kind {
         case .acknowledgement: "checkmark"

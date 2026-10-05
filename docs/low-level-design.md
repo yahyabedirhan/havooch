@@ -50,6 +50,7 @@ The person and the operator reach the same `AppModel` methods, so a UI action an
 | change the lease | `Sources/ReviewLease/ControlLease.swift` |
 | change where a file is kept | `Sources/ReviewStore/SupportLayout.swift` |
 | add a colour token or a built-in theme | `Sources/ReviewCore/Theme/ThemeToken.swift`, `Packaging/Themes/` |
+| add a known agent harness or its logo | `Sources/ReviewCore/KnownAgent.swift`, `assets/images/agent-logos/`, `make agent-logos`, `Packaging/AgentLogos/NOTICE.md` |
 | follow a command from the shell to the player | [Trace 1](#trace-1-a-cli-command-comment-add-on-a-region) |
 | follow a send from Cmd+Enter to `wait`, and a follow-up | [Trace 2](#trace-2-a-send-from-cmdenter-to-wait-then-a-follow-up) |
 
@@ -205,9 +206,12 @@ What changed from proto-2, in short:
 
 ```text
 Package.swift                      targets below; macOS 26; no dependencies; ReviewApp and its tests under #if os(macOS)
-Makefile                           test, build, bundle, install, acceptance, clean; reads VERSION from ReviewWire/Version.swift
+Makefile                           test, build, bundle, install, acceptance, agent-logos, clean; reads VERSION from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle)
 Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
+Packaging/AgentLogos/              the nine agent harnesses' logos as PDFs (OpenCode has a -dark file), drawn by make agent-logos
+                                   from assets/images/agent-logos/*.svg, and NOTICE.md (Shipyard's attribution at 74b9695);
+                                   copied to Contents/Resources/AgentLogos/
 scripts/acceptance.sh              the 0.1.0 acceptance scenario, CLI only (#33)
 scripts/screenshots.sh             the 0.1.0 gallery: states/ in light and dark, themes/ one per built-in theme (#33)
 .agents/skills/video-review-mate/  the listener skill (#27)
@@ -256,6 +260,8 @@ Sources/
     VideoReview.swift              one video's review: every rule about threads, messages and sends; the counters
     ReviewRefusal.swift            why a change is refused, as the line the CLI prints
     Outbox.swift                   the listener outbox: pending, in flight, taken, session, context sent, presence
+    KnownAgent.swift               the nine agent harnesses a session's name says ("Claude Code" → claude), each one's
+                                   AgentLogo (colour, light and dark, template); ListenerSession.agent (from Shipyard)
     SendPayload.swift              the JSON `wait` prints, grouped by thread, and how it is assembled
     Theme/
       ThemeToken.swift             every semantic colour token, by name
@@ -306,6 +312,8 @@ Sources/
       QuietButtonStyle.swift       hover and press feedback for symbol buttons
       MessageEditor.swift          the one text view messages are written in, and its keys
       EmptyState.swift             the drop target, "Open a video", "Try the demo"
+      AgentMark.swift              `AgentLogoImage`, the logo loader (Contents/Resources/AgentLogos/, else Packaging/AgentLogos/);
+                                   `AgentMark`, a known agent's logo at any size; `AgentAvatar`, the logo or the neutral symbol
       Header/
         TitleView.swift            video icon and file name; folder icon and folder, shortened in the middle, or "Demo"
         FloatingControls.swift     the group at the top right: agent-control icon, Context, sidebar toggle
@@ -323,7 +331,7 @@ Sources/
                                    grip resizes it; where it opens beside a region or above the bar's playhead (pure)
         ThreadPopover.swift        a thread's kept popover frame on the stage, fitted to it (pure); the conversation
                                    above the field, in the sidebar's `MessageBubble`s (#31)
-        Notices.swift              the brief notices that name the thread
+        Notices.swift              the brief notices that name the thread, with the agent's logo (`AgentAvatar`)
       PlayerBar/
         PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button
         Timeline.swift             the track, ticks and time labels, the pins
@@ -333,22 +341,23 @@ Sources/
         ThreadRow.swift            the collapsed row: number, thumbnail, state, start of the last message;
                                    `ThreadSummary`, its words (pure)
         ThreadConversation.swift   the expanded thread: header, keyframe, messages, the field; `ThreadFieldLook` (pure)
-        MessageBubble.swift        avatar, name, time, bubble, crop; state and edit and delete on a person's message;
+        MessageBubble.swift        avatar (the agent's logo, `AgentAvatar`), name, time, bubble, crop; state and edit and delete on a person's message;
                                    `ThreadHeading` (pure), `StateChip`, `RowButton`
         SidebarPicture.swift       a keyframe or a crop read off the main actor at the size it shows
         SidebarFooter.swift        the presence pill, the queued count, Send; as tall as the player bar
-        PresencePill.swift         the pill's words and the agent's name on hover (pure)
+        PresencePill.swift         the pill's words, the agent's name on hover and the logo in place of the glyph (pure)
 
 Tests/
   ReviewLeaseTests/                time-driven tables; Holder.find; the real process table
   ReviewWireTests/                 version refusal, message round trips, time codes, the demo pointer
   ReviewCommandTests/              parsing, the request sent, output, exit codes; fake transport and launcher
-  ReviewCoreTests/                 threads, joining, states, thread state, send, requeue, payload, outbox, theme resolution
+  ReviewCoreTests/                 threads, joining, states, thread state, send, requeue, payload, outbox, theme resolution, known agents
   ReviewTranscriptTests/           the window cut, the source order, srt, vtt, voiceover (fixtures/sample)
   ReviewStoreTests/                SupportLayout, round trips, a renamed copy's hash, the hash-prefix index, theme files (Packaging/Themes)
   ReviewAppTests/                  macOS only: the server over the real socket, the heartbeat, the lease gate, AppModel on the fixture
                                    (threads, popover close rules, send), region crops at several window sizes, restarts,
-                                   ThemeDesk (pin, overrides, reload on a file change), the raw-colour check of every view
+                                   ThemeDesk (pin, overrides, reload on a file change), the raw-colour check of every view,
+                                   every agent logo in light and dark (AgentLogoTests)
 ```
 
 A module and a type never share a name. `ReviewThread` is not called `Thread`, which is Foundation's.
@@ -848,7 +857,7 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 ### Build and tests
 
 - `Package.swift`: tools 6.2, macOS 26, no dependencies; `ReviewApp` uses `.defaultIsolation(MainActor.self)`; explicit `@MainActor` marks that the default makes redundant are removed (D A.2). `ReviewApp`, `ReviewAppTests` and the `VideoReview` product are added under `#if os(macOS)` (D A.9).
-- `make bundle` stamps `Video Review`, the bundle id and `0.1.0` into `Info.plist`, copies `Packaging/Themes/` to `Contents/Resources/Themes/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Video Review.app` and never touches the prototype apps.
+- `make bundle` stamps `Video Review`, the bundle id and `0.1.0` into `Info.plist`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Video Review.app` and never touches the prototype apps.
 - Owner tests, one per contract at its strongest boundary:
 
 | Contract | Owner test |

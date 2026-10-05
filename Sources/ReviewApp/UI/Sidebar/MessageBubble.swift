@@ -5,7 +5,7 @@ import SwiftUI
 struct ThreadHeading: Equatable {
     /// "Claude Code asked", "You answered", "Claude Code".
     var title: String
-    /// The symbol in the message's avatar.
+    /// The symbol in the message's avatar, when it shows no agent logo.
     var symbol: String
 
     init(_ message: Message, agent: String) {
@@ -40,12 +40,12 @@ struct MessageBubble: View {
     var body: some View {
         let heading = ThreadHeading(message, agent: model.agentName)
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: heading.symbol)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(palette[.textOnAccent])
-                .frame(width: Self.avatar, height: Self.avatar)
-                .background(avatarFill, in: Circle())
-                .accessibilityHidden(true)
+            // The agent's harness logo when its session names a known
+            // agent; else the symbol in the author's disc.
+            AgentAvatar(
+                agent: message.author == .agent ? model.agent : nil,
+                size: Self.avatar, symbol: heading.symbol, fill: avatarFill
+            )
             VStack(alignment: .leading, spacing: 4) {
                 header(heading)
                 if let edited {

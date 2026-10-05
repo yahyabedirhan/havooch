@@ -9,8 +9,13 @@ struct PresencePill: Equatable {
     var title: String
     /// The hover line, which names the agent: "Claude Code is listening".
     var help: String
+    /// The agent whose logo the pill shows in place of its glyph: the
+    /// listener's harness while it listens or works. Nil with no listener,
+    /// or for a name no known agent has: the pill shows its glyph.
+    var logo: KnownAgent?
 
     init(presence: Presence, session: String?, pendingSends: Int) {
+        logo = presence == .absent ? nil : session.flatMap(KnownAgent.init(sender:))
         let agent = session ?? "An agent"
         let waiting = pendingSends > 0 ? " \(pendingSends) \(pendingSends == 1 ? "send waits" : "sends wait") for it." : ""
         switch presence {
@@ -37,9 +42,10 @@ struct PresencePill: Equatable {
     }
 }
 
-/// The presence chip: a glyph and a word in a soft capsule of the
-/// presence's colour. The glyph pulses while the agent works, unless motion
-/// is reduced. Hover names the agent.
+/// The presence chip: the agent's harness logo, or a glyph, and a word in a
+/// soft capsule of the presence's colour. The glyph pulses while the agent
+/// works, unless motion is reduced; the word says it beside a logo. Hover
+/// names the agent.
 struct PresenceChip: View {
     let presence: Presence
     let pill: PresencePill
@@ -49,20 +55,28 @@ struct PresenceChip: View {
 
     var body: some View {
         let colour = palette.presence(presence)
-        Label(pill.title, systemImage: PresencePill.glyph(presence))
-            .font(.callout.weight(.medium))
-            .lineLimit(1)
-            .fixedSize()
-            .symbolRenderingMode(.hierarchical)
-            .symbolEffect(.variableColor.iterative, options: .repeating, isActive: presence == .working && !reduceMotion)
-            .foregroundStyle(colour)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(colour.opacity(0.14), in: Capsule())
-            .contentShape(Capsule())
-            .help(pill.help)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Listener: \(pill.title)")
-            .accessibilityHint(pill.help)
+        Label {
+            Text(pill.title)
+        } icon: {
+            if let agent = pill.logo {
+                AgentMark(agent: agent, size: 14)
+            } else {
+                Image(systemName: PresencePill.glyph(presence))
+                    .symbolRenderingMode(.hierarchical)
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: presence == .working && !reduceMotion)
+            }
+        }
+        .font(.callout.weight(.medium))
+        .lineLimit(1)
+        .fixedSize()
+        .foregroundStyle(colour)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(colour.opacity(0.14), in: Capsule())
+        .contentShape(Capsule())
+        .help(pill.help)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Listener: \(pill.title)")
+        .accessibilityHint(pill.help)
     }
 }

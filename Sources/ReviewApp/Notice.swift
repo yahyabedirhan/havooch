@@ -36,6 +36,10 @@ struct Notice: Equatable, Identifiable {
         expires = now.addingTimeInterval(Self.life)
     }
 
+    /// The agent harness its name says, for its logo; nil for a name no
+    /// known agent has.
+    var knownAgent: KnownAgent? { KnownAgent(sender: agent) }
+
     /// The notice's first line, which names the thread: `#3 · Claude
     /// Code`, or `General · Claude Code`.
     var title: String {

@@ -5,11 +5,14 @@
 #   make test       run the tests (swift test); never drives the Mac
 #   make bundle     build/<app name>.app with the video-review command in
 #                   Contents/Helpers, the built-in themes in
-#                   Contents/Resources/Themes and the demo video in
-#                   Contents/Resources/Demo, ad-hoc signed
+#                   Contents/Resources/Themes, the agents' logos and their
+#                   notice in Contents/Resources/AgentLogos and the demo
+#                   video in Contents/Resources/Demo, ad-hoc signed
 #   make install    bundle, then replace /Applications/<app name>.app and open it
 #   make acceptance run the acceptance scenario through the installed app's
 #                   command, on demo data (scripts/acceptance.sh); after make install
+#   make agent-logos redraw Packaging/AgentLogos/*.pdf from the SVGs in
+#                   assets/images/agent-logos/ (needs rsvg-convert)
 #   make clean
 
 # The executables' names.
@@ -46,7 +49,7 @@ MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install acceptance clean
+.PHONY: all build test bundle install acceptance agent-logos clean
 
 all: build
 
@@ -68,6 +71,10 @@ bundle: build
 	@# The built-in themes, as plain files beside the code (Contents/Resources/Themes).
 	@mkdir -p "$(CONTENTS)/Resources/Themes"
 	cp Packaging/Themes/*.json Packaging/Themes/NOTICE.md "$(CONTENTS)/Resources/Themes/"
+	@# The agents' logos and their notice, which travels with every copy of
+	@# them (Contents/Resources/AgentLogos).
+	@mkdir -p "$(CONTENTS)/Resources/AgentLogos"
+	cp Packaging/AgentLogos/*.pdf Packaging/AgentLogos/NOTICE.md "$(CONTENTS)/Resources/AgentLogos/"
 	@# The demo the empty screen's "Try the demo" opens (Contents/Resources/Demo).
 	@mkdir -p "$(CONTENTS)/Resources/Demo"
 	cp fixtures/sample/* "$(CONTENTS)/Resources/Demo/"
@@ -101,6 +108,22 @@ install: bundle
 # Drives the installed app, in demo mode only. It is not part of `make test`.
 acceptance:
 	@scripts/acceptance.sh
+
+# Each known agent's logo, kept as its maker's SVG in
+# assets/images/agent-logos/ (sources in Packaging/AgentLogos/NOTICE.md),
+# converted to the vector PDF the app bundles: macOS can't be relied on to
+# load SVG. The PDFs are committed, so bundling doesn't need librsvg; run
+# this after changing an SVG (brew install librsvg).
+AGENT_LOGO_SVGS := $(wildcard assets/images/agent-logos/*.svg)
+AGENT_LOGOS     := Packaging/AgentLogos
+
+agent-logos:
+	@mkdir -p $(AGENT_LOGOS)
+	@for svg in $(AGENT_LOGO_SVGS); do \
+		pdf=$(AGENT_LOGOS)/$$(basename $$svg .svg).pdf; \
+		rsvg-convert --format pdf --output $$pdf $$svg || exit 1; \
+		echo "drew $$pdf"; \
+	done
 
 clean:
 	rm -rf $(BUILD_DIR) .build
