@@ -11,8 +11,8 @@ Agents are users of Video Review from the first build, not only testers. Every a
 
 ## Two roles
 
-- An **operator** drives the UI: open a video, play, pause, seek, write a message on a frame, a region or a thread, send the queue, answer a question, set the theme, take a screenshot. Every operator command needs the lease.
-- A **listener** receives sends and answers on their threads: `wait`, `ack <send-id>`, `status <message-id> working|done|failed`, `reply <thread-id>` and `ask <thread-id>`. It needs no lease: a person watches and writes while a listener works, and the two must not fight. One listener at a time is enough.
+- An **operator** drives the UI: open a video, play, pause, seek, write a message on a frame, a region or a thread (what the person does in the comment popover or the sidebar's composer), show the thread list or a thread view, send the queue, answer a question, set the theme, take a screenshot. Every operator command needs the lease.
+- A **listener** receives sends and answers on their threads: `wait`, `ack <send-id>`, `status <message-id> working|done|failed`, `reply <thread-id>` and `ask <thread-id>`. It needs no lease: a person watches and writes while a listener works, and the two must not fight. One listener at a time is enough. The listener's session name tells the app its agent harness ("Claude Code", "Codex CLI"), and the app shows that harness's logo on the agent's messages, the presence pill and the notices; no flag says it (0.2.0, #38).
 - Free commands: `app status`, `state --json`, `control take`, `control release`, `theme list`, and the listener commands.
 
 ## The lease

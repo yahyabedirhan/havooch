@@ -409,11 +409,13 @@ UI roles (built theme):
 
 The files are `Packaging/Themes/<name>.json`, credited in `Packaging/Themes/NOTICE.md`. Each one sets every token but `letterbox`, `popoverBorder`, `well`, `knob`, `shadow`, `controlHover`, `controlPressed`, `regionDim` and `sizeLabel`, which come from the default theme of its kind.
 
+0.2.0 put the whole window on `window` and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header` (`docs/low-level-design.md`, L36). The files keep the editor background on `window`; the rows below for the removed tokens are the 0.1.0 mapping.
+
 | Token | Taken from |
 |---|---|
-| `window`, `stage` | editor background |
-| `bar`, `sidebar` | side bar background |
-| `header` | title bar background |
+| `window`, `stage` (0.1.0) | editor background |
+| `bar`, `sidebar` (0.1.0) | side bar background |
+| `header` (0.1.0) | title bar background |
 | `popover`, `notice` | widget background, or a palette surface where the widget is the side bar's colour |
 | `field` | input background (white in the light themes) |
 | `track`, `separator` | border colour |
@@ -421,7 +423,7 @@ The files are `Packaging/Themes/<name>.json`, credited in `Packaging/Themes/NOTI
 | `accent`, `regionOutline`, `badge` | the theme's brand colour: blue (GitHub, One Dark Pro, Tokyo Night, Atom One Light), purple (Dracula), mauve (Catppuccin) |
 | `textOnAccent`, `badgeText` | the darkest background in dark themes, white in light themes |
 | `agent`, `question`, `control` | the theme's blue, cyan or teal, and yellow |
-| `bubble*`, `sidebarSection`, `sidebarRow*` | the colours above over the side bar, mixed to an opaque colour |
+| `bubble*` (and `sidebarSection`, `sidebarRow*` in 0.1.0) | the colours above over the side bar, mixed to an opaque colour |
 | states | queued: comment grey; sent: a second neutral or the theme's purple; acknowledged: blue; working: yellow; done: green; failed: red |
 
 Where a palette colour failed the readability test (`everyThemeReads` in `Tests/ReviewStoreTests/ThemeFilesTests.swift`) or the no-pink rule for states, the file uses another one:

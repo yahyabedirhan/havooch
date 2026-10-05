@@ -45,8 +45,16 @@ The sidebar's view of every thread of a review, grouped by who must act next: Ne
 _Avoid_: inbox
 
 **Thread view**:
-The sidebar's view of one thread: its conversation, with Back to the thread list.
+The sidebar's view of one thread: its conversation, with Back to the thread list and Previous and Next. It has no keyframe, since the stage shows it.
 _Avoid_: detail, expanded thread
+
+**Composer**:
+The one field at the foot of the sidebar. In a thread view it follows up on that thread or answers its open question; in the thread list it writes at the playhead, to the thread of that frame or a new one. It keeps a draft per thread.
+_Avoid_: reply box, thread field, input
+
+**Comment popover**:
+The popover on the stage where the person writes a message on the frame or a region, and continues a thread beside its keyframe.
+_Avoid_: composer (the composer is the sidebar's field), comment box
 
 **Message**:
 One piece of text that the person or the agent writes on a thread, of the kind message, question or answer.
@@ -104,6 +112,14 @@ _Avoid_: client, caller, owner
 A holder's right to drive the app, which ends by itself.
 _Avoid_: lock, control session
 
+**Agent harness**:
+The program an agent runs in, such as Claude Code or Codex. The listener's session name says which one it is.
+_Avoid_: client, tool, model
+
+**Agent logo**:
+The logo of the agent harness, shown as the agent's avatar on its messages, in the thread list's previews, on the presence pill and on notices. An unknown harness shows a sparkle symbol.
+_Avoid_: avatar (the avatar is where the logo shows), icon
+
 **Agent-control icon**:
 The icon in the header that shows while an agent holds the lease, with a popover that names it and stops it.
 _Avoid_: banner, lease banner, indicator
@@ -115,5 +131,9 @@ A named set of colours of one kind, light or dark, that can extend another theme
 _Avoid_: skin, colour scheme, appearance (the appearance is the system's light or dark mode)
 
 **Token**:
-One semantic colour name, such as the surface of the window or the colour of the done state, that a theme gives a value: a colour, or `system` for the native macOS surface on a surface token.
+One semantic colour name, such as the surface of the window or the colour of the done state, that a theme gives a value: a colour, or `system` on a surface.
 _Avoid_: colour variable, swatch
+
+**Surface**:
+A token that a part of the window is drawn on: the window, a popover, a notice, a field or a separator. The whole window is on one surface, with hairlines between its parts. A surface set to `system` is the native macOS one, as in Default Light and Default Dark.
+_Avoid_: background, panel colour, sidebar colour

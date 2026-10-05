@@ -1,21 +1,26 @@
 #!/bin/bash
-# Makes the 0.1.0 gallery for the pull request, through the `video-review`
+# Makes the 0.2.0 gallery for the pull request, through the `video-review`
 # CLI only, against the installed app in demo mode with the fixture video:
 #
 #   states/<state>-<light|dark>.png   the main states, in both appearances
-#   themes/<slug>.png                 every built-in theme on one scene
+#   themes/<slug>-<view>.png          every built-in theme, in each view below
 #
-# in assets/screenshots/0.1.0/, or in the folder given.
+# in assets/screenshots/0.2.0/, or in the folder given.
 #
 #   make install && scripts/screenshots.sh [<gallery folder>]
 #
 # The states:
 #
 #   empty           the empty screen: the drop target, "Open a video" and "Try the demo"
-#   threads         a review with threads in every state (done, failed, working,
-#                   sent, queued) and their pins on the player bar, at a region
-#                   thread's frame
-#   sidebar         a thread view, with an agent reply and a question
+#   threads         the thread list: a review with threads in every group (Needs
+#                   you, With agent, Queued, Done) and their pins on the player
+#                   bar, at a region thread's frame; the composer at the foot of
+#                   the sidebar writes at the playhead ("Reply on #3")
+#   sidebar         thread #3's view, with an agent reply and an open question;
+#                   the composer answers it ("Answer #3 · goes at once")
+#   follow-up       thread #1's view, done; the composer follows up on it
+#   settings        the Settings window with the theme picker (PENDING: no
+#                   command opens it yet)
 #   thread-popover  a thread's popover on the video
 #   agent-control   the header with the agent-control icon, and the footer with
 #                   the listener's presence, the queued count and Send
@@ -23,9 +28,11 @@
 #   comment-popover the comment popover on a region (`comment open --region`)
 #
 # The themes: every built-in theme of `theme list`, pinned in turn, on the
-# threads scene with thread #3 shown in the sidebar. A pinned theme looks
-# the same in both appearances, so each has one picture, named after the
-# theme in lowercase with hyphens (`Atom One Light` is atom-one-light.png).
+# threads scene, in three views: `list` (the thread list and its composer),
+# `thread` (thread #3's view, the composer in answer mode) and `settings`
+# (PENDING, as above). A pinned theme looks the same in both appearances, so
+# each view has one picture, named after the theme in lowercase with hyphens
+# (`Atom One Light` is atom-one-light-list.png).
 #
 # A state whose view or command is not built yet is a PENDING step: the script
 # says what it waits on and makes no picture for it. Each one is marked
@@ -44,7 +51,7 @@ cli="${VIDEO_REVIEW_CLI:-/Applications/Video Review.app/Contents/Helpers/video-r
 video="$root/fixtures/sample/sample.mp4"
 
 case "${1:-}" in
-    "") gallery="$root/assets/screenshots/0.1.0" ;;
+    "") gallery="$root/assets/screenshots/0.2.0" ;;
     /*) gallery="$1" ;;
     *) gallery="$PWD/$1" ;;
 esac
@@ -183,15 +190,27 @@ listener_pid=$!
 # of the last messages go after 5 s.
 operator player seek 12.5 >/dev/null
 sleep 6
-echo "threads in every state, with their pins:"
+operator thread list >/dev/null
+echo "the thread list, threads in every group, with their pins:"
 pair threads --hide-agent-indicator
 
 # Thread #3 shown, with its reply, its open question and its region's
 # crop.
 operator thread show "$(thread "$keys")" >/dev/null
 sleep 1
-echo "a thread view in the sidebar:"
+echo "a thread view in the sidebar, the composer answering its question:"
 pair sidebar --hide-agent-indicator
+
+# Thread #1, done: the composer follows up on it.
+operator thread show "$(thread "$intro")" >/dev/null
+sleep 1
+echo "a done thread's view, the composer following up:"
+pair follow-up --hide-agent-indicator
+
+# PENDING (#43): no command opens the Settings window. Put the command here
+# when one exists, then `pair settings --hide-agent-indicator`.
+pending settings "#43" "no CLI command opens the Settings window"
+operator thread show "$(thread "$keys")" >/dev/null
 
 # Thread #3's popover, as a click on its pin opens it: its conversation with
 # the agent's open question above the field, beside its region.
@@ -217,19 +236,28 @@ operator theme set system >/dev/null
 
 # --- every built-in theme ----------------------------------------------------
 
-# The threads scene, with thread #3 shown and no popover open.
-operator thread show "$(thread "$keys")" >/dev/null
+# The threads scene at thread #3's frame, with no popover open: the thread
+# list, then thread #3's view.
+operator player seek 12.5 >/dev/null
 echo "every built-in theme:"
 themes="$(operator theme list --json | jq -r '.themes[] | select(.source == "built-in") | .name')"
 [ -n "$themes" ] || fail "theme list --json names no built-in theme"
 while IFS= read -r name; do
     slug="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
     operator theme set "$name" >/dev/null
+    operator thread list >/dev/null
     sleep 1
-    operator screenshot "$theme_shots/$slug.png" --hide-agent-indicator >/dev/null
-    echo "  $theme_shots/$slug.png"
+    operator screenshot "$theme_shots/$slug-list.png" --hide-agent-indicator >/dev/null
+    operator thread show "$(thread "$keys")" >/dev/null
+    sleep 1
+    operator screenshot "$theme_shots/$slug-thread.png" --hide-agent-indicator >/dev/null
+    echo "  $theme_shots/$slug-list.png"
+    echo "  $theme_shots/$slug-thread.png"
     taken+=("theme:$slug")
 done <<< "$themes"
+# PENDING (#43): Settings in every theme, as the settings state above.
+pending "themes/*-settings" "#43" "no CLI command opens the Settings window"
+operator thread list >/dev/null
 operator theme set system >/dev/null
 
 # --- the comment popover on a region -----------------------------------------
