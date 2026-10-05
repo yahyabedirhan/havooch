@@ -43,7 +43,7 @@ public struct Holder: Codable, Hashable, Sendable {
     /// ancestor of this process that isn't a shell, as its pid and start
     /// time, read from `processes`. When even this process can't be read,
     /// `process:unknown`. `keyVariable`, when set, replaces the key only.
-    public static func find(variables: [String: String], workingDirectory: URL, processes: any ProcessTable) -> Holder {
+    public static func find(variables: [String: String], workingDirectory: URL, processes: some ProcessTable) -> Holder {
         let place = variables["HERDR_PANE_ID"].flatMap { $0.isEmpty ? nil : "Herdr pane \($0)" } ?? workingDirectory.path
         var holder = automatic(variables: variables, place: place, processes: processes)
         if let key = variables[keyVariable], !key.allSatisfy(\.isWhitespace) {
@@ -53,7 +53,7 @@ public struct Holder: Codable, Hashable, Sendable {
     }
 
     /// The holder its session, else its process, makes it.
-    private static func automatic(variables: [String: String], place: String, processes: any ProcessTable) -> Holder {
+    private static func automatic(variables: [String: String], place: String, processes: some ProcessTable) -> Holder {
         for (variable, agent) in sessionVariables {
             if let session = variables[variable], !session.isEmpty {
                 return Holder(key: "\(variable)=\(session)", name: agent, place: place)
@@ -68,7 +68,7 @@ public struct Holder: Codable, Hashable, Sendable {
 
     /// The nearest ancestor of `processes.currentPID` that isn't a shell;
     /// the farthest shell when every readable ancestor up to launchd is one.
-    private static func ancestor(_ processes: any ProcessTable) -> ProcessRecord? {
+    private static func ancestor(_ processes: some ProcessTable) -> ProcessRecord? {
         guard var pid = processes.process(processes.currentPID)?.parent else { return nil }
         var farthest: ProcessRecord?
         // A process table is a tree, but never trust it not to loop.

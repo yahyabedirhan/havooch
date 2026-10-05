@@ -149,20 +149,19 @@ import VRReview
 }
 
 @Suite struct CommentStateTests {
-    @Test func aCommentOnlyMovesForward() {
-        let allowed: [CommentState: Set<CommentState>] = [
-            .draft: [.queued],
-            .queued: [.sent],
-            .sent: [.acknowledged, .working, .done, .failed],
-            .acknowledged: [.working, .done, .failed],
-            .working: [.done, .failed],
-            .done: [],
-            .failed: [],
-        ]
-        for from in CommentState.allCases {
-            for to in CommentState.allCases {
-                #expect(from.canMove(to: to) == allowed[from]!.contains(to), "\(from) to \(to)")
-            }
-        }
+    static let allowed: [CommentState: Set<CommentState>] = [
+        .draft: [.queued],
+        .queued: [.sent],
+        .sent: [.acknowledged, .working, .done, .failed],
+        .acknowledged: [.working, .done, .failed],
+        .working: [.done, .failed],
+        .done: [],
+        .failed: [],
+    ]
+
+    @Test(arguments: CommentState.allCases, CommentState.allCases)
+    func aCommentOnlyMovesForward(from: CommentState, to: CommentState) throws {
+        let moves = try #require(Self.allowed[from])
+        #expect(from.canMove(to: to) == moves.contains(to))
     }
 }

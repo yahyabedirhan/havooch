@@ -27,14 +27,12 @@ import VRReview
             == "a region must lie inside the frame: x, y, w and h are parts of it from 0 to 1, w and h above 0, x + w and y + h at most 1")
     }
 
-    @Test func twoCornersInAnyOrderSpanTheSameRegion() throws {
+    @Test(arguments: [
+        ((0.25, 0.5), (0.75, 0.75)), ((0.75, 0.75), (0.25, 0.5)), ((0.75, 0.5), (0.25, 0.75)), ((0.25, 0.75), (0.75, 0.5)),
+    ] as [((Double, Double), (Double, Double))])
+    func twoCornersInAnyOrderSpanTheSameRegion(one: (Double, Double), other: (Double, Double)) throws {
         let expected = try #require(Region(x: 0.25, y: 0.5, w: 0.5, h: 0.25))
-        let corners: [((Double, Double), (Double, Double))] = [
-            ((0.25, 0.5), (0.75, 0.75)), ((0.75, 0.75), (0.25, 0.5)), ((0.75, 0.5), (0.25, 0.75)), ((0.25, 0.75), (0.75, 0.5)),
-        ]
-        for (one, other) in corners {
-            #expect(Region.spanning(from: one, to: other) == expected)
-        }
+        #expect(Region.spanning(from: one, to: other) == expected)
     }
 
     @Test func aCornerOutsideTheFrameIsBroughtOntoIt() {
@@ -67,12 +65,11 @@ import VRReview
         #expect((found.x, found.y, found.width, found.height) == pixels)
     }
 
-    @Test func theSameRegionCutsTheSamePartOfAFrameOfAnySize() throws {
+    @Test(arguments: [(1920, 1080), (1280, 720), (640, 360), (1080, 1920)])
+    func theSameRegionCutsTheSamePartOfAFrameOfAnySize(width: Int, height: Int) throws {
         let region = try #require(Region(x: 0.25, y: 0.5, w: 0.5, h: 0.25))
-        for (width, height) in [(1920, 1080), (1280, 720), (640, 360), (1080, 1920)] {
-            let pixels = region.pixels(in: (width: width, height: height))
-            #expect((pixels.x, pixels.y, pixels.width, pixels.height) == (width / 4, height / 2, width / 2, height / 4))
-        }
+        let pixels = region.pixels(in: (width: width, height: height))
+        #expect((pixels.x, pixels.y, pixels.width, pixels.height) == (width / 4, height / 2, width / 2, height / 4))
     }
 
     @Test func aRegionIsStoredAsItsFourNumbersAndAStoredOneOutsideTheFrameDoesNotRead() throws {

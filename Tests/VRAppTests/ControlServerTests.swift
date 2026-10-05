@@ -14,8 +14,9 @@ import VRWire
         var now = Date(timeIntervalSince1970: 0)
     }
 
-    /// How often the server asked the app to quit.
-    final class Quits: @unchecked Sendable {
+    /// How often the server asked the app to quit: counted on the main
+    /// actor, where the server's `quit` runs.
+    @MainActor final class Quits {
         var count = 0
     }
 
