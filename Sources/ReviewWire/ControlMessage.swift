@@ -6,7 +6,7 @@ import ReviewLease
 /// naming the protocol's `version`, the `command` and the `holder`, with the
 /// command's own fields beside them:
 ///
-///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":2}
+///     {"command":"player.seek","holder":{"key":"…","name":"Claude Code","place":"/Users/me/shop"},"json":false,"seconds":10,"version":3}
 ///
 /// The wire format is a contract between a `video-review` and the app of
 /// the same build.

@@ -33,7 +33,7 @@ struct StageView: View {
                 // The threads on this frame: outlines and badges.
                 FrameMarks(model: model, geometry: geometry)
                 if let draft = model.draft {
-                    composer(draft, geometry: geometry, stage: proxy.size)
+                    commentPopover(draft, geometry: geometry, stage: proxy.size)
                 }
                 // What the agent just said, over everything on the stage.
                 Notices(model: model)
@@ -63,7 +63,7 @@ struct StageView: View {
     /// popover, else beside the region for a message on one, else above
     /// the playhead at the foot of the stage. One view in every place, so
     /// a drag that starts from where it opened keeps going.
-    private func composer(_ draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
+    private func commentPopover(_ draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
         let thread = model.draftThread
         let place = placement(draft, thread: thread, geometry: geometry, stage: stage, moving: moving, growing: growing)
         return CommentPopover(

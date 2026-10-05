@@ -1,6 +1,6 @@
 # Video Review 0.2.0: low-level design
 
-Written 2026-10-05, before the first build ticket of `effort:0.1.0`, from `Spec: Video Review 0.1.0` (#20), the prototype decisions in `docs/prototypes/2026-10-05-decisions.md` (cited as D x.y), ADR 0001 and the tickets #22 to #33. It is documentation for the maintainer, not a review gate. When the code and this document disagree, fix one of them in the same change. `Spec: Video Review 0.2.0` (#36) and its tickets #37 to #44 changed it since; their decisions are L36 to L43.
+Written 2026-10-05, before the first build ticket of `effort:0.1.0`, from `Spec: Video Review 0.1.0` (#20), the prototype decisions in `docs/prototypes/2026-10-05-decisions.md` (cited as D x.y), ADR 0001 and the tickets #22 to #33. It is documentation for the maintainer, not a review gate. When the code and this document disagree, fix one of them in the same change. `Spec: Video Review 0.2.0` (#36) and its tickets #37 to #44 changed it since; their decisions are L36 to L44.
 
 It starts from proto-2's low-level design (`proto-2:docs/low-level-design.md`, PR #18), since proto-2's code is the base (D A.1). It keeps what proto-2 got right and changes four things: the **thread model** replaces comments and batches, the **send** cuts the transcript at send time, every colour comes from a **theme**, and the module changes A.2 to A.10 come from proto-1 (`proto-1:docs/low-level-design.md`, PR #17). proto-2's own decisions (D1 to D216 in its document) still hold where this document does not replace them; the decisions this design takes on its own are numbered L1, L2… under [Decisions](#6-decisions-the-spec-left-open).
 
@@ -67,7 +67,7 @@ The 92 user stories of the spec are the requirements. They group into these capa
 5. **Send**: Cmd+Enter, the Send button or `video-review send` sends every queued message of the open video, on any threads, as one send. (20 to 22)
 6. **Pins**: one pin per thread on the timeline, its shape from its regions, its colour from its state or, while the agent waits for an answer, the question's (L35), its details on hover; a click seeks and opens the thread popover. (23 to 27)
 7. **Thread popover**: outlines and number badges on the frame; the popover holds the conversation above the field, drags and resizes, and keeps its frame per thread. Nothing opens during playback. (28 to 34)
-8. **Sidebar**: the thread list, grouped by who must act next, and the thread view of one thread with Back, Previous and Next; message bubbles with crops, a field at the bottom, resizable. (35 to 44, 65; 0.2.0: L38, L39)
+8. **Sidebar**: the thread list, grouped by who must act next, and the thread view of one thread with Back, Previous and Next; message bubbles with crops, one composer at the sidebar's foot, resizable. (35 to 44, 65; 0.2.0: L38 to L41)
 9. **Agent**: the listener gets each send through `wait`, grouped by thread, acknowledges, replies, sets each message's state and asks on a thread; an answer to a question goes at once. Notices name the thread. (45 to 49, 71 to 81)
 10. **Header and presence**: the file name, the folder, the floating group (agent-control icon, Context, sidebar toggle), the footer with presence, queued count and Send. (50 to 58)
 11. **Themes**: every colour is a token; built-in and user themes, light and dark, follow the system or a pinned one, per-token overrides, reload on change. (59 to 64)
@@ -225,7 +225,7 @@ Sources/
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
   ReviewWire/
     AppIdentity.swift              the app name, bundle id, support folder name ("Video Review", no suffix)
-    Version.swift                  the app version "0.2.0" and the protocol version 2
+    Version.swift                  the app version "0.2.0" and the protocol version 3 (L44)
     ControlRequest.swift           every request as an enum case; its role; how long the app may hold it
     ControlMessage.swift           request plus holder as one JSON object; decode refuses another version
     ControlReply.swift             {ok, output, error, lease?, timedOut?}
@@ -242,7 +242,7 @@ Sources/
     AppCommands.swift              app status | open [--demo] | quit, state, --version
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
-    CommentCommands.swift          comment add | edit | delete, send, thread answer | open | show | list, context set
+    CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | open | show | list, context set
     ThemeCommands.swift            theme list | set
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings] (L42)
     ListenerCommands.swift         wait, ack, status, reply, ask
@@ -305,7 +305,7 @@ Sources/
       Screenshotter.swift          the app window, or Settings (L42), through ScreenCaptureKit, in an appearance
     UI/
       RootView.swift               stage, player bar, sidebar, header, all on the `window` surface; injects the Palette; a pinned theme's kind as the window's colour
-                                   scheme; `SidebarColumn`: the threads above the footer, resizable, the width kept in settings, proto-1's spring in and out, a
+                                   scheme; `SidebarColumn`: the threads, the composer and the footer, resizable, the width kept in settings, proto-1's spring in and out, a
                                    hairline on its leading edge; `Hairline`, one pixel of `separator`
       Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
@@ -380,13 +380,13 @@ proto-1's split (D A.7): `Holder`, `ProcessTable` and `LeaseTerm` move here from
 As proto-2, with these changes:
 
 - `AppIdentity` has no variant: `appName` "Video Review", `bundleID` "com.yahyabedirhan.video-review", support folder `~/Library/Application Support/Video Review/` (D A.10). The name's one definition is `ControlLease.appName`, since the lease's refusals name the app and `ReviewLease` depends on nothing; `AppIdentity.appName` is that value, and the `Makefile` reads it there.
-- `Version.app` is "0.2.0"; `video-review --version` prints it. `Version.controlProtocol` is 2 (L1).
+- `Version.app` is "0.2.0"; `video-review --version` prints it. `Version.controlProtocol` is 3 (L1, L44).
 - `ControlRequest` follows the spec's contract:
 
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
-| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
+| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentOpen(text, region?)`, `commentCompose(text, region?, general)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadOpen(thread, frame?)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?)` | none |
 
 - A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `threadOpen`, `threadShow`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
@@ -405,7 +405,7 @@ As proto-2, with the spec's names and outputs:
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
 | `thread open <thread> [--frame x,y,w,h]` (L29) | `popover open on #3 at 0:12.5` | `{"popover": {"thread", "time", "text", "region"}}` |
-| `thread show <thread>` (L39) | `the sidebar shows #1` | `{"sidebar": {"thread": "t-…", "width": 340}}` |
+| `thread show <thread>` (L39) | `the sidebar shows #1` | `{"sidebar": {"thread": "t-…", "width": 340, "composer": {…}}}` |
 | `thread list` (L39) | `the sidebar shows the thread list` | `{"sidebar": {"thread": null, "width": 340, "composer": {…}}}` |
 | `comment compose [<text>] [--region] [--general]` (L41) | `the composer says "New thread at 0:12"` (`… with the region 0.25,0.2,0.3,0.25`) | `{"composer": {"target", "kind", "thread", "number", "time", "general", "text", "region"}}` |
 | `theme list` | one line per theme: name, kind, `built-in` or `user`, `active` / `pinned` marks; then `left out: <reason>` per file left out | `{"themes": [{"name", "kind", "source", "path", "active", "pinned"}], "problems": ["…"]}` |
@@ -536,7 +536,7 @@ public struct ResolvedTheme: Equatable { public let name: String; public let kin
 
 `resolve` walks the `extends` chain first, then the default theme of the theme's kind, then applies the overrides (D 5.2, D 5.5). A token name the catalog does not know is ignored, and a colour text that does not parse counts as missing. A chain that loops, or names a theme that does not exist, leaves that theme out of the catalog, with its reason in `problems`; resolving a name the catalog does not have is `ThemeRefusal.unknown`. Names match without regard to case. A user theme named `Default Dark` replaces the built-in one, but the built-in defaults stay the last fallback, so a partial replacement still resolves every token. The two default themes must define every token; a test proves it.
 
-The tokens (each addition is one case and one value in each default theme). 0.2.0 put the whole window on one surface (L36) and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header`, and the native buttons left `controlPressed` with no view (L43); a user theme that still sets one loads, since an unknown token is ignored. A token may carry an alpha (`#rrggbbaa`): the hover and press fills, the region's dim and the shadow do. A surface token (`window`, `popover`, `notice`, `field`, `separator`) may be `system`, the native macOS part; the default themes set all five so (L37).
+The tokens (each addition is one case and one value in each default theme). 0.2.0 put the whole window on one surface (L36) and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header`, and the native buttons left `controlPressed` with no view (L43); a user theme that still sets one loads, since an unknown token is ignored. A token may carry an alpha (`#rrggbbaa`): the hover fill, the region's dim and the shadow do. A surface token (`window`, `popover`, `notice`, `field`, `separator`) may be `system`, the native macOS part; the default themes set all five so (L37).
 
 | Group | Tokens |
 |---|---|
@@ -642,7 +642,7 @@ public struct SupportLayout: Sendable {
   "player":   { "time": 10.017, "playing": false },
   "transcript": { "source": "voiceover", "complete": true, "lines": 3, "problem": null },
   "popover":  null,
-  "sidebar":  { "thread": null, "width": 340 },
+  "sidebar":  { "thread": null, "width": 340, "composer": { "target": "Reply on #1", "kind": "reply", … } },
   "threads":  [ { "id": "t-f92cbb2a-0", "number": 0, "time": null, "state": null, "keyframePath": null, "messages": [] },
                 { "id": "t-f92cbb2a-1", "number": 1, "time": 10.017, "state": "queued", "keyframePath": "/abs/…png",
                   "popoverFrame": null,
@@ -791,7 +791,7 @@ ReviewCommand/CommandTable.swift         `comment add` → CommentCommands.add
 ReviewCommand/CommentCommands.swift      --region → ControlRequest.Rectangle(0.47,0.27,0.29,0.15)   (not four numbers: exit 64)
 ReviewLease/Holder.swift                 Holder.find → "CLAUDE_CODE_SESSION_ID=…", "Claude Code", the working folder
 ReviewWire/ControlSocket.swift           demo.json → the demo's control.sock
-ReviewWire/ControlClient.swift           writes {"command":"comment.add","holder":{…},"region":{…},"text":"…","version":2}, half-closes
+ReviewWire/ControlClient.swift           writes {"command":"comment.add","holder":{…},"region":{…},"text":"…","version":3}, half-closes
 ReviewApp/Control/SocketListener.swift   reads to the end; task awaits ControlServer.reply(to:); heartbeat armed
 ReviewApp/Control/ControlServer.swift    decode: version 2 = 2 → .commentAdd(text, at: nil, region, thread: nil)
 ReviewLease/ControlLease.swift           use(by: holder, at: 12:00:00) → started, ends 12:01:00      state: the agent-control icon shows
@@ -913,7 +913,7 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 
 | # | Decision | Reason |
 |---|---|---|
-| L1 | The protocol version is 2. | The requests changed shape (`send`, `--thread`, thread ids). A prototype's CLI that reaches this app is told to reinstall, not given a wrong answer. |
+| L1 | The protocol version is 2 (3 since L44). | The requests changed shape (`send`, `--thread`, thread ids). A prototype's CLI that reaches this app is told to reinstall, not given a wrong answer. |
 | L2 | A thread's key is the frame's start time from the nominal frame rate, raised to the next millisecond (`PlayerEngine.frameTime`). | "The exact frame" (D 3.8) must be one number for two moments inside one frame, from the UI and from `--at`. Raising, not rounding, keeps proto-2's D46 rule. |
 | L3 | The thread id carries its number: `t-<hash8>-<number>`, General `t-<hash8>-0`. Messages and sends count on their own (`m-<hash8>-<n>`, `s-<hash8>-<n>`). | The id a listener holds and the `#n` the person sees are the same thing. One counter per kind keeps ids short and deterministic. |
 | L4 | A thread whose last message is deleted goes away; its number is not reused. | An empty thread has nothing to show. A reused number would make an old reference point at another frame. |
@@ -956,3 +956,4 @@ Refused for now: more than one listener or window, unread marks, undo, an Allow 
 | L41 | One composer at the sidebar's foot (ticket #42), `Composer` in `UI/Sidebar/`; the stage popover's view is `CommentPopover`, as the glossary names them. Its target (`ComposerTarget`): in a thread view a follow-up on the thread, or the answer to its open question; in the list the thread of the frame on the stage ("Reply on #3"), a new thread there ("New thread at 0:12"), or General with the General toggle ("Reply on General"), and the answer when the frame's thread has an open question. A drawn region opens the comment popover as before and is the composer's chip too, while the stage shows its frame and the target is on it; the popover's words or its discard take it, and a click into the composer closes the empty popover and leaves the chip. A chip turns an answer into a message on the frame, since an answer takes no region. One draft per target thread and one for a new thread, in memory, cleared when written and when another video opens; the General toggle goes off once written to. Clicking into the field pauses the player. Cmd+Return queues the words, or answers, then sends. `comment compose [<text>] [--region] [--general]` puts words, a chip and the toggle in it; `state` reports it as `sidebar.composer`, its `target` the line it shows. An operator command, an addition to the contract. | Spec 0.2.0 (#36): stories 36 to 46. The prototype's region went to the composer only; the spec keeps the popover on a drawn region (story 46), so the region is offered to both. The CLI cannot type or draw. |
 | L42 | Native parts (ticket #43). The empty first screen and "No Threads Yet" are `ContentUnavailableView`s ("No Threads Yet" in a compact form since L43); the first screen's drop target stays on the whole stage, with a dashed outline over it only while a file is over it. `QuietButtonStyle` is gone: symbol buttons are native `.borderless` buttons with a `textSecondary` label, so they dim on press and when disabled and take the focus ring under keyboard navigation; the hover fill went with it (the `controlPressed` token has no view now). `MessageField` draws the field colour with a `separator` hairline at rest and the system focus ring (`FocusRing`, 3 pt outside the edge in `Palette.focusRing`, the system's `keyboardFocusIndicatorColor`) while its text view has the focus in the key window, in place of the permanent accent stroke; `FocusTextView` reports the focus. Tab and Shift+Tab in the editor move to the next and the previous control, as in a text field. A `Settings` scene (⌘,) holds the theme picker; View › Theme stays, and both use `ThemePicker`, the same choice as `theme set`. Settings takes the pinned theme's appearance and accent. `screenshot --window settings` opens Settings as ⌘, does (SwiftUI's `openSettings`, handed over by the player's window through `SettingsWindow`), captures it, and closes it when it was closed before; an operator command option, an addition to the contract. | Spec 0.2.0 (#36): the app feels like a Mac app. The focus ring is drawn by the field, since an `NSTextView` in a scroll view draws none of its own, and the raw-colour test allows the one system focus colour in `Palette`. `screenshot` captured only the player's window, and Settings has to be checked and shown without a click. |
 | L43 | The 0.2.0 polish pass (ticket #44), after a review of the whole window against the macOS conventions, the Shipyard app and variant 02 of the prototype. `controlPressed` is gone from the token list and the two default themes, as L36 removed the others; a person's theme that still sets it loads. A notice is a native `.borderless` button, so it dims while pressed and takes the focus ring under keyboard navigation, in place of `.plain`. "No Threads Yet" is the compact form of the native empty state: a light symbol, a headline and a callout, centred, in place of `ContentUnavailableView`'s large title. The thread view's Previous and Next name their keys in their help (↑, ↓). The timeline's pins keep `.plain`: the player bar stays as it is (spec 0.2.0: "Keep the player bar"). | Spec 0.2.0 (#36): the app feels like a Mac app. The large title was heavier than the thread list's own heading in a sidebar 340 pt wide, and the prototype's empty list is one quiet line. |
+| L44 | The protocol version is 3. | 0.2.0 changed the requests' shape: `thread.expand` became `thread.show`, `state` names `sidebar.thread` in place of `sidebar.expanded`, and `screenshot` takes a `window` that a 0.1.0 app would ignore and capture the player's window. A 0.1.0 CLI or app that meets this one is told to reinstall, not given a wrong answer (L1). |

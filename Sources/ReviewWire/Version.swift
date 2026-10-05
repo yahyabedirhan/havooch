@@ -6,6 +6,8 @@ public enum Version {
 
     /// The control protocol's version, a number of its own. A request of
     /// another version is refused with both numbers, never misread. 2 since
-    /// 0.1.0: the prototypes spoke 1.
-    public static let controlProtocol = 2
+    /// 0.1.0: the prototypes spoke 1. 3 since 0.2.0: `thread.show` replaced
+    /// `thread.expand`, `state` names `sidebar.thread`, and `screenshot`
+    /// takes a `window`.
+    public static let controlProtocol = 3
 }
