@@ -846,6 +846,7 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 | paths, round trips, the hash-prefix index | `ReviewStoreTests` |
 | popover close rules, frame time, the send through `AppModel` | `ReviewAppTests` on the fixture |
 | the server, the heartbeat, a gone client | `ReviewAppTests` over the real socket |
+| the listener's round: ack, status, reply, ask and answer, a follow-up, a listener restart | `ReviewAppTests` over the real socket (`ListenerSocketTests`) |
 | region crops at several window sizes | `ReviewAppTests` (proto-1's) |
 | what a restart keeps | `ReviewAppTests`, a second `AppModel` on the same support folder |
 | everything end to end | `scripts/acceptance.sh`, the spec's 10 steps against the installed app in demo mode |
