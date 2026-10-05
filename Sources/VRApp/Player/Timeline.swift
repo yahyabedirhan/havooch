@@ -60,6 +60,9 @@ struct Timeline: View {
             .frame(width: width, height: height, alignment: .topLeading)
         }
         .frame(height: height)
+        // Up by what the pins add over the labels, so the track, not the
+        // whole timeline, sits on the bar's centre line.
+        .offset(y: height / 2 - Self.trackCentre)
     }
 
     /// The track, the played part and the knob. The whole timeline's height
