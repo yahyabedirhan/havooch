@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A theme file or settings.json edited by hand shows at once.
             model.themes.startWatching()
             // Only the one copy that has the socket touches the data.
-            server.ready = Task { await model.openRecent() }
+            server.ready = Task { await model.openAtLaunch(environment: ProcessInfo.processInfo.environment) }
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))

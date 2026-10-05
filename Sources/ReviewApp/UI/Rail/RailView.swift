@@ -3,8 +3,8 @@ import ReviewWire
 import SwiftUI
 
 /// The rail beside the stage: the General thread when it has messages,
-/// then each thread in time order, with its messages in the order written,
-/// then the send bar.
+/// then each thread in time order, with its messages in the order written.
+/// The footer under it is the root view's (`SidebarFooter`).
 ///
 /// Nothing in the rail is a bordered card. Each thread starts with a
 /// header band, the person's messages are rows, and only the agent's
@@ -47,13 +47,10 @@ struct RailView: View {
 
     var body: some View {
         let threads = model.threads.filter { !$0.messages.isEmpty }
-        VStack(spacing: 0) {
-            if threads.isEmpty {
-                empty
-            } else {
-                list(threads)
-            }
-            SendBar(model: model)
+        if threads.isEmpty {
+            empty
+        } else {
+            list(threads)
         }
     }
 

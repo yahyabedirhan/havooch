@@ -2,9 +2,10 @@ import ReviewCore
 import SwiftUI
 
 /// The brief notices in the stage's top-right corner: what the agent just
-/// said. A message goes by itself after a few seconds; a question stays
-/// until it's clicked or answered. A click opens the thread it's on.
-struct Toasts: View {
+/// said, under a line that names the thread (`#3 · Claude Code`). A message
+/// fades by itself after a few seconds; a question stays until it's clicked
+/// or answered. A click opens the thread it's on.
+struct Notices: View {
     let model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -15,8 +16,12 @@ struct Toasts: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             ForEach(model.notices.suffix(Self.most)) { notice in
-                Toast(notice: notice) { model.openNotice(notice.id) }
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                NoticeCard(notice: notice) { model.openNotice(notice.id) }
+                    // In from the edge, and out as a fade.
+                    .transition(.asymmetric(
+                        insertion: reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity),
+                        removal: .opacity
+                    ))
             }
         }
         .padding(12)
@@ -26,7 +31,7 @@ struct Toasts: View {
 }
 
 /// One notice: who said what, on which thread.
-private struct Toast: View {
+private struct NoticeCard: View {
     let notice: Notice
     let open: () -> Void
     @Environment(\.palette) private var palette
@@ -59,7 +64,7 @@ private struct Toast: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(12)
-            .frame(width: Toasts.width)
+            .frame(width: Notices.width)
             // A solid surface, as the comment box: words over a video stay readable.
             .background(palette[.notice], in: shape)
             .overlay { shape.strokeBorder(notice.kind == .question ? tint.opacity(0.7) : palette[.popoverBorder], lineWidth: notice.kind == .question ? 1.5 : 1) }

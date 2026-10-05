@@ -1,63 +1,60 @@
 import ReviewWire
 import SwiftUI
 
-/// The window: the stage with the player bar under it, and the rail at
-/// the side. With no video, a place to open one.
+/// The window: the header at the top, the stage with the player bar under
+/// it, and the sidebar at the side with its footer under it. With no
+/// video, a place to open one.
 struct RootView: View {
     @Bindable var model: AppModel
-    /// The lease as the toolbar's agent-control sign draws it, and its Stop.
+    /// The lease as the header's agent-control icon draws it, and its Stop.
     let lease: LeaseIndicator
     let stopLease: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let palette = Palette(theme: model.themes.theme)
-        Group {
-            if model.video == nil {
-                EmptyState(model: model)
-            } else {
-                VStack(spacing: 0) {
-                    StageView(model: model)
-                    PlayerBar(model: model)
+        HStack(spacing: 0) {
+            Group {
+                if model.video == nil {
+                    EmptyState(model: model)
+                } else {
+                    VStack(spacing: 0) {
+                        StageView(model: model)
+                        PlayerBar(model: model)
+                    }
                 }
             }
+            .frame(minWidth: 480, maxWidth: .infinity)
+            .background(palette[.stage])
+            if sidebarShown {
+                SidebarColumn(model: model)
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+            }
         }
+        // proto-1's motion, whatever opens or closes the sidebar: the
+        // toggle, a notice, or the operator.
+        .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)
         .frame(minWidth: 760, minHeight: 480)
-        .background(palette[.stage])
-        .inspector(isPresented: railShown) {
-            RailView(model: model)
-                .background(palette[.sidebar])
-                .inspectorColumnWidth(
-                    min: Metrics.railWidthRange.lowerBound, ideal: Metrics.railWidth, max: Metrics.railWidthRange.upperBound
-                )
-        }
         // The theme's accent in place of the system's, for a selection and
         // a prominent button.
         .tint(palette[.accent])
         .foregroundStyle(palette[.textPrimary])
         .background(palette[.window])
         .background(WindowAppearance(kind: model.themes.pinned == nil ? nil : palette.theme.kind))
+        // The window's title stays for the Window menu and VoiceOver; the
+        // header draws its own, with icons.
         .navigationTitle(model.video?.title ?? AppIdentity.appName)
-        .navigationSubtitle(subtitle)
+        .toolbar(removing: .title)
         .toolbar {
-            // One group of icon buttons at the trailing edge: the agent's
-            // sign while it holds the lease, then Context, then the rail.
-            if isControlled || model.video != nil {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    if isControlled {
-                        AgentControlButton(indicator: lease, stop: stopLease)
-                    }
-                    if model.video != nil {
-                        ContextButton(model: model)
-                        Button {
-                            model.isRailVisible.toggle()
-                        } label: {
-                            Label("Comments", systemImage: "sidebar.trailing")
-                        }
-                        .help(model.isRailVisible ? "Hide the comments" : "Show the comments")
-                    }
-                }
+            ToolbarItem(placement: .navigation) {
+                TitleView(words: HeaderWords(video: model.video?.url, isDemo: model.isDemo))
             }
+            .sharedBackgroundVisibility(.hidden)
+            FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)
         }
+        .toolbarBackground(palette[.header], for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             model.openForPerson(url)
@@ -72,18 +69,15 @@ struct RootView: View {
         .environment(\.palette, palette)
     }
 
-    /// Whether an agent's sign is in the toolbar: while it holds the lease,
-    /// unless a screenshot leaves the sign out.
+    /// Whether the agent-control icon is in the header: while an agent
+    /// holds the lease, unless a screenshot leaves the icon out.
     private var isControlled: Bool {
         lease.shown(at: Date()) != nil
     }
 
-    /// The rail shows beside a video only.
-    private var railShown: Binding<Bool> {
-        Binding(
-            get: { model.video != nil && model.isRailVisible },
-            set: { model.isRailVisible = $0 }
-        )
+    /// The sidebar shows beside a video only.
+    private var sidebarShown: Bool {
+        model.video != nil && model.isRailVisible
     }
 
     private var hasProblem: Binding<Bool> {
@@ -92,16 +86,50 @@ struct RootView: View {
             set: { if !$0 { model.problem = nil } }
         )
     }
+}
 
-    /// Under the title: that this is a demo run, and the video's folder.
-    private var subtitle: String {
-        ([model.isDemo ? "Demo" : nil] + [model.video.map { Self.folder(of: $0.url) }])
-            .compactMap(\.self)
-            .joined(separator: " · ")
+/// The sidebar column: the threads above the footer, resizable from its
+/// leading edge between `Metrics.railWidthRange`'s bounds.
+struct SidebarColumn: View {
+    let model: AppModel
+    @State private var width = Metrics.railWidth
+    /// The width when the drag started.
+    @State private var dragStart: CGFloat?
+    @Environment(\.palette) private var palette
+
+    /// proto-1's motion for the column: a critically damped spring, so it
+    /// settles without a bounce; a short fade when motion is reduced.
+    static func animation(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 1)
     }
 
-    /// The folder `url` is in, with the home folder as `~`.
-    private static func folder(of url: URL) -> String {
-        (url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
+    var body: some View {
+        VStack(spacing: 0) {
+            RailView(model: model)
+                .frame(maxHeight: .infinity)
+            SidebarFooter(model: model)
+        }
+        .frame(width: width)
+        .background(palette[.sidebar])
+        .overlay(alignment: .leading) { resizeHandle }
+    }
+
+    /// A thin strip on the leading edge that drags the width.
+    private var resizeHandle: some View {
+        Color.clear
+            .frame(width: 6)
+            .contentShape(Rectangle())
+            .pointerStyle(.columnResize)
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { drag in
+                        let start = dragStart ?? width
+                        dragStart = start
+                        let range = Metrics.railWidthRange
+                        width = min(max(start - drag.translation.width, range.lowerBound), range.upperBound)
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
+            .accessibilityHidden(true)
     }
 }

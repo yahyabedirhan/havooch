@@ -1,9 +1,9 @@
 import Foundation
 import ReviewCore
 
-/// A brief notice on the stage: the agent said something on a thread. A
-/// message and an acknowledgement go by themselves; a question stays until
-/// the person clicks it or answers it, since the agent waits for it.
+/// A brief notice on the stage: the agent said something on a thread.
+/// Every notice fades after a few seconds (D 4.10), a question too: the
+/// question stays open on its thread, where the person answers it.
 struct Notice: Equatable, Identifiable {
     enum Kind: Equatable {
         /// The agent has the send (`ack`).
@@ -21,10 +21,10 @@ struct Notice: Equatable, Identifiable {
     /// The agent's name as people read it: `Claude Code`.
     var agent: String
     var text: String
-    /// When the notice goes by itself; nil for one that stays.
-    var expires: Date?
+    /// When the notice goes by itself.
+    var expires: Date
 
-    /// How long a notice that goes by itself is up, in seconds.
+    /// How long a notice is up, in seconds.
     static let life: TimeInterval = 5
 
     init(id: UUID = UUID(), thread: ThreadID, kind: Kind, agent: String, text: String, at now: Date) {
@@ -33,7 +33,7 @@ struct Notice: Equatable, Identifiable {
         self.kind = kind
         self.agent = agent
         self.text = text
-        expires = kind == .question ? nil : now.addingTimeInterval(Self.life)
+        expires = now.addingTimeInterval(Self.life)
     }
 
     /// The notice's first line, which names the thread: `#3 · Claude

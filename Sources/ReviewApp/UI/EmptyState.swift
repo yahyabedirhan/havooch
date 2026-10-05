@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// No video is open: a drop target and the Open button.
+/// No video is open: a drop target, "Open a video" and "Try the demo"
+/// (D 5.11). The demo is the sample video bundled in the app, on demo data
+/// (`DemoRun`); a build with no bundled demo leaves the button out.
 struct EmptyState: View {
     let model: AppModel
     @State private var isTargeted = false
@@ -13,18 +15,28 @@ struct EmptyState: View {
                 .foregroundStyle(palette[.accent])
                 .frame(width: 92, height: 92)
                 .background(palette[.accent].opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .accessibilityHidden(true)
             VStack(spacing: 6) {
-                Text("Open a video to review")
+                Text("Drop a video here")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(palette[.textPrimary])
-                Text("Drop an mp4, mov or m4v file here, or choose one.")
+                Text("An mp4, mov or m4v file. Pause anywhere, or draw on the frame, and write to your agent.")
                     .foregroundStyle(palette[.textSecondary])
+                    .multilineTextAlignment(.center)
             }
-            Button("Open a Video…") { model.openFromPanel() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
+            HStack(spacing: 10) {
+                Button("Open a video") { model.openFromPanel() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                if DemoRun.video() != nil {
+                    Button("Try the demo") { model.tryDemo() }
+                        .buttonStyle(.bordered)
+                        .help("Open the sample video on demo data, apart from your own reviews")
+                }
+            }
+            .controlSize(.large)
         }
+        .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)

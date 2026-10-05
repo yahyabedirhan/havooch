@@ -30,7 +30,7 @@ struct StageView: View {
                     composer(draft, geometry: geometry, stage: proxy.size)
                 }
                 // What the agent just said, over everything on the stage.
-                Toasts(model: model)
+                Notices(model: model)
             }
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.2), value: model.draft == nil)
         }

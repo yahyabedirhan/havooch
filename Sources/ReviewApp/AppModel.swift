@@ -115,6 +115,9 @@ final class AppModel: AppControlling {
         sendCount > 0
     }
 
+    /// How many messages wait in the queue, as the sidebar's footer counts them.
+    var queuedCount: Int { desk.review?.queue.count ?? 0 }
+
     /// How many messages a send would deliver now.
     var sendCount: Int {
         (desk.review?.queue.count ?? 0) + commitsUnderWay + (draft.map { Self.hasWords($0.text) } == true ? 1 : 0)
@@ -174,6 +177,41 @@ final class AppModel: AppControlling {
     /// At launch: the video that was open last opens again, paused at its
     /// start, with its history. One whose file is gone, or that doesn't
     /// open any more, leaves the app with no video.
+    /// At launch: the video the launch names (`DemoRun.openVariable`, a
+    /// demo started from the empty screen), else the last one.
+    func openAtLaunch(environment: [String: String]) async {
+        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else {
+            await openRecent()
+            return
+        }
+        do throws(AppRefusal) {
+            try await open(URL(fileURLWithPath: path))
+        } catch {
+            problem = Problem(title: "The video didn't open", reason: error.reason)
+        }
+    }
+
+    /// "Try the demo": the bundled sample video on demo data. A demo run
+    /// opens it here; a run on the person's data starts a demo copy of the
+    /// app and quits, so demo threads never mix with the person's.
+    func tryDemo() {
+        guard let video = DemoRun.video() else {
+            problem = Problem(title: "The demo didn't open", reason: "this build has no bundled demo video; run `make bundle`")
+            return
+        }
+        if isDemo {
+            openForPerson(video)
+            return
+        }
+        DemoRun.launch(video: video, normalSupport: support) { [weak self] reason in
+            if let reason {
+                self?.problem = Problem(title: "The demo didn't open", reason: reason)
+            } else {
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
     func openRecent() async {
         guard video == nil, let url = desk.library.recent(), FileManager.default.fileExists(atPath: url.path) else { return }
         do throws(AppRefusal) {
@@ -683,12 +721,12 @@ final class AppModel: AppControlling {
     var agentName: String { listeners.outbox.session?.name ?? "Agent" }
 
     /// The agent said something: a notice goes up on the stage, and the
-    /// thread it's on is marked until the person looks at it. A notice
-    /// that isn't a question goes by itself.
+    /// thread it's on is marked until the person looks at it. Every notice
+    /// goes by itself; a question stays open on its thread.
     func raise(_ notice: Notice) {
         notices.append(notice)
         if notice.thread != selection || !isRailVisible { unread.insert(notice.thread) }
-        guard let expires = notice.expires else { return }
+        let expires = notice.expires
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(expires.timeIntervalSinceNow, 0)))
             self?.dismiss(notice.id)

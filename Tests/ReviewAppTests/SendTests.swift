@@ -454,22 +454,23 @@ struct SendDeliveryTests {
 
 @Suite("The rail's words")
 struct RailWordsTests {
-    @Test("the presence pill says whether an agent listens, who, and what happens to a send made now")
+    @Test("the presence pill says Listening, Working or No listener, and its hover names the agent")
     func pill() {
         let listening = PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0)
-        #expect(listening.title == "Agent listening")
-        #expect(listening.detail == "Claude Code")
-        #expect(listening.text == "Agent listening · Claude Code")
+        #expect(listening.title == "Listening")
+        #expect(listening.help == "Claude Code is listening. It gets what you send at once.")
 
         let working = PresencePill(presence: .working, session: "Claude Code", pendingSends: 2)
-        #expect(working.title == "Agent working")
-        #expect(working.detail == "Claude Code · 2 sends waiting")
+        #expect(working.title == "Working")
+        #expect(working.help.hasPrefix("Claude Code is working on a send."))
+        #expect(working.help.hasSuffix("2 sends wait for it."))
 
         let absent = PresencePill(presence: .absent, session: nil, pendingSends: 0)
-        #expect(absent.title == "No agent listening")
-        #expect(absent.detail == "a send will wait")
-        // An agent that left is still named by its last wait, but it isn't there.
-        #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).detail == "1 send waiting")
+        #expect(absent.title == "No listener")
+        #expect(absent.help == "No agent runs `video-review wait`. What you send waits for the next one.")
+        #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).help.hasSuffix("1 send waits for it."))
+        // Before anyone listened, the hover still says who: an agent.
+        #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))
     }
 
     @Test("a thread's conversation is cut into the person's messages, as rows, and runs of the agent's messages and answers")

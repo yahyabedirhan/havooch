@@ -246,17 +246,17 @@ struct AnswerTests {
         #expect(app.model.notices.isEmpty)
     }
 
-    @Test("a notice of a message goes by itself; a question's stays")
+    @Test("a notice goes by itself, a question's too")
     func noticesGo() async throws {
         defer { cleanUp() }
         let app = try await taken()
         _ = await listen(.reply(thread: app.one, text: "Done"), app)
         _ = await listen(.ask(thread: app.two, question: "Which box?", waitSeconds: 0), app)
         #expect(app.model.notices.map(\.kind) == [.message, .question])
-        #expect(app.model.notices[1].expires == nil)
+        #expect(app.model.notices[1].expires.timeIntervalSinceNow <= Notice.life)
         #expect(app.model.notices[1].hint == "Click to answer")
         let message = app.model.notices[0]
-        #expect(try #require(message.expires).timeIntervalSinceNow <= Notice.life)
+        #expect(message.expires.timeIntervalSinceNow <= Notice.life)
 
         app.model.dismiss(message.id)
         #expect(app.model.notices.map(\.kind) == [.question])
@@ -469,14 +469,14 @@ struct ThreadWordsTests {
         #expect(ThreadHeading(message(.agent, .question), agent: "Claude Code").symbol == "questionmark")
     }
 
-    @Test("a notice names its thread, or General, and only a question stays up")
+    @Test("a notice names its thread, or General, and every notice fades after five seconds")
     func notices() {
         let reply = Notice(thread: ItemID("t-f92cbb2a-3")!, kind: .message, agent: "Claude Code", text: "Done", at: Self.now)
         #expect(reply.title == "#3 · Claude Code")
         #expect(reply.expires == Self.now.addingTimeInterval(5))
         #expect(reply.hint == nil)
         let question = Notice(thread: ItemID("t-f92cbb2a-3")!, kind: .question, agent: "Claude Code", text: "Which?", at: Self.now)
-        #expect(question.expires == nil)
+        #expect(question.expires == Self.now.addingTimeInterval(5))
         let ack = Notice(thread: ItemID("t-f92cbb2a-0")!, kind: .acknowledgement, agent: "Claude Code", text: "On it", at: Self.now)
         #expect(ack.title == "General · Claude Code")
         #expect(ack.expires == Self.now.addingTimeInterval(5))

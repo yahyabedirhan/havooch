@@ -4,8 +4,9 @@
 #   make            build the app and the command (release)
 #   make test       run the tests (swift test); never drives the Mac
 #   make bundle     build/<app name>.app with the video-review command in
-#                   Contents/Helpers and the built-in themes in
-#                   Contents/Resources/Themes, ad-hoc signed
+#                   Contents/Helpers, the built-in themes in
+#                   Contents/Resources/Themes and the demo video in
+#                   Contents/Resources/Demo, ad-hoc signed
 #   make install    bundle, then replace /Applications/<app name>.app and open it
 #   make acceptance run the acceptance scenario through the installed app's
 #                   command, on demo data (scripts/acceptance.sh); after make install
@@ -67,6 +68,9 @@ bundle: build
 	@# The built-in themes, as plain files beside the code (Contents/Resources/Themes).
 	@mkdir -p "$(CONTENTS)/Resources/Themes"
 	cp Packaging/Themes/*.json "$(CONTENTS)/Resources/Themes/"
+	@# The demo the empty screen's "Try the demo" opens (Contents/Resources/Demo).
+	@mkdir -p "$(CONTENTS)/Resources/Demo"
+	cp fixtures/sample/* "$(CONTENTS)/Resources/Demo/"
 	@# Ad-hoc: no Developer ID. The command is signed first: the bundle's
 	@# signature seals nested code.
 	codesign --force --sign - --timestamp=none "$(CONTENTS)/Helpers/$(CLI)"

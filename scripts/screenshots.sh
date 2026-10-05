@@ -190,8 +190,6 @@ pending thread-popover "#31" "no command opens a thread's popover yet"
 
 # The header and the footer of #32: the agent-control icon shows while this
 # script holds the lease; the footer shows the listener and the queued count.
-# PENDING (#32 header and footer): the picture is taken now, with the lease
-# banner of this build. Take it again once #32 lands.
 echo "the agent-control indicator, the header and the footer:"
 pair agent-control
 
