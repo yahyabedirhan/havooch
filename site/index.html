@@ -59,7 +59,7 @@
         <h1 id="hero-title">Havooch</h1>
         <p class="say"><span class="visually-hidden">Pronounced </span><span aria-hidden="true">/</span>hah-VOOCH<span aria-hidden="true">/</span></p>
         <p class="pitch">Pause the video. Point at the frame.<br class="br-wide"> Your coding agent answers right there.</p>
-        <p class="lede">A native macOS video player for giving feedback to agents. Comment on any moment or region, press <kbd>⌘</kbd><kbd>↩</kbd>, and the listening agent gets the timestamp, the keyframe, the region and the transcript, then replies on the frame.</p>
+        <p class="lede">A native Mac video player for reviewing videos with your coding agent. Comment on any moment, or draw a box around what you mean, press <kbd>⌘</kbd><kbd>↩</kbd>, and your agent gets the time, the frame, the region and what was being said. Then it answers right beside the frame.</p>
         <div class="cta">
           <a class="btn btn-filled" href="#install">Install for Mac</a>
           <a class="btn btn-plain" href="https://github.com/yahyabedirhan/havooch">View on GitHub <span aria-hidden="true">›</span></a>
@@ -71,10 +71,10 @@
         <div class="window">
           <picture>
             <source srcset="assets/shots/hero-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="assets/shots/hero-light.webp" width="2400" height="1288" alt="The Havooch window: a paused demo video on the stage, and beside it a thread where the person asked for a slower intro, Claude Code answered, asked a question, got an answer, and finished the change. A new message waits in the queue." fetchpriority="high">
+            <img src="assets/shots/hero-light.webp" width="2400" height="1412" alt="The Havooch window: a teaser for a weather app, paused at its sunrise logo, and beside it a thread where you asked for a lighter wordmark. Claude Code made the change, asked about the tagline, got your answer and finished. A follow-up waits in the queue." fetchpriority="high">
           </picture>
         </div>
-        <figcaption class="visually-hidden">Havooch in demo mode: a thread with the agent's reply, its question, the person's answer and a queued follow-up.</figcaption>
+        <figcaption class="visually-hidden">Havooch in demo mode: a thread with the agent's reply, its question, your answer and a queued follow-up.</figcaption>
       </figure>
     </section>
 
@@ -83,7 +83,7 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <h2 id="how-title">One loop, on the frame.</h2>
-        <p class="section-lede">You watch. The agent works. Every word stays pinned to the moment it is about.</p>
+        <p class="section-lede">You watch, your agent works, and every note stays pinned to the moment it's about.</p>
 
         <div class="loop" data-step="1">
           <ol class="loop-steps" role="tablist" aria-label="The review loop">
@@ -136,20 +136,20 @@
         <div class="payload">
           <div class="payload-copy">
             <h3>What the agent receives</h3>
-            <p>Each send is grouped by thread. For every thread the agent gets the exact time, the keyframe image, the region you drew and its crop, the transcript from 15 seconds either side, and the context: what the video is about, its source repos and your note. It works in your repo, commits, and replies on the thread.</p>
-            <p>The agent side is one skill, <a href="https://github.com/yahyabedirhan/havooch/tree/main/.agents/skills/havooch-mate"><code>havooch-mate</code></a>. Ask your agent to listen for Havooch feedback, and the player shows it as listening.</p>
+            <p>Each send is grouped by thread. For every thread the agent gets the exact time, the keyframe image, the region you drew and its crop, the transcript from 15 seconds either side, and the context: what the video is about, its source repos and your note. Then it works in your repo, commits, and tells you on the thread what it changed.</p>
+            <p>The agent side is one skill, <a href="https://github.com/yahyabedirhan/havooch/tree/main/.agents/skills/havooch-mate"><code>havooch-mate</code></a>. Ask your agent to listen for Havooch feedback, and you'll see it listening in the player.</p>
           </div>
           <pre class="code" aria-label="An example send, as JSON"><code><span class="c">// one send, as the agent reads it</span>
 {
   <span class="k">"send"</span>: { <span class="k">"id"</span>: <span class="s">"s-f92cbb2a-2"</span> },
-  <span class="k">"video"</span>: { <span class="k">"title"</span>: <span class="s">"sample.mp4"</span>, <span class="k">"duration"</span>: 21.2 },
+  <span class="k">"video"</span>: { <span class="k">"title"</span>: <span class="s">"halcyon-teaser.mp4"</span>, <span class="k">"duration"</span>: 42.6 },
   <span class="k">"threads"</span>: [{
-    <span class="k">"number"</span>: 1, <span class="k">"time"</span>: 3.017,
+    <span class="k">"number"</span>: 2, <span class="k">"time"</span>: 12.0,
     <span class="k">"keyframePath"</span>: <span class="s">"…/t-1.png"</span>,
-    <span class="k">"transcript"</span>: [{ <span class="k">"text"</span>: <span class="s">"Pause and point…"</span> }],
+    <span class="k">"transcript"</span>: [{ <span class="k">"text"</span>: <span class="s">"Meet Halcyon…"</span> }],
     <span class="k">"messages"</span>: [{
-      <span class="k">"text"</span>: <span class="s">"The title fades in too late."</span>,
-      <span class="k">"region"</span>: { <span class="k">"x"</span>: 0.08, <span class="k">"y"</span>: 0.2, <span class="k">"w"</span>: 0.3, <span class="k">"h"</span>: 0.25 },
+      <span class="k">"text"</span>: <span class="s">"The wordmark feels heavy…"</span>,
+      <span class="k">"region"</span>: { <span class="k">"x"</span>: 0.08, <span class="k">"y"</span>: 0.27, <span class="k">"w"</span>: 0.5, <span class="k">"h"</span>: 0.28 },
       <span class="k">"cropPath"</span>: <span class="s">"…/m-9.png"</span>
     }]
   }]
@@ -163,17 +163,17 @@
       <div class="wrap">
         <p class="eyebrow">Features</p>
         <h2 id="features-title">Built like a Mac app, because it is one.</h2>
-        <p class="section-lede">Native AppKit and SwiftUI parts, one surface colour across the window, and hairlines where other apps paint bands.</p>
+        <p class="section-lede">I built it from native AppKit and SwiftUI parts, with one calm surface across the window and fine hairlines where other apps paint bands.</p>
 
         <article class="feature feature-wide">
           <div class="feature-copy">
             <h3>Every thread, by who acts next</h3>
-            <p>The thread list groups the review into <em>Needs you</em>, <em>With agent</em>, <em>Queued</em> and <em>Done</em>. Each row shows its keyframe, its state and who spoke last. Pins on the timeline jump to the same threads.</p>
+            <p>The thread list sorts your review into <em>Needs you</em>, <em>With agent</em>, <em>Queued</em> and <em>Done</em>, so you always know whose turn it is. Each row shows its frame, its state and who spoke last, and the pins on the timeline take you to the same threads.</p>
           </div>
           <div class="window">
             <picture>
               <source srcset="assets/shots/list-dark.webp" media="(prefers-color-scheme: dark)">
-              <img src="assets/shots/list-light.webp" width="1800" height="966" loading="lazy" alt="The thread list beside the stage: one thread needs you, one is with the agent, two are queued and two are done.">
+              <img src="assets/shots/list-light.webp" width="1800" height="1058" loading="lazy" alt="The thread list beside the week view of a weather app teaser: one thread needs you, one is with the agent, three are queued, and two are done or failed.">
             </picture>
           </div>
         </article>
@@ -182,12 +182,12 @@
           <article class="feature tile tile-tall">
             <div class="feature-copy">
               <h3>A real conversation</h3>
-              <p>Your messages on the right, the agent's on the left with its harness's logo. Each message carries its state: queued, sent, acknowledged, working, done or failed.</p>
+              <p>Your messages sit on the right, your agent's on the left with its logo. Each one shows where it is: queued, sent, acknowledged, working, done or failed.</p>
             </div>
             <div class="crop">
               <picture>
                 <source srcset="assets/shots/chat-dark.webp" media="(prefers-color-scheme: dark)">
-                <img src="assets/shots/chat-light.webp" width="680" height="830" loading="lazy" alt="A thread view: the person's message is done, Claude Code replied, asked whether the subtitle should hold as long as the title, got an answer, and finished. A follow-up waits with a dashed outline.">
+                <img src="assets/shots/chat-light.webp" width="680" height="1156" loading="lazy" alt="A thread view: your note on the wordmark is done. Claude Code replied, asked whether the tagline should go lighter too, got your answer and finished. A follow-up waits with a dashed outline.">
               </picture>
             </div>
           </article>
@@ -196,12 +196,12 @@
             <article class="feature tile">
               <div class="feature-copy">
                 <h3>One composer</h3>
-                <p>The field at the foot of the sidebar follows up on a thread, answers a question, or writes at the playhead. <kbd>↩</kbd> queues, <kbd>⌘</kbd><kbd>↩</kbd> sends the queue.</p>
+                <p>One field at the foot of the sidebar does it all: follow up on a thread, answer a question, or start a new note at the playhead. <kbd>↩</kbd> queues, <kbd>⌘</kbd><kbd>↩</kbd> sends the queue.</p>
               </div>
               <div class="crop">
                 <picture>
                   <source srcset="assets/shots/composer-dark.webp" media="(prefers-color-scheme: dark)">
-                  <img src="assets/shots/composer-light.webp" width="660" height="262" loading="lazy" alt="The composer: a field that reads Follow up on #1, the hint that return queues and command-return sends the queue, and a Send button with 2 queued.">
+                  <img src="assets/shots/composer-light.webp" width="660" height="246" loading="lazy" alt="The composer: a field that follows up on #2, the hint that return queues and command-return sends, and a Send button with 3 queued.">
                 </picture>
               </div>
             </article>
@@ -209,7 +209,7 @@
             <article class="feature tile tile-text">
               <div class="feature-copy">
                 <h3>Works with your agent</h3>
-                <p>Any agent that runs skills and a shell can listen. The player shows who is listening, with its logo.</p>
+                <p>Any agent that runs skills and a shell can listen, and the player shows you who it is, with its logo.</p>
               </div>
               <ul class="chips" aria-label="Agent harnesses with a logo in the player">
                 <li>Claude Code</li><li>Codex</li><li>Gemini CLI</li><li>Copilot</li><li>Cursor</li><li>Amp</li><li>opencode</li><li>Droid</li><li>Pi</li>
@@ -221,12 +221,12 @@
         <article class="feature feature-wide feature-flip">
           <div class="feature-copy">
             <h3>The agent asks. You answer at once.</h3>
-            <p>When a request is unclear, the agent asks on the thread instead of guessing. The question gets its own card and moves the thread to <em>Needs you</em>. Your answer skips the queue and goes straight back.</p>
+            <p>When a note could mean two things, your agent asks on the thread instead of guessing. The question gets its own card and moves the thread to <em>Needs you</em>, and your answer skips the queue and goes straight back.</p>
           </div>
           <div class="window">
             <picture>
               <source srcset="assets/shots/question-dark.webp" media="(prefers-color-scheme: dark)">
-              <img src="assets/shots/question-light.webp" width="1800" height="966" loading="lazy" alt="A region drawn on the keyboard shortcut in the video, and in the sidebar the agent asks which name the person wants: Cmd+Return or Cmd+Enter.">
+              <img src="assets/shots/question-light.webp" width="1800" height="1058" loading="lazy" alt="A region drawn on a rain alert in the video, and in the sidebar Claude Code asks whether the card should lead with the time to leave or the time the rain starts.">
             </picture>
           </div>
         </article>
@@ -234,17 +234,17 @@
         <article class="feature feature-wide">
           <div class="feature-copy">
             <h3>Native surfaces, or your editor's colours</h3>
-            <p>Default Light and Default Dark use the native macOS surfaces. Prefer your editor? Tokyo Night, Dracula, One Dark Pro, Catppuccin, GitHub and more ship built in, and a theme file of your own can extend any of them.</p>
+            <p>Default Light and Default Dark use the native macOS surfaces. Rather have your editor's colours? Tokyo Night, Dracula, One Dark Pro, Catppuccin, GitHub and more come built in, and a theme file of your own can build on any of them.</p>
           </div>
           <div class="window window-dark">
-            <img src="assets/shots/theme-tokyo.webp" width="1800" height="966" loading="lazy" alt="The thread list in the Tokyo Night theme.">
+            <img src="assets/shots/theme-tokyo.webp" width="1800" height="1058" loading="lazy" alt="The thread list in the Tokyo Night theme, beside the rain alert of the weather app teaser.">
           </div>
         </article>
 
         <ul class="facts" aria-label="More details">
-          <li><strong>Agents drive it too.</strong> A leased CLI lets an agent open videos, seek, comment and take screenshots, and the person can take control back at any time.</li>
+          <li><strong>Agents drive it too.</strong> A leased CLI lets an agent open videos, seek, comment and take screenshots, and you can take control back at any time.</li>
           <li><strong>Reviews stay.</strong> Threads are kept per video by its content, so a renamed or moved copy opens the same review.</li>
-          <li><strong>Context travels.</strong> A sidecar file or an in-app note tells the agent what the video is about.</li>
+          <li><strong>Context travels.</strong> A sidecar file or a note in the app tells your agent what the video is about.</li>
         </ul>
       </div>
     </section>
@@ -282,7 +282,7 @@
 
         <aside class="note" aria-label="First launch">
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5M10 6.2v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <p><strong>First launch.</strong> Havooch is signed ad hoc, not notarized, so macOS asks once. Open <em>System Settings › Privacy &amp; Security</em> and choose <em>Open Anyway</em>. Then try the demo from the empty window to see the loop without a video of your own.</p>
+          <p><strong>First launch.</strong> Havooch is signed ad hoc, not notarized, so macOS asks once. Open <em>System Settings › Privacy &amp; Security</em> and choose <em>Open Anyway</em>. Then try the demo from the empty window to see the whole loop, even before you have a video of your own.</p>
         </aside>
       </div>
     </section>
@@ -300,8 +300,8 @@
         <div class="story-copy">
           <p class="eyebrow">The name</p>
           <h2 id="story-title">Named after a cat.</h2>
-          <p>Havooch is named after Havuç, the maintainer's orange-and-white cat. <em>Havuç</em> is Turkish for “carrot”, for the obvious reason.</p>
-          <p>The app spells it the way it sounds — <strong>hah-VOOCH</strong> — so everyone types it and says it the same way. The logo is the cat's head, drawn simply enough to read at 16 pixels.</p>
+          <p>Havooch is named after Havuç, my orange-and-white cat. <em>Havuç</em> is Turkish for “carrot”, and one look at the cat tells you why.</p>
+          <p>I spelled the app's name the way it sounds — <strong>hah-VOOCH</strong> — so you can type it and say it without guessing. The logo is Havuç's head, drawn simply enough to read at 16 pixels.</p>
         </div>
       </div>
     </section>

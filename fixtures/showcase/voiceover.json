@@ -1,0 +1,52 @@
+{
+  "scenes": [
+    {
+      "id": "numbers",
+      "text": "Seventeen degrees. Sixty two percent. Fourteen kilometres an hour. Every forecast gives you numbers.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 7.525,
+      "paddingSeconds": 0.8
+    },
+    {
+      "id": "reveal",
+      "text": "Meet Halcyon. It tells you how the day will actually feel.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 4.05,
+      "paddingSeconds": 1.4
+    },
+    {
+      "id": "today",
+      "text": "A crisp morning, then a warm afternoon. Bring a light jacket, and leave the umbrella at home.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 6.175,
+      "paddingSeconds": 1.0
+    },
+    {
+      "id": "rain",
+      "text": "When rain is on its way, Halcyon tells you when to leave. Head out by four fifteen, and you'll stay dry.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 6.775,
+      "paddingSeconds": 1.0
+    },
+    {
+      "id": "week",
+      "text": "Your whole week, in plain words. Bright on Monday. Breezy on Tuesday. Soft rain by Thursday.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 6.825,
+      "paddingSeconds": 1.0
+    },
+    {
+      "id": "close",
+      "text": "Halcyon. Weather, in plain words. Coming to iPhone this spring.",
+      "voice": "af_heart",
+      "speed": 0.95,
+      "durationSeconds": 4.375,
+      "paddingSeconds": 1.6
+    }
+  ]
+}
