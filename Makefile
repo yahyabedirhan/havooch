@@ -5,6 +5,7 @@
 #   make test       run the tests (swift test); they never drive the Mac
 #   make bundle     build/<name>.app with the video-review CLI in Contents/Helpers, ad-hoc signed
 #   make install    bundle, then replace /Applications/<name>.app; it isn't opened (`video-review app open`)
+#                   refused while another agent holds the running app's lease
 #   make acceptance the v1 acceptance scenario through the installed CLI, in demo mode; it drives the app
 #   make clean
 
@@ -80,6 +81,12 @@ bundle: build
 RUNNING = ps -u "$$USER" -o pid=,command= | grep -F "$(INSTALLED)/Contents/MacOS/" | grep -v grep | awk '{print $$1}'
 
 install: bundle
+	@# Never quit another agent's run: while the app runs, take its lease
+	@# first. The lease lives in the app, so the quit below ends it.
+	@if [ -n "$$($(RUNNING))" ] && ! "$(INSTALLED)/Contents/Helpers/$(CLI)" control take >/dev/null; then \
+		echo "make install: another agent drives $(APP_NAME); not replaced. Try again once it releases the lease."; \
+		exit 1; \
+	fi
 	@# Only this build's copy; one that hasn't quit after about 10 s is killed.
 	@pids=$$($(RUNNING)); [ -z "$$pids" ] || kill $$pids 2>/dev/null || true
 	@tries=0; while [ -n "$$($(RUNNING))" ]; do \
