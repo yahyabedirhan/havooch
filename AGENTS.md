@@ -39,7 +39,7 @@ Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and 
 
 ## Testing
 
-Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `video-review` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
+Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Off the Mac (a Linux machine), the package leaves out `ReviewApp` and its tests, and `swift test` runs the rest; the app, its tests and every visual check stay Mac-only. Check a visual change through app control: `make install`, then the `video-review` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
 
 ## Agent skills
 
