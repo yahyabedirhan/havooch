@@ -83,9 +83,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// resize leave it. An addition to the spec's contract: the CLI can't
     /// click, drag or resize.
     case threadOpen(thread: String, frame: Rectangle? = nil)
-    /// `video-review thread expand <thread>`: the thread shows expanded in
-    /// the sidebar, as a click on its row shows it.
-    case threadExpand(thread: String)
+    /// `video-review thread show <thread>`: the sidebar shows the thread's
+    /// view, as a click on its row in the thread list shows it.
+    case threadShow(thread: String)
+    /// `video-review thread list`: the sidebar shows the thread list, as
+    /// Back in a thread view shows it.
+    case threadList
     /// `video-review screenshot <abs.png> [--appearance light|dark]
     /// [--hide-agent-indicator]`: the app's window written as a PNG at the
     /// absolute `path`, in `appearance` when it's set, as the Mac shows it
@@ -152,7 +155,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentEdit, .commentDelete, .send: .operator
-        case .threadAnswer, .threadOpen, .threadExpand: .operator
+        case .threadAnswer, .threadOpen, .threadShow, .threadList: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }
     }

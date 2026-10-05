@@ -226,10 +226,11 @@ struct AnswerTests {
         #expect(try thread(app.general, app).messages.map(\.text) == ["Both fixed in one commit"])
         #expect(app.model.notices.first?.title == "General · Mate")
 
-        // General has no frame: a click on its notice expands it in the sidebar.
+        // General has no frame: a click on its notice shows its thread view.
         let notice = try #require(app.model.notices.first)
         app.model.openNotice(notice.id)
-        #expect(app.model.expanded == ItemID(app.general))
+        #expect(app.model.shown == ItemID(app.general))
+        #expect(app.model.state().sidebar?.thread == app.general)
         #expect(app.model.state().popover == nil)
     }
 

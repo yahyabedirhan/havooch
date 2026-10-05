@@ -247,7 +247,7 @@ struct MessageTests {
         _ = try await model.addMessage(text: "general", at: nil, thread: "0")
         let firstID = try #require(ItemID(first.thread.id))
 
-        model.select(firstID)
+        model.showThread(firstID)
         await eventually { model.engine.time == 2 }
         #expect(model.engine.time == 2)
         #expect(model.selection == firstID)

@@ -74,10 +74,17 @@ enum CommentCommands {
             return .send(.threadOpen(thread: thread, frame: frame))
         },
         Command(
-            name: "thread expand", synopsis: "thread expand <thread>",
-            summary: "show a thread (an id, or a number of the open video) expanded in the sidebar, as a click on its row does"
+            name: "thread show", synopsis: "thread show <thread>",
+            summary: "show a thread's view (an id, or a number of the open video) in the sidebar, as a click on its row does: the player pauses on its frame"
         ) { arguments, _ throws(UsageError) in
-            .send(.threadExpand(thread: try arguments.one("<thread>")))
+            .send(.threadShow(thread: try arguments.one("<thread>")))
+        },
+        Command(
+            name: "thread list", synopsis: "thread list",
+            summary: "show the thread list in the sidebar, as Back in a thread view does"
+        ) { arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.threadList)
         },
     ]
 

@@ -28,7 +28,7 @@ struct ControlServerTests {
         static let sentAt = Date(timeIntervalSince1970: 1_790_000_000)
 
         func state() -> StateReport {
-            StateReport(
+            var report = StateReport(
                 app: .init(version: "0.1.0", demo: true, support: "/demo"),
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
@@ -37,6 +37,8 @@ struct ControlServerTests {
                 queue: review.queue.map(\.id.text),
                 sends: review.sends.map { StateReport.Send($0, in: review) }
             )
+            report.sidebar = StateReport.Sidebar(thread: shown, width: 340)
+            return report
         }
 
         private func change<Result>(_ call: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
@@ -115,10 +117,21 @@ struct ControlServerTests {
             return StateReport.Popover(thread: id.number, time: time, text: "", region: nil)
         }
 
-        func expandThread(_ thread: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
-            try record("thread expand \(thread)")
+        /// The thread the sidebar shows; nil for the thread list.
+        var shown: String?
+
+        func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
+            try record("thread show \(thread)")
             let threadID = try id(thread)
-            return (StateReport.Sidebar(expanded: threadID.text, width: 340), threadID.number)
+            guard review.thread(threadID) != nil else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
+            shown = threadID.text
+            return (StateReport.Sidebar(thread: shown, width: 340), threadID.number)
+        }
+
+        func showThreadList() -> StateReport.Sidebar {
+            calls.append("thread list")
+            shown = nil
+            return StateReport.Sidebar(thread: nil, width: 340)
         }
 
         private func record(_ call: String) throws(AppRefusal) {
@@ -333,6 +346,30 @@ struct ControlServerTests {
         #expect(await answer(.threadOpen(thread: "t-abcdef01-9")).reply.ok == false)
         #expect(app.calls.dropFirst() == [
             "thread open t-abcdef01-1", "thread open t-abcdef01-1 at 0.55,0.1,0.4,0.5", "thread open t-abcdef01-9",
+        ])
+    }
+
+    @Test("`thread show` shows a thread's view and `thread list` the list; the state report names the thread the sidebar shows, or null")
+    func threadShowAndList() async throws {
+        _ = try await app.addMessage(text: "Here", at: 12.5, region: nil, thread: nil)
+        var sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
+        #expect(sidebar["thread"] is NSNull)
+
+        #expect(await answer(.threadShow(thread: "t-abcdef01-1")).reply == .done("the sidebar shows #1\n"))
+        sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
+        #expect(sidebar["thread"] as? String == "t-abcdef01-1")
+        let shown = try object(await answer(.threadShow(thread: "t-abcdef01-0"), json: true).reply.output)
+        #expect(shown["sidebar"] as? [String: AnyHashable] == ["thread": "t-abcdef01-0", "width": 340])
+        #expect(shown.count == 1)
+        #expect(await answer(.threadShow(thread: "t-abcdef01-9")).reply.ok == false)
+
+        #expect(await answer(.threadList).reply == .done("the sidebar shows the thread list\n"))
+        let listed = try object(await answer(.threadList, json: true).reply.output)
+        #expect((listed["sidebar"] as? [String: Any])?["thread"] is NSNull)
+        sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
+        #expect(sidebar["thread"] is NSNull)
+        #expect(app.calls.dropFirst() == [
+            "thread show t-abcdef01-1", "thread show t-abcdef01-0", "thread show t-abcdef01-9", "thread list", "thread list",
         ])
     }
 

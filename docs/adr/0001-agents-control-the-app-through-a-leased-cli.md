@@ -38,7 +38,7 @@ The 0.1.0 build added these to the commands the spec names, so an agent can reac
 
 - `comment open [<text>] [--region x,y,w,h]` opens the popover at the player's frame, as C or a drawn rectangle does.
 - `thread open <thread> [--frame x,y,w,h]` opens a thread's popover on its frame, first kept at `--frame` when given.
-- `thread expand <thread>` expands a thread in the sidebar.
+- `thread show <thread>` shows a thread's view in the sidebar and pauses the player on its frame, as a click on its row does. `thread list` shows the thread list, as Back does. The 0.2.0 build replaced 0.1.0's `thread expand <thread>` with them (#39). `state` names the thread the sidebar shows in `sidebar.thread`, or `null` for the list.
 - `screenshot --hide-agent-indicator` leaves the agent-control icon out; by default it shows, as the person sees it.
 - `theme set system` unpins the theme, so it follows the system appearance.
 - A thread is named by its id or by its bare number on the open video (`3`, `0` for General).

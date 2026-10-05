@@ -15,7 +15,7 @@
 #   threads         a review with threads in every state (done, failed, working,
 #                   sent, queued) and their pins on the player bar, at a region
 #                   thread's frame
-#   sidebar         a collapsed and an expanded thread, with an agent reply and a question
+#   sidebar         a thread view, with an agent reply and a question
 #   thread-popover  a thread's popover on the video
 #   agent-control   the header with the agent-control icon, and the footer with
 #                   the listener's presence, the queued count and Send
@@ -23,7 +23,7 @@
 #   comment-popover the comment popover on a region (`comment open --region`)
 #
 # The themes: every built-in theme of `theme list`, pinned in turn, on the
-# threads scene with thread #3 expanded in the sidebar. A pinned theme looks
+# threads scene with thread #3 shown in the sidebar. A pinned theme looks
 # the same in both appearances, so each has one picture, named after the
 # theme in lowercase with hyphens (`Atom One Light` is atom-one-light.png).
 #
@@ -186,11 +186,11 @@ sleep 6
 echo "threads in every state, with their pins:"
 pair threads --hide-agent-indicator
 
-# Thread #3 expanded, with its reply, its open question and its region's
-# crop; the others collapsed.
-operator thread expand "$(thread "$keys")" >/dev/null
+# Thread #3 shown, with its reply, its open question and its region's
+# crop.
+operator thread show "$(thread "$keys")" >/dev/null
 sleep 1
-echo "a collapsed and an expanded thread in the sidebar:"
+echo "a thread view in the sidebar:"
 pair sidebar --hide-agent-indicator
 
 # Thread #3's popover, as a click on its pin opens it: its conversation with
@@ -217,8 +217,8 @@ operator theme set system >/dev/null
 
 # --- every built-in theme ----------------------------------------------------
 
-# The threads scene, with thread #3 expanded and no popover open.
-operator thread expand "$(thread "$keys")" >/dev/null
+# The threads scene, with thread #3 shown and no popover open.
+operator thread show "$(thread "$keys")" >/dev/null
 echo "every built-in theme:"
 themes="$(operator theme list --json | jq -r '.themes[] | select(.source == "built-in") | .name')"
 [ -n "$themes" ] || fail "theme list --json names no built-in theme"

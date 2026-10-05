@@ -46,9 +46,9 @@ final class AppModel: AppControlling {
     var draft: Draft?
     /// The thread whose pin is picked out.
     private(set) var selection: ThreadID?
-    /// The one thread the sidebar shows expanded; nil while every thread
-    /// is collapsed (L33).
-    private(set) var expanded: ThreadID?
+    /// The thread the sidebar shows in its thread view; nil while it
+    /// shows the thread list (L38).
+    private(set) var shown: ThreadID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the sidebar is shown beside the stage.
@@ -151,7 +151,7 @@ final class AppModel: AppControlling {
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         draft = nil
         selection = nil
-        expanded = nil
+        shown = nil
         isDrawingRegion = false
         // They point at threads of the video that was open.
         notices = []
@@ -307,7 +307,8 @@ final class AppModel: AppControlling {
         if deleted.removedThread, let video {
             ImageFiles.remove(layout.keyframe(deleted.thread, of: video.contentHash))
             if selection == deleted.thread { selection = nil }
-            if expanded == deleted.thread { expanded = nil }
+            // A thread view of a thread that's gone goes back to the list.
+            if shown == deleted.thread { shown = nil }
         }
         return report
     }
@@ -390,7 +391,7 @@ final class AppModel: AppControlling {
         )
         report.transcript = transcript
         report.theme = themes.report
-        report.sidebar = .init(expanded: expanded?.text, width: Double(sidebarWidth))
+        report.sidebar = sidebarReport
         return report
     }
 
@@ -639,15 +640,20 @@ final class AppModel: AppControlling {
     }
 
     /// Escape: drops the rectangle being drawn, else the popover's words
-    /// with its region. False when there was neither.
+    /// with its region, else goes back from a thread view to the thread
+    /// list. False when there was none of them.
     @discardableResult
     func escape() -> Bool {
         if isDrawingRegion {
             isDrawingRegion = false
             return true
         }
-        guard draft != nil else { return false }
-        closePopover(.discard)
+        if draft != nil {
+            closePopover(.discard)
+            return true
+        }
+        guard shown != nil, isSidebarVisible else { return false }
+        _ = showThreadList()
         return true
     }
 
@@ -704,8 +710,8 @@ final class AppModel: AppControlling {
     private func startThread(_ id: ThreadID) -> Double? {
         guard let thread = desk.review?.thread(id), let time = thread.time else { return nil }
         selection = id
-        // The sidebar shows the same conversation as the popover (L33).
-        expanded = id
+        // The sidebar shows the same conversation as the popover (L38).
+        shown = id
         engine.pause()
         if draft?.time != time {
             closePopover(.momentChanged)
@@ -761,46 +767,90 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// A click on a pin, a keyframe or a notice: selects the thread,
-    /// expands it in the sidebar, pauses and moves the player to its
-    /// frame. General has no frame to move to.
-    func select(_ id: ThreadID) {
-        guard let thread = desk.review?.thread(id) else { return }
-        selection = id
-        expanded = id
-        engine.pause()
-        // A move to the thread's frame is a change of the moment.
+    // MARK: - The sidebar
+
+    /// A click on a row of the thread list, Previous and Next, Up and
+    /// Down: the sidebar shows the thread's view, its pin is picked out,
+    /// and the player pauses on its frame. General has no frame to move
+    /// to. A move to the thread's frame is a change of the moment.
+    func showThread(_ id: ThreadID) {
+        guard let thread = show(id) else { return }
         if let time = thread.time { move(to: time) }
     }
 
-    // MARK: - The sidebar
-
-    /// A click on a thread's row in the sidebar: the thread expands, and
-    /// the one expanded before collapses. A click on the expanded thread
-    /// collapses it. The thread's pin is picked out; the player stays
-    /// where it is.
-    func expandThread(_ id: ThreadID) {
-        guard desk.review?.thread(id) != nil else { return }
-        if expanded == id {
-            expanded = nil
-        } else {
-            expanded = id
-            selection = id
-        }
-    }
-
-    /// `thread expand` (L34): the thread of the open video shows expanded,
-    /// as a click on its collapsed row shows it. A thread already expanded
-    /// stays so.
-    func expandThread(_ ref: String) throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
+    /// `thread show` (L39): the sidebar shows the thread's view, as a
+    /// click on its row does. It answers once the player is on the
+    /// thread's frame, so `state` after it shows the frame.
+    func showThread(_ ref: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
         try needVideo()
         let (id, hash) = try desk.threadID(ref)
-        guard hash == video?.contentHash else { throw AppRefusal("\(ref) is a thread of another video; open it first") }
-        if expanded != id { expandThread(id) }
-        return (StateReport.Sidebar(expanded: id.text, width: Double(sidebarWidth)), id.number)
+        guard hash == video?.contentHash, let thread = show(id) else {
+            throw AppRefusal(ReviewRefusal.otherVideo(id.text).line)
+        }
+        if let time = thread.time {
+            closePopover(.momentChanged)
+            await committing?.value
+            await engine.seek(to: time)
+        }
+        return (sidebarReport, id.number)
     }
 
-    /// The field at the foot of an expanded thread (L14): with an open
+    /// Shows thread `id`'s view, picks out its pin and pauses: the
+    /// thread, or nil for one the open video doesn't have.
+    private func show(_ id: ThreadID) -> ReviewThread? {
+        guard let thread = desk.review?.thread(id) else { return nil }
+        selection = id
+        shown = id
+        engine.pause()
+        return thread
+    }
+
+    /// Back, Escape and `thread list`: the sidebar shows the thread list.
+    /// The player stays where it is.
+    func showThreadList() -> StateReport.Sidebar {
+        shown = nil
+        return sidebarReport
+    }
+
+    /// Previous and Next in a thread view: the thread before or after the
+    /// one shown, in the list's time order (General first). Nothing at
+    /// either end.
+    func showNeighbour(forward: Bool) {
+        guard let next = neighbour(forward: forward) else { return }
+        showThread(next.id)
+    }
+
+    /// The thread Previous (`forward` false) or Next shows; nil at either
+    /// end, and in the thread list.
+    func neighbour(forward: Bool) -> ReviewThread? {
+        let threads = threads
+        guard let shown, let index = threads.firstIndex(where: { $0.id == shown }) else { return nil }
+        let next = index + (forward ? 1 : -1)
+        return threads.indices.contains(next) ? threads[next] : nil
+    }
+
+    /// The thread list's groups (`ThreadGroup`), in their order, each with
+    /// its threads in time order; an empty group isn't there.
+    var threadGroups: [ThreadGroup.Section] { ThreadGroup.sections(of: threads) }
+
+    /// How many threads need the person (an open question) besides the
+    /// one the sidebar shows: the count on Back.
+    var othersNeedingYou: Int {
+        threads.filter { $0.openQuestion != nil && $0.id != shown }.count
+    }
+
+    /// The thread whose frame is on the stage: its row in the list sits in
+    /// a `well`. Nil off every thread's frame.
+    var stageThread: ThreadID? {
+        frameMarks.first?.thread
+    }
+
+    /// The sidebar as `state` reports it: the thread it shows, and its width.
+    var sidebarReport: StateReport.Sidebar {
+        StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth))
+    }
+
+    /// The field at the foot of a thread view (L14): with an open
     /// question the words are the answer and go at once (D 2.16); else
     /// they are a follow-up in the queue (D 2.13). False when nothing was
     /// written, and the person is told why.
@@ -848,7 +898,7 @@ final class AppModel: AppControlling {
         let next = forward
             ? pinned.first { ($0.time ?? 0) > engine.time + slack }
             : pinned.last { ($0.time ?? 0) < engine.time - slack }
-        if let next { select(next.id) }
+        if let next { showThread(next.id) }
     }
 
     // MARK: - What the agent says
@@ -879,14 +929,14 @@ final class AppModel: AppControlling {
 
     /// A click on a notice: it goes, and its thread's popover opens on
     /// the thread's frame, with the answer field under a question (D 4.10).
-    /// A notice on General expands General in the sidebar (L18).
+    /// A notice on General shows General's thread view (L18).
     func openNotice(_ id: UUID) {
         guard let notice = notices.first(where: { $0.id == id }) else { return }
         dismiss(id)
         // General has no frame: its conversation is in the sidebar (L18).
         if notice.thread.number == 0 {
             isSidebarVisible = true
-            expanded = notice.thread
+            shown = notice.thread
         } else {
             openThread(notice.thread)
         }

@@ -231,22 +231,22 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The sidebar: the expanded thread and the kept width.
+    /// The sidebar: the thread it shows and the kept width.
     struct Sidebar: Encodable, Equatable {
-        /// The id of the one expanded thread; `null` while every thread is
-        /// collapsed.
-        var expanded: String?
+        /// The id of the thread the sidebar shows in its thread view;
+        /// `null` while it shows the thread list.
+        var thread: String?
         /// The sidebar's width in points, as it is kept in the settings.
         var width: Double
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(expanded, forKey: .expanded)
+            try container.encode(thread, forKey: .thread)
             try container.encode(width, forKey: .width)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case expanded, width
+            case thread, width
         }
     }
 

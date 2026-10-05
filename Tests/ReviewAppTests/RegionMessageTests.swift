@@ -333,7 +333,7 @@ struct RegionMessageTests {
         // The player is on #2's frame: one badge, two outlines.
         #expect(model.frameMarks == [AppModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
 
-        model.select(try #require(ItemID(plain.thread.id)))
+        model.showThread(try #require(ItemID(plain.thread.id)))
         await eventually { model.engine.time == 3 }
         #expect(model.frameMarks.map(\.number) == [1])
         #expect(model.frameMarks.first?.regions == [])

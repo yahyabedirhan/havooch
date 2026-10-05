@@ -40,6 +40,14 @@ _Avoid_: comment, topic, conversation, batch
 The thread with the number 0 and no keyframe, for conversation that is not about one frame.
 _Avoid_: batch thread, main thread
 
+**Thread list**:
+The sidebar's view of every thread of a review, grouped by who must act next: Needs you, With agent, Queued, Done.
+_Avoid_: inbox
+
+**Thread view**:
+The sidebar's view of one thread: its conversation, with Back to the thread list.
+_Avoid_: detail, expanded thread
+
 **Message**:
 One piece of text that the person or the agent writes on a thread, of the kind message, question or answer.
 _Avoid_: comment, note, item

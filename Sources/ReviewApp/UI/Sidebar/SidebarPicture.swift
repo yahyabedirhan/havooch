@@ -1,3 +1,4 @@
+import ReviewCore
 import ReviewStore
 import SwiftUI
 
@@ -16,6 +17,9 @@ struct SidebarPicture: View {
     /// The shape the picture takes until it is read; nil keeps the frame
     /// it's given. Once read, the picture takes its own shape.
     var shape: CGFloat?
+    /// The regions outlined on the picture, where they are on its frame:
+    /// a thread's on its keyframe. Only a picture shown whole has them.
+    var regions: [Region] = []
 
     @State private var image: CGImage?
     @Environment(\.palette) private var palette
@@ -36,6 +40,9 @@ struct SidebarPicture: View {
                 Image(decorative: image, scale: scale)
                     .resizable()
                     .aspectRatio(contentMode: fills ? .fill : .fit)
+                if !fills, !regions.isEmpty {
+                    outlines(aspect: Self.aspect(of: image))
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
@@ -46,6 +53,24 @@ struct SidebarPicture: View {
         }
         .task(id: file) { await load() }
         .accessibilityHidden(true)
+    }
+
+    /// The regions' outlines on the picture shown whole at `aspect` in the
+    /// middle of the frame.
+    private func outlines(aspect: CGFloat) -> some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let fitted = size.width / max(size.height, 1) > aspect
+                ? CGSize(width: size.height * aspect, height: size.height)
+                : CGSize(width: size.width, height: size.width / aspect)
+            let origin = CGPoint(x: (size.width - fitted.width) / 2, y: (size.height - fitted.height) / 2)
+            ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .strokeBorder(palette[.regionOutline], lineWidth: 1.5)
+                    .frame(width: max(fitted.width * region.w, 3), height: max(fitted.height * region.h, 3))
+                    .offset(x: origin.x + fitted.width * region.x, y: origin.y + fitted.height * region.y)
+            }
+        }
     }
 
     private static func aspect(of image: CGImage) -> CGFloat {

@@ -48,7 +48,7 @@ struct ControlMessageTests {
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 600),
         .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro"),
         .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
-        .threadExpand(thread: "t-f92cbb2a-1"), .threadExpand(thread: "0"),
+        .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
@@ -167,7 +167,8 @@ struct ControlMessageTests {
         #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: nil).holdSeconds == nil)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").role == .operator)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").holdSeconds == 0)
-        #expect(ControlRequest.threadExpand(thread: "1").role == .operator)
+        #expect(ControlRequest.threadShow(thread: "1").role == .operator)
+        #expect(ControlRequest.threadList.role == .operator)
     }
 
     @Test("a listener's wait takes no lease, and may be held for its timeout, or with no limit without one")

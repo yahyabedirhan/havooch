@@ -4,7 +4,8 @@ import AppKit
 /// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
 /// comma and the period move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a message,
-/// Escape drops a rectangle that's being drawn. They're off while a text
+/// Escape drops a rectangle that's being drawn, else the popover, else goes
+/// back from a thread view to the thread list. They're off while a text
 /// view has the focus, so typing never reaches the player. Cmd+Return sends
 /// the queue, also while the person types.
 enum Shortcuts {
@@ -22,7 +23,7 @@ enum Shortcuts {
         case marker(forward: Bool)
         case startMessage
         /// Escape: drops the rectangle being drawn, or the popover
-        /// when its text view lost the focus.
+        /// when its text view lost the focus, or the thread view.
         case cancel
         /// Cmd+Return: sends the queue, with the words in the popover.
         case send
