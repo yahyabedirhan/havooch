@@ -35,16 +35,15 @@ struct ThreadView: View {
             ThreadViewBar(model: model, thread: thread)
             Hairline(axis: .horizontal)
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
                     if thread.messages.isEmpty {
                         GeneralIntro()
                     }
-                    ForEach(thread.messages) { message in
-                        MessageBubble(model: model, message: message, isOpenQuestion: message.id == thread.openQuestion?.id)
-                    }
+                    Conversation(model: model, thread: thread)
                 }
-                .padding(.horizontal, Metrics.sidebarPadding)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 16 + MessageBubble.gap)
             }
             // A conversation reads from its newest message, as in a chat.
             .defaultScrollAnchor(.bottom)
@@ -57,6 +56,21 @@ struct ThreadView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.isGeneral ? "General thread" : "Thread \(thread.number)")
+    }
+}
+
+/// A thread's messages as a chat (L40), in the order written: in the
+/// thread view and in the thread popover alike.
+struct Conversation: View {
+    let model: AppModel
+    let thread: ReviewThread
+
+    var body: some View {
+        let messages = thread.messages
+        let open = thread.openQuestion?.id
+        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+            MessageBubble(model: model, message: message, isOpenQuestion: message.id == open, run: ChatRun(of: index, in: messages))
+        }
     }
 }
 

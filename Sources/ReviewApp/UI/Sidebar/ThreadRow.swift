@@ -16,6 +16,9 @@ struct ThreadSummary: Hashable {
     var writer: String?
     /// Whether the agent wrote the last message: its logo leads the preview.
     var byAgent = false
+    /// The harness of the session that wrote the last message, for its
+    /// logo; nil for the person's message or a name no agent has.
+    var writerAgent: KnownAgent?
     /// The last message's words on one line. General with no message says
     /// what it is for.
     var words: String
@@ -23,9 +26,11 @@ struct ThreadSummary: Hashable {
     var lastAt: Date?
     /// Whether the agent waits for the person's answer on the thread.
     var waitsForAnswer: Bool
-    /// The agent's name, for VoiceOver's reading of a question.
+    /// The name of the agent that wrote the last message, for VoiceOver's
+    /// reading of a question.
     private var agent: String
 
+    /// `agent` names a message of the agent's kept with no session name.
     init(_ thread: ReviewThread, agent: String) {
         self.agent = agent
         title = thread.isGeneral ? "General" : "#\(thread.number)"
@@ -33,12 +38,15 @@ struct ThreadSummary: Hashable {
         state = thread.state
         waitsForAnswer = thread.openQuestion != nil
         if let last = thread.messages.last {
+            let lastWriter = MessageWriter(last, listener: agent)
             switch (last.author, last.kind) {
             case (.agent, .question): writer = "Asks"
-            case (.agent, _): writer = agent
+            case (.agent, _): writer = lastWriter.name
             case (.person, _): writer = "You"
             }
             byAgent = last.author == .agent
+            writerAgent = lastWriter.agent
+            if byAgent { self.agent = lastWriter.name }
             words = last.text.split(whereSeparator: \.isNewline).joined(separator: " ")
             lastAt = last.at
         } else {
@@ -57,6 +65,35 @@ struct ThreadSummary: Hashable {
         let state = waitsForAnswer ? "waiting for your answer" : self.state.map(StateLook.name)
         let preview = writer == "Asks" ? "\(agent) asks: \(words)" : self.preview
         return [title, time, state, preview].compactMap(\.self).joined(separator: ", ")
+    }
+}
+
+/// What a row's menu offers (L40); `AppModel.rowActions` says which
+/// apply to a thread.
+enum RowAction: Identifiable {
+    /// Shows the thread's view, as a click on the row does.
+    case open
+    /// Moves the player to the thread's frame and leaves the list showing.
+    case showOnVideo
+    /// Deletes the thread's queued messages.
+    case deleteQueued
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .open: "Open"
+        case .showOnVideo: "Show on Video"
+        case .deleteQueued: "Delete Queued Messages"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .open: "arrow.right.circle"
+        case .showOnVideo: "play.rectangle"
+        case .deleteQueued: "trash"
+        }
     }
 }
 
@@ -112,11 +149,29 @@ struct ThreadRow: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture { model.showThread(thread.id) }
+        .contextMenu {
+            ForEach(model.rowActions(for: thread)) { action in
+                Button(action.title, systemImage: action.symbol, role: action == .deleteQueued ? .destructive : nil) { perform(action) }
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.text)
         .accessibilityHint("Shows the conversation")
         .accessibilityAddTraits(isOnStage ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { model.showThread(thread.id) }
+        .accessibilityActions {
+            ForEach(model.rowActions(for: thread).filter { $0 != .open }) { action in
+                Button(action.title) { perform(action) }
+            }
+        }
+    }
+
+    private func perform(_ action: RowAction) {
+        switch action {
+        case .open: model.showThread(thread.id)
+        case .showOnVideo: model.showOnVideo(thread.id)
+        case .deleteQueued: model.deleteQueued(on: thread.id)
+        }
     }
 
     /// The thread on the stage, else the one under the pointer.
@@ -165,7 +220,7 @@ struct ThreadRow: View {
     /// agent's logo leads a message of the agent's.
     private func preview(_ summary: ThreadSummary) -> some View {
         let writer = summary.writer.map { Text("\($0): ").foregroundStyle(palette[.textTertiary]) } ?? Text("")
-        let mark = summary.byAgent ? Text("\(agentMark) ") : Text("")
+        let mark = summary.byAgent ? Text("\(agentMark(summary.writerAgent)) ") : Text("")
         return Text("\(mark)\(writer)\(summary.words)")
             .font(.callout)
             .foregroundStyle(palette[.textSecondary])
@@ -176,8 +231,8 @@ struct ThreadRow: View {
 
     /// The agent's logo at the size of the preview's text, inside the
     /// line; the sparkle of an agent with no logo (`AgentAvatar`'s symbol).
-    private var agentMark: Text {
-        guard let agent = model.agent, let logo = AgentLogoImage.image(for: agent, dark: colorScheme == .dark),
+    private func agentMark(_ agent: KnownAgent?) -> Text {
+        guard let agent, let logo = AgentLogoImage.image(for: agent, dark: colorScheme == .dark),
               let small = logo.copy() as? NSImage
         else {
             return Text(Image(systemName: "sparkles")).foregroundStyle(palette[.agent])

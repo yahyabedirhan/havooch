@@ -118,6 +118,19 @@ struct AnswerTests {
         #expect(app.model.notices.first?.thread.text == app.general)
     }
 
+    @Test("an ack, a reply and a question keep the listener's name, so a later listener doesn't rename them")
+    func sessionName() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        _ = await listen(.ack(sendID: app.send, text: "On it"), app)
+        _ = await listen(.reply(thread: app.one, text: "Slowed it"), app)
+        _ = await listen(.ask(thread: app.two, question: "Which box?", waitSeconds: 0), app)
+
+        let agentMessages = app.model.threads.flatMap(\.messages).filter { $0.author == .agent }
+        #expect(agentMessages.map(\.text) == ["On it", "Slowed it", "Which box?"])
+        #expect(agentMessages.map(\.sessionName) == ["Mate", "Mate", "Mate"])
+    }
+
     @Test("ack of an id that names no send is refused, and changes nothing")
     func ackUnknown() async throws {
         defer { cleanUp() }
@@ -459,18 +472,6 @@ struct AnswerTests {
 @Suite("The thread's words")
 struct ThreadWordsTests {
     static let now = Date(timeIntervalSince1970: 1_790_000_000)
-
-    private func message(_ author: Message.Author, _ kind: Message.Kind) -> Message {
-        Message(id: ItemID("m-f92cbb2a-1")!, author: author, kind: kind, text: "Words", at: Self.now)
-    }
-
-    @Test("a message is headed by who said it, and how")
-    func headings() {
-        #expect(ThreadHeading(message(.agent, .message), agent: "Claude Code").title == "Claude Code")
-        #expect(ThreadHeading(message(.agent, .question), agent: "Claude Code").title == "Claude Code asked")
-        #expect(ThreadHeading(message(.person, .answer), agent: "Claude Code").title == "You answered")
-        #expect(ThreadHeading(message(.agent, .question), agent: "Claude Code").symbol == "questionmark")
-    }
 
     @Test("a notice names its thread, or General, and every notice fades after five seconds")
     func notices() {

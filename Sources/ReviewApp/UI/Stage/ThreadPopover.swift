@@ -47,7 +47,7 @@ enum ThreadPopover {
 }
 
 /// A thread's conversation in its popover, above the field (D 2.7): the
-/// sidebar's `MessageBubble`s, in the order written, the newest at the
+/// sidebar's `Conversation`, in the order written, the newest at the
 /// foot. One message style in both places, and both read the same thread,
 /// so a message written in either shows in both.
 struct PopoverConversation: View {
@@ -61,10 +61,8 @@ struct PopoverConversation: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(thread.messages) { message in
-                    MessageBubble(model: model, message: message, isOpenQuestion: message.id == thread.openQuestion?.id)
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                Conversation(model: model, thread: thread)
             }
             .padding(.vertical, 2)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }

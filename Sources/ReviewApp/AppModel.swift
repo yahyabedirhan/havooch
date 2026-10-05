@@ -805,6 +805,33 @@ final class AppModel: AppControlling {
         return thread
     }
 
+    /// What a row's menu offers for `thread` (L40): Open always; Show on
+    /// video when it has a frame; Delete queued messages when it has any.
+    func rowActions(for thread: ReviewThread) -> [RowAction] {
+        var actions: [RowAction] = [.open]
+        if !thread.isGeneral { actions.append(.showOnVideo) }
+        if thread.messages.contains(where: { $0.state == .queued }) { actions.append(.deleteQueued) }
+        return actions
+    }
+
+    /// Show on video in a row's menu: the thread's pin is picked out and
+    /// the player pauses on its frame (a change of the moment); the sidebar
+    /// stays on the list. General has no frame.
+    func showOnVideo(_ id: ThreadID) {
+        guard let thread = desk.review?.thread(id), let time = thread.time else { return }
+        selection = id
+        engine.pause()
+        move(to: time)
+    }
+
+    /// Delete queued messages in a row's menu: each queued message of the
+    /// thread goes, as its own Delete would take it; a thread left with no
+    /// message goes too. A sent message stays.
+    func deleteQueued(on id: ThreadID) {
+        let queued = desk.review?.thread(id)?.messages.filter { $0.state == .queued }.map(\.id) ?? []
+        for message in queued { delete(message) }
+    }
+
     /// Back, Escape and `thread list`: the sidebar shows the thread list.
     /// The player stays where it is.
     func showThreadList() -> StateReport.Sidebar {

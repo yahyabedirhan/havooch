@@ -305,6 +305,62 @@ struct SidebarTests {
         #expect(ThreadFieldLook(try thread(0, model)).placeholder == "Write to the agent…")
     }
 
+    @Test("a row's menu has Open, Show on video for a thread with a frame, and Delete queued messages for a thread with any")
+    func rowActions() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        _ = try await model.addMessage(text: "Sent", at: 5)
+        _ = try await model.sendQueue()
+        _ = try await model.addMessage(text: "Queued", at: 15)
+        _ = try await model.addMessage(text: "Whole video", at: nil, thread: "0")
+        #expect(model.rowActions(for: try thread(1, model)) == [.open, .showOnVideo])
+        #expect(model.rowActions(for: try thread(2, model)) == [.open, .showOnVideo, .deleteQueued])
+        #expect(model.rowActions(for: try thread(0, model)) == [.open, .deleteQueued])
+        _ = try model.deleteMessage(try #require(model.threads[0].messages.first).id.text)
+        #expect(model.rowActions(for: try thread(0, model)) == [.open])
+    }
+
+    @Test("Show on video picks out the thread's pin and pauses the player on its frame, and the sidebar stays on the list")
+    func showOnVideo() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        _ = try await model.addMessage(text: "One", at: 5)
+        _ = try await model.addMessage(text: "Two", at: 15)
+        let one = try thread(1, model).id
+        try model.play()
+
+        model.showOnVideo(one)
+        #expect(model.selection == one)
+        #expect(model.shown == nil)
+        #expect(!model.engine.isPlaying)
+        await eventually { model.engine.time == 5 }
+        #expect(model.engine.time == 5)
+        #expect(model.stageThread == one)
+    }
+
+    @Test("Delete queued messages deletes a thread's queued messages only; a thread left with none goes")
+    func deleteQueued() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        _ = try await model.addMessage(text: "Sent", at: 5)
+        _ = try await model.sendQueue()
+        _ = try await model.addMessage(text: "Follow-up", at: nil, thread: "1")
+        _ = try await model.addMessage(text: "And another", at: nil, thread: "1")
+        _ = try await model.addMessage(text: "Only queued", at: 15)
+        let (one, two) = (try thread(1, model).id, try thread(2, model).id)
+        model.showThread(two)
+
+        model.deleteQueued(on: one)
+        #expect(try thread(1, model).messages.map(\.text) == ["Sent"])
+        #expect(model.queuedCount == 1)
+
+        model.deleteQueued(on: two)
+        #expect(!model.threads.contains { $0.id == two })
+        #expect(model.queuedCount == 0)
+        // The thread view of a thread that went goes back to the list.
+        #expect(model.shown == nil)
+    }
+
     @Test("the sidebar's width stays within its limits, and the width a drag ends at is kept in settings.json for the next run")
     func width() async throws {
         defer { cleanUp() }
