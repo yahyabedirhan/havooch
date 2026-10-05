@@ -7,7 +7,7 @@ import ReviewWire
 /// What the app shows, for `state` and `app status`: as one JSON object
 /// with `--json`, as lines otherwise. Keys that have no value are `null`,
 /// never left out, so a reader can tell "nothing" from "not reported".
-struct StateReport: Encodable, Equatable {
+nonisolated struct StateReport: Encodable, Equatable {
     struct App: Encodable, Equatable {
         var version: String
         var variant: String

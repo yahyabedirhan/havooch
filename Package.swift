@@ -52,12 +52,14 @@ package.targets += [
     .executableTarget(
         name: "ReviewApp",
         dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
-        path: "Sources/ReviewApp"
+        path: "Sources/ReviewApp",
+        swiftSettings: [.defaultIsolation(MainActor.self)]
     ),
     .testTarget(
         name: "ReviewAppTests",
         dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
-        path: "Tests/ReviewAppTests"
+        path: "Tests/ReviewAppTests",
+        swiftSettings: [.defaultIsolation(MainActor.self)]
     ),
 ]
 #endif

@@ -5,7 +5,7 @@ import ReviewLease
 import ReviewWire
 
 /// Why the app refuses an action, as the one line the command prints.
-struct AppRefusal: Error, Equatable {
+nonisolated struct AppRefusal: Error, Equatable {
     var reason: String
 
     init(_ reason: String) {
@@ -55,7 +55,7 @@ final class ControlServer {
     /// client would know, undone when the reply can't be written
     /// (`undelivered`): the lease a `control take`'s reply grants, and the
     /// batch a `wait`'s reply carries.
-    struct Answer: Equatable {
+    nonisolated struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: LeaseTerm?
@@ -66,7 +66,7 @@ final class ControlServer {
     }
 
     /// Why the server couldn't start listening.
-    struct Failure: Error, CustomStringConvertible {
+    nonisolated struct Failure: Error, CustomStringConvertible {
         var description: String
     }
 
@@ -473,7 +473,7 @@ final class ControlServer {
 /// dispatch queue and not on the concurrency pool's few threads. It has no
 /// mutable state: `@unchecked` only because the dispatch source isn't
 /// declared `Sendable`.
-private final class Listener: @unchecked Sendable {
+private nonisolated final class Listener: @unchecked Sendable {
     typealias Respond = @Sendable (Data, UUID) async -> ControlServer.Answer
     typealias Undelivered = @MainActor @Sendable (ControlServer.Answer) -> Void
     typealias HungUp = @MainActor @Sendable (UUID) -> Void
@@ -595,7 +595,7 @@ private final class Listener: @unchecked Sendable {
 /// looked at: the first look comes after one interval. Its one property
 /// is a `let`: `@unchecked` only because the timer source isn't declared
 /// `Sendable`.
-private final class HangUpWatch: @unchecked Sendable {
+private nonisolated final class HangUpWatch: @unchecked Sendable {
     private let timer: any DispatchSourceTimer
 
     init(descriptor: Int32, every interval: TimeInterval, queue: DispatchQueue, hungUp: @escaping @Sendable () -> Void) {
