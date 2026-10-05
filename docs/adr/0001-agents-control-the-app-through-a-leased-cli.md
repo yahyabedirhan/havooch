@@ -11,9 +11,9 @@ Agents are users of Video Review from the first build, not only testers. Every a
 
 ## Two roles
 
-- An **operator** drives the UI: open a video, play, pause, seek, draw a region, write a comment, send a batch, answer a question, take a screenshot. Every operator command needs the lease.
-- A **listener** receives sent batches and answers them (`wait`, `ack`, `reply`, `ask`, `done`, `fail`). It needs no lease: a person watches and comments while a listener works, and the two must not fight. One listener at a time is enough for v1.
-- Free commands: `app status`, `state --json`, `control take`, `control release`, and the listener commands.
+- An **operator** drives the UI: open a video, play, pause, seek, write a message on a frame, a region or a thread, send the queue, answer a question, set the theme, take a screenshot. Every operator command needs the lease.
+- A **listener** receives sends and answers on their threads: `wait`, `ack <send-id>`, `status <message-id> working|done|failed`, `reply <thread-id>` and `ask <thread-id>`. It needs no lease: a person watches and writes while a listener works, and the two must not fight. One listener at a time is enough.
+- Free commands: `app status`, `state --json`, `control take`, `control release`, `theme list`, and the listener commands.
 
 ## The lease
 
@@ -23,7 +23,7 @@ Shipyard's rules, unchanged:
 - `control take --wait <seconds>` holds it for a longer run and queues agents first come, first served. `control release` ends it.
 - The CLI works out the holder on every call: `CLAUDE_CODE_SESSION_ID` when exported, otherwise the nearest ancestor process that isn't a shell (pid plus start time). `VIDEO_REVIEW_CONTROL_KEY` overrides both.
 - A command from another holder is refused with exit 1, naming the holder and when the lease ends.
-- While an agent holds the lease the app shows a banner. The person's Stop ends the lease and bars that holder for five minutes. The person always wins.
+- While an agent holds the lease the app shows the agent-control icon in the header, left of Context. Its popover names the agent, where it runs and the time left, and has Stop. The person's Stop ends the lease and bars that holder for five minutes. The person always wins.
 - The lease rules are a pure value in an agent-side module, given the time on each call, so they test without the app.
 
 ## Demo mode and screenshots
