@@ -1,0 +1,136 @@
+import AppKit
+import SwiftUI
+
+/// The text view a message is written in: in the popover and in a message
+/// that's being edited, and an answer under a question. It's a standard
+/// `NSTextView` that takes the focus when it appears, so the player's keys
+/// stand back while the person types and dictation has a normal text view
+/// to type into. An answer box waits for a click instead (`takesFocus`
+/// false): a question arrives while the person does something else.
+///
+/// Return commits, Shift+Return makes a new line, Escape cancels.
+struct MessageEditor: NSViewRepresentable {
+    @Binding var text: String
+    var takesFocus = true
+    let commit: () -> Void
+    let cancel: () -> Void
+
+    /// What a key does in the editor.
+    enum KeyAction: Equatable {
+        case commit, newLine, cancel
+    }
+
+    /// The action of the text view's command `selector`, if the editor
+    /// takes it; any other command is the text view's own.
+    static func keyAction(for selector: Selector, shift: Bool) -> KeyAction? {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)): shift ? .newLine : .commit
+        case #selector(NSResponder.cancelOperation(_:)): .cancel
+        default: nil
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        guard let view = scroll.documentView as? NSTextView else { return scroll }
+        view.delegate = context.coordinator
+        view.isRichText = false
+        view.allowsUndo = true
+        view.drawsBackground = false
+        view.font = .systemFont(ofSize: NSFont.systemFontSize)
+        view.textColor = context.environment.palette.nsColor(.textPrimary)
+        view.insertionPointColor = context.environment.palette.nsColor(.textPrimary)
+        view.textContainerInset = Self.inset
+        view.string = text
+        view.setAccessibilityLabel("Message")
+        guard takesFocus else { return scroll }
+        // Once the view is in its window: the person types at once.
+        Task { [weak view] in
+            guard let view, let window = view.window else { return }
+            window.makeFirstResponder(view)
+            view.setSelectedRange(NSRange(location: view.string.utf16.count, length: 0))
+        }
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let view = scroll.documentView as? NSTextView else { return }
+        // The theme may change while the editor is open.
+        let ink = context.environment.palette.nsColor(.textPrimary)
+        if view.textColor != ink {
+            view.textColor = ink
+            view.insertionPointColor = ink
+        }
+        guard view.string != text else { return }
+        view.string = text
+    }
+
+    /// The space around the text, which a placeholder over the editor
+    /// lines up with.
+    static let inset = NSSize(width: 3, height: 6)
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: MessageEditor
+
+        init(_ parent: MessageEditor) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let view = notification.object as? NSTextView else { return }
+            parent.text = view.string
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            let shift = NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false
+            switch MessageEditor.keyAction(for: selector, shift: shift) {
+            case .commit: parent.commit()
+            case .newLine: textView.insertNewlineIgnoringFieldEditor(nil)
+            case .cancel:
+                parent.cancel()
+                // A box that stays on screen gives the keys back to the player.
+                if !parent.takesFocus { textView.window?.makeFirstResponder(nil) }
+            case nil: return false
+            }
+            return true
+        }
+    }
+}
+
+/// The editor with its placeholder, in the field look both of its places
+/// share.
+struct MessageField: View {
+    @Binding var text: String
+    var placeholder = "Add a message…"
+    var takesFocus = true
+    let commit: () -> Void
+    let cancel: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        MessageEditor(text: $text, takesFocus: takesFocus, commit: commit, cancel: cancel)
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .foregroundStyle(palette[.textTertiary])
+                        // The text container's own 5 pt of line padding.
+                        .padding(.leading, MessageEditor.inset.width + 5)
+                        .padding(.top, MessageEditor.inset.height)
+                        .allowsHitTesting(false)
+                }
+            }
+            .background(palette[.field], in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(palette[.accent].opacity(0.55), lineWidth: 1.5)
+            }
+    }
+}

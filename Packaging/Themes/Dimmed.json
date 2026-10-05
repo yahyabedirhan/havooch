@@ -1,0 +1,28 @@
+{
+  "name": "Dimmed",
+  "kind": "dark",
+  "extends": "Default Dark",
+  "tokens": {
+    "window": "#2d2f33",
+    "stage": "#2d2f33",
+    "bar": "#33363b",
+    "sidebar": "#363940",
+    "sidebarSection": "#3b3e45",
+    "sidebarRowHover": "#3e424a",
+    "sidebarRowSelected": "#3d4756",
+    "header": "#2d2f33",
+    "popover": "#383b41",
+    "field": "#292b2f",
+    "track": "#50545c",
+    "separator": "#454850",
+    "bubblePerson": "#40434a",
+    "bubbleAgent": "#3a4352",
+    "bubbleQuestion": "#37484a",
+    "textPrimary": "#dfe1e5",
+    "textSecondary": "#a5a9b1",
+    "textTertiary": "#7c818a",
+    "notice": "#383b41",
+    "noticeText": "#dfe1e5",
+    "shadow": "#00000059"
+  }
+}

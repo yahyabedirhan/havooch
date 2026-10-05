@@ -36,6 +36,8 @@ Write each prefix the way its maker writes it. Use a semantic prefix before a ge
 - `Control`: the `video-review` CLI, the control socket, the lease, demo mode and screenshots.
 - `Transcript`: transcript sources and the `Transcriber`.
 - `Proto`: one prototype build and its comparison.
+- `Thread`: threads on a keyframe, the General thread, the sidebar and the thread popover.
+- `Theme`: colour tokens, theme files and choosing a theme.
 
 Reuse a prefix from this list before you add a new one. Add a new one when no prefix fits and the issue belongs to one tool, product, skill or workflow. Add it to this list in the same change.
 
