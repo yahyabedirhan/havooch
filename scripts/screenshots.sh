@@ -1,10 +1,13 @@
 #!/bin/bash
-# Makes the light and dark pictures of the main 0.1.0 states, for the pull
-# request, in assets/screenshots/0.1.0/states/ as <state>-<light|dark>.png,
-# through the `video-review` CLI only, against the installed app in demo mode
-# with the fixture video.
+# Makes the 0.1.0 gallery for the pull request, through the `video-review`
+# CLI only, against the installed app in demo mode with the fixture video:
 #
-#   make install && scripts/screenshots.sh [<folder for the PNG files>]
+#   states/<state>-<light|dark>.png   the main states, in both appearances
+#   themes/<slug>.png                 every built-in theme on one scene
+#
+# in assets/screenshots/0.1.0/, or in the folder given.
+#
+#   make install && scripts/screenshots.sh [<gallery folder>]
 #
 # The states:
 #
@@ -18,6 +21,11 @@
 #                   the listener's presence, the queued count and Send
 #   dimmed          the Dimmed theme
 #   comment-popover the comment popover on a region (`comment open --region`)
+#
+# The themes: every built-in theme of `theme list`, pinned in turn, on the
+# threads scene with thread #3 expanded in the sidebar. A pinned theme looks
+# the same in both appearances, so each has one picture, named after the
+# theme in lowercase with hyphens (`Atom One Light` is atom-one-light.png).
 #
 # A state whose view or command is not built yet is a PENDING step: the script
 # says what it waits on and makes no picture for it. Each one is marked
@@ -36,10 +44,12 @@ cli="${VIDEO_REVIEW_CLI:-/Applications/Video Review.app/Contents/Helpers/video-r
 video="$root/fixtures/sample/sample.mp4"
 
 case "${1:-}" in
-    "") shots="$root/assets/screenshots/0.1.0/states" ;;
-    /*) shots="$1" ;;
-    *) shots="$PWD/$1" ;;
+    "") gallery="$root/assets/screenshots/0.1.0" ;;
+    /*) gallery="$1" ;;
+    *) gallery="$PWD/$1" ;;
 esac
+shots="$gallery/states"
+theme_shots="$gallery/themes"
 
 run_id="$(date +%Y%m%d-%H%M%S)-$$"
 demo="$root/.scratch/screenshots/$run_id"
@@ -99,7 +109,7 @@ thread() { printf '%s' "$1" | jq -r '.thread.id'; }
 
 command -v jq >/dev/null 2>&1 || fail "jq is needed and was not found"
 [ -x "$cli" ] || fail "no video-review command at $cli; run make install, or set VIDEO_REVIEW_CLI"
-mkdir -p "$shots"
+mkdir -p "$shots" "$theme_shots"
 
 # --- the empty screen --------------------------------------------------------
 
@@ -205,12 +215,30 @@ echo "the Dimmed theme:"
 pair dimmed --hide-agent-indicator
 operator theme set system >/dev/null
 
+# --- every built-in theme ----------------------------------------------------
+
+# The threads scene, with thread #3 expanded and no popover open.
+operator thread expand "$(thread "$keys")" >/dev/null
+echo "every built-in theme:"
+themes="$(operator theme list --json | jq -r '.themes[] | select(.source == "built-in") | .name')"
+[ -n "$themes" ] || fail "theme list --json names no built-in theme"
+while IFS= read -r name; do
+    slug="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+    operator theme set "$name" >/dev/null
+    sleep 1
+    operator screenshot "$theme_shots/$slug.png" --hide-agent-indicator >/dev/null
+    echo "  $theme_shots/$slug.png"
+    taken+=("theme:$slug")
+done <<< "$themes"
+operator theme set system >/dev/null
+
 # --- the comment popover on a region -----------------------------------------
 
 # Last: a seek would queue the popover's text. A frame with no thread, so
-# the popover starts thread #6.
-operator player seek 5 >/dev/null
-operator comment open "The title and the subtitle overlap here." --region 0.2,0.15,0.6,0.25 >/dev/null
+# the popover starts thread #6, and still: 1.5 s is in the first scene,
+# not in a cross-fade. The region is the scene's title.
+operator player seek 1.5 >/dev/null
+operator comment open "The title and the subtitle overlap here." --region 0.62,0.6,0.32,0.27 >/dev/null
 sleep 1
 echo "the comment popover on a region:"
 pair comment-popover --hide-agent-indicator
