@@ -1,4 +1,8 @@
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
 import Darwin
+#endif
 import Foundation
 
 /// One process as the process table has it.
@@ -35,6 +39,7 @@ public struct SystemProcessTable: ProcessTable {
     public var currentPID: Int32 { getpid() }
 
     public func process(_ pid: Int32) -> ProcessRecord? {
+        #if canImport(Darwin)
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
@@ -50,5 +55,10 @@ public struct SystemProcessTable: ProcessTable {
             started: Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000),
             name: command
         )
+        #else
+        // Only macOS runs the app; elsewhere the walk finds no process and
+        // the holder key falls back to the session variable.
+        return nil
+        #endif
     }
 }

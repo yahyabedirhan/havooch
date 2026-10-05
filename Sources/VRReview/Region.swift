@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 
 /// A rectangle on the video's frame, in normalized coordinates: 0..1 across
