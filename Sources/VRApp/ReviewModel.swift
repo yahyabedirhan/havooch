@@ -1,8 +1,10 @@
 import Foundation
 import Observation
+import os
 import VRReview
 import VRStore
 import VRTranscript
+import VRWire
 
 /// Why the model won't do what was asked, as one line.
 struct ModelRefusal: Error, Equatable {
@@ -75,6 +77,19 @@ final class ReviewModel {
     /// Opens the video the last run had open; nil when it had none, and
     /// once that's done.
     @ObservationIgnored private var reopening: Task<Void, Never>?
+    /// Where the person's last scrub asked the player to go, until the
+    /// player is there; nil with no seek of theirs on its way.
+    private var scrubTarget: Double?
+    /// The person's seeks on their way (`scrub`), or nil with none.
+    @ObservationIgnored private var seeking: Task<Void, Never>?
+    /// Whether a drag on the timeline is going on (`beginScrub`).
+    @ObservationIgnored private var isScrubbing = false
+    /// Whether the video played when the drag started, so plays again at
+    /// its end.
+    @ObservationIgnored private var playsAfterScrub = false
+    /// Whether the video plays once the seeks on their way have landed: the
+    /// drag ended before they did.
+    @ObservationIgnored private var playsAfterSeeking = false
 
     init(
         player: any Playing,
@@ -97,6 +112,11 @@ final class ReviewModel {
     }
 
     var time: Double { player.time }
+    /// The time the transport bar shows: where a seek a person asked for is
+    /// going while it's on its way, else the player's time. The thumb
+    /// stays where the person left it instead of jumping back while the
+    /// player catches up.
+    var shownTime: Double { scrubTarget ?? player.time }
     var isPlaying: Bool { player.isPlaying }
     /// The open video's length in seconds; 0 with none.
     var duration: Double { video?.info.duration ?? 0 }
@@ -740,7 +760,11 @@ final class ReviewModel {
     /// is asking who could be refused.
     private static func complain(_ line: String) {
         FileHandle.standardError.write(Data("video-review: \(line)\n".utf8))
+        log.error("\(line, privacy: .public)")
     }
+
+    /// The model's log, for Console and a bug report.
+    private static let log = Logger(subsystem: AppIdentity.bundleID, category: "ReviewModel")
 
     /// Forgets a dropped comment's keyframe and crop and removes their
     /// files. An image still being written removes itself when it lands.
@@ -779,22 +803,77 @@ final class ReviewModel {
         }
     }
 
-    /// Moves to `seconds`, kept inside the video.
-    func scrub(to seconds: Double) {
-        guard video != nil else { return }
+    /// Moves to `seconds`, kept inside the video. One seek is on its way at
+    /// a time: a call while one is landing only replaces where the next one
+    /// goes, so a drag's many calls end where the pointer stopped, never
+    /// where an older seek happened to land last.
+    ///
+    /// Returns the seeks on their way, which end once the player is at the
+    /// last time asked for; nil with no video.
+    @discardableResult
+    func scrub(to seconds: Double) -> Task<Void, Never>? {
+        guard video != nil else { return nil }
         let target = min(max(0, seconds), duration)
-        Task { try? await seek(to: target) }
+        scrubTarget = target
+        if let seeking { return seeking }
+        let task = Task { await seekToLatest() }
+        seeking = task
+        return task
     }
 
+    /// Seeks to the last time asked for until no newer one is waiting, then
+    /// plays again when a drag that paused the video ended meanwhile.
+    private func seekToLatest() async {
+        var landed: Double?
+        while let target = scrubTarget, target != landed {
+            try? await seek(to: target)
+            landed = target
+        }
+        // Nothing awaits from here on, so a `scrub` can't slip in between.
+        scrubTarget = nil
+        seeking = nil
+        if playsAfterSeeking {
+            playsAfterSeeking = false
+            player.play()
+        }
+    }
+
+    /// A drag on the timeline started: the video pauses, so the frame shown
+    /// is the one under the pointer, and plays again at `endScrub` if it
+    /// was playing.
+    func beginScrub() {
+        guard video != nil, !isScrubbing else { return }
+        isScrubbing = true
+        playsAfterScrub = player.isPlaying
+        playsAfterSeeking = false
+        if playsAfterScrub { try? pause() }
+    }
+
+    /// The drag on the timeline ended: the video plays again, once the last
+    /// seek has landed, if it played when the drag started.
+    func endScrub() {
+        guard isScrubbing else { return }
+        isScrubbing = false
+        guard playsAfterScrub else { return }
+        playsAfterScrub = false
+        if seeking != nil {
+            playsAfterSeeking = true
+        } else {
+            player.play()
+        }
+    }
+
+    /// Moves by `seconds` from where the player is going, so presses that
+    /// come faster than the seeks land add up.
     func skip(by seconds: Double) {
-        scrub(to: player.time + seconds)
+        scrub(to: shownTime + seconds)
     }
 
     /// Pauses and moves by whole frames of the open video.
     func step(frames: Int) {
         guard let video, video.frameRate > 0 else { return }
         try? pause()
-        scrub(to: player.time + Double(frames) / video.frameRate)
+        scrub(to: shownTime + Double(frames) / video.frameRate)
     }
 
     /// Pauses and opens the comment box at the player's time, on `region`

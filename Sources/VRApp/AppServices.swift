@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import VRLease
 import VRStore
 import VRWire
@@ -54,9 +55,13 @@ final class AppServices {
             try server.start()
         } catch {
             FileHandle.standardError.write(Data("video-review: no app control: \(error.description)\n".utf8))
+            Self.log.error("no app control: \(error.description, privacy: .public)")
         }
         shortcuts.install()
     }
+
+    /// The composition root's log, for Console and a bug report.
+    private static let log = Logger(subsystem: AppIdentity.bundleID, category: "AppServices")
 
     /// Stops listening and removes the socket.
     func stop() {

@@ -14,9 +14,8 @@ enum Theme {
     static let footerHeight: CGFloat = 52
     static let trackHeight: CGFloat = 4
     static let thumbSize: CGFloat = 12
-    /// A comment's pin above the track, and the pin of the selected one.
+    /// A comment's pin above the track; the selected one is drawn larger.
     static let pinSize: CGFloat = 11
-    static let selectedPinSize: CGFloat = 13
     static let sidebarWidth: CGFloat = 340
     static let cardCorner: CGFloat = 8
     /// Times, in digits that don't shift as they change.
