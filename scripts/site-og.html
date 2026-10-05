@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- The link-preview image of the landing page, site/assets/og.png (1200 x 630).
+     It reads the logo and a screenshot from site/assets/, so a new logo or
+     gallery shows here too. To make the PNG again, from the repo root:
+
+       npx playwright screenshot --viewport-size=1200,630 \
+         "file://$PWD/scripts/site-og.html" site/assets/og.png
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Havooch link preview</title>
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #1d1d1f;
+    background:
+      radial-gradient(900px 600px at 0% 0%, #fff3e8 0%, transparent 60%),
+      radial-gradient(700px 500px at 100% 100%, #ffe0c4 0%, transparent 60%),
+      #fbf8f5;
+    position: relative;
+  }
+  .copy { position: absolute; left: 72px; top: 0; bottom: 0; width: 500px; display: flex; flex-direction: column; justify-content: center; }
+  .mark { width: 96px; height: 96px; margin-bottom: 26px; filter: drop-shadow(0 8px 18px rgba(236,122,47,.3)); }
+  h1 { margin: 0; font-size: 92px; line-height: .95; letter-spacing: -0.045em; font-weight: 750; }
+  .say { margin-top: 12px; font: 500 24px/1 ui-monospace, "SF Mono", Menlo, monospace; color: #8a7f76; letter-spacing: .02em; }
+  .pitch { margin-top: 30px; font-size: 30px; line-height: 1.18; letter-spacing: -0.022em; font-weight: 650; }
+  .pitch span { color: #b5520f; }
+  .meta { margin-top: 22px; font-size: 19px; color: #6e665f; }
+  .shot {
+    position: absolute; left: 590px; top: 118px; width: 560px;
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 30px 70px -18px rgba(70, 35, 10, .35), 0 0 0 .5px rgba(0,0,0,.1);
+  }
+  .shot img { display: block; width: 760px; max-width: none; }
+  .chat {
+    position: absolute; left: 860px; top: 150px; width: 290px;
+    border-radius: 14px; overflow: hidden; background: #fff;
+    box-shadow: 0 24px 50px -12px rgba(70, 35, 10, .4), 0 0 0 .5px rgba(0,0,0,.12);
+  }
+  .chat img { display: block; width: 100%; }
+</style>
+</head>
+<body>
+  <div class="copy">
+    <img class="mark" src="../site/assets/logo.svg" alt="">
+    <h1>Havooch</h1>
+    <div class="say">/hah-VOOCH/</div>
+    <div class="pitch">Pause. Comment. <span>⌘↩</span>.<br>Your agent answers in the player.</div>
+    <div class="meta">A native macOS video player · free and open source</div>
+  </div>
+  <div class="shot"><img src="../site/assets/shots/hero-light.webp" alt=""></div>
+  <div class="chat"><img src="../site/assets/shots/chat-light.webp" alt=""></div>
+</body>
+</html>
