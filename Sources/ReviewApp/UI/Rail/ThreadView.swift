@@ -33,7 +33,7 @@ struct ThreadView: View {
 
     var body: some View {
         let open = answer == nil ? nil : messages.openQuestion
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(messages) { message in
                 ThreadRow(message: message, agent: agent, isOpen: message.id == open?.id)
             }
@@ -72,8 +72,9 @@ struct ThreadView: View {
     }
 }
 
-/// One message of a thread: a badge for its author, who said it and when,
-/// and the words. An open question is picked out: the agent waits for it.
+/// One message of a thread, as in a chat: a badge for its author, who said
+/// it and when, and the words in a soft bubble. An open question is picked
+/// out: the agent waits for it.
 struct ThreadRow: View {
     let message: ThreadMessage
     let agent: String
@@ -88,22 +89,19 @@ struct ThreadRow: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: heading.symbol)
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.onTint)
                 .frame(width: Self.badge, height: Self.badge)
                 .background(tint, in: Circle())
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(heading.title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(message.kind == .question ? AnyShapeStyle(Theme.question) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(isQuestion ? AnyShapeStyle(Theme.question) : AnyShapeStyle(.secondary))
                     if isOpen {
                         Text("waiting for you")
-                            .font(.caption2.weight(.semibold))
+                            .font(.caption2.weight(.medium))
                             .foregroundStyle(Theme.question)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Theme.question.opacity(0.14), in: Capsule())
                     }
                     Spacer(minLength: 4)
                     Text(message.at.formatted(.dateTime.hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits)))
@@ -112,19 +110,36 @@ struct ThreadRow: View {
                 }
                 Text(message.text)
                     .font(.callout)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(bubble, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    // The bubble hugs its words, as in a chat.
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .accessibilityElement(children: .combine)
     }
 
+    private var isQuestion: Bool { message.author == .agent && message.kind == .question }
+
+    /// The badge's fill: the agent's colour, a question's, or a quiet grey
+    /// for the person.
     private var tint: Color {
         switch (message.author, message.kind) {
         case (.agent, .question): Theme.question
         case (.agent, _): Theme.agent
-        case (.person, _): .gray
+        case (.person, _): Theme.tint(.sent)
+        }
+    }
+
+    /// The bubble behind the words: no stroke, only a light fill.
+    private var bubble: Color {
+        switch (message.author, message.kind) {
+        case (.agent, .question): Theme.question.opacity(0.14)
+        case (.agent, _): Theme.agentBubble
+        case (.person, _): Theme.personBubble
         }
     }
 }

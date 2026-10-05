@@ -62,7 +62,7 @@ final class AppModel: AppControlling {
     private(set) var video: OpenVideo?
     /// The comment being written; nil while the comment box is closed.
     var draft: Draft?
-    /// The comment whose marker and card are picked out.
+    /// The comment whose marker and row are picked out.
     private(set) var selection: ItemID?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
@@ -104,7 +104,7 @@ final class AppModel: AppControlling {
         listeners.announce = { [weak self] notice in self?.raise(notice) }
     }
 
-    /// The open video's transcript as `state` and the toolbar's chip show
+    /// The open video's transcript as `state` and the Context popover show
     /// it: its source, and how far it is.
     var transcript: StateReport.Transcript? {
         video.flatMap { transcripts.report(of: $0.contentHash) }
@@ -530,12 +530,12 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// A click on a marker or a card: selects the comment, pauses and
+    /// A click on a marker or a row: selects the comment, pauses and
     /// moves the player to its time.
     func select(_ id: ItemID) {
         guard let comment = desk.review?.comment(id) else { return }
         selection = id
-        // Its thread opens with the card: the person sees what the agent said.
+        // Its thread opens with the row: the person sees what the agent said.
         unread.remove(id)
         engine.pause()
         move(to: comment.time)
@@ -598,7 +598,7 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// Save on a card: the comment's new text.
+    /// Save on a row: the comment's new text.
     func edit(_ id: ItemID, text: String) {
         do throws(AppRefusal) {
             _ = try editComment(id.text, text: text)
@@ -607,7 +607,7 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// Delete on a card.
+    /// Delete on a row.
     func delete(_ id: ItemID) {
         do throws(AppRefusal) {
             _ = try deleteComment(id.text)

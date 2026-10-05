@@ -32,6 +32,9 @@ struct PresencePill: Equatable {
 /// The foot of the rail: whether an agent listens, and the Send button with
 /// how many comments it sends. Sending is safe either way: with no agent
 /// the batch waits for the next one.
+///
+/// It is as tall as the timeline lane under the stage, so the line over it
+/// carries on the stage's lower edge across the window.
 struct SendBar: View {
     let model: AppModel
 
@@ -43,33 +46,31 @@ struct SendBar: View {
             }
             sendButton
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .padding(.horizontal, Theme.railPadding)
+        .frame(maxWidth: .infinity)
+        .frame(height: Theme.footerHeight)
         .overlay(alignment: .top) { Divider() }
     }
 
+    /// Whether an agent is there, as a quiet dot and words: no capsule.
     private func presence(at time: Date) -> some View {
         let outbox = model.listeners.outbox
         let presence = outbox.presence(at: time)
         let pill = PresencePill(presence: presence, session: outbox.session?.name, pendingBatches: outbox.pending.count)
-        return HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                PresenceDot(presence: presence)
-                Text(pill.title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(presence == .absent ? .secondary : .primary)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Self.tint(presence).opacity(presence == .absent ? 0.12 : 0.16), in: Capsule())
-            Text(pill.detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+        return HStack(spacing: 6) {
+            PresenceDot(presence: presence)
+            Text(pill.title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(presence == .absent ? .secondary : .primary)
                 .lineLimit(1)
-                .truncationMode(.tail)
+                .fixedSize()
+            if !pill.detail.isEmpty {
+                Text("· \(pill.detail)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer(minLength: 0)
         }
         .help(Self.help(presence))
@@ -99,11 +100,13 @@ struct SendBar: View {
         .accessibilityLabel(count == 0 ? "Send" : "Send \(count) comment\(count == 1 ? "" : "s")")
     }
 
+    /// The dot's colour: the pastels of a done and a working comment, and
+    /// no colour for no agent.
     static func tint(_ presence: Presence) -> Color {
         switch presence {
-        case .listening: .green
-        case .working: .orange
-        case .absent: .gray
+        case .listening: Theme.tint(.done)
+        case .working: Theme.tint(.working)
+        case .absent: .secondary
         }
     }
 
@@ -116,7 +119,7 @@ struct SendBar: View {
     }
 }
 
-/// The pill's dot, told by shape as well as colour: filled for an agent
+/// The presence dot, told by shape as well as colour: filled for an agent
 /// that listens, half for one that works, hollow for none.
 private struct PresenceDot: View {
     let presence: Presence

@@ -3,29 +3,37 @@ import ReviewStore
 import ReviewWire
 import SwiftUI
 
-/// One comment in the rail: its pin, time and state, a picture (the
-/// region's crop, else the keyframe) and the text, then its thread. A click
-/// selects it and moves the player to its time. A queued card can be edited
-/// and deleted; no other card shows those controls. The thread is open on
-/// the selected card and on any card with an open question; another card
-/// shows its last message on one line.
-struct CommentCard: View {
+/// One comment in the rail, as a full-width row: its pin, time and state, a
+/// picture (the region's crop, else the keyframe) and the text, then its
+/// thread. A click selects it and moves the player to its time. A queued
+/// row can be edited and deleted; no other row shows those controls. The
+/// thread is open on the selected row and on any row with an open
+/// question; another row shows its last message on one line.
+///
+/// A row has no border: the selected row is told by its fill, and the rail
+/// draws a hairline between rows.
+struct CommentRow: View {
     let model: AppModel
     let comment: Comment
     /// The comment's number in time order, as on its marker.
     let number: Int
 
     @State private var thumbnail: CGImage?
-    /// The text being edited; nil while the card only shows its comment.
+    /// The text being edited; nil while the row only shows its comment.
     @State private var edited: String?
+    @State private var isHovered = false
 
     private static let thumbnailSize = CGSize(width: 96, height: 54)
-    private static let corner: CGFloat = 10
+    /// The space between the pin and the time, which the text lines up with.
+    static let pinSpacing: CGFloat = 8
+    /// How far a row's words start from its leading edge, where the
+    /// hairline between rows starts.
+    static let textInset: CGFloat = Theme.railPadding + MarkerPin.size + pinSpacing
 
     private var isSelected: Bool { model.selection == comment.id }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             HStack(alignment: .top, spacing: 10) {
                 keyframe
@@ -51,32 +59,37 @@ struct CommentCard: View {
                 .controlSize(.small)
             }
             if !comment.thread.isEmpty {
-                Divider()
                 if isSelected || comment.openQuestion != nil {
                     ThreadView(messages: comment.thread, agent: model.agentName) { model.answerQuestion(comment.id, text: $0) }
+                        .padding(.top, 4)
                 } else {
                     threadSummary
                 }
             }
         }
-        .padding(10)
-        .background(
-            isSelected ? AnyShapeStyle(.tint.opacity(0.13)) : AnyShapeStyle(.quaternary.opacity(0.45)),
-            in: RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-                .strokeBorder(isSelected ? AnyShapeStyle(.tint.opacity(0.75)) : AnyShapeStyle(.quaternary), lineWidth: isSelected ? 1.5 : 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
+        .padding(.horizontal, Theme.railPadding)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(fill)
+        .animation(.smooth(duration: 0.15), value: isSelected)
+        .animation(.smooth(duration: 0.12), value: isHovered)
+        .contentShape(Rectangle())
         .onTapGesture { model.select(comment.id) }
+        .onHover { isHovered = $0 }
         .task(id: comment.id) { await loadThumbnail() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Comment \(number) at \(TimeCode.text(comment.time))")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The selected row's fill; a fainter one under the pointer.
+    private var fill: Color {
+        if isSelected { return Theme.selectedRow }
+        return isHovered ? Color.primary.opacity(0.025) : .clear
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Self.pinSpacing) {
             MarkerPin(
                 number: number, state: comment.state, isSelected: isSelected,
                 badge: MarkerPin.Badge(comment, unread: model.unread)
@@ -93,8 +106,8 @@ struct CommentCard: View {
             StateChip(state: comment.state)
             Spacer(minLength: 4)
             if comment.state.isEditable, edited == nil {
-                CardButton("Edit", symbol: "pencil") { edited = comment.text }
-                CardButton("Delete", symbol: "trash") { model.delete(comment.id) }
+                RowButton("Edit", symbol: "pencil") { edited = comment.text }
+                RowButton("Delete", symbol: "trash") { model.delete(comment.id) }
             }
         }
     }
@@ -108,7 +121,7 @@ struct CommentCard: View {
             HStack(spacing: 6) {
                 Image(systemName: isUnread ? "bubble.left.fill" : "bubble.left")
                     .font(.caption)
-                    .foregroundStyle(isUnread ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(isUnread ? AnyShapeStyle(Theme.agent) : AnyShapeStyle(.tertiary))
                     .accessibilityHidden(true)
                 Text("\(last.author == .agent ? model.agentName : "You"): \(last.text)")
                     .font(.caption.weight(isUnread ? .semibold : .regular))
@@ -118,11 +131,8 @@ struct CommentCard: View {
                 Spacer(minLength: 4)
                 if comment.thread.count > 1 {
                     Text("\(comment.thread.count)")
-                        .font(.caption2.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(.quaternary, in: Capsule())
+                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .foregroundStyle(.tertiary)
                         .accessibilityLabel("\(comment.thread.count) messages")
                 }
             }
@@ -140,7 +150,12 @@ struct CommentCard: View {
         }
         .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.quaternary, lineWidth: 1) }
+        // A hairline only, so the black of the letterbox keeps an edge on a
+        // dark rail.
+        .overlay {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+        }
         .accessibilityHidden(true)
     }
 
@@ -157,17 +172,20 @@ struct CommentCard: View {
     private func loadThumbnail() async {
         // What the comment points at: its region's crop, else the whole frame.
         guard let file = model.crop(of: comment) ?? model.keyframe(of: comment) else { return }
-        // Twice the card's size, for a sharp picture on a Retina display.
+        // Twice the thumbnail's size, for a sharp picture on a Retina display.
         thumbnail = await Self.thumbnail(of: file, side: Int(Self.thumbnailSize.width) * 2)
     }
 
     /// The picture at `file`, made small off the main actor.
+    @concurrent
     nonisolated private static func thumbnail(of file: URL, side: Int) async -> CGImage? {
         ImageFiles.thumbnail(of: file, side: side)
     }
 }
 
-/// A comment's state as a chip: its glyph and its name, in its colour.
+/// A comment's state: its glyph and its name, in its colour. No capsule
+/// behind it: the pin beside it already carries the colour, and the name
+/// only has to be read.
 struct StateChip: View {
     let state: CommentState
 
@@ -179,15 +197,12 @@ struct StateChip: View {
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(Theme.tint(state))
-        .padding(.horizontal, 7)
-        .padding(.vertical, 2.5)
-        .background(Theme.tint(state).opacity(0.14), in: Capsule())
         .accessibilityElement(children: .combine)
     }
 }
 
-/// A quiet symbol button on a card.
-private struct CardButton: View {
+/// A quiet symbol button on a row.
+private struct RowButton: View {
     let title: String
     let symbol: String
     let action: () -> Void
