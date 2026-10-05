@@ -25,7 +25,7 @@ public struct AppleSpeechRecognizer: SpeechRecognizing {
 
     public func lines(of file: URL) -> AsyncThrowingStream<TranscriptLine, any Error> {
         AsyncThrowingStream { continuation in
-            let work = Task.detached(priority: .utility) { [locale] in
+            let work = Task(priority: .utility) { [locale] in
                 do {
                     try await Self.transcribe(file, locale: locale) { continuation.yield($0) }
                     continuation.finish()
@@ -37,6 +37,7 @@ public struct AppleSpeechRecognizer: SpeechRecognizing {
         }
     }
 
+    @concurrent
     private static func transcribe(_ file: URL, locale: Locale, line: @escaping @Sendable (TranscriptLine) -> Void) async throws {
         // A video with no sound has no speech: done, with no lines.
         guard try await !AVURLAsset(url: file).loadTracks(withMediaType: .audio).isEmpty else { return }

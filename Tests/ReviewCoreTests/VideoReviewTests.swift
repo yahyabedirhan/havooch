@@ -139,15 +139,17 @@ struct CommentStateTests {
 
 @Suite("Item ids")
 struct ItemIDTests {
-    @Test("a new id has its kind's prefix and 8 hex digits")
-    func make() throws {
-        for kind in ItemID.Kind.allCases {
-            let id = ItemID.make(kind)
-            #expect(id.kind == kind)
-            #expect(id.text.wholeMatch(of: /[cbm]-[0-9a-f]{8}/) != nil)
-            #expect(id.text.hasPrefix(kind.rawValue + "-"))
-            #expect(ItemID(id.text) == id)
-        }
+    @Test("a new id has its kind's prefix and 8 hex digits", arguments: ItemID.Kind.allCases)
+    func make(kind: ItemID.Kind) {
+        let id = ItemID.make(kind)
+        #expect(id.kind == kind)
+        #expect(id.text.wholeMatch(of: /[cbm]-[0-9a-f]{8}/) != nil)
+        #expect(id.text.hasPrefix(kind.rawValue + "-"))
+        #expect(ItemID(id.text) == id)
+    }
+
+    @Test("two new ids differ")
+    func makeTwice() {
         #expect(ItemID.make(.comment) != ItemID.make(.comment))
     }
 

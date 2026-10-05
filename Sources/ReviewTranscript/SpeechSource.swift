@@ -64,9 +64,12 @@ public final class SpeechSource: Transcriber {
             return true
         }
         guard starts else { return }
-        Task.detached(priority: .utility) { [self] in await transcribe(video) }
+        Task(priority: .utility) { [self] in await transcribe(video) }
     }
 
+    /// Off the caller's actor: the recognizer's stream and the cache's file
+    /// are slow.
+    @concurrent
     private func transcribe(_ video: VideoFile) async {
         if let cached = cache.load(video), cached.complete, cached.source == .speech {
             known.withLock { $0[video.contentHash] = cached }

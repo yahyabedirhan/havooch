@@ -88,7 +88,8 @@ public struct Outbox: Codable, Equatable, Sendable {
         let known = Set(unfinished)
         pending.removeAll { !known.contains($0) }
         taken.removeAll { !known.contains($0) }
-        for ref in unfinished where !pending.contains(ref) && !taken.contains(ref) { pending.append(ref) }
+        var present = Set(pending).union(taken)
+        for ref in unfinished where present.insert(ref).inserted { pending.append(ref) }
     }
 
     /// Whether `other` is the same on disk: the same line, taken batches,
