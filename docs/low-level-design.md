@@ -206,13 +206,18 @@ What changed from proto-2, in short:
 
 ```text
 Package.swift                      targets below; macOS 26; no dependencies; ReviewApp and its tests under #if os(macOS)
-Makefile                           test, build, bundle, install, acceptance, agent-logos, clean; reads VERSION from ReviewWire/Version.swift
+Makefile                           test, build, bundle, install, acceptance, agent-logos, identity, clean; reads VERSION from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle)
 Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
 Packaging/AgentLogos/              the nine agent harnesses' logos as PDFs (OpenCode has a -dark file), drawn by make agent-logos
                                    from assets/images/agent-logos/*.svg, and NOTICE.md (Shipyard's attribution at 74b9695);
                                    copied to Contents/Resources/AgentLogos/
 scripts/acceptance.sh              the 0.2.0 acceptance scenario, CLI only (#33, #44)
+scripts/install.sh                 installs the latest release (or --from <zip>): the app, a link to its command, the mate skill; --uninstall (#49)
+scripts/update-tap.sh              writes the cask's version and sha256 into the tap repository; run by the release workflow (#49)
+Packaging/homebrew/havooch.rb      the cask the tap carries; version and sha256 filled in by scripts/update-tap.sh
+.github/workflows/release.yml      on a v* tag: make test, make bundle, the zip and its .sha256 as a GitHub Release, then the tap
+LICENSE, README.md                 MIT; what the app is, install, first launch, build from source
 scripts/screenshots.sh             the 0.2.0 gallery: states/ in light and dark, themes/ the list and a thread view per built-in theme (#33, #44)
 .agents/skills/video-review-mate/  the listener skill (#27)
 fixtures/sample/                   the fixture video and its sidecars
@@ -867,6 +872,7 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 
 - `Package.swift`: tools 6.2, macOS 26, no dependencies; `ReviewApp` uses `.defaultIsolation(MainActor.self)`; explicit `@MainActor` marks that the default makes redundant are removed (D A.2). `ReviewApp`, `ReviewAppTests` and the `VideoReview` product are added under `#if os(macOS)` (D A.9).
 - `make bundle` stamps `Video Review`, the bundle id and `0.1.0` into `Info.plist`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Video Review.app` and never touches the prototype apps.
+- A release is a `v<version>` tag; the tag must match `Version.app`. `.github/workflows/release.yml` reads the name, the command and the version through `make identity`, zips the bundle with `ditto -c -k --keepParent` as `<command>-<version>.zip` with `<command>-<version>.zip.sha256` beside it, and publishes both. `scripts/install.sh` reads the app and command names from the zip, never from a constant; it finds an installed copy for `--uninstall` by the bundle id `com.<repository owner>.<command>`. The app is ad-hoc signed and not notarized, so the first launch needs Open Anyway (#49).
 - Owner tests, one per contract at its strongest boundary:
 
 | Contract | Owner test |

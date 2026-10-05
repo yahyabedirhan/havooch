@@ -13,6 +13,8 @@
 #                   command, on demo data (scripts/acceptance.sh); after make install
 #   make agent-logos redraw Packaging/AgentLogos/*.pdf from the SVGs in
 #                   assets/images/agent-logos/ (needs rsvg-convert)
+#   make identity   print the app name, the command, the bundle id and the
+#                   version as name=value lines (the release workflow reads them)
 #   make clean
 
 # The executables' names.
@@ -49,7 +51,7 @@ MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
-.PHONY: all build test bundle install acceptance agent-logos clean
+.PHONY: all build test bundle install acceptance agent-logos identity clean
 
 all: build
 
@@ -124,6 +126,14 @@ agent-logos:
 		rsvg-convert --format pdf --output $$pdf $$svg || exit 1; \
 		echo "drew $$pdf"; \
 	done
+
+# One name=value line each, the form $$GITHUB_OUTPUT takes, so the release
+# workflow names the zip and the release from the same constants as this file.
+identity:
+	@echo "app_name=$(APP_NAME)"
+	@echo "command=$(CLI)"
+	@echo "bundle_id=$(BUNDLE_ID)"
+	@echo "version=$(VERSION)"
 
 clean:
 	rm -rf $(BUILD_DIR) .build
