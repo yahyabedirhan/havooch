@@ -1,3 +1,4 @@
+import ReviewCore
 import SwiftUI
 
 /// The words of the context popover: what the agent is told about the
@@ -32,26 +33,44 @@ struct ContextWords: Equatable {
 }
 
 /// The toolbar's Context button, with the popover it opens. Its glyph is
-/// filled while the video has a context to send.
+/// filled while the video has a context to send, and pulses while this Mac
+/// transcribes the video's speech.
 struct ContextButton: View {
     @Bindable var model: AppModel
+    /// The transcript's words, read again each second: speech arrives with
+    /// no event.
+    @State private var transcript: TranscriptChip?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let words = ContextPopover.words(for: model)
+        let isTranscribing = transcript?.isWorking == true
         Button {
             model.isContextShown.toggle()
         } label: {
             Label("Context", systemImage: model.contextText == nil ? "doc.text" : "doc.text.fill")
+                .symbolEffect(.pulse, isActive: isTranscribing && !reduceMotion)
         }
-        .help(ContextPopover.words(for: model).help)
+        .help(isTranscribing ? "\(words.help). \(transcript?.title ?? "")" : words.help)
         .popover(isPresented: $model.isContextShown, arrowEdge: .bottom) {
             ContextPopover(model: model)
+                .tint(Theme.accent)
+        }
+        .task {
+            // Ends when the button leaves the toolbar with the video.
+            while !Task.isCancelled {
+                let now = model.transcript.map { TranscriptChip($0) }
+                if now != transcript { transcript = now }
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
     }
 }
 
 /// What the agent is told about the video: the sidecar file's text, which
-/// is read-only here, and the person's own note under it. Save and Return
-/// keep the note; Escape closes the popover and drops the change.
+/// is read-only here, the person's own note under it, and where the
+/// transcript around each comment comes from. Save and Return keep the
+/// note; Escape closes the popover and drops the change.
 struct ContextPopover: View {
     let model: AppModel
     /// The note as it's being written; the model's until it's saved.
@@ -61,6 +80,9 @@ struct ContextPopover: View {
     /// The sidecar's text scrolls in a box of one height, so the popover
     /// doesn't change size with the file.
     static let sidecarHeight: CGFloat = 140
+    /// The quiet fill behind a part of the popover, in place of a border.
+    private static let partFill = Color.primary.opacity(0.04)
+    private static let partShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
     static func words(for model: AppModel) -> ContextWords {
         ContextWords(
@@ -72,7 +94,7 @@ struct ContextPopover: View {
 
     var body: some View {
         let words = Self.words(for: model)
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Context for the agent")
                     .font(.headline)
@@ -83,10 +105,10 @@ struct ContextPopover: View {
             }
             sidecar(words)
             noteEditor
-            Divider()
+            transcriptPart
             HStack(spacing: 8) {
                 Image(systemName: model.contextText == nil ? "circle.dashed" : (model.isContextDue ? "arrow.up.circle" : "checkmark.circle"))
-                    .foregroundStyle(model.contextText != nil && !model.isContextDue ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(model.contextText != nil && !model.isContextDue ? Theme.tint(.done) : Color.secondary)
                 Text(words.delivery)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -144,7 +166,7 @@ struct ContextPopover: View {
                         .padding(9)
                 }
                 .frame(height: Self.sidecarHeight)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(Self.partFill, in: Self.partShape)
                 .help((sidecar.file.path as NSString).abbreviatingWithTildeInPath)
             }
         }
@@ -168,6 +190,39 @@ struct ContextPopover: View {
                 commit: { model.saveContextNote(note) }, cancel: { model.isContextShown = false }
             )
             .frame(height: 84)
+        }
+    }
+
+    /// Where the transcript around each comment comes from, and how far it
+    /// is. Read again each second, since speech arrives with no event.
+    private var transcriptPart: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if let transcript = model.transcript {
+                let chip = TranscriptChip(transcript)
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: chip.symbol)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(chip.title)
+                            .font(.callout.weight(.medium))
+                        Text(chip.help)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    if chip.isWorking {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Self.partFill, in: Self.partShape)
+                .accessibilityElement(children: .combine)
+            }
         }
     }
 }

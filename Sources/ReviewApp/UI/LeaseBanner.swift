@@ -2,10 +2,10 @@ import ReviewLease
 import ReviewWire
 import SwiftUI
 
-/// The words of the banner while an agent holds the lease: "Claude Code
-/// controls Video Review" beside "video-review · 48s left · 2 waiting".
-/// Made from the lease's status at the moment drawn, so the countdown ticks
-/// with the time it's made at.
+/// The words shown while an agent holds the lease: "Claude Code controls
+/// Video Review", with "video-review · 48s left · 2 waiting". Made from the
+/// lease's status at the moment drawn, so the countdown ticks with the time
+/// it's made at. The toolbar's agent-control sign and its popover say them.
 struct LeaseBanner: Equatable {
     /// "Claude Code controls Video Review".
     var title: String
@@ -33,58 +33,128 @@ struct LeaseBanner: Equatable {
         ([place, timeLeft] + [waiting].compactMap(\.self)).joined(separator: " · ")
     }
 
-    /// The banner as one line, for VoiceOver.
+    /// The words as one line, for VoiceOver.
     var text: String { "\(title) · \(detail)" }
 
-    /// The banner's button, which takes the app back from the holder.
+    /// The popover's button, which takes the app back from the holder.
     static let stop = "Stop"
+
+    /// What Stop does, on the button and under the popover's words.
+    static let stopHelp = "Take the app back. This agent can't control it again for 5 minutes."
 }
 
-/// The strip across the top of the window while an agent holds the lease:
-/// who controls the app, where, the time left, and Stop, which ends the
-/// lease and bars that agent for five minutes. Nothing is drawn while the
-/// lease is free, or while a screenshot leaves the banner out.
-struct LeaseBannerView: View {
+/// The toolbar's sign that an agent controls the app: one glyph in the
+/// control colour, at the head of the window's buttons. It is in the toolbar
+/// only while `LeaseIndicator.shown(at:)` has a lease, so nothing shows while
+/// the lease is free or while a screenshot leaves it out. A click opens who
+/// controls the app, where, the time left, and Stop.
+struct AgentControlButton: View {
     let indicator: LeaseIndicator
     /// Takes the app back from the holder (`ControlServer.stopLease`).
     let stop: () -> Void
 
+    @State private var isOpen = false
+    /// The time the words are made at, moved on each second while the sign
+    /// is in the toolbar, so VoiceOver reads the time left as it is.
+    @State private var now = Date()
+    /// Set once the sign is in the toolbar, for its one bounce.
+    @State private var hasArrived = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        // Nothing at all while there's no lease to draw, so the window's
-        // layout is as it was. A change to the lease redraws at once.
-        if indicator.shown(at: Date()) != nil {
-            // Each second, so the countdown ticks.
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                if let lease = indicator.shown(at: Date()) {
-                    strip(LeaseBanner(lease))
-                }
+        let banner = indicator.shown(at: now).map { LeaseBanner($0) }
+        Button {
+            isOpen.toggle()
+        } label: {
+            Label {
+                Text(banner?.title ?? "Agent control")
+            } icon: {
+                Image(systemName: "cursorarrow.rays")
+                    .foregroundStyle(Theme.control)
+                    .symbolEffect(.bounce, value: hasArrived)
+            }
+        }
+        .help(banner.map { "\($0.title). Click for the time left and Stop" } ?? "")
+        .accessibilityLabel(banner?.text ?? "")
+        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
+            AgentControlPopover(indicator: indicator) {
+                isOpen = false
+                stop()
+            }
+        }
+        .onAppear {
+            if !reduceMotion { hasArrived = true }
+        }
+        .task {
+            // Ends when the sign leaves the toolbar, so nothing ticks
+            // while no agent holds the lease.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                now = Date()
+            }
+        }
+    }
+}
+
+/// What the agent-control sign opens: who controls the app, where it runs,
+/// the time left ticking each second, how many wait, and Stop, which ends
+/// the lease and bars that agent for five minutes.
+private struct AgentControlPopover: View {
+    let indicator: LeaseIndicator
+    let stop: () -> Void
+
+    static let width: CGFloat = 300
+
+    var body: some View {
+        // Each second, so the countdown ticks.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if let lease = indicator.shown(at: Date()) {
+                content(LeaseBanner(lease))
             }
         }
     }
 
-    private func strip(_ banner: LeaseBanner) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "cursorarrow.rays")
-                .foregroundStyle(.orange)
-                .accessibilityHidden(true)
-            Text(banner.title)
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
-            Text(banner.detail)
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 8)
-            Button(LeaseBanner.stop, role: .destructive, action: stop)
-                .controlSize(.small)
-                .help("Take the app back. This agent can't control it again for 5 minutes.")
+    private func content(_ banner: LeaseBanner) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "cursorarrow.rays")
+                    .font(.title3)
+                    .foregroundStyle(Theme.control)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.control.opacity(0.16), in: Circle())
+                    .accessibilityHidden(true)
+                Text(banner.title)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Label(banner.place, systemImage: "terminal")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Label(banner.timeLeft, systemImage: "timer")
+                    .monospacedDigit()
+                if let waiting = banner.waiting {
+                    Label(waiting, systemImage: "person.2")
+                }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(LeaseBanner.stopHelp)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button(LeaseBanner.stop, role: .destructive, action: stop)
+                    .controlSize(.small)
+                    .help(LeaseBanner.stopHelp)
+            }
         }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
-        .background(.orange.opacity(0.16))
-        .overlay(alignment: .bottom) { Divider() }
+        .padding(16)
+        .frame(width: Self.width)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(banner.text)
     }

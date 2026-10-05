@@ -2,8 +2,8 @@ import Foundation
 import Observation
 import ReviewLease
 
-/// What the person sees of the lease: the banner across the top of the
-/// window, drawn while an agent holds it. The control server, which owns
+/// What the person sees of the lease: the banner, an agent-control sign in
+/// the toolbar that opens the details and Stop, drawn while an agent holds it. The control server, which owns
 /// the lease, writes each change here and settles it when it runs out, so
 /// the banner follows its start and end with no request. Of the person's
 /// clicks only the banner's Stop reaches the lease, through the control

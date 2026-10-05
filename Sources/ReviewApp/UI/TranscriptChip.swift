@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// The toolbar chip's words: where the open video's transcript comes from,
-/// and how far it is. Pure, so its words are tested without a window.
+/// The words of the Context popover's transcript part: where the open
+/// video's transcript comes from, and how far it is. Pure, so its words are
+/// tested without a window.
 struct TranscriptChip: Equatable {
     var title: String
     /// The SF Symbol beside the title.
     var symbol: String
-    /// What the chip says when the pointer rests on it.
+    /// What the transcript gives the agent, or why it gives nothing.
     var help: String
     /// Whether the transcript is still being made.
     var isWorking = false
@@ -40,30 +41,6 @@ struct TranscriptChip: Equatable {
                 title = "Speech transcript"
                 symbol = "waveform"
                 help = "The agent gets the speech around each comment, transcribed on this Mac (\(count))"
-            }
-        }
-    }
-}
-
-/// The chip in the toolbar. Speech arrives with no event, so it's drawn
-/// again each second, as the presence pill is.
-struct TranscriptChipView: View {
-    let model: AppModel
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
-            if let transcript = model.transcript {
-                let chip = TranscriptChip(transcript)
-                Label(chip.title, systemImage: chip.symbol)
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .symbolEffect(.variableColor.iterative, isActive: chip.isWorking)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: Capsule())
-                    .help(chip.help)
-                    .accessibilityLabel(chip.title)
             }
         }
     }

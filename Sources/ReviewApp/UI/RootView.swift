@@ -5,7 +5,7 @@ import SwiftUI
 /// the side. With no video, a place to open one.
 struct RootView: View {
     @Bindable var model: AppModel
-    /// The lease as the banner draws it, and the banner's Stop.
+    /// The lease as the toolbar's agent-control sign draws it, and its Stop.
     let lease: LeaseIndicator
     let stopLease: () -> Void
 
@@ -22,33 +22,34 @@ struct RootView: View {
         }
         .frame(minWidth: 760, minHeight: 480)
         .background(Color(nsColor: .windowBackgroundColor))
-        .safeAreaInset(edge: .top, spacing: 0) {
-            LeaseBannerView(indicator: lease, stop: stopLease)
-        }
         .inspector(isPresented: railShown) {
             RailView(model: model)
                 .inspectorColumnWidth(
                     min: Theme.railWidthRange.lowerBound, ideal: Theme.railWidth, max: Theme.railWidthRange.upperBound
                 )
         }
+        // The soft slate blue in place of the system's bright one, for the
+        // scrubber, a selection and a prominent button.
+        .tint(Theme.accent)
         .navigationTitle(model.video?.title ?? AppIdentity.appName)
-        .navigationSubtitle(model.video.map { Self.folder(of: $0.url) } ?? "")
+        .navigationSubtitle(subtitle)
         .toolbar {
-            if model.isDemo {
-                ToolbarItem(placement: .primaryAction) { DemoChip() }
-                    .sharedBackgroundVisibility(.hidden)
-            }
-            if model.video != nil {
-                ToolbarItem(placement: .primaryAction) { ContextButton(model: model) }
-                ToolbarItem(placement: .primaryAction) { TranscriptChipView(model: model) }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        model.isRailVisible.toggle()
-                    } label: {
-                        Label("Comments", systemImage: "sidebar.trailing")
+            // One group of icon buttons at the trailing edge: the agent's
+            // sign while it holds the lease, then Context, then the rail.
+            if isControlled || model.video != nil {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if isControlled {
+                        AgentControlButton(indicator: lease, stop: stopLease)
                     }
-                    .help(model.isRailVisible ? "Hide the comments" : "Show the comments")
+                    if model.video != nil {
+                        ContextButton(model: model)
+                        Button {
+                            model.isRailVisible.toggle()
+                        } label: {
+                            Label("Comments", systemImage: "sidebar.trailing")
+                        }
+                        .help(model.isRailVisible ? "Hide the comments" : "Show the comments")
+                    }
                 }
             }
         }
@@ -62,6 +63,12 @@ struct RootView: View {
         } message: {
             Text(model.problem?.reason ?? "")
         }
+    }
+
+    /// Whether an agent's sign is in the toolbar: while it holds the lease,
+    /// unless a screenshot leaves the sign out.
+    private var isControlled: Bool {
+        lease.shown(at: Date()) != nil
     }
 
     /// The rail shows beside a video only.
@@ -79,21 +86,15 @@ struct RootView: View {
         )
     }
 
+    /// Under the title: that this is a demo run, and the video's folder.
+    private var subtitle: String {
+        ([model.isDemo ? "Demo" : nil] + [model.video.map { Self.folder(of: $0.url) }])
+            .compactMap(\.self)
+            .joined(separator: " · ")
+    }
+
     /// The folder `url` is in, with the home folder as `~`.
     private static func folder(of url: URL) -> String {
         (url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
-    }
-}
-
-/// Tells a demo run from the person's own data.
-private struct DemoChip: View {
-    var body: some View {
-        Text("Demo data")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.orange)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(.orange.opacity(0.16), in: Capsule())
-            .help("This run uses a demo folder, not your own reviews")
     }
 }
