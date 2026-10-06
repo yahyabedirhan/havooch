@@ -11,7 +11,7 @@ struct TranscriptFilesTests {
         defer { scratch.cleanUp() }
         let files = TranscriptFiles(layout: SupportLayout(root: scratch.folder))
         let transcript = Transcript(
-            source: .speech, lines: [TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review.")], complete: true
+            source: .speech, lines: [TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch.")], complete: true
         )
         #expect(files.load("abc") == nil)
 

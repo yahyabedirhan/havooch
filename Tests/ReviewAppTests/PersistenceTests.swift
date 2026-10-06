@@ -312,7 +312,7 @@ struct PersistenceTests {
         let speech = SlowRecognizer()
         let (model, _) = await run(speech: speech)
         try await model.open(video)
-        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review."))
+        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch."))
         speech.finish()
         await eventually { model.transcript?.complete == true }
         _ = try await model.addMessage(text: "Too fast here", at: 3)
@@ -323,7 +323,7 @@ struct PersistenceTests {
         let (_, server) = await run(speech: later)
         let payload = try object(await listen(.wait(timeoutSeconds: 0), server).output)
         let threads = try #require(payload["threads"] as? [[String: Any]])
-        #expect(threads.first?["transcript"] as? [[String: AnyHashable]] == [["start": 0.2, "end": 5.1, "text": "This is Video Review."]])
+        #expect(threads.first?["transcript"] as? [[String: AnyHashable]] == [["start": 0.2, "end": 5.1, "text": "This is Havooch."]])
         #expect(later.runs == 0)
     }
 

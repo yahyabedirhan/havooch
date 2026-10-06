@@ -15,9 +15,11 @@ Each scene lasts `ceil((durationSeconds + paddingSeconds) x 30)` frames, as the 
 
 | Scene | Frames | Start (s) | End (s) | Narration |
 |---|---|---|---|---|
-| `pause` | 0 to 182 | 0.000 | 6.067 | This is Video Review. Pause any video, or draw a box on the frame, and write a comment. |
+| `pause` | 0 to 182 | 0.000 | 6.067 | This is Havooch. Pause any video, or draw a box on the frame, and write a comment. |
 | `send` | 182 to 430 | 6.067 | 14.333 | Your comments queue up. Press command enter, and they go to your agent as one batch, with the time, the frame, and the transcript. |
 | `answer` | 430 to 637 | 14.333 | 21.233 | The agent reads your notes and answers right inside the player. No copying, and no screenshots. |
+
+The studio project is `havooch-sample`. Its `pause` scene has 0.825 s of padding, so that the shorter first line keeps the scene times of the earlier recording.
 
 The container reports 21.248 s because the AAC track runs a few milliseconds past the last video frame.
 
