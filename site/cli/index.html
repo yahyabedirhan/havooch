@@ -3,39 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Havooch — the wire between your video and your agent</title>
+  <title>Havooch CLI — the wire between your video and your agent</title>
   <meta name="description" content="Havooch is a native macOS video player with a command line on the other end. You comment on frames; your coding agent reads the send in its shell, works in your repo and answers on the frame.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
-  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#eef0e6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#23211e" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://yahyabedirhan.github.io/havooch/cli/">
+
+  <!-- Link previews. og:image must be an absolute URL. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Havooch">
+  <meta property="og:title" content="Havooch CLI — the wire between your video and your agent">
+  <meta property="og:description" content="Havooch is a native macOS video player with a command line on the other end. You comment on frames; your coding agent reads the send in its shell, works in your repo and answers on the frame.">
+  <meta property="og:url" content="https://yahyabedirhan.github.io/havooch/cli/">
+  <meta property="og:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Havooch CLI — the wire between your video and your agent">
+  <meta name="twitter:description" content="Havooch is a native macOS video player with a command line on the other end. You comment on frames; your coding agent reads the send in its shell, works in your repo and answers on the frame.">
+  <meta name="twitter:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta name="twitter:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <script src="script.js" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght,8..60,400..700;1,8..60,400..700&family=Young+Serif&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <script src="../assets/script.js" defer></script>
 </head>
-<body>
+<body class="page-cli">
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="top">
     <div class="wrap top-row">
-      <a class="brand" href="#top" aria-label="Havooch, back to top"><img src="logo.svg" alt="" width="24" height="24"><span>Havooch</span></a>
-      <nav aria-label="Sections">
-        <a href="#wire">The wire</a>
-        <a href="#send">The send</a>
-        <a href="#commands">Commands</a>
-        <a href="#install">Install</a>
-        <a href="https://github.com/yahyabedirhan/havooch">GitHub</a>
+      <a class="brand" href="../" aria-label="Havooch, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Havooch</span></a>
+      <nav aria-label="Pages">
+        <a href="../">Home</a>
+        <a href="../studio/">Studio</a>
+        <a href="./" aria-current="page">CLI</a>
+        <a class="gh" href="https://github.com/yahyabedirhan/havooch">GitHub</a>
       </nav>
     </div>
   </header>
 
   <main id="main">
-    <section class="hero" id="top">
+    <section class="hero sub-hero cli-hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="kicker"><img src="logo.svg" alt="" width="40" height="40"> A video player for one side, a command line for the other.</p>
+          <p class="kicker">A video player for one side, a command line for the other.</p>
           <h1>Point at a frame. Your agent reads it as JSON.</h1>
           <p class="lede">Havooch is a native macOS video player for giving feedback to coding agents. You pause, draw a region and write a note. <kbd>⌘↩</kbd> sends the queue down the wire, and the agent that is listening in your shell gets the time, the keyframe, the crop and the transcript. It works in your repo and replies on the frame.</p>
           <div class="actions">
@@ -179,30 +197,19 @@
       <div class="wrap">
         <h2 id="install-title">Install</h2>
         <p class="section-lede">Either line installs the app, the <code>havooch</code> command and the <code>havooch-mate</code> skill.</p>
-        <div class="installs">
+        <div class="cmds">
           <div class="cmd">
-            <span class="prompt">$</span>
+            <span class="cmd-name">Homebrew</span>
             <code id="cmd-brew">brew install --cask yahyabedirhan/tap/havooch</code>
             <button type="button" class="copy" data-copy="cmd-brew" aria-label="Copy the Homebrew command">Copy</button>
           </div>
           <div class="cmd">
-            <span class="prompt">$</span>
+            <span class="cmd-name">Script</span>
             <code id="cmd-curl">curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash</code>
             <button type="button" class="copy" data-copy="cmd-curl" aria-label="Copy the install script command">Copy</button>
           </div>
         </div>
-        <p class="install-note">The script checks the release's SHA-256 before it installs; <code>--uninstall</code> removes everything. Havooch is signed but not notarized, so on first launch macOS asks once: System Settings, Privacy &amp; Security, Open Anyway. Then tell your agent to listen for Havooch feedback and open the demo from the empty window.</p>
-      </div>
-    </section>
-
-    <section class="name" id="name" aria-labelledby="name-title">
-      <div class="wrap name-row">
-        <div>
-          <h2 id="name-title">Why a cat</h2>
-          <p>I named it after my cat, Havuç. He is orange and white, and <em>havuç</em> is Turkish for carrot. Havooch is how you say it, hah-VOOCH, so that you and I type the same thing into the terminal. The mark is his face, drawn from a photo.</p>
-          <p>I built it because I kept describing a frame to an agent in words. Pointing is faster, and the agent is better when it can see what I saw. If you review recordings, demos or renders with an agent in the loop, I hope it saves you the same breath.</p>
-        </div>
-        <img class="name-mark" src="logo.svg" alt="The Havooch mark: the head of an orange-and-white cat with a white stripe down the nose." width="160" height="160">
+        <p class="install-note">The script checks the release's SHA-256 before it installs; <code>--uninstall</code> removes everything. Havooch is signed ad hoc, not notarized, so on first launch macOS asks once: System Settings, Privacy &amp; Security, Open Anyway. Then tell your agent to listen for Havooch feedback and open the demo from the empty window.</p>
       </div>
     </section>
   </main>

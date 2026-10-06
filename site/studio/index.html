@@ -8,19 +8,38 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#eef0e6" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#23211e" media="(prefers-color-scheme: dark)">
-  <link rel="icon" href="../logo.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://yahyabedirhan.github.io/havooch/studio/">
+
+  <!-- Link previews. og:image must be an absolute URL. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Havooch">
+  <meta property="og:title" content="Havooch Studio — review a video with your coding agent">
+  <meta property="og:description" content="Havooch is a native macOS video player for giving feedback to coding agents. Pause, point at the frame, comment, press ⌘↩, and the agent answers on the frame.">
+  <meta property="og:url" content="https://yahyabedirhan.github.io/havooch/studio/">
+  <meta property="og:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Havooch Studio — review a video with your coding agent">
+  <meta name="twitter:description" content="Havooch is a native macOS video player for giving feedback to coding agents. Pause, point at the frame, comment, press ⌘↩, and the agent answers on the frame.">
+  <meta name="twitter:image" content="https://yahyabedirhan.github.io/havooch/assets/og.png">
+  <meta name="twitter:image:alt" content="Havooch: pause, comment, ⌘↩, and the agent answers in the player.">
+
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght,8..60,400..700;1,8..60,400..700&family=Young+Serif&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../styles.css">
-  <script src="../script.js" defer></script>
+  <link rel="stylesheet" href="../assets/styles.css">
+  <script src="../assets/script.js" defer></script>
 </head>
 <body class="page-studio">
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="top">
     <div class="wrap top-row">
-      <a class="brand" href="../" aria-label="Havooch, home"><img src="../logo.svg" alt="" width="28" height="28"><span>Havooch</span></a>
+      <a class="brand" href="../" aria-label="Havooch, home"><img src="../assets/logo.svg" alt="" width="28" height="28"><span>Havooch</span></a>
       <nav aria-label="Pages">
         <a href="../">Home</a>
         <a href="./" aria-current="page">Studio</a>
@@ -45,13 +64,13 @@
       <figure class="shot wrap" aria-describedby="shot-caption">
         <div class="window">
           <picture>
-            <source srcset="../../../assets/shots/hero-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="../../../assets/shots/hero-light.webp" width="2400" height="1288" fetchpriority="high" alt="The Havooch window. A demo video is paused on the left with an orange region drawn around a card. On the right, a thread: you asked for a slower intro, Claude Code slowed the first slide, asked whether the subtitle should hold as long, got a yes, and finished. A follow-up waits in the queue.">
+            <source srcset="../assets/shots/hero-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="../assets/shots/hero-light.webp" width="2400" height="1288" fetchpriority="high" alt="The Havooch window. The Halcyon teaser is paused at 0:12 on the left, with a region drawn around the Halcyon title. On the right, a thread: you asked for a lighter title, Claude Code made it lighter, asked whether the tagline should go lighter too, got an answer, and finished. A follow-up waits in the queue.">
           </picture>
           <ul class="callouts" aria-label="What you see in the window">
-            <li class="callout" style="--x: 32%; --y: 42%; --tx: -60%; --ty: -130%"><span class="pin">1</span><span class="tip">You drew this region at 0:03 and wrote one line.</span></li>
-            <li class="callout" style="--x: 86%; --y: 30%; --tx: -100%; --ty: -140%"><span class="pin">2</span><span class="tip">The agent answered on the same thread, then asked a question.</span></li>
-            <li class="callout" style="--x: 82%; --y: 71%; --tx: -100%; --ty: 40%"><span class="pin">3</span><span class="tip">Your next note is queued. <kbd>⌘</kbd><kbd>↩</kbd> sends the queue.</span></li>
+            <li class="callout" style="--x: 26%; --y: 34%; --tx: -40%; --ty: -130%"><span class="pin">1</span><span class="tip">You drew this region around the title at 0:12 and wrote a note.</span></li>
+            <li class="callout" style="--x: 81%; --y: 52%; --tx: -100%; --ty: -140%"><span class="pin">2</span><span class="tip">The agent answered on the same thread, then asked a question.</span></li>
+            <li class="callout" style="--x: 87%; --y: 78%; --tx: -100%; --ty: 40%"><span class="pin">3</span><span class="tip">Your next note is queued. <kbd>⌘</kbd><kbd>↩</kbd> sends the queue.</span></li>
             <li class="callout" style="--x: 42%; --y: 94%; --tx: -50%; --ty: 50%"><span class="pin">4</span><span class="tip">Each pin on the timeline is a thread. Its glyph is the state.</span></li>
           </ul>
         </div>
@@ -123,8 +142,8 @@
           </div>
           <div class="window">
             <picture>
-              <source srcset="../../../assets/shots/list-dark.webp" media="(prefers-color-scheme: dark)">
-              <img src="../../../assets/shots/list-light.webp" width="1800" height="966" loading="lazy" alt="The thread list beside the stage: one thread needs you, one is with the agent, two are queued and two are done.">
+              <source srcset="../assets/shots/list-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="../assets/shots/list-light.webp" width="1800" height="966" loading="lazy" alt="The thread list beside the stage: one thread needs you, one is with the agent, two are queued and two are done.">
             </picture>
           </div>
         </article>
@@ -136,8 +155,8 @@
           </div>
           <div class="window">
             <picture>
-              <source srcset="../../../assets/shots/question-dark.webp" media="(prefers-color-scheme: dark)">
-              <img src="../../../assets/shots/question-light.webp" width="1800" height="966" loading="lazy" alt="A region drawn around the keyboard shortcut in the video, and in the sidebar the agent asks which name to use: Cmd+Return or Cmd+Enter.">
+              <source srcset="../assets/shots/question-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="../assets/shots/question-light.webp" width="1800" height="966" loading="lazy" alt="A region drawn around the keyboard shortcut in the video, and in the sidebar the agent asks which name to use: Cmd+Return or Cmd+Enter.">
             </picture>
           </div>
         </article>
@@ -150,8 +169,8 @@
             </div>
             <div class="crop">
               <picture>
-                <source srcset="../../../assets/shots/chat-dark.webp" media="(prefers-color-scheme: dark)">
-                <img src="../../../assets/shots/chat-light.webp" width="680" height="830" loading="lazy" alt="A thread: your message is done, Claude Code replied and asked a question, you answered, it finished. A queued follow-up has a dashed outline.">
+                <source srcset="../assets/shots/chat-dark.webp" media="(prefers-color-scheme: dark)">
+                <img src="../assets/shots/chat-light.webp" width="680" height="830" loading="lazy" alt="A thread: your message is done, Claude Code replied and asked a question, you answered, it finished. A queued follow-up has a dashed outline.">
               </picture>
             </div>
           </article>
@@ -161,7 +180,7 @@
               <p>Default Light and Dark use the native surfaces. Tokyo Night, Dracula, One Dark Pro, Catppuccin and GitHub ship built in, and a theme file of your own can extend any of them.</p>
             </div>
             <div class="crop">
-              <img src="../../../assets/shots/theme-tokyo.webp" width="1800" height="966" loading="lazy" alt="The thread list in the Tokyo Night theme.">
+              <img src="../assets/shots/theme-tokyo.webp" width="1800" height="966" loading="lazy" alt="The thread list in the Tokyo Night theme.">
             </div>
           </article>
         </div>
@@ -190,7 +209,7 @@
             <button type="button" class="copy" data-copy="cmd-curl" aria-label="Copy the install script command">Copy</button>
           </div>
         </div>
-        <p class="install-note">Homebrew updates with <code>brew upgrade</code>. The script checks the release's SHA-256 before it installs; <code>--uninstall</code> removes it all. <strong>First launch.</strong> Havooch is signed but not notarized, so macOS asks once. Open System Settings, Privacy &amp; Security, and choose Open Anyway. Then try the demo from the empty window.</p>
+        <p class="install-note">Homebrew updates with <code>brew upgrade</code>. The script checks the release's SHA-256 before it installs; <code>--uninstall</code> removes it all. <strong>First launch.</strong> Havooch is signed ad hoc, not notarized, so macOS asks once. Open System Settings, Privacy &amp; Security, and choose Open Anyway. Then try the demo from the empty window.</p>
       </div>
     </section>
   </main>
