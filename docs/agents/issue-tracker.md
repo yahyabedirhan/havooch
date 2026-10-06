@@ -38,6 +38,7 @@ Write each prefix the way its maker writes it. Use a semantic prefix before a ge
 - `Proto`: one prototype build and its comparison.
 - `Thread`: threads on a keyframe, the General thread, the sidebar and the thread popover.
 - `Theme`: colour tokens, theme files and choosing a theme.
+- `Launch`: making Havooch public: the public repository, releases, the Homebrew tap and the landing page. It comes before `QA`.
 
 Reuse a prefix from this list before you add a new one. Add a new one when no prefix fits and the issue belongs to one tool, product, skill or workflow. Add it to this list in the same change.
 
