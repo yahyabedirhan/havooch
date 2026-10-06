@@ -5,8 +5,7 @@
 #
 # The tap step is inactive until the tap repository exists and the secret
 # TAP_TOKEN is set: without the token scripts/update-tap.sh skips with a
-# notice. The command is `havooch` since the rename (docs/adr/0002), and
-# Packaging/homebrew/havooch.rb is its cask.
+# notice. Packaging/homebrew/havooch.rb is the cask of the command `havooch`.
 name: release
 
 on:

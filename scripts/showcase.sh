@@ -46,7 +46,7 @@
 set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-cli="${HAVOOCH_CLI:-${VIDEO_REVIEW_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}}"
+cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
 video="$root/fixtures/showcase/halcyon-teaser.mp4"
 
 case "${1:-}" in
@@ -57,8 +57,8 @@ esac
 
 run_id="$(date +%Y%m%d-%H%M%S)-$$"
 demo="$root/.scratch/showcase/$run_id/demo"
-operator_key="${HAVOOCH_CONTROL_KEY:-${VIDEO_REVIEW_CONTROL_KEY:-showcase-operator-$run_id}}"
-listener_key="${HAVOOCH_LISTENER_KEY:-${VIDEO_REVIEW_LISTENER_KEY:-showcase-listener-$run_id}}"
+operator_key="${HAVOOCH_CONTROL_KEY:-showcase-operator-$run_id}"
+listener_key="${HAVOOCH_LISTENER_KEY:-showcase-listener-$run_id}"
 export CLAUDE_CODE_SESSION_ID="${CLAUDE_CODE_SESSION_ID:-showcase-$run_id}"
 holds_lease=0
 listener_pid=""
