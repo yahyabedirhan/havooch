@@ -356,13 +356,15 @@ Sources/
                                    hidden while the person points at a region (#46)
         ThreadView.swift           one thread: the top bar (Back, number and time, Previous and Next), the `Conversation`
                                    (shared with the thread popover)
+        ActivityLine.swift         what the agent does now (#47): `ThreadActivity` under a thread view's conversation,
+                                   `ActivityLine`, the working glyph and the words
         Composer.swift             the one composer at the sidebar's foot (L41): the target line, the region chip, the
                                    General toggle, a field that grows with the words and draws the system focus ring
         MessageBubble.swift        one message as a chat (L40): the person's trailing with the quiet line, the agent's leading
                                    with its logo, the question card, the crop, edit in place, the right-click menu;
                                    `MessageWriter`, `ChatRun`, `MessageVoice`, `MessageAction` (pure), `StateChip`, `RowButton`
         SidebarPicture.swift       a keyframe or a crop read off the main actor at the size it shows, with region outlines
-        SidebarFooter.swift        the presence pill, the queued count, Send; as tall as the player bar
+        SidebarFooter.swift        the presence pill and the newest live line, the queued count, Send; as tall as the player bar
         PresencePill.swift         the pill's words, the agent's name on hover and the logo in place of the glyph (pure)
 
 Tests/
@@ -425,7 +427,7 @@ As proto-2, with the spec's names and outputs:
 | `theme set <name>` | `theme Dimmed pinned`, or `theme follows the system (Default Dark)` for `system`; names match without regard to case | `{"theme": {…}}` as in `state` |
 | `wait [--timeout]` | the payload JSON, with or without `--json` | same |
 | `ack <send-id> [<text>]` | `s-f92cbb2a-1 acknowledged, 3 messages` | `{"send": {…}}` |
-| `status <message-id> working\|done\|failed` | `m-f92cbb2a-3 working` | `{"message": {…}}` |
+| `status <message-id> working\|done\|failed [<text>]` (#47; the text with `working` only) | `m-f92cbb2a-3 working` | `{"message": {…}}` |
 | `reply <thread> <text>` | `m-f92cbb2a-7 on #2` | `{"message": {…}}` |
 | `ask <thread> <question> [--choice <text>]... [--wait]` | the answer's text, exit 0; exit 2 and nothing when the wait runs out | `{"answer": {…}}` |
 
@@ -640,7 +642,7 @@ public struct SupportLayout: Sendable {
 - `Draft` is view state only: `time`, `region`, `text`. The thread it writes to is computed (`draftThreadNumber`: the thread at that frame, or the number a new thread will take). It is never saved (D 1.4). `state --json` reports it as `popover`, with that number.
 - **Frame time** (L2): `PlayerEngine.frameTime(of: t)` is the start of the frame shown at `t` (from the track's nominal frame rate), raised to the next millisecond, as proto-2 raised a comment's time (D46). Every thread time goes through it, from the UI and from `--at`. The frame length comes from the nominal rate snapped to a whole or an NTSC rate (L20).
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
-- `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `written`, `undelivered`, `isDelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none.
+- `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `written`, `undelivered`, `isDelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none. `status working` with a text sets the thread's live line (`Activity`: thread, message, text, time; #47), the latest one per thread and kept in memory only; `done` or `failed` on its message, an empty text, and a new listener session clear it. `activities(at:)` and `activity(on:at:)` give nothing while the presence is absent, and `state` reports them, newest first, as `listener.activity`.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s for every kind, a question too: the question stays open on its thread, L28). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or shows General's thread view.
 - `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. The system appearance is `NSApp.effectiveAppearance`, observed, so a screenshot in the other appearance shows that appearance's default theme. `DispatchSource`s on `Themes/`, each theme file and `settings.json` reload the themes 150 ms after a change (D 5.6); the watches are made again after each reload, since an editor that saves by replacing a file makes a new one. One more on the support folder catches a `settings.json` that appears for the first time or is replaced: it reloads only when the file's number or modification date differs from the last reload's, so the outbox's and the reviews' saves there read nothing. `startWatching` makes `Themes/`, so a person finds where their themes go. A theme or settings problem is written to standard error once. `Palette` turns the resolved tokens into `Color`s, reaches every view through the environment (`@Environment(\.palette)`), and is the only colour source a view has (D 5.1); a test in `ReviewAppTests` fails on a raw colour anywhere in `Sources/ReviewApp`, and in `Palette.swift` on anything but a colour from numbers or a `system` surface (L37). The letterbox is a token too. While a theme is pinned, the window takes its kind's appearance, so the title bar and the system's controls match; with no pin it inherits the app's. `RootView` sets it with `preferredColorScheme`, never on the `NSWindow` itself: SwiftUI sets the window's appearance on each update from that preference, and an AppKit view that set it as well fought SwiftUI in an endless update loop when a light theme was pinned under a dark system. The View menu's Theme picker and the Settings window's (`ThemePicker`, L42) pin a theme or follow the system, as `theme set` does.
 - `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that was written goes to the server as `written` (a send it carried is taken), and one that cannot be written as `undelivered` (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
@@ -652,7 +654,7 @@ public struct SupportLayout: Sendable {
 {
   "app":      { "version": "0.2.0", "demo": true, "support": "/abs/demo" },
   "lease":    { "holder": {…}, "taken": "…", "ends": "…", "secondsLeft": 48, "waiting": 0 },
-  "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingSends": 0, "takenSends": 0 },
+  "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingSends": 0, "takenSends": 0, "activity": [] },
   "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "overrides": 0 },
   "video":    { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4", "contextNote": "" },
   "player":   { "time": 10.017, "playing": false },
@@ -698,7 +700,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 ```text
 on a send     `ack <send-id> "<line>"`, then a new background `wait`
 per thread    read the keyframe, the crops, the transcript, history[] and the context
-per message   `status working` → the work → one commit when files changed, its body ending `Havooch-Message: <message-id>`
+per message   `status working "<what you do now>"`, again at each step → the work → one commit when files changed, its body ending `Havooch-Message: <message-id>`
               → `reply <thread-id>` with the short SHA → `status done`
               cannot be done: `reply <thread-id>` with the reason → `status failed`
 unclear       `ask <thread-id>` in the background; the next thread goes on

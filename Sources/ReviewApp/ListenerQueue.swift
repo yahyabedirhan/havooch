@@ -62,6 +62,21 @@ final class ListenerQueue {
         var timeout: Task<Void, Never>?
     }
 
+    /// What the agent does now, as `status working` with a text said it:
+    /// the live line under a thread's conversation and in the footer. One
+    /// per thread, the latest; never kept, since it's only true while the
+    /// agent works.
+    struct Activity: Equatable {
+        var thread: ThreadID
+        var message: MessageID
+        var text: String
+        var at: Date
+    }
+
+    /// The live lines by thread. `done` or `failed` on a line's message
+    /// clears it, and so does a new listener session.
+    private(set) var activities: [ThreadID: Activity] = [:]
+
     @ObservationIgnored private var open: OpenWait?
     /// The open `ask`s, by the thread each one asks on: a thread has one
     /// open question at most.
@@ -106,11 +121,25 @@ final class ListenerQueue {
         outbox.presence(at: time)
     }
 
+    /// The live lines at `time`, the newest first: none while no agent is
+    /// there, since a listener that went away says nothing more.
+    func activities(at time: Date) -> [Activity] {
+        guard outbox.presence(at: time) != .absent else { return [] }
+        return activities.values.sorted { $0.at > $1.at }
+    }
+
+    /// The live line of the thread `id` at `time`; nil with none.
+    func activity(on id: ThreadID, at time: Date) -> Activity? {
+        guard outbox.presence(at: time) != .absent else { return nil }
+        return activities[id]
+    }
+
     /// The listener as `state` reports it at `time`.
     func report(at time: Date) -> StateReport.Listener {
         StateReport.Listener(
             presence: outbox.presence(at: time).rawValue, waitOpen: outbox.isWaitOpen, session: outbox.session?.name,
-            pendingSends: outbox.pending.count, takenSends: outbox.taken.count
+            pendingSends: outbox.pending.count, takenSends: outbox.taken.count,
+            activity: activities(at: time).map { StateReport.Activity(thread: $0.thread.text, message: $0.message.text, text: $0.text) }
         )
     }
 
@@ -124,9 +153,12 @@ final class ListenerQueue {
     /// `wait` that's still open is replaced: one listener at a time.
     func wait(by holder: Holder, timeout: Int?, connection: UUID? = nil) async -> Outcome {
         let listener = ListenerSession(key: holder.key, name: holder.name, place: holder.place)
-        for ref in outbox.waitOpened(by: listener, at: now()) {
+        let requeued = outbox.waitOpened(by: listener, at: now())
+        for ref in requeued {
             _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
         }
+        // A new session starts its work over: what the last one did is past.
+        if !requeued.isEmpty { activities = [:] }
         if let older = open {
             open = nil
             older.timeout?.cancel()
@@ -211,13 +243,21 @@ final class ListenerQueue {
 
     /// `havooch status`: how far the listener is with a message. The
     /// send whose last message finishes is no longer taken, so the listener
-    /// is back to listening.
-    func status(_ messageID: String, _ state: MessageState) throws(AppRefusal) -> StateReport.Message {
+    /// is back to listening. `working` with a `text` makes it the thread's
+    /// live line, and with an empty one clears it; `done` and `failed`
+    /// clear the line the message set.
+    func status(_ messageID: String, _ state: MessageState, text: String? = nil) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
         guard let id = ItemID(messageID), id.kind == .message, let hash = desk.contentHash(of: id) else {
             throw AppRefusal("no message `\(messageID)`; the send `havooch wait` printed names each message's id")
         }
         let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.setState(id, state) }
+        if state.isFinal {
+            activities = activities.filter { $0.value.message != id }
+        } else if let text, let thread = desk.review(of: hash)?.threads.first(where: { $0.messages.contains { $0.id == id } })?.id {
+            let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            activities[thread] = words.isEmpty ? nil : Activity(thread: thread, message: id, text: words, at: now())
+        }
         if let sendID = message.sendID, desk.review(of: hash)?.isFinished(sendID) == true {
             outbox.finished(SendRef(sendID: sendID, contentHash: hash))
         }

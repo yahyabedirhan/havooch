@@ -84,6 +84,10 @@ _Avoid_: response, answer
 Where a person's message is in its life: queued, sent, acknowledged, working, done or failed. A thread's state is that of its latest open person message.
 _Avoid_: status (except as the CLI command's name), progress
 
+**Activity**:
+What the agent says it does now on a thread, given as the text of `status <message> working`. It shows as a live line under the thread view's conversation and in the footer, until the message is done or failed.
+_Avoid_: progress, status text
+
 ### Sending
 
 **Queue**:

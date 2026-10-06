@@ -271,10 +271,10 @@ final class ControlServer {
                 let send = try listeners.ack(sendID, text: text)
                 let count = send.messageIds.count
                 return done("\(send.id) acknowledged, \(count) message\(count == 1 ? "" : "s")", Output(send: send), json)
-            case .status(let messageID, let status):
+            case .status(let messageID, let status, let text):
                 // Every status is a message state of the same name.
                 let state = MessageState(rawValue: status.rawValue) ?? .working
-                let message = try listeners.status(messageID, state)
+                let message = try listeners.status(messageID, state, text: text)
                 return done("\(message.id) \(message.state ?? status.rawValue)", Output(message: message), json)
             case .reply(let thread, let text):
                 let message = try listeners.reply(on: thread, text: text)

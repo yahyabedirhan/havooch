@@ -29,14 +29,19 @@ enum ListenerCommands {
             return .send(.ack(sendID: id, text: arguments.words.count == 2 ? arguments.words[1] : nil))
         },
         Command(
-            name: "status", synopsis: "status <message-id> working|done|failed",
-            summary: "say how far you are with a message; its thread's pin shows it"
+            name: "status", synopsis: "status <message-id> working|done|failed [<text>]",
+            summary: "say how far you are with a message; its thread's pin shows it, and the text with working what you do now"
         ) { arguments, _ throws(UsageError) in
-            let words = try arguments.exactly(["<message-id>", "working|done|failed"])
+            let words = arguments.words
+            guard words.count >= 1 else { throw UsageError("missing <message-id>") }
+            guard words.count >= 2 else { throw UsageError("missing working|done|failed") }
             guard let state = ControlRequest.Status(rawValue: words[1]) else {
                 throw UsageError("`\(words[1])` isn't a status; write `working`, `done` or `failed`")
             }
-            return .send(.status(messageID: words[0], state: state))
+            // Only work in progress has a "now": done and failed clear the line.
+            let most = state == .working ? 3 : 2
+            guard words.count <= most else { throw UsageError("unexpected `\(words[most])`") }
+            return .send(.status(messageID: words[0], state: state, text: words.count == 3 ? words[2] : nil))
         },
         Command(
             name: "reply", synopsis: "reply <thread> <text>",

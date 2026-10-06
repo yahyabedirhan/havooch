@@ -69,9 +69,11 @@ public enum ControlRequest: Equatable, Sendable {
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
     case ack(sendID: String, text: String?)
-    /// `havooch status <message-id> working|done|failed`: how far the
-    /// listener is with a message.
-    case status(messageID: String, state: Status)
+    /// `havooch status <message-id> working|done|failed [<text>]`: how
+    /// far the listener is with a message. With `working`, `text` is what
+    /// the agent does now, the live line the thread view and the footer
+    /// show; `done` and `failed` clear it.
+    case status(messageID: String, state: Status, text: String? = nil)
     /// `havooch reply <thread> <text>`: the listener's message on a
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)

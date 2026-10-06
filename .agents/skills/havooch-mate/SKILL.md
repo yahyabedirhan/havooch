@@ -35,17 +35,26 @@ The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else `$CL
 
    A send that arrives while you work gets the same two commands at once. Its work starts when the send before it is finished.
 3. **Work each thread**, in the order of `threads[]`. Read the thread first: see [The send](#the-send). Then work each of its `messages[]`, in order:
-   1. `havooch status <message id> working`
-   2. Decide its [intent](#intent) and do the work. When you cannot tell what it asks, [ask](#ask).
+   1. `havooch status <message id> working "<what you do now>"`
+   2. Decide its [intent](#intent) and do the work. When you cannot tell what it asks, [ask](#ask). Each time the work moves to a new step, send `status <message id> working "<the step>"` again: see [Activity](#activity).
    3. When the work changed files in this repo, commit: one commit per message, with only that message's files staged, in this repo's commit convention, and the line `Havooch-Message: <message id>` at the end of the body.
    4. `havooch reply <thread id> "<the result>"`, then `havooch status <message id> done`.
 
-   When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `status` carries no text, so the reply is the reason.
+   When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `done` and `failed` carry no text, so the reply is the reason.
 4. **Close the send.** `havooch reply t-<hash8>-0 "<one line for the whole send>"` on the General thread: how many messages are done, and which failed, by thread number. `<hash8>` is the part of any id between its first two dashes.
 
 A send is finished when every message in it is `done` or `failed` and has a reply on its thread, and the send has its line on General. `done` and `failed` are final.
 
 The reply is the person's only view of what you did, read in a narrow column beside the video. Write one to three plain sentences: what changed and where, or the answer, or the issue's link. Give the commit's short SHA whenever you committed. When a thread has several messages in the send, open each reply with the start of the message it answers, so the person can pair them.
+
+## Activity
+
+The text of `status <message id> working "<text>"` is the **activity**, a live line. The player shows it under the thread's conversation and in the footer, beside the presence pill, until the message is `done` or `failed`. The newest text replaces the one before; an empty text clears the line.
+
+- Write what you do now, not what you did: `"Reading the intro scene"`, `"Rendering 0:14 to 0:21"`, `"Running the tests"`.
+- Keep it to one short line, at most about 40 characters. Start with a verb in the `-ing` form, with no agent name and no full stop.
+- Send a new text when the work moves to a new step, not more often than every few seconds.
+- The line is not a result. The result goes in the `reply`.
 
 ## The send
 

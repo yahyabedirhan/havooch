@@ -4,8 +4,9 @@ import SwiftUI
 
 /// The sidebar's view of one thread (L38): a top bar with Back, the
 /// thread's number and time, and Previous and Next; then the conversation.
-/// No keyframe: the stage shows the thread's frame. The composer under it
-/// (`Composer`) writes on the thread.
+/// No keyframe: the stage shows the thread's frame. Under the conversation,
+/// the live line says what the agent does now (`ThreadActivity`). The
+/// composer under it (`Composer`) writes on the thread.
 struct ThreadView: View {
     let model: AppModel
     let thread: ReviewThread
@@ -20,6 +21,7 @@ struct ThreadView: View {
                         GeneralIntro()
                     }
                     Conversation(model: model, thread: thread, offersQuickReplies: true)
+                    ThreadActivity(model: model, thread: thread.id)
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 14)

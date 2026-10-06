@@ -277,7 +277,7 @@ struct ControlServerTests {
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0,
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
         ])
 
         app.hasVideo = false

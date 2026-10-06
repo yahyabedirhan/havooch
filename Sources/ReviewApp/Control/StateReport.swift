@@ -187,6 +187,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         var pendingSends: Int
         /// The sends a `wait` took that aren't finished.
         var takenSends: Int
+        /// What the agent does now, the newest first: the live lines the
+        /// thread views and the footer show. Empty while no agent is there.
+        var activity: [Activity] = []
 
         /// Nobody has listened yet.
         static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingSends: 0, takenSends: 0)
@@ -198,11 +201,20 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(session, forKey: .session)
             try container.encode(pendingSends, forKey: .pendingSends)
             try container.encode(takenSends, forKey: .takenSends)
+            try container.encode(activity, forKey: .activity)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case presence, waitOpen, session, pendingSends, takenSends
+            case presence, waitOpen, session, pendingSends, takenSends, activity
         }
+    }
+
+    /// One live line: what the agent does now on a thread, for a message,
+    /// as its last `status working` said it.
+    struct Activity: Encodable, Equatable {
+        var thread: String
+        var message: String
+        var text: String
     }
 
     struct Player: Encodable, Equatable {
@@ -391,7 +403,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     private var listenerLine: String {
         let who = listener.session.map { " (\($0))" } ?? ""
         let waiting = "\(listener.pendingSends) \(listener.pendingSends == 1 ? "send" : "sends") waiting"
-        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken"
+        let now = listener.activity.map { "\n  now on \($0.thread): \($0.text.replacing("\n", with: " "))" }.joined()
+        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken" + now
     }
 
     /// The threads, one line each with their messages under them.

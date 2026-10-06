@@ -45,6 +45,7 @@ struct ControlMessageTests {
         .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
         .status(messageID: "m-f92cbb2a-1", state: .working), .status(messageID: "m-f92cbb2a-1", state: .done),
         .status(messageID: "m-f92cbb2a-1", state: .failed),
+        .status(messageID: "m-f92cbb2a-1", state: .working, text: "Rendering 0:14 to 0:21"),
         .reply(thread: "t-f92cbb2a-1", text: "Slowed it down"), .reply(thread: "0", text: "All done"),
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil),
         .ask(thread: "1", question: "Which part?", waitSeconds: 0),

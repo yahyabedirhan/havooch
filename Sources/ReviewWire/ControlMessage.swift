@@ -54,7 +54,8 @@ public struct ControlMessage: Equatable, Sendable {
         case .send: wire = Wire(command: "send")
         case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
         case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
-        case .status(let messageID, let state): wire = Wire(command: "status", id: messageID, state: state.rawValue)
+        case .status(let messageID, let state, let text):
+            wire = Wire(command: "status", id: messageID, text: text, state: state.rawValue)
         case .reply(let thread, let text): wire = Wire(command: "reply", text: text, thread: thread)
         case .ask(let thread, let question, let waitSeconds, let choices):
             wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
@@ -168,7 +169,7 @@ public struct ControlMessage: Equatable, Sendable {
             guard let state = ControlRequest.Status(rawValue: name) else {
                 throw .unreadable("the control command `status` has no state `\(name)`; it takes `working`, `done` or `failed`")
             }
-            return .status(messageID: id, state: state)
+            return .status(messageID: id, state: state, text: wire.text)
         case "reply":
             return .reply(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
         case "ask":

@@ -174,6 +174,62 @@ struct AnswerTests {
         _ = await wait.value
     }
 
+    @Test("status working with a text shows what the agent does now on its thread, the latest one, and done or failed clears it")
+    func activity() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let listeners = app.model.listeners
+        let one = try thread(app.one, app).id, two = try thread(app.two, app).id
+        func line(_ id: ThreadID) -> String? { listeners.activity(on: id, at: Date())?.text }
+
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "Reading the intro"), app).ok)
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "  Rendering 0:14 to 0:21\n"), app)
+            == .done("\(app.first) working\n"))
+        #expect(line(one) == "Rendering 0:14 to 0:21")
+        #expect(line(two) == nil)
+        #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping the box"), app).ok)
+
+        // The newest first, as `state` reports it and the footer shows it.
+        let state = try object(await operate(.state, app, json: true).output)
+        let activity = try #require((state["listener"] as? [String: Any])?["activity"] as? [[String: Any]])
+        #expect(activity.map { $0["text"] as? String } == ["Cropping the box", "Rendering 0:14 to 0:21"])
+        #expect(activity.map { $0["thread"] as? String } == [app.two, app.one])
+        #expect(activity.map { $0["message"] as? String } == [app.second, app.first])
+        #expect(await operate(.state, app).output.contains("  now on \(app.two): Cropping the box\n"))
+
+        // A status with no text keeps the line; done and failed clear it.
+        #expect(await listen(.status(messageID: app.first, state: .working), app).ok)
+        #expect(line(one) == "Rendering 0:14 to 0:21")
+        #expect(await listen(.status(messageID: app.first, state: .done), app).ok)
+        #expect(line(one) == nil)
+        #expect(line(two) == "Cropping the box")
+        #expect(await listen(.status(messageID: app.second, state: .failed), app).ok)
+        #expect(listeners.activities(at: Date()).isEmpty)
+        #expect(listeners.report(at: Date()).activity.isEmpty)
+    }
+
+    @Test("an empty text clears the line, a new listener session clears every line, and no line shows while no agent is there")
+    func activityCleared() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let listeners = app.model.listeners
+        let one = try thread(app.one, app).id
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "Reading"), app).ok)
+        #expect(await listen(.status(messageID: app.first, state: .working, text: " "), app).ok)
+        #expect(listeners.activity(on: one, at: Date()) == nil)
+
+        #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping"), app).ok)
+        // The agent went quiet: past the grace, nothing it said still shows.
+        let later = Date().addingTimeInterval(Outbox.workingGrace + 1)
+        #expect(listeners.activities(at: later).isEmpty)
+        #expect(listeners.activity(on: try thread(app.two, app).id, at: later) == nil)
+
+        // Another listener takes the unfinished send over: its work starts again.
+        let other = Holder(key: "listener-2", name: "Mate", place: "/shop")
+        #expect(await app.server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: other)).reply.ok)
+        #expect(listeners.activities(at: Date()).isEmpty)
+    }
+
     @Test("a status that moves a message back, or names no message, is refused")
     func statusRefused() async throws {
         defer { cleanUp() }
