@@ -208,7 +208,7 @@ final class AppModel: AppControlling {
     /// At launch: the video the launch names (`DemoRun.openVariable`, a
     /// demo started from the empty screen), else the last one.
     func openAtLaunch(environment: [String: String]) async {
-        guard let path = AppVariable.value(DemoRun.openVariable, in: environment), path.hasPrefix("/") else {
+        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else {
             await openRecent()
             return
         }

@@ -133,7 +133,7 @@ public struct ControlLease: Equatable, Sendable {
     /// it was taken and so its cap; free when there's none, it doesn't
     /// read, or it has already ended.
     public init(environment: [String: String], at now: Date) {
-        guard let json = AppVariable.value(Self.handoverVariable, in: environment),
+        guard let json = environment[Self.handoverVariable],
               var term = try? JSONDecoder().decode(LeaseTerm.self, from: Data(json.utf8)) else { return }
         term.ends = min(term.ends, term.capped)
         guard now < term.ends else { return }
