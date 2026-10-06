@@ -49,6 +49,7 @@ struct AgentControlWords: Equatable {
 /// the lease is free or while a screenshot leaves it out. A click opens who
 /// controls the app, where, the time left, and Stop.
 struct AgentControlButton: View {
+    let model: AppModel
     let indicator: AgentControlIcon
     /// Takes the app back from the holder (`ControlServer.stopLease`).
     let stop: () -> Void
@@ -75,10 +76,11 @@ struct AgentControlButton: View {
                     .symbolEffect(.bounce, value: hasArrived)
             }
         }
+        .pressedByKeys(in: model) { isOpen.toggle() }
         .help(words.map { "\($0.title). Click for the time left and Stop" } ?? "")
         .accessibilityLabel(words?.text ?? "")
         .popover(isPresented: $isOpen, arrowEdge: .bottom) {
-            AgentControlPopover(indicator: indicator) {
+            AgentControlPopover(model: model, indicator: indicator) {
                 isOpen = false
                 stop()
             }
@@ -102,6 +104,7 @@ struct AgentControlButton: View {
 /// the time left ticking each second, how many wait, and Stop, which ends
 /// the lease and bars that agent for five minutes.
 private struct AgentControlPopover: View {
+    let model: AppModel
     let indicator: AgentControlIcon
     let stop: () -> Void
 
@@ -154,6 +157,7 @@ private struct AgentControlPopover: View {
                 Spacer(minLength: 0)
                 Button(AgentControlWords.stop, role: .destructive, action: stop)
                     .controlSize(.small)
+                    .pressedByKeys(in: model, action: stop)
                     .help(AgentControlWords.stopHelp)
             }
         }

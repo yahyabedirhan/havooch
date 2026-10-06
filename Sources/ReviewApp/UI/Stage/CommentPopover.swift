@@ -58,6 +58,7 @@ struct CommentPopover: View {
                 Spacer(minLength: 4)
                 Button(answers ? "Answer" : "Queue") { model.commitDraft() }
                     .buttonStyle(.borderedProminent)
+                    .pressedByKeys(in: model) { model.commitDraft() }
                     .tint(answers ? palette[.question] : palette[.accent])
                     .controlSize(.mini)
                     .disabled(!AppModel.hasWords(draft.text))
@@ -110,6 +111,7 @@ struct CommentPopover: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .pressedByKeys(in: model) { model.closePopover(.discard) }
             .help("Discard (Esc)")
             .accessibilityLabel("Discard")
         }

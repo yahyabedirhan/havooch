@@ -201,8 +201,8 @@ struct SidebarTests {
         #expect(model.shown == nil)
 
         // Space or Return on a focused row opens it the same way.
-        model.focusedRow = two
-        model.perform(.open, on: two)
+        model.focusControl(UUID()) { model.perform(.open, on: two) }
+        #expect(model.pressFocusedControl())
         #expect(model.shown == two)
         #expect(model.selection == two)
         await eventually { model.engine.time == 15 }

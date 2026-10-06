@@ -18,7 +18,7 @@ struct FloatingControls: ToolbarContent {
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             if isControlled {
-                AgentControlButton(indicator: lease, stop: stopLease)
+                AgentControlButton(model: model, indicator: lease, stop: stopLease)
             }
             if model.video != nil {
                 ContextButton(model: model)
@@ -39,6 +39,7 @@ private struct SidebarToggle: View {
         } label: {
             Label("Sidebar", systemImage: "sidebar.trailing")
         }
+        .pressedByKeys(in: model) { model.isSidebarVisible.toggle() }
         .help(model.isSidebarVisible ? "Hide the sidebar" : "Show the sidebar")
     }
 }

@@ -163,7 +163,9 @@ struct MessageBubble: View {
                     if isQueued {
                         HStack(spacing: 1) {
                             RowButton("Edit", symbol: "pencil") { edited = message.text }
+                                .pressedByKeys(in: model) { edited = message.text }
                             RowButton("Delete", symbol: "trash") { model.delete(message.id) }
+                                .pressedByKeys(in: model) { model.delete(message.id) }
                         }
                         .opacity(isHovered ? 1 : 0)
                         .animation(.smooth(duration: 0.12), value: isHovered)
@@ -338,8 +340,10 @@ struct MessageBubble: View {
                     .foregroundStyle(palette[.textTertiary])
                 Spacer()
                 Button("Cancel") { edited = nil }
+                    .pressedByKeys(in: model) { edited = nil }
                 Button("Save", action: save)
                     .buttonStyle(.borderedProminent)
+                    .pressedByKeys(in: model, action: save)
                     .disabled(!AppModel.hasWords(text))
             }
             .controlSize(.small)

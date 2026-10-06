@@ -22,6 +22,7 @@ struct PlayerBar: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
+            .pressedByKeys(in: model) { model.togglePlay() }
             .help(engine.isPlaying ? "Pause (Space)" : "Play (Space)")
             .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
@@ -31,8 +32,8 @@ struct PlayerBar: View {
                 .fixedSize()
 
             Timeline(
-                time: engine.time, duration: engine.duration, threads: model.frameThreads, selection: model.selection,
-                scrub: { model.scrub(to: $0) }, select: { model.openThread($0) }
+                model: model, time: engine.time, duration: engine.duration, threads: model.frameThreads,
+                selection: model.selection, scrub: { model.scrub(to: $0) }, select: { model.openThread($0) }
             )
             // Where the track is, for the popover's notch to point
             // at the playhead from the stage above.
@@ -47,6 +48,7 @@ struct PlayerBar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .pressedByKeys(in: model) { model.startDraft() }
             .disabled(model.draft != nil)
             .help("Comment at this frame (C)")
             .accessibilityLabel("Comment")

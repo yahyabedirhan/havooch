@@ -50,10 +50,10 @@ final class AppModel: AppControlling {
     /// The thread the sidebar shows in its thread view; nil while it
     /// shows the thread list (L38).
     private(set) var shown: ThreadID?
-    /// The thread whose row in the thread list has the keyboard focus
-    /// under keyboard navigation: Space and Return open it. Nil while no
-    /// row has it.
-    @ObservationIgnored var focusedRow: ThreadID?
+    /// The control that has the keyboard focus under keyboard navigation
+    /// (`focusControl(_:press:)`): Space and Return press it. Nil while
+    /// no control has it, and Space is the player's.
+    @ObservationIgnored private var focusedControl: (id: UUID, press: () -> Void)?
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the sidebar is shown beside the stage.
@@ -855,6 +855,30 @@ final class AppModel: AppControlling {
         shown = id
         engine.pause()
         return thread
+    }
+
+    /// Whether a control has the keyboard focus, so Space and Return
+    /// press it and don't reach the player.
+    var isControlFocused: Bool { focusedControl != nil }
+
+    /// The control `id` took the keyboard focus; Space and Return now
+    /// call `press`, as a click does.
+    func focusControl(_ id: UUID, press: @escaping () -> Void) {
+        focusedControl = (id, press)
+    }
+
+    /// The control `id` lost the keyboard focus, or left the window. A
+    /// control that took the focus since keeps it.
+    func blurControl(_ id: UUID) {
+        if focusedControl?.id == id { focusedControl = nil }
+    }
+
+    /// Presses the control that has the keyboard focus; false when none has.
+    @discardableResult
+    func pressFocusedControl() -> Bool {
+        guard let control = focusedControl else { return false }
+        control.press()
+        return true
     }
 
     /// A row's action on thread `id`: the one path for a click, Space or

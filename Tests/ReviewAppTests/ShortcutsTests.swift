@@ -1,5 +1,6 @@
 import AppKit
 @testable import ReviewApp
+import ReviewWire
 import Testing
 
 @Suite("The player's keys")
@@ -72,17 +73,54 @@ struct ShortcutsTests {
     }
 
     /// Space, Return and the keypad's Enter.
-    @Test("while a row of the thread list has the keyboard focus, Space and Return open its thread; other keys stay the player's",
+    @Test("while a control has the keyboard focus, Space and Return press it; other keys stay the player's",
           arguments: [49, 36, 76] as [UInt16])
-    func focusedRowKeys(keyCode: UInt16) {
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isRowFocused: true) == .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .numericPad, isRowFocused: true) == .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .shift, isRowFocused: true) != .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isRowFocused: true) != .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true, isRowFocused: true) == nil)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != .openRow)
-        #expect(Shortcuts.action(keyCode: 125, modifiers: [], isRowFocused: true) == .marker(forward: true))
-        #expect(Shortcuts.action(keyCode: 40, modifiers: [], isRowFocused: true) == .togglePlay)
+    func focusedControlKeys(keyCode: UInt16) {
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .numericPad, isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .shift, isControlFocused: true) != .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isControlFocused: true) != .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true, isControlFocused: true) == nil)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != .pressControl)
+        #expect(Shortcuts.action(keyCode: 125, modifiers: [], isControlFocused: true) == .marker(forward: true))
+        #expect(Shortcuts.action(keyCode: 40, modifiers: [], isControlFocused: true) == .togglePlay)
+    }
+
+    @Test("Space on a focused control presses it and doesn't play; with no control focused, Space plays and pauses")
+    func spaceOnFocusedControl() {
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: false) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: 36, modifiers: [], isControlFocused: false) == .startMessage)
+    }
+
+    @Test("Space presses the control that has the keyboard focus: a notice card, a symbol button, a chip or a row")
+    func pressFocusedControl() {
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        var pressed: [String] = []
+        let notice = UUID(), symbol = UUID()
+        #expect(!model.isControlFocused)
+        #expect(!model.pressFocusedControl())
+
+        model.focusControl(notice) { pressed.append("notice") }
+        #expect(model.isControlFocused)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["notice"])
+
+        // Tab gives the next control the focus before the last one hears
+        // that it lost it: the late loss leaves the new control focused.
+        model.focusControl(symbol) { pressed.append("symbol") }
+        model.blurControl(notice)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["notice", "symbol"])
+
+        // The focus leaves for the video: Space is the player's again.
+        model.blurControl(symbol)
+        #expect(!model.isControlFocused)
+        #expect(!model.pressFocusedControl())
+        #expect(pressed == ["notice", "symbol"])
     }
 
     @Test("a key with Command, Option or Control, or any other key, is left alone")

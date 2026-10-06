@@ -125,7 +125,6 @@ struct ThreadRow: View {
     let isOnStage: Bool
 
     @State private var isHovered = false
-    @FocusState private var isFocused: Bool
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var colorScheme
 
@@ -155,19 +154,7 @@ struct ThreadRow: View {
         }
         .buttonStyle(RowButtonStyle())
         .contentShape(.focusEffect, Self.shape)
-        .focused($isFocused)
-        // Space and Return reach the player's keys first (`Shortcuts`),
-        // which open the focused row's thread.
-        .onChange(of: isFocused) { _, focused in
-            if focused {
-                model.focusedRow = thread.id
-            } else if model.focusedRow == thread.id {
-                model.focusedRow = nil
-            }
-        }
-        .onDisappear {
-            if model.focusedRow == thread.id { model.focusedRow = nil }
-        }
+        .pressedByKeys(in: model) { model.perform(.open, on: thread.id) }
         .animation(.smooth(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
         .contextMenu {
