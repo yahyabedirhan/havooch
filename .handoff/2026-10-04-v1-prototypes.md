@@ -1,10 +1,10 @@
-# Handoff: Video Review v1 prototypes
+# Handoff: Havooch v1 prototypes
 
 Three orchestrators build the same spec on their own, at the same time, on `proto-1`, `proto-2` and `proto-3`. A fourth session researches transcription on `research/transcription`. The maintainer compares the three draft pull requests later; nothing merges into `main` from this round without them.
 
 ## Read first
 
-- Spec: #1 `Spec: Video Review v1`. Tickets: every issue labelled `effort:v1`. Start with #15 (the low-level design), then follow the blocking links.
+- Spec: #1 `Spec: Havooch v1`. Tickets: every issue labelled `effort:v1`. Start with #15 (the low-level design), then follow the blocking links.
 - `AGENTS.md` and `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md`.
 - Shipyard (`~/Developer/yahyabedirhan/shipyard`) is the working example for the build, the CLI, the socket, the lease, demo mode and screenshots: its `Package.swift`, `Makefile`, `Sources/ShipyardControl/`, `Sources/ShipyardApp/Control/`, ADR 0006, ADR 0007 and the Testing section of its `AGENTS.md`. Copy its patterns; don't link its code.
 - ReviewMate, a review loop in one of the maintainer's private repositories, is the working example for the listener loop. Read it for the principles only. Never copy its code or name its private details in this repo.
@@ -26,9 +26,9 @@ The maintainer watches explainer videos that agents made about their projects, a
 
 The installed app is shared with the other two runs. Give your build its own identity so the builds never replace or reach each other, without changing the CLI contract:
 
-- App name `Video Review (proto-N).app` in `/Applications`, bundle id ending in `.proto-N`.
-- Support folder `~/Library/Application Support/Video Review (proto-N)/`, so the socket, the demo pointer and the data are separate.
-- The CLI keeps its name and commands. Run it from your own bundle's `Contents/Helpers/video-review`, never from `PATH`.
+- App name `Havooch (proto-N).app` in `/Applications`, bundle id ending in `.proto-N`.
+- Support folder `~/Library/Application Support/Havooch (proto-N)/`, so the socket, the demo pointer and the data are separate.
+- The CLI keeps its name and commands. Run it from your own bundle's `Contents/Helpers/havooch`, never from `PATH`.
 - Write this in one build setting, so the real product can drop the suffix later.
 
 `N` is the number in your branch name.
