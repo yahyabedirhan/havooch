@@ -29,7 +29,7 @@ struct ControlServerTests {
 
         func state() -> StateReport {
             var report = StateReport(
-                app: .init(version: "0.2.0", demo: true, support: "/demo"),
+                app: .init(version: "0.3.0", demo: true, support: "/demo"),
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
@@ -277,7 +277,7 @@ struct ControlServerTests {
     func stateJSON() async throws {
         app.time = 10
         var state = try object(await answer(.state, json: true).reply.output)
-        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.2.0", "demo": true, "support": "/demo"])
+        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.3.0", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
             == ["path": "/videos/sample.mp4", "contentHash": "abcdef0123", "title": "sample", "duration": 21.233, "contextNote": ""])
@@ -304,7 +304,7 @@ struct ControlServerTests {
     @Test("state and app status answer lines without --json")
     func lines() async {
         #expect(await answer(.state).reply.output == """
-            \(AppIdentity.appName) 0.2.0, demo data in /demo
+            \(AppIdentity.appName) 0.3.0, demo data in /demo
             screen: player
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
@@ -317,7 +317,7 @@ struct ControlServerTests {
 
             """)
         #expect(await answer(.appStatus).reply.output == """
-            running: \(AppIdentity.appName) 0.2.0
+            running: \(AppIdentity.appName) 0.3.0
             data: demo, /demo
             video: /videos/sample.mp4
             lease: free

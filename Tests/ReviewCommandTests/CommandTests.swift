@@ -345,13 +345,13 @@ struct CommandTests {
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("--version prints 0.2.0 without asking the app, as JSON with --json")
+    @Test("--version prints 0.3.0 without asking the app, as JSON with --json")
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
+        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.3.0\n"))
         #expect(HavoochCLI.run(["--version", "--json"], environment: run.environment)
-            == CommandResult(output: "{\n  \"version\" : \"0.2.0\"\n}\n"))
+            == CommandResult(output: "{\n  \"version\" : \"0.3.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
 
