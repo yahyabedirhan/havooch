@@ -84,6 +84,7 @@ The 92 user stories of the spec are the requirements. They group into these capa
 - The state of a thread is the state of its latest open person message (open: not `done` or `failed`). With none open, it is the state of its latest person message. With no person message, the thread has no state (D 3.9).
 - A send is every queued person message of the open video at the moment of sending. It is finished when each of its messages is `done` or `failed`.
 - A thread has at most one open question. An answer goes to the waiting `ask` at once and never into the queue (D 2.16).
+- An `ask` may offer quick-reply choices (`--choice`, repeatable, #46). The question keeps them; the thread view shows one chip button per choice under the open question, and a click (or `thread choose <thread> <number>`) answers with that choice at once.
 - The outbox delivers sends first in, first out, one per `wait`. A new holder key on `wait` is a new listener session: its predecessor's unfinished sends return to `pending` and the context is due again (D A.11).
 - The listener is present while a `wait` or an `ask` is open, with proto-2's grace times (5 s listening, 120 s working).
 - The lease follows ADR 0001 unchanged.
@@ -94,7 +95,7 @@ The 92 user stories of the spec are the requirements. They group into these capa
 - Every refusal is a reply with `ok` false and one line in `error`; the CLI prints it on standard error.
 - Exit codes: 0 done; 1 refused or failed; 2 a held request ran out of time (`wait --timeout`, `ask --wait`); 64 wrong usage.
 - Invalid input is refused before any state changes: a time outside the video, a region outside 0..1 or with no area, an empty text, an unknown or malformed id, a thread id of another video for `comment add --thread`, a relative screenshot path, an unknown theme name.
-- Illegal moves are refused with the rule broken: editing a sent message, a state moving back, `ask` while a question is open, `thread answer` with no open question, `reply` on a thread with nothing sent.
+- Illegal moves are refused with the rule broken: editing a sent message, a state moving back, `ask` while a question is open, `thread answer` or `thread choose` with no open question, `thread choose` with no such choice, an `ask` choice with no words, `reply` on a thread with nothing sent.
 - A file AVPlayer cannot play is refused; the open video stays open. A transcript source that fails gives no lines and never blocks a send.
 - A store file from a newer schema, or one that does not read, is never written over; the video's history is refused with the reason.
 - A theme file that does not read, has an unknown `kind`, or forms an `extends` loop is left out of `theme list` with a line on standard error; a token with a bad colour falls back as a missing token does.
@@ -112,7 +113,7 @@ In: all of the above. Out, as the spec says: a redesign of the comment popover, 
 | 11 themes | ReviewCore `Theme/`, ReviewStore `ThemeFiles`, ReviewApp `ThemeDesk`, `UI/Palette` | #23 |
 | 2, 4, 12 threads and messages | ReviewCore `VideoReview`, `ReviewThread`, `Message`, `ItemID`, ReviewStore `SupportLayout`, `Library` | #24 |
 | 5, 9, 13 the send, `wait`, the outbox | ReviewCore `Send`, `SendPayload`, `Outbox`, ReviewApp `ListenerQueue`, `TranscriptDesk` | #25 |
-| 9 `ack`, `status`, `reply`, `ask`, `thread answer` | ReviewCore `VideoReview`, ReviewApp `ListenerQueue`, `Notice` | #26 |
+| 9 `ack`, `status`, `reply`, `ask`, `thread answer`, `thread choose` | ReviewCore `VideoReview`, ReviewApp `ListenerQueue`, `Notice` | #26 |
 | 9 the listener skill | `.agents/skills/havooch-mate/` | #27 |
 | 6 pins | ReviewApp `UI/PlayerBar/` | #28 |
 | 2, 3 comment popover, region | ReviewApp `UI/Stage/` | #29 |
@@ -248,7 +249,7 @@ Sources/
     AppCommands.swift              app status | open [--demo] | quit, state, --version
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
-    CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | open | show | list, context set
+    CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | choose | open | show | list, context set
     ThemeCommands.swift            theme list | set
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42)
     ListenerCommands.swift         wait, ack, status, reply, ask
@@ -351,6 +352,8 @@ Sources/
         ThreadGroup.swift          `ThreadGroup` (Needs you, With agent, Queued, Done) and `ThreadListSummary` (pure)
         ThreadRow.swift            a row: thumbnail with regions, number, time, state, relative time, two-line preview,
                                    the right-click menu (`RowAction`); `ThreadSummary`, its words, and `RelativeTime` (pure)
+        QuickReplies.swift         the open question's choices as chip buttons under it in the thread view, "Quick reply" in front;
+                                   hidden while the person points at a region (#46)
         ThreadView.swift           one thread: the top bar (Back, number and time, Previous and Next), the `Conversation`
                                    (shared with the thread popover)
         Composer.swift             the one composer at the sidebar's foot (L41): the target line, the region chip, the
@@ -396,7 +399,7 @@ As proto-2, with these changes:
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
 | operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentOpen(text, region?)`, `commentCompose(text, region?, general)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadOpen(thread, frame?)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
-| listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?)` | none |
+| listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?, choices)` | none |
 
 - A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `threadOpen`, `threadShow`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
 - `ControlClient` reads to the end; the server's heartbeat spaces before the reply are skipped as JSON allows, and a reply of spaces only is an app that went away (D A.8). Its timeout is proto-2's, applied to each read: 15 s plus the request's `holdSeconds`, and no limit for a `wait` or an `ask` with no limit. With the heartbeat no read of a healthy held request waits more than 2 s.
@@ -413,6 +416,7 @@ As proto-2, with the spec's names and outputs:
 | `comment open [<text>] [--region]` (L22) | `popover open on #1 at 0:12.5` (`… on the region 0.25,0.2,0.3,0.25`) | `{"popover": {"thread", "time", "text", "region"}}` |
 | `send` | `s-f92cbb2a-1 sent: 3 messages on 2 threads, taken by the listener` (or `…, waiting for a listener`) | `{"send": {"id", "sentAt", "messageIds", "threadIds"}}` |
 | `thread answer <thread> <text>` | `#1 answered` | `{"message": {…}}` |
+| `thread choose <thread> <number>` | `#1 answered: <choice>` | `{"message": {…}}` |
 | `thread open <thread> [--frame x,y,w,h]` (L29) | `popover open on #3 at 0:12.5` | `{"popover": {"thread", "time", "text", "region"}}` |
 | `thread show <thread>` (L39) | `the sidebar shows #1` | `{"sidebar": {"thread": "t-…", "width": 340, "composer": {…}}}` |
 | `thread list` (L39) | `the sidebar shows the thread list` | `{"sidebar": {"thread": null, "width": 340, "composer": {…}}}` |
@@ -423,7 +427,7 @@ As proto-2, with the spec's names and outputs:
 | `ack <send-id> [<text>]` | `s-f92cbb2a-1 acknowledged, 3 messages` | `{"send": {…}}` |
 | `status <message-id> working\|done\|failed` | `m-f92cbb2a-3 working` | `{"message": {…}}` |
 | `reply <thread> <text>` | `m-f92cbb2a-7 on #2` | `{"message": {…}}` |
-| `ask <thread> <question> [--wait]` | the answer's text, exit 0; exit 2 and nothing when the wait runs out | `{"answer": {…}}` |
+| `ask <thread> <question> [--choice <text>]... [--wait]` | the answer's text, exit 0; exit 2 and nothing when the wait runs out | `{"answer": {…}}` |
 
 `wait` connects again while the app is not running, as in proto-2. Every other proto-2 rule of the command layer holds: options and words (D201), `app open` relaunch and handover, the launcher, exit 64 for wrong usage.
 
@@ -452,7 +456,8 @@ public struct VideoReview: Codable, Equatable {          // one video's review
     mutating func acknowledge(_ send: SendID, text:, session:, now:) throws(ReviewRefusal) -> Send  // sent → acknowledged; text → General
     mutating func setState(_ message: MessageID, _ state: MessageState) throws(ReviewRefusal) -> Message   // working | done | failed, forward only
     mutating func reply(on thread: ThreadID, text:, session:, now:) throws(ReviewRefusal) -> Message
-    mutating func ask(on thread: ThreadID, question:, session:, now:) throws(ReviewRefusal) -> Message  // refused while a question is open
+    mutating func ask(on thread: ThreadID, question:, choices:, session:, now:) throws(ReviewRefusal) -> Message  // refused while a question is open
+    func choice(_ number: Int, on thread: ThreadID) throws(ReviewRefusal) -> String  // the open question's choice, from 1
     mutating func requeue(_ send: SendID) -> [MessageID]                                      // unfinished → sent
 
     func thread(atFrame time: Double) -> ReviewThread?
@@ -463,13 +468,13 @@ public struct VideoReview: Codable, Equatable {          // one video's review
 
 - **Joining** (D 3.1, D 3.8): `write` with a time finds the thread whose `time` equals it exactly. The time is already the frame time (`PlayerEngine.frameTime(of:)`, L2), so two moments inside one frame give the same key and one frame later gives another. With `to:` it writes on that thread, General included; a time given beside a thread is refused when it is another frame (L6).
 - **A new thread** takes the next number and the id `t-<hash8>-<number>`; General is `t-<hash8>-0`, made with the review (L3). The keyframe is written before the thread exists (proto-2 D47), at `frames/<thread-id>.png`.
-- **A message** is `id` (`m-<hash8>-<n>`), `author` (`person` | `agent`), `kind` (`message` | `question` | `answer`), `text` (trimmed, never empty), `at`, `region` (person messages only), `state` (person `message`s only), `sendID` (once sent) and `sessionName` (agent messages only: the listener session's name when it was written, L40). A region message's crop is `crops/<message-id>.png`, written before the message enters the review.
+- **A message** is `id` (`m-<hash8>-<n>`), `author` (`person` | `agent`), `kind` (`message` | `question` | `answer`), `text` (trimmed, never empty), `at`, `region` (person messages only), `state` (person `message`s only), `sendID` (once sent) `sessionName` (agent messages only: the listener session's name when it was written, L40) and `choices` (a question's quick replies, trimmed, each once; nil with none, #46). `StateReport.Message` names `choices` only for a question with some. A region message's crop is `crops/<message-id>.png`, written before the message enters the review.
 - **States**: `MessageState` is `queued`, `sent`, `acknowledged`, `working`, `done`, `failed`. `canMove(to:)` is forward only with skips; the state a message already has is accepted and changes nothing (proto-2 D122). There is no draft state (D 1.4).
 - **Thread state** (D 3.9): `ReviewThread.state` is the state of the latest person `message` that is not `done` or `failed`, else of the latest person `message`, else nil. A new person message on a finished thread makes it `queued`, so active again (D 2.12) with no extra rule.
 - **Questions**: `openQuestion` is the last agent `question` with no person `answer` after it. `ask` is refused while one is open; `answer` is refused with none; a `reply` does not close it.
 - **The listener's reach**: `setState`, `reply` and `ask` need something sent on the thread (`notSent`); General takes `reply` and `ask` always. `acknowledge` moves each message of the send still `sent` and leaves the ones further on.
 - **Popover frame** (D 2.10): `PopoverFrame` is `x, y, w, h` in normalized coordinates of the video area, nil until the person moves or resizes the popover.
-- `ReviewRefusal` is `emptyText`, `unknownID(id)`, `otherVideo(id)`, `notQueued(id, state)`, `badRegion`, `nothingQueued`, `emptyMessage`, `notSent(thread)`, `illegalMove(id, from, to)`, `questionOpen(thread)`, `noQuestion(thread)`, `frameMismatch(thread, time)`, `noFrame` (a time or a region on General), each with its `line`.
+- `ReviewRefusal` is `emptyText`, `unknownID(id)`, `otherVideo(id)`, `notQueued(id, state)`, `badRegion`, `nothingQueued`, `emptyMessage`, `notSent(thread)`, `illegalMove(id, from, to)`, `questionOpen(thread)`, `noQuestion(thread)`, `emptyChoice`, `noChoice(thread, number)`, `frameMismatch(thread, time)`, `noFrame` (a time or a region on General), each with its `line`.
 
 **Ids** (D A.5): `ItemID` is `<kind>-<hash8>-<n>` with `t`, `m` or `s`, where `hash8` is the first eight hex digits of the video's content hash and `n` a counter of the review. A listener's command finds its video from the prefix (`Library.contentHash(prefix:)`), so it works after another video opens. Numbers come from the review's counters and are never given twice, so tests are deterministic with no injected ids.
 
@@ -628,6 +633,7 @@ public struct SupportLayout: Sendable {
 | `movePopover(id, frame)` | the end of a drag or a resize: saves the `PopoverFrame` | |
 | `send()` | answer with the composer's words when it answers, queue the open draft's text and the composer's, then `ReviewDesk.change { $0.send(…) }`, then `ListenerQueue.enqueue`; does nothing while a send is under way | nothing queued (`send` exits 1) |
 | `answer(thread, text)` | `thread answer` and the field: through `ReviewDesk`, then `ListenerQueue.answered` | no open question |
+| `choose(thread, choice:)`, `chooseAnswer` | `thread choose` and a quick-reply chip: `answer` with the open question's choice of that number | no open question; no such choice |
 | `setContextNote(text)` | as proto-2 | no video |
 | `setTheme(name)` | through `ThemeDesk`; `system` unpins | unknown theme |
 
@@ -677,7 +683,7 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 | Frame marks | On the current frame, while paused or playing: each thread's region outlines and one number badge per thread (at its first region's corner, or the frame's top-left corner for a thread without a region). A badge click is `openThread`. Nothing opens by itself. | D 2.6, D 2.11 |
 | Thread popover | One component for a new message and for an existing thread: header `#3 · 0:12` and ×, the conversation (empty for a new thread) above a field that fills the width, quieter key hints, less padding than proto-2. Drag by its header, resize from its corner, inside the video area; the end of either saves the frame (only on an existing thread, L30). Opens at its kept frame, fitted to the stage (L32), else beside the draft's region or the thread's first region, else above the playhead. | D 1.2, D 1.7, D 1.8, D 2.7 to D 2.10 |
 | Sidebar | Two views (L38). The thread list: the title "Threads" and a summary line (`6 threads · 1 needs you · 2 queued`), then the groups Needs you, With agent, Queued, Done under headers with a glyph and a count that stay at the top while the list scrolls; Queued's says `⌘↩ sends them all`. A `ThreadRow`: an 88 × 50 pt keyframe thumbnail with its region outlines (a globe for General), the number and time, the state chip, the relative time, a chevron, and a two-line preview that names the writer (`You:`, `Asks:`, the agent), led by the agent's logo (or the sparkle) on an agent's message. An unread row (L46) has an 8 pt `accent` dot at its left, straddling the row's edge on the first line, its title bold, its preview in `textPrimary` and its time in `accent`; VoiceOver reads `Unread` first. A right-click on a row offers Open, Show on Video (not General) and Delete Queued Messages (when it has any), L40. Tab under keyboard navigation reaches each row, with the system focus ring, and Space or Return opens it (L43, L45). The thread view: a 44 pt top bar (Back with the count of the other threads that need the person, the number and time, Previous and Next), the conversation as a chat (L40) from the newest, and the field at the foot (answer at once when a question is open, else queue); no keyframe. The view slides in from the trailing edge with the sidebar's spring, a fade with Reduce Motion. On the window's surface (L36): a row under the pointer takes `controlHover`, the row of the thread on the stage sits in a `well`, no cards. Resizable between the bounds of `Metrics.sidebarWidthRange` (300 to 460), width kept in `settings.json`, proto-1's animation for open and close. | D 3.1, D 3.2, D 3.7, D 4.5, D 5.10; replaces D 3.3, D 3.5, D 3.6 (spec 0.2.0) |
-| Conversation | A chat (L40), from variant 02. The person's messages trailing, 46 pt in from the leading side, in `bubblePerson` (16 pt corners, a 5 pt corner at the trailing foot for the tail), no avatar; a quiet line under the bubble holds the state chip (an answer: `Answer · sent at once` in `question`), the `Region` tag in `regionOutline` and the time. A queued message: a dashed `stateQueued` outline, `controlHover` on hover, Edit and Delete beside it on hover, edited in place (Return saves, Escape cancels). An answer: `question` at 15% with a 40% border. The agent's messages leading, 34 pt in from the trailing side, in `bubbleAgent` (the tail at the leading foot); the 24 pt avatar (the harness logo, else the sparkle) beside the last bubble of a run, the name (`agent`) and time over the first. A question: a card in `bubbleQuestion` with a `question` border at 32%, headed `<agent> asks`; an answered one at 80% opacity. A region message's crop under its bubble. Messages 8 pt apart, 4 pt inside a run of the agent's. The name and logo are the message's `sessionName`, else the listener's. A right-click: Edit, Delete (queued only), Copy. VoiceOver reads one element per message: writer, kind, state, words (`MessageVoice`), with the menu's actions. The thread popover shows the same `Conversation`. | D 3.4 replaced (spec 0.2.0) |
+| Conversation | A chat (L40), from variant 02. The person's messages trailing, 46 pt in from the leading side, in `bubblePerson` (16 pt corners, a 5 pt corner at the trailing foot for the tail), no avatar; a quiet line under the bubble holds the state chip (an answer: `Answer · sent at once` in `question`), the `Region` tag in `regionOutline` and the time. A queued message: a dashed `stateQueued` outline, `controlHover` on hover, Edit and Delete beside it on hover, edited in place (Return saves, Escape cancels). An answer: `question` at 15% with a 40% border. The agent's messages leading, 34 pt in from the trailing side, in `bubbleAgent` (the tail at the leading foot); the 24 pt avatar (the harness logo, else the sparkle) beside the last bubble of a run, the name (`agent`) and time over the first. A question: a card in `bubbleQuestion` with a `question` border at 32%, headed `<agent> asks`; an answered one at 80% opacity. A region message's crop under its bubble. Messages 8 pt apart, 4 pt inside a run of the agent's. The name and logo are the message's `sessionName`, else the listener's. A right-click: Edit, Delete (queued only), Copy. VoiceOver reads one element per message: writer, kind, state, words (`MessageVoice`), with the menu's actions. The thread popover shows the same `Conversation`. In the thread view only, an open question with choices has a row under it: `Quick reply` in `textTertiary`, then one capsule chip per choice in `question` at 12% (22% on hover) with a 45% border, wrapping; a click answers at once. The row hides while a rectangle is drawn and while a drawn one is in the composer (`isPointingAtRegion`), #46. | D 3.4 replaced (spec 0.2.0) |
 | Composer | Variant 02's composer at the sidebar's foot, above the footer, under a hairline (L41): a 22 pt target line (glyph, "New thread at 0:12", "Reply on #3", "Follow up on #3", or "Answer #3 · goes at once" in `question`), the `regionOutline` region chip with its ×, and in the list the General toggle (native borderless). The field: `field` with a `separator` border (`question` for an answer), 15 pt corners, the keys at its trailing foot, the system focus ring round the whole field; it grows from one line to about six. | L41 |
 | Footer | proto-3's line: presence pill (`Listening`, `Working`, `No listener`; hover names the agent), the queued count, Send. Same height as the player bar, a `separator` hairline above it inside that height (L36). | D 4.8, D 4.9 |
 | Header | Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `window` token, or the native toolbar when `window` is `system` (L26, L36, L37). | D 4.1 to D 4.4, D 4.7 |

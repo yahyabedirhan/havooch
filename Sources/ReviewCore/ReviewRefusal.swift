@@ -26,6 +26,10 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
     case questionOpen(ThreadID)
     /// An answer needs an open question.
     case noQuestion(ThreadID)
+    /// A question's quick-reply choice needs words.
+    case emptyChoice
+    /// The open question on the thread has no choice of this number (from 1).
+    case noChoice(ThreadID, Int)
     /// A message on a thread must be on that thread's frame.
     case frameMismatch(ThreadID, time: Double)
     /// The General thread has no frame: a message on it has no time and no
@@ -57,6 +61,10 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
             "#\(thread.number) (\(thread)) already has an open question; its answer comes on the thread, which `havooch state --json` shows"
         case .noQuestion(let thread):
             "#\(thread.number) (\(thread)) has no open question to answer"
+        case .emptyChoice:
+            "a choice needs text"
+        case .noChoice(let thread, let number):
+            "the open question on #\(thread.number) (\(thread)) has no choice \(number); `havooch state --json` lists its `choices`, numbered from 1"
         case .frameMismatch(let thread, let time):
             "#\(thread.number) (\(thread)) is on another frame than \(time) s; leave out `--at` to write on its frame"
         case .noFrame:

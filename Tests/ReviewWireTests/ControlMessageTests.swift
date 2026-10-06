@@ -49,7 +49,9 @@ struct ControlMessageTests {
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil),
         .ask(thread: "1", question: "Which part?", waitSeconds: 0),
         .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 600),
+        .ask(thread: "1", question: "Which part?", waitSeconds: nil, choices: ["The intro", "The end"]),
         .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro"),
+        .threadChoose(thread: "t-f92cbb2a-1", choice: 2), .threadChoose(thread: "1", choice: 1),
         .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
         .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
     ], [false, true])
@@ -155,6 +157,17 @@ struct ControlMessageTests {
         #expect(refusal(fields("ask", ["thread": "1", "text": "Which?", "waitSeconds": 86401])) != nil)
         #expect(refusal(fields("thread.answer", ["text": "a"])) == .unreadable("the control command `thread.answer` needs its `thread`"))
         #expect(refusal(fields("thread.answer", ["thread": "1"])) == .unreadable("the control command `thread.answer` needs its `text`"))
+        #expect(refusal(fields("thread.choose", ["thread": "1"])) == .unreadable("the control command `thread.choose` needs its `choice`, 1 or more"))
+        #expect(refusal(fields("thread.choose", ["thread": "1", "choice": 0])) != nil)
+        #expect(refusal(fields("thread.choose", ["choice": 1])) == .unreadable("the control command `thread.choose` needs its `thread`"))
+    }
+
+    @Test("an ask with no choices goes on the wire as it did before choices")
+    func askWithoutChoices() throws {
+        let plain = String(decoding: ControlMessage(.ask(thread: "1", question: "Which?", waitSeconds: nil), holder: Self.holder).encoded(), as: UTF8.self)
+        #expect(!plain.contains("choices"))
+        let offered = ControlMessage(.ask(thread: "1", question: "Which?", waitSeconds: nil, choices: ["A", "B"]), holder: Self.holder)
+        #expect(String(decoding: offered.encoded(), as: UTF8.self).contains(#""choices":["A","B"]"#))
     }
 
     @Test("the listener's answers take no lease and are never held", arguments: [
@@ -172,6 +185,9 @@ struct ControlMessageTests {
         #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: nil).holdSeconds == nil)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").role == .operator)
         #expect(ControlRequest.threadAnswer(thread: "1", text: "a").holdSeconds == 0)
+        #expect(ControlRequest.ask(thread: "1", question: "a", waitSeconds: 30, choices: ["b"]).holdSeconds == 30)
+        #expect(ControlRequest.threadChoose(thread: "1", choice: 1).role == .operator)
+        #expect(ControlRequest.threadChoose(thread: "1", choice: 1).holdSeconds == 0)
         #expect(ControlRequest.threadShow(thread: "1").role == .operator)
         #expect(ControlRequest.threadList.role == .operator)
     }

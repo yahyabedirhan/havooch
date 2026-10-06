@@ -117,6 +117,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// The send it went out in; `null` while it's queued, and for
         /// every message but a person's `message`.
         var sendId: String?
+        /// A question's quick-reply choices, in order; left out of the JSON
+        /// for a question with none and for every other message.
+        var choices: [String]?
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -129,10 +132,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(region, forKey: .region)
             try container.encode(cropPath, forKey: .cropPath)
             try container.encode(sendId, forKey: .sendId)
+            try container.encodeIfPresent(choices, forKey: .choices)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, author, kind, text, at, state, region, cropPath, sendId
+            case id, author, kind, text, at, state, region, cropPath, sendId, choices
         }
 
         init(_ message: ReviewCore.Message, contentHash: String, layout: SupportLayout) {
@@ -145,6 +149,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             region = message.region
             cropPath = layout.crop(of: message, on: contentHash)?.path
             sendId = message.sendID?.text
+            choices = message.choices
         }
     }
 

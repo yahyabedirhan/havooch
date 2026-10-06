@@ -2,7 +2,7 @@ import Foundation
 import ReviewWire
 
 /// `havooch comment add | open | compose | edit | delete`, `context set`, `send` and
-/// `thread answer`.
+/// `thread answer | choose`.
 enum CommentCommands {
     static let commands: [Command] = [
         Command(
@@ -68,6 +68,16 @@ enum CommentCommands {
         ) { arguments, _ throws(UsageError) in
             let words = try arguments.exactly(["<thread>", "<text>"])
             return .send(.threadAnswer(thread: words[0], text: words[1]))
+        },
+        Command(
+            name: "thread choose", synopsis: "thread choose <thread> <number>",
+            summary: "answer the agent's open question on a thread with its quick-reply choice <number> (from 1), as a click on that choice does"
+        ) { arguments, _ throws(UsageError) in
+            let words = try arguments.exactly(["<thread>", "<number>"])
+            guard let number = Int(words[1]), number >= 1 else {
+                throw UsageError("`<number>` is a choice's number from 1, not `\(words[1])`")
+            }
+            return .send(.threadChoose(thread: words[0], choice: number))
         },
         Command(
             name: "thread open", synopsis: "thread open <thread> [--frame x,y,w,h]",

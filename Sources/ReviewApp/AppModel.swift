@@ -410,6 +410,20 @@ final class AppModel: AppControlling {
         return (report, id.number)
     }
 
+    /// A quick-reply button and `thread choose`: the open question on a
+    /// thread answered with its choice `number` (from 1), at once.
+    func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
+        let (id, hash) = try desk.threadID(thread)
+        guard let review = desk.review(of: hash) else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
+        let words: String
+        do throws(ReviewRefusal) {
+            words = try review.choice(number, on: id)
+        } catch {
+            throw AppRefusal(error.line)
+        }
+        return try answer(id.text, text: words)
+    }
+
     func state() -> StateReport {
         let hash = video?.contentHash ?? ""
         let review = desk.review
@@ -998,6 +1012,10 @@ final class AppModel: AppControlling {
         )
     }
 
+    /// Whether the person points at a region: draws a rectangle, or has a
+    /// drawn one in the composer. The quick replies hide meanwhile.
+    var isPointingAtRegion: Bool { isDrawingRegion || composerRegion != nil }
+
     /// The region chip in the composer: the drawn region, when it goes
     /// with the words.
     var composerRegion: Region? {
@@ -1182,6 +1200,20 @@ final class AppModel: AppControlling {
     func answerQuestion(_ thread: ThreadID, text: String) -> Bool {
         do throws(AppRefusal) {
             _ = try answer(thread.text, text: text)
+            return true
+        } catch {
+            problem = Problem(title: "The answer wasn't sent", reason: error.reason)
+            return false
+        }
+    }
+
+    /// A click on a quick-reply button: the open question on `thread`
+    /// answered with its choice `number` (from 1). False when it wasn't
+    /// taken.
+    @discardableResult
+    func chooseAnswer(_ thread: ThreadID, choice number: Int) -> Bool {
+        do throws(AppRefusal) {
+            _ = try choose(thread.text, choice: number)
             return true
         } catch {
             problem = Problem(title: "The answer wasn't sent", reason: error.reason)

@@ -331,6 +331,64 @@ struct AnswerTests {
         #expect(app.server.lease.current(at: Date()) == nil)
     }
 
+    @Test("an ask with choices keeps them on its question, which state --json lists, and thread choose answers with one at once")
+    func askWithChoicesAnsweredByChoose() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let server = app.server
+        let two = app.two
+        let asking = Task {
+            await server.reply(
+                to: ControlRequest.ask(thread: two, question: "Which box?", waitSeconds: 30, choices: ["The left one", "The right one"])
+                    .sent(by: Self.listener)
+            )
+        }
+        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        #expect(try thread(app.two, app).openQuestion?.choices == ["The left one", "The right one"])
+        let state = try object(await operate(.state, app, json: true).output)
+        let threads = try #require(state["threads"] as? [[String: Any]])
+        let messages = try #require(threads.first { $0["id"] as? String == two }?["messages"] as? [[String: Any]])
+        #expect(messages.last?["choices"] as? [String] == ["The left one", "The right one"])
+        // Only a question with choices names them.
+        #expect(messages.first?["choices"] == nil)
+
+        #expect(await operate(.threadChoose(thread: "2", choice: 3), app) == .refused(ReviewRefusal.noChoice(try #require(ItemID(two)), 3).line))
+        let chosen = await operate(.threadChoose(thread: "2", choice: 2), app)
+        let reply = await asking.value.reply
+
+        #expect(chosen == .done("#2 answered: The right one\n"))
+        #expect(reply == .done("The right one\n"))
+        #expect(try thread(app.two, app).openQuestion == nil)
+        #expect(try thread(app.two, app).messages.last?.kind == .answer)
+        #expect(app.model.state().queue.isEmpty)
+    }
+
+    @Test("a click on a quick reply answers the open question at once, and one on a question no longer open is refused in words")
+    func quickReplyClick() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let one = try #require(ItemID(app.one))
+        _ = await listen(.ask(thread: app.one, question: "Which part?", waitSeconds: 0, choices: ["The intro", "The end"]), app)
+
+        #expect(app.model.chooseAnswer(one, choice: 1))
+        #expect(try thread(app.one, app).messages.last?.text == "The intro")
+        #expect(app.model.problem == nil)
+
+        #expect(!app.model.chooseAnswer(one, choice: 1))
+        #expect(app.model.problem?.reason == ReviewRefusal.noQuestion(one).line)
+    }
+
+    @Test("the person points at a region while drawing a rectangle, and stops when it's cancelled")
+    func pointingAtRegion() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        #expect(!app.model.isPointingAtRegion)
+        app.model.beginRegion()
+        #expect(app.model.isPointingAtRegion)
+        app.model.endRegion(nil)
+        #expect(!app.model.isPointingAtRegion)
+    }
+
     @Test("an ask whose wait runs out answers that it ran out; the question stays open, and a late answer stays on the thread")
     func askRunsOut() async throws {
         defer { cleanUp() }

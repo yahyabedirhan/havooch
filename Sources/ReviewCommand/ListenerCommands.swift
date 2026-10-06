@@ -46,9 +46,9 @@ enum ListenerCommands {
             return .send(.reply(thread: words[0], text: words[1]))
         },
         Command(
-            name: "ask", synopsis: "ask <thread> <question> [--wait <seconds>]",
-            summary: "ask a question on a thread and print the person's answer; exit 2 when --wait runs out with none",
-            valuedOptions: ["--wait"]
+            name: "ask", synopsis: "ask <thread> <question> [--choice <text>]... [--wait <seconds>]",
+            summary: "ask a question on a thread and print the person's answer; each --choice is a quick reply the person can click; exit 2 when --wait runs out with none",
+            valuedOptions: ["--wait", "--choice"]
         ) { arguments, _ throws(UsageError) in
             let words = try arguments.exactly(["<thread>", "<question>"])
             var wait: Int?
@@ -58,7 +58,8 @@ enum ListenerCommands {
                 }
                 wait = whole
             }
-            return .send(.ask(thread: words[0], question: words[1], waitSeconds: wait))
+            let choices = arguments.repeated["--choice"] ?? []
+            return .send(.ask(thread: words[0], question: words[1], waitSeconds: wait, choices: choices))
         },
     ]
 

@@ -56,9 +56,12 @@ public struct ControlMessage: Equatable, Sendable {
         case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
         case .status(let messageID, let state): wire = Wire(command: "status", id: messageID, state: state.rawValue)
         case .reply(let thread, let text): wire = Wire(command: "reply", text: text, thread: thread)
-        case .ask(let thread, let question, let waitSeconds):
+        case .ask(let thread, let question, let waitSeconds, let choices):
             wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
+            // A question with no choices goes as it went before them.
+            wire.choices = choices.isEmpty ? nil : choices
         case .threadAnswer(let thread, let text): wire = Wire(command: "thread.answer", text: text, thread: thread)
+        case .threadChoose(let thread, let choice): wire = Wire(command: "thread.choose", thread: thread, choice: choice)
         case .threadOpen(let thread, let frame): wire = Wire(command: "thread.open", thread: thread, frame: frame)
         case .threadShow(let thread): wire = Wire(command: "thread.show", thread: thread)
         case .threadList: wire = Wire(command: "thread.list")
@@ -176,10 +179,15 @@ public struct ControlMessage: Equatable, Sendable {
             }
             return .ask(
                 thread: try field(wire.thread, "thread", of: wire), question: try field(wire.text, "text", of: wire),
-                waitSeconds: wire.waitSeconds
+                waitSeconds: wire.waitSeconds, choices: wire.choices ?? []
             )
         case "thread.answer":
             return .threadAnswer(thread: try field(wire.thread, "thread", of: wire), text: try field(wire.text, "text", of: wire))
+        case "thread.choose":
+            guard let choice = wire.choice, choice >= 1 else {
+                throw .unreadable("the control command `thread.choose` needs its `choice`, 1 or more")
+            }
+            return .threadChoose(thread: try field(wire.thread, "thread", of: wire), choice: choice)
         case "thread.open":
             return .threadOpen(thread: try field(wire.thread, "thread", of: wire), frame: wire.frame)
         case "thread.show": return .threadShow(thread: try field(wire.thread, "thread", of: wire))
@@ -239,5 +247,9 @@ public struct ControlMessage: Equatable, Sendable {
         var frame: ControlRequest.Rectangle?
         /// `comment compose --general`: the composer writes to General.
         var general: Bool?
+        /// `ask --choice`: the question's quick replies; left out with none.
+        var choices: [String]?
+        /// `thread choose`: the number (from 1) of the choice pressed.
+        var choice: Int?
     }
 }

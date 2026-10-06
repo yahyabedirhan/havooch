@@ -75,13 +75,19 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch reply <thread> <text>`: the listener's message on a
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)
-    /// `havooch ask <thread> <question> [--wait <seconds>]`: the
-    /// listener's question on a thread. The app holds the request until the
-    /// person answers, up to `waitSeconds`, or with no limit when it's nil.
-    case ask(thread: String, question: String, waitSeconds: Int?)
+    /// `havooch ask <thread> <question> [--choice <text>]...
+    /// [--wait <seconds>]`: the listener's question on a thread, with the
+    /// quick replies the person may answer with in one click. The app holds
+    /// the request until the person answers, up to `waitSeconds`, or with
+    /// no limit when it's nil.
+    case ask(thread: String, question: String, waitSeconds: Int?, choices: [String] = [])
     /// `havooch thread answer <thread> <text>`: the answer to a
     /// thread's open question, as the person gives it in the app.
     case threadAnswer(thread: String, text: String)
+    /// `havooch thread choose <thread> <number>`: the open question
+    /// answered with its quick-reply choice `choice` (from 1), as a click
+    /// on that choice's button answers it.
+    case threadChoose(thread: String, choice: Int)
     /// `havooch thread open <thread> [--frame x,y,w,h]`: the thread
     /// popover opened on the thread's frame, as a click on its pin or its
     /// badge opens it. With `frame` (0 to 1 of the video area, from its
@@ -168,7 +174,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
-        case .threadAnswer, .threadOpen, .threadShow, .threadList: .operator
+        case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         }
     }
@@ -181,7 +187,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
         case .wait(let timeoutSeconds): timeoutSeconds.map(TimeInterval.init)
-        case .ask(_, _, let waitSeconds): waitSeconds.map(TimeInterval.init)
+        case .ask(_, _, let waitSeconds, _): waitSeconds.map(TimeInterval.init)
         default: 0
         }
     }

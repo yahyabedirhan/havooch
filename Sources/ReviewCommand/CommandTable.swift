@@ -29,7 +29,12 @@ struct UsageError: Error, Equatable {
 /// A command's arguments, split into the words and the `--options`.
 struct Arguments: Equatable {
     var words: [String] = []
+    /// Each valued option written, with its value; the last one when it's
+    /// written more than once.
     var options: [String: String] = [:]
+    /// Every value of each valued option, in the order written: a
+    /// repeatable option such as `ask --choice` reads all of them.
+    var repeated: [String: [String]] = [:]
     /// The `--flags` written: options with no value.
     var flags: Set<String> = []
 
@@ -56,6 +61,7 @@ struct Arguments: Equatable {
             guard valued.contains(argument) else { throw UsageError("unknown option `\(argument)`") }
             guard let value = rest.popFirst() else { throw UsageError("`\(argument)` needs a value") }
             options[argument] = value
+            repeated[argument, default: []].append(value)
         }
     }
 

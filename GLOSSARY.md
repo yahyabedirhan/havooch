@@ -72,6 +72,10 @@ _Avoid_: ask (as a noun), prompt
 A message by the person to an open question. It goes to the agent at once and never into the queue.
 _Avoid_: response, reply (reply is what the agent writes)
 
+**Choice**:
+A short answer the agent offers with a question. The thread view shows each one as a button under the open question, after the label "Quick reply"; a click on it sends it as the answer at once.
+_Avoid_: option (an option is a command's `--flag`), suggestion
+
 **Reply**:
 A message by the agent on a thread that waits for nothing.
 _Avoid_: response, answer

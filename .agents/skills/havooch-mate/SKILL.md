@@ -94,6 +94,8 @@ Ask when a message has two readings that lead to different work and the frame, t
 
 Run `havooch ask <thread id> "<question>"` as a background command, like `wait`: the question shows on the thread, the person answers in the player, and the command then exits `0` with the answer on standard output. Leave the message `working` and go on with the next one meanwhile; come back to it when the answer wakes you.
 
+When the answer is one of a few short readings, give each one as a choice: `havooch ask <thread id> "<question>" --choice "<reading 1>" --choice "<reading 2>"`. Give two to four choices of a few words each, in the order of the question. The player shows each choice as a button under the question, and one click answers with its words. The person can still type another answer, so the answer is not always one of the choices. Leave out `--choice` when the answer needs the person's own words.
+
 A thread holds one open question: a second `ask` on it is refused until the person answers the first. A `reply` does not close a question.
 
 Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `havooch state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.

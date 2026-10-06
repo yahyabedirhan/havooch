@@ -235,16 +235,18 @@ final class ListenerQueue {
         return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `havooch ask`: the agent's question on a thread, held until the
-    /// person answers it, for up to `waitSeconds` (nil: with no limit).
+    /// `havooch ask`: the agent's question on a thread, with its
+    /// quick-reply `choices`, held until the person answers it, for up to `waitSeconds` (nil: with no limit).
     /// When the time runs out the question stays open, and an answer that
     /// comes later stays on the thread.
-    func ask(on thread: String, question: String, waitSeconds: Int?, connection: UUID? = nil) async throws(AppRefusal) -> Asked {
+    func ask(
+        on thread: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
+    ) async throws(AppRefusal) -> Asked {
         outbox.heard(at: now())
         let (id, hash) = try desk.threadID(thread)
         let time = now()
         let message = try desk.change(hash) { [session = outbox.session?.name] review throws(ReviewRefusal) in
-            try review.ask(on: id, question: question, session: session, now: time)
+            try review.ask(on: id, question: question, choices: choices, session: session, now: time)
         }
         notify(id, .question, message.text)
         if waitSeconds == 0 { return .ranOut }
