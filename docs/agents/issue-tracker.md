@@ -2,8 +2,6 @@
 
 Issues and specs for this repo live as GitHub issues in `yahyabedirhan/havooch`, so the repo has no `.efforts/` folder. Use the `gh` CLI for all operations.
 
-NOTE: The app is named Havooch (`docs/adr/0002-the-app-is-named-havooch.md`). The repository was named `yahyabedirhan/video-review` before. GitHub redirects the old name.
-
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.

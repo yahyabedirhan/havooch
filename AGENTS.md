@@ -1,6 +1,6 @@
 # Havooch
 
-Havooch (formerly Video Review; `docs/adr/0002-the-app-is-named-havooch.md`) is a native macOS video player for giving feedback to agents. You pause any video, or draw a region on its frame, and comment. Comments queue up and Cmd+Enter sends them as one batch to a listening agent session, with the timestamp, the keyframe, the region and the transcript around that point. The agent answers inside the player.
+Havooch is a native macOS video player for giving feedback to agents. You pause any video, or draw a region on its frame, and comment. Comments queue up and Cmd+Enter sends them as one batch to a listening agent session, with the timestamp, the keyframe, the region and the transcript around that point. The agent answers inside the player.
 
 Each build has its spec as a GitHub issue titled `Spec: ...`. The app follows `Spec: Video Review v1` (#1), then `Spec: Video Review 0.1.0` (#20) and `Spec: Video Review 0.2.0` (#36), each one changing the one before. Read them, and the decisions in `docs/prototypes/`, before building anything.
 
