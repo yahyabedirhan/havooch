@@ -14,12 +14,47 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
     /// Where the person left the thread's popover; nil until they move or
     /// resize it.
     public internal(set) var popoverFrame: PopoverFrame?
+    /// When the person last opened the thread's view; nil until they do.
+    public internal(set) var lastSeen: Date?
 
-    public init(id: ThreadID, time: Double?, messages: [Message] = [], popoverFrame: PopoverFrame? = nil) {
+    public init(
+        id: ThreadID, time: Double?, messages: [Message] = [], popoverFrame: PopoverFrame? = nil, lastSeen: Date? = nil
+    ) {
         self.id = id
         self.time = time
         self.messages = messages
         self.popoverFrame = popoverFrame
+        self.lastSeen = lastSeen
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, time, messages, popoverFrame, lastSeen
+    }
+
+    /// A thread kept before the last opening was has no `lastSeen` key:
+    /// its agent messages count as read, so an update marks nothing.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(ThreadID.self, forKey: .id)
+        time = try container.decodeIfPresent(Double.self, forKey: .time)
+        messages = try container.decode([Message].self, forKey: .messages)
+        popoverFrame = try container.decodeIfPresent(PopoverFrame.self, forKey: .popoverFrame)
+        lastSeen = if container.contains(.lastSeen) {
+            try container.decodeIfPresent(Date.self, forKey: .lastSeen)
+        } else {
+            messages.last(where: { $0.author == .agent })?.at
+        }
+    }
+
+    /// `lastSeen` is written as `null` until the person opens the thread,
+    /// so it reads back apart from a thread kept before it was.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(time, forKey: .time)
+        try container.encode(messages, forKey: .messages)
+        try container.encodeIfPresent(popoverFrame, forKey: .popoverFrame)
+        try container.encode(lastSeen, forKey: .lastSeen)
     }
 
     /// Whether this is the General thread.
@@ -42,6 +77,14 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
               !messages[index...].contains(where: { $0.kind == .answer })
         else { return nil }
         return messages[index]
+    }
+
+    /// Whether an agent message came after the person last opened the
+    /// thread's view: its row shows the unread dot.
+    public var isUnread: Bool {
+        messages.contains { message in
+            message.author == .agent && lastSeen.map { message.at > $0 } ?? true
+        }
     }
 
     /// Whether anything on the thread was sent: the listener answers only a

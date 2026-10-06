@@ -122,7 +122,8 @@ struct SidebarTests {
         #expect(summary.preview == "Asks: Which part?")
         #expect(summary.byAgent)
         #expect(summary.waitsForAnswer)
-        #expect(summary.text == "#1, 0:12, waiting for your answer, Claude Code asks: Which part?")
+        #expect(summary.isUnread)
+        #expect(summary.text == "Unread, #1, 0:12, waiting for your answer, Claude Code asks: Which part?")
 
         let general = ThreadSummary(try thread(0, model), agent: "Claude Code")
         #expect(general.title == "General")

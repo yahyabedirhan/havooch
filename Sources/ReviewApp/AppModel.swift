@@ -48,8 +48,11 @@ final class AppModel: AppControlling {
     /// The thread whose pin is picked out.
     private(set) var selection: ThreadID?
     /// The thread the sidebar shows in its thread view; nil while it
-    /// shows the thread list (L38).
-    private(set) var shown: ThreadID?
+    /// shows the thread list (L38). Showing a thread's view marks its
+    /// agent messages read (L46).
+    private(set) var shown: ThreadID? {
+        didSet { if let shown { markSeen(shown) } }
+    }
     /// The controls that have the keyboard focus under keyboard navigation
     /// (`focusControl(_:press:)`), the last to take it at the end: Space
     /// and Return press that one. A control in a popover takes the focus
@@ -860,6 +863,14 @@ final class AppModel: AppControlling {
         return thread
     }
 
+    /// The person sees thread `id`'s view now: its agent messages until
+    /// now are read, and its row loses the unread dot (L46). Nothing for
+    /// a thread the open video doesn't have.
+    private func markSeen(_ id: ThreadID) {
+        guard desk.review?.thread(id) != nil else { return }
+        _ = try? desk.change { review throws(ReviewRefusal) in try review.markSeen(id, at: Date()) }
+    }
+
     /// Whether a control has the keyboard focus, so Space and Return
     /// press it and don't reach the player.
     var isControlFocused: Bool { !focusedControls.isEmpty }
@@ -1135,6 +1146,8 @@ final class AppModel: AppControlling {
     /// The agent said something: a notice goes up on the stage. Every
     /// notice goes by itself; a question stays open on its thread.
     func raise(_ notice: Notice) {
+        // The thread view shows the message as it comes: it's read.
+        if notice.thread == shown { markSeen(notice.thread) }
         notices.append(notice)
         let expires = notice.expires
         Task { [weak self] in

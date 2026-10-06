@@ -44,7 +44,7 @@ struct ChatTests {
         #expect(codex.preview == "Codex CLI: Words 1")
         #expect(codex.writerAgent == .codex)
         let old = ThreadSummary(ReviewThread(id: id, time: 5, messages: [message(2, .agent, .question)]), agent: "Claude Code")
-        #expect(old.text == "#1, 0:05, waiting for your answer, Claude Code asks: Words 2")
+        #expect(old.text == "Unread, #1, 0:05, waiting for your answer, Claude Code asks: Words 2")
         #expect(old.writerAgent == .claude)
         let person = ThreadSummary(ReviewThread(id: id, time: 5, messages: [message(3, .person, state: .queued)]), agent: "Claude Code")
         #expect(person.writerAgent == nil)

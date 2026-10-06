@@ -205,6 +205,12 @@ public struct VideoReview: Codable, Equatable, Sendable {
         threads[index].popoverFrame = frame
     }
 
+    /// The person opened thread `id`'s view at `now`: the agent's messages
+    /// on it until then are read.
+    public mutating func markSeen(_ id: ThreadID, at now: Date) throws(ReviewRefusal) {
+        threads[try threadIndex(id)].lastSeen = Self.kept(now)
+    }
+
     /// Sends every queued message as one send: each moves to `sent` and
     /// names the send. `transcript` gives each thread with a frame its
     /// window as it is now; the send keeps those lines, so a delivery again

@@ -392,7 +392,7 @@ struct AnswerTests {
         _ = await listen(.reply(thread: app.one, text: "Looking"), app)
         let lines = await listen(.state, app).output
         #expect(lines.contains("threads: 3 (0 queued)\n"))
-        #expect(lines.contains("  #1 at 0:10 \(app.one) sent\n"))
+        #expect(lines.contains("  #1 at 0:10 \(app.one) sent unread\n"))
         #expect(lines.contains("    \(app.first) person message sent: Too fast here\n"))
         #expect(lines.contains(" agent message: Looking\n"))
         #expect(lines.contains(" region 0.25,0.2,0.3,0.25: This box\n"))

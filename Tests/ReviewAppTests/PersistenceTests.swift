@@ -143,6 +143,36 @@ struct PersistenceTests {
         #expect(try await again.addMessage(text: "After the restart", at: 15).thread.number == 4)
     }
 
+    @Test("an agent reply on a thread the person isn't viewing is unread until its view opens, one on the thread shown is read, and both last a restart")
+    func unread() async throws {
+        defer { cleanUp() }
+        let (model, server) = await run()
+        try await model.open(MessageTests.fixture)
+        let one = try await model.addMessage(text: "Too fast here", at: 10).thread.id
+        _ = try await model.sendQueue()
+        #expect(await listen(.wait(timeoutSeconds: 0), server).ok)
+        func unread(_ model: AppModel) -> [Bool] { model.state().threads.map(\.unread) }
+        #expect(unread(model) == [false, false])
+
+        #expect(await listen(.reply(thread: one, text: "Slowed it down"), server).ok)
+        #expect(unread(model) == [false, true])
+        #expect(try state(model)["threads"].flatMap { $0 as? [[String: Any]] }?.map { $0["unread"] as? Bool } == [false, true])
+        #expect(model.state().lines.contains("\(one) sent unread\n"))
+
+        _ = try await model.showThread("1")
+        #expect(unread(model) == [false, false])
+        // A reply on the thread the sidebar shows is read as it comes; one on another isn't.
+        #expect(await listen(.reply(thread: one, text: "And the title"), server).ok)
+        #expect(await listen(.reply(thread: "0", text: "One left"), server).ok)
+        #expect(unread(model) == [true, false])
+        model.listeners.stop()
+
+        let (again, _) = await run(reopening: true)
+        #expect(unread(again) == [true, false])
+        _ = try await again.showThread("0")
+        #expect(unread(again) == [false, false])
+    }
+
     @Test("a launch with no last video, or one whose file is gone, opens nothing, says nothing and writes nothing")
     func nothingToReopen() async throws {
         defer { cleanUp() }

@@ -63,6 +63,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         var keyframePath: String?
         /// Where the person left its popover; `null` until they move it.
         var popoverFrame: PopoverFrame?
+        /// Whether an agent message came after the person last opened
+        /// the thread's view: its row shows the unread dot.
+        var unread: Bool
         var messages: [Message]
 
         func encode(to encoder: any Encoder) throws {
@@ -73,11 +76,12 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(state, forKey: .state)
             try container.encode(keyframePath, forKey: .keyframePath)
             try container.encode(popoverFrame, forKey: .popoverFrame)
+            try container.encode(unread, forKey: .unread)
             try container.encode(messages, forKey: .messages)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, number, time, state, keyframePath, popoverFrame, messages
+            case id, number, time, state, keyframePath, popoverFrame, unread, messages
         }
 
         /// `thread` of the video with `contentHash`, whose pictures are
@@ -89,6 +93,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             state = thread.state?.rawValue
             keyframePath = layout.keyframe(of: thread, on: contentHash)?.path
             popoverFrame = thread.popoverFrame
+            unread = thread.isUnread
             messages = thread.messages.map { Message($0, contentHash: contentHash, layout: layout) }
         }
     }
@@ -388,7 +393,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     private var threadLines: String {
         let lines = threads.flatMap { thread in
             let place = thread.time.map { "#\(thread.number) at \(TimeCode.text($0))" } ?? "#0 General"
-            let head = "  \(place) \(thread.id) \(thread.state ?? "-")"
+            let head = "  \(place) \(thread.id) \(thread.state ?? "-")\(thread.unread ? " unread" : "")"
             return [head] + thread.messages.map { message in
                 let region = message.region.map { " region \($0.text)" } ?? ""
                 let state = message.state.map { " \($0)" } ?? ""

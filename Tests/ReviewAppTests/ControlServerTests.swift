@@ -264,7 +264,7 @@ struct ControlServerTests {
         #expect(state["popover"] is NSNull)
         #expect(state["threads"] as? [[String: AnyHashable]] == [[
             "id": "t-abcdef01-0", "number": 0, "time": NSNull(), "state": NSNull(), "keyframePath": NSNull(),
-            "popoverFrame": NSNull(), "messages": [] as [String],
+            "popoverFrame": NSNull(), "unread": false, "messages": [] as [String],
         ]])
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])

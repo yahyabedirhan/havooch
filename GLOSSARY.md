@@ -48,6 +48,10 @@ _Avoid_: inbox
 The sidebar's view of one thread: its conversation, with Back to the thread list and Previous and Next. It has no keyframe, since the stage shows it.
 _Avoid_: detail, expanded thread
 
+**Unread**:
+A thread with an agent message newer than the last time the person opened its thread view. Its row in the thread list shows a dot in the accent colour.
+_Avoid_: new, unseen, badge
+
 **Composer**:
 The one field at the foot of the sidebar. In a thread view it follows up on that thread or answers its open question; in the thread list it writes at the playhead, to the thread of that frame or a new one. It keeps a draft per thread.
 _Avoid_: reply box, thread field, input
