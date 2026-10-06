@@ -215,12 +215,20 @@ final class AppModel: AppControlling {
         let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
         // Where the person left the video that goes, before the player takes the new one.
         savePosition()
-        try await engine.load(url)
-        guard self.data.support == data.support else {
-            // The switch closed the video; the player stays empty.
+        let closesBefore = closes
+        loads += 1
+        do {
+            try await engine.load(url)
+        } catch {
+            loads -= 1
+            throw error
+        }
+        loads -= 1
+        guard self.data.support == data.support, closes == closesBefore else {
+            // The switch, or going home, closed the video; the player stays empty.
             if video == nil { engine.close() }
             try needData(data, for: url)
-            return
+            throw AppRefusal("\(url.path) didn't open: the video was closed meanwhile")
         }
         // The review as it is now, not as it was before the load: a
         // listener may have answered on one of its threads meanwhile.
@@ -380,6 +388,7 @@ final class AppModel: AppControlling {
     /// No video is open any more: the player is empty, and what was on
     /// the video goes with it.
     private func closeVideo() {
+        closes += 1
         engine.close()
         video = nil
         desk.close()
@@ -401,11 +410,19 @@ final class AppModel: AppControlling {
     /// library, which observation doesn't follow.
     private var recentsRevision = 0
 
+    /// How many `open`s are loading their video into the player.
+    @ObservationIgnored private var loads = 0
+    /// Grows each time the open video closes: an `open` whose load a close
+    /// overtook leaves the player empty.
+    @ObservationIgnored private var closes = 0
+
     /// Keeps where the playhead is as the open video's last position, for
     /// its recent-video entry. Opening another video, closing the window,
     /// quitting and going home call it. Nothing with no video.
     func savePosition() {
-        guard let video else { return }
+        // While a load runs, the player already holds the next video's
+        // time; `open` saved this one's before the load.
+        guard let video, loads == 0 else { return }
         desk.library.savePosition(engine.time, of: video.contentHash)
         recentsRevision += 1
     }

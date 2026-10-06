@@ -99,8 +99,7 @@ struct HomeScreenTests {
         defer { cleanUp() }
         let model = AppModel(environment: environment)
         model.desk.library.recordOpened(URL(fileURLWithPath: "/nowhere/gone.mp4"), contentHash: "gone", at: Date())
-        let recent = try? #require(model.recents.first)
-        #expect(recent?.available == false)
+        #expect(model.recents.first?.available == false)
         #expect(StageContent(model) == .home)
 
         model.openRecent(gone())

@@ -1,8 +1,9 @@
 import Foundation
 import ReviewWire
 
-/// "Try the demo" on the empty screen: the sample video bundled in the app
-/// (`Contents/Resources/Demo/`, copied there by `make bundle`), opened on
+/// "Try the Demo" on the empty state and the home screen: the sample
+/// video bundled in the app (`Contents/Resources/Demo/`, copied there by
+/// `make bundle`), opened on
 /// demo data in a folder under the user's temporary folder, so demo threads
 /// never mix with the person's (L17). The running app switches to that
 /// folder in the same window (`AppModel.enterDemo`, L27).
