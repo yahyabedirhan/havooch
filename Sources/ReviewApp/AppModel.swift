@@ -96,6 +96,9 @@ final class AppModel: AppControlling {
     /// popover on a moment points at the playhead on it.
     var trackArea: CGRect = .zero
 
+    /// Shows the player's window when it's closed; the app sets it.
+    @ObservationIgnored var showWindow: () -> Void = {}
+
     @ObservationIgnored private let layout: SupportLayout
     /// The message the popover is queueing: its pictures are being
     /// written. A send waits for it.
@@ -199,6 +202,14 @@ final class AppModel: AppControlling {
         desk.open(review)
         desk.library.saveRecent(url)
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
+        // A control command's open is seen when the window was closed.
+        showWindow()
+    }
+
+    /// The player's window closed; the app and this model stay. The video
+    /// pauses, and the Dock icon shows it again where it was.
+    func windowClosed() {
+        engine.pause()
     }
 
     /// The hash of the file at `url`, read off the main actor: it reads the
@@ -208,16 +219,11 @@ final class AppModel: AppControlling {
         ContentHash.of(url)
     }
 
-    /// At launch: the video that was open last opens again, paused at its
-    /// start, with its history. One whose file is gone, or that doesn't
-    /// open any more, leaves the app with no video.
     /// At launch: the video the launch names (`DemoRun.openVariable`, a
-    /// demo started from the empty screen), else the last one.
+    /// demo started from the empty screen), else none. A launch never
+    /// opens the last video by itself.
     func openAtLaunch(environment: [String: String]) async {
-        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else {
-            await openRecent()
-            return
-        }
+        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else { return }
         do throws(AppRefusal) {
             try await open(URL(fileURLWithPath: path))
         } catch {
@@ -243,15 +249,6 @@ final class AppModel: AppControlling {
             } else {
                 NSApp.terminate(nil)
             }
-        }
-    }
-
-    func openRecent() async {
-        guard video == nil, let url = desk.library.recent(), FileManager.default.fileExists(atPath: url.path) else { return }
-        do throws(AppRefusal) {
-            try await open(url)
-        } catch {
-            problem = Problem(title: "The last video didn't open", reason: error.reason)
         }
     }
 

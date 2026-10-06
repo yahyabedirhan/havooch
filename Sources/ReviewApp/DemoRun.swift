@@ -12,8 +12,8 @@ import ReviewWire
 /// demo pointer, as after `app open --demo`. A demo run opens the video
 /// itself.
 enum DemoRun {
-    /// The variable that names a video for the app to open at launch, in
-    /// place of the last one.
+    /// The variable that names a video for the app to open at launch. Only
+    /// a demo copy's launch sets it; any other launch opens no video.
     static let openVariable = "HAVOOCH_OPEN_VIDEO"
 
     /// The bundled sample video, when this build has one: a bundle made by

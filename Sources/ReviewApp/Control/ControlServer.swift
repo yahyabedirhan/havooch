@@ -120,7 +120,8 @@ final class ControlServer {
     }
 
     /// What the app does at launch before it answers its first request:
-    /// opening the last video again. Nil when there's nothing to wait for.
+    /// opening the video the launch names (a demo run). Nil when there's
+    /// nothing to wait for.
     var ready: Task<Void, Never>?
 
     init(
@@ -160,7 +161,7 @@ final class ControlServer {
     /// is made. `connection` names the connection the request came over,
     /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
-        // The app is still opening its last video: a command sees the app
+        // The app is still opening the video its launch names: a command sees the app
         // with it open, not the moment before.
         await ready?.value
         let message: ControlMessage

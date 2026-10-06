@@ -9,9 +9,10 @@ struct HavoochApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window(AppIdentity.appName, id: "main") {
+        Window(AppIdentity.appName, id: PlayerWindow.sceneID) {
             RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
                 .modifier(SettingsOpener(settings: delegate.settings))
+                .modifier(PlayerWindowOpener(window: delegate.window))
         }
         // A 16:9 video fills the stage beside the sidebar with no letterbox.
         .defaultSize(width: 1360, height: 730)
@@ -81,11 +82,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.
     let settings = SettingsWindow()
+    /// The player's window, which closes while the app runs on.
+    let window = PlayerWindow()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
+        model.showWindow = { [window] in window.show() }
+        window.watchClose { [model] in model.windowClosed() }
         Shortcuts.install(for: model)
         OutsideClicks.install(for: model)
         model.themes.followSystemAppearance()
@@ -130,7 +135,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server?.stop()
     }
 
+    /// Cmd+W closes the window and the app stays in the Dock, with its
+    /// model: the video, the playhead and the sidebar. Cmd+Q quits.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// A click on the Dock icon with the window closed shows it again, as
+    /// it was. Before the window has been on screen once, SwiftUI's own
+    /// reopen shows it.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        flag || !window.show()
     }
 }

@@ -93,13 +93,8 @@ final class Screenshotter: Screenshotting {
         try Self.write(image, to: file)
     }
 
-    /// The player's window: the titled window the app shows that isn't
-    /// Settings.
-    private static var appWindow: NSWindow? {
-        NSApp.windows.first {
-            $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel) && !SettingsWindow.isSettings($0)
-        }
-    }
+    /// The player's window while it's on screen.
+    private static var appWindow: NSWindow? { PlayerWindow.window }
 
     /// The window `windowID` names, captured from this process's shareable
     /// content only, at its display's scale.

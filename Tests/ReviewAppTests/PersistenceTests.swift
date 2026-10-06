@@ -25,12 +25,13 @@ struct PersistenceTests {
     }
 
     /// One run of the app on `support`: its model and the server in front
-    /// of it. With `reopening`, it opens the last video as a launch does.
+    /// of it. With `reopening`, the person opens the last video again; a
+    /// launch opens none by itself.
     private func run(
         on support: URL? = nil, reopening: Bool = false, speech: any SpeechRecognizing = SlowRecognizer()
     ) async -> (AppModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech)
-        if reopening { await model.openRecent() }
+        if reopening, let last = model.desk.library.recent() { try? await model.open(last) }
         let server = ControlServer(
             socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: model.listeners,
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
@@ -103,7 +104,7 @@ struct PersistenceTests {
 
     // MARK: - A restart
 
-    @Test("after a restart the last video is open again, paused at its start, with the same threads, messages, states, sends, popover frames and note")
+    @Test("after a restart the last video opened again is paused at its start, with the same threads, messages, states, sends, popover frames and note")
     func restart() async throws {
         defer { cleanUp() }
         let (model, server) = await run()
@@ -173,10 +174,12 @@ struct PersistenceTests {
         #expect(unread(again) == [false, false])
     }
 
-    @Test("a launch with no last video, or one whose file is gone, opens nothing, says nothing and writes nothing")
-    func nothingToReopen() async throws {
+    @Test("a launch opens nothing, says nothing and writes nothing, with or without a last video")
+    func launchOpensNothing() async throws {
         defer { cleanUp() }
-        let (empty, _) = await run(reopening: true)
+        let environment = [SupportFolder.overrideVariable: support.path]
+        let (empty, _) = await run()
+        await empty.openAtLaunch(environment: environment)
         #expect(empty.video == nil)
         #expect(!FileManager.default.fileExists(atPath: support.path))
 
@@ -184,11 +187,12 @@ struct PersistenceTests {
         try await empty.open(video)
         // A video with no message yet has no review file.
         #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recent.json"])
-        try FileManager.default.removeItem(at: video)
 
-        let (again, _) = await run(reopening: true)
+        let (again, _) = await run()
+        await again.openAtLaunch(environment: environment)
         #expect(again.video == nil)
         #expect(again.problem == nil)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recent.json"])
     }
 
     // MARK: - The same video elsewhere
@@ -425,10 +429,14 @@ struct PersistenceTests {
         let half = try Data(contentsOf: file).prefix(120)
         try half.write(to: file)
 
-        let (again, later) = await run(reopening: true)
+        let (again, later) = await run()
+        do throws(AppRefusal) {
+            try await again.open(other)
+            Issue.record("a review that doesn't read opened")
+        } catch {
+            #expect(error.reason.contains("review.json doesn't read"))
+        }
         #expect(again.video == nil)
-        #expect(again.problem?.title == "The last video didn't open")
-        #expect(again.problem?.reason.contains("review.json doesn't read") == true)
         try await again.open(MessageTests.fixture)
         await #expect(throws: AppRefusal.self) { try await again.open(other) }
         #expect(again.video?.url == MessageTests.fixture.standardizedFileURL)
