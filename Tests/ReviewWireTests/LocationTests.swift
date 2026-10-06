@@ -40,8 +40,6 @@ struct LocationTests {
         #expect(SupportFolder.app(environment: ["HAVOOCH_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
         #expect(SupportFolder.moved(environment: ["HAVOOCH_SUPPORT_DIR": "demo"]) == nil)
         #expect(SupportFolder.moved(environment: [:]) == nil)
-        // The variable's name before the rename still works.
-        #expect(SupportFolder.app(environment: ["VIDEO_REVIEW_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
     }
 
     @Test("the demo pointer is recorded, read and removed")

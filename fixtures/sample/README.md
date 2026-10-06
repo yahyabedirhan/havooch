@@ -1,6 +1,6 @@
 # Sample fixture
 
-A 21 s narrated explainer of Video Review, made in the local explainer studio (slug `video-review-sample`) with the Kokoro voice `af_heart`. Tests and demo mode use it.
+A 21 s narrated explainer of Havooch, made in the local explainer studio with the Kokoro voice `af_heart`. Tests and demo mode use it.
 
 | File | What it is |
 |---|---|

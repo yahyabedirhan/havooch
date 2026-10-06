@@ -1,8 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues in `yahyabedirhan/video-review`, so the repo has no `.efforts/` folder. Use the `gh` CLI for all operations.
-
-NOTE: The app is named Havooch (`docs/adr/0002-the-app-is-named-havooch.md`). The repository keeps the name `yahyabedirhan/video-review` until the maintainer renames it `yahyabedirhan/havooch`. After the rename, GitHub redirects the old name.
+Issues and specs for this repo live as GitHub issues in `yahyabedirhan/havooch`, so the repo has no `.efforts/` folder. Use the `gh` CLI for all operations.
 
 ## Conventions
 

@@ -29,21 +29,6 @@ struct HavoochApp: App {
         }
     }
 
-    /// The line the log gets about the earlier support folder; nil when
-    /// there was nothing to do.
-    static func describe(_ outcome: EarlierSupportFolder.Outcome) -> String? {
-        switch outcome {
-        case .nothingToDo:
-            return nil
-        case .earlierAppRuns:
-            return "\(EarlierSupportFolder.name) runs, so its data stays in its folder until the next launch"
-        case let .moved(moved, kept):
-            let from = "~/Library/Application Support/\(EarlierSupportFolder.name)"
-            var line = "moved \(moved.count) item(s) from \(from)"
-            if !kept.isEmpty { line += "; kept there, since the support folder has them or they didn't move: \(kept.joined(separator: ", "))" }
-            return line
-        }
-    }
 }
 
 /// The Playback menu. Its playback items carry no key equivalents: the
@@ -91,17 +76,7 @@ private struct ThemeMenu: Commands {
 
 /// Owns what lives as long as the app: the model and the control server.
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model: AppModel = {
-        let environment = ProcessInfo.processInfo.environment
-        // Before the model reads the support folder: an update from the
-        // app's earlier name keeps the person's data.
-        let earlierRuns = !NSRunningApplication.runningApplications(withBundleIdentifier: EarlierSupportFolder.bundleID).isEmpty
-        let outcome = EarlierSupportFolder.move(environment: environment, earlierAppRuns: earlierRuns)
-        if let line = HavoochApp.describe(outcome) {
-            FileHandle.standardError.write(Data("\(AppIdentity.appName): \(line)\n".utf8))
-        }
-        return AppModel(environment: environment)
-    }()
+    let model = AppModel(environment: ProcessInfo.processInfo.environment)
     /// The lease as the agent-control icon draws it; the control server writes it.
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.

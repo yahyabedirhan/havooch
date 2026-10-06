@@ -1,5 +1,5 @@
 #!/bin/bash
-# The 0.2.0 acceptance scenario (`Spec: Video Review 0.2.0`, #36): the 10
+# The 0.2.0 acceptance scenario (`Spec: Havooch 0.2.0`, #36): the 10
 # steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
 # `havooch` CLI only, against the installed app in demo mode with the
 # fixture video.
@@ -53,7 +53,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 
 # The one place that names the command: HAVOOCH_CLI, else the installed
 # app's.
-cli="${HAVOOCH_CLI:-${VIDEO_REVIEW_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}}"
+cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
 
 # The fixture, and what its README says about it.
 video="$root/fixtures/sample/sample.mp4"
@@ -87,8 +87,8 @@ demo="$out/demo"
 logs="$out/logs"
 shots="${ACCEPTANCE_SHOTS:-$root/assets/screenshots/0.2.0/acceptance}"
 
-operator_key="${HAVOOCH_CONTROL_KEY:-${VIDEO_REVIEW_CONTROL_KEY:-acceptance-operator-$run_id}}"
-listener_key="${HAVOOCH_LISTENER_KEY:-${VIDEO_REVIEW_LISTENER_KEY:-acceptance-listener-$run_id}}"
+operator_key="${HAVOOCH_CONTROL_KEY:-acceptance-operator-$run_id}"
+listener_key="${HAVOOCH_LISTENER_KEY:-acceptance-listener-$run_id}"
 operator() { HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@"; }
 listener() { HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@"; }
 

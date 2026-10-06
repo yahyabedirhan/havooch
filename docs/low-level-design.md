@@ -1,6 +1,6 @@
 # Havooch 0.2.0: low-level design
 
-Written 2026-10-05, before the first build ticket of `effort:0.1.0`, from `Spec: Video Review 0.1.0` (#20), the prototype decisions in `docs/prototypes/2026-10-05-decisions.md` (cited as D x.y), ADR 0001 and the tickets #22 to #33. It is documentation for the maintainer, not a review gate. When the code and this document disagree, fix one of them in the same change. `Spec: Video Review 0.2.0` (#36) and its tickets #37 to #44 changed it since; their decisions are L36 to L44.
+Written 2026-10-05, before the first build ticket of `effort:0.1.0`, from `Spec: Havooch 0.1.0` (#20), the prototype decisions in `docs/prototypes/2026-10-05-decisions.md` (cited as D x.y), ADR 0001 and the tickets #22 to #33. It is documentation for the maintainer, not a review gate. When the code and this document disagree, fix one of them in the same change. `Spec: Havooch 0.2.0` (#36) and its tickets #37 to #44 changed it since; their decisions are L36 to L44.
 
 It starts from proto-2's low-level design (`proto-2:docs/low-level-design.md`, PR #18), since proto-2's code is the base (D A.1). It keeps what proto-2 got right and changes four things: the **thread model** replaces comments and batches, the **send** cuts the transcript at send time, every colour comes from a **theme**, and the module changes A.2 to A.10 come from proto-1 (`proto-1:docs/low-level-design.md`, PR #17). proto-2's own decisions (D1 to D216 in its document) still hold where this document does not replace them; the decisions this design takes on its own are numbered L1, L2… under [Decisions](#6-decisions-the-spec-left-open).
 
@@ -226,7 +226,6 @@ fixtures/sample/                   the fixture video and its sidecars
 Sources/
   ReviewLease/
     Holder.swift                   who sends a request: key, name, place; Holder.find (HAVOOCH_CONTROL_KEY, CLAUDE_CODE_SESSION_ID, ancestor)
-    AppVariable.swift              the HAVOOCH_* variables, each read by its earlier VIDEO_REVIEW_* name when unset (ADR 0002)
     ProcessTable.swift             the process table Holder.find walks (sysctl on macOS, /proc on Linux), and its protocol
     LeaseTerm.swift                a lease held: holder, taken, ends
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
@@ -243,7 +242,6 @@ Sources/
     ControlSocket.swift            where control.sock is; follows the demo pointer
     DemoPointer.swift              demo.json in the normal support folder
     SupportFolder.swift            the support folder; HAVOOCH_SUPPORT_DIR moves it
-    EarlierSupportFolder.swift     at a launch on the person's data, moves ~/Library/Application Support/Video Review/ into the support folder (ADR 0002)
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
     HavoochCLI.swift               run(arguments, environment) → output, error, exit code
@@ -252,7 +250,7 @@ Sources/
     PlayerCommands.swift           player open | play | pause | seek
     CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | open | show | list, context set
     ThemeCommands.swift            theme list | set
-    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42, ADR 0002)
+    ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42)
     ListenerCommands.swift         wait, ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services; the AppLaunching seam
   ReviewCLI/
@@ -288,7 +286,7 @@ Sources/
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
     Settings.swift                 the pinned theme, the overrides, the sidebar width; settings.json load and save
   ReviewApp/
-    HavoochApp.swift               @main; the one window, Settings (L42); the menu commands; at launch, the move of the earlier support folder (ADR 0002)
+    HavoochApp.swift               @main; the one window, Settings (L42); the menu commands
     AppModel.swift                 the orchestrator; every action a person or an operator can take
     Draft.swift                    `AppModel.Draft`: the open popover's time, text and region (view state, never
                                    saved; its thread number is `AppModel.draftThreadNumber`); `PopoverClose`; `FrameMark`
@@ -881,8 +879,8 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 
 ### Build and tests
 
-- `Package.swift`: tools 6.2, macOS 26, no dependencies; `ReviewApp` uses `.defaultIsolation(MainActor.self)`; explicit `@MainActor` marks that the default makes redundant are removed (D A.2). `ReviewApp`, `ReviewAppTests` and the `VideoReview` product are added under `#if os(macOS)` (D A.9).
-- `make bundle` stamps `Havooch`, the bundle id and `0.2.0` into `Info.plist`, copies the app icon (`assets/images/logo/v2-havuc/AppIcon-light.icns`, `CFBundleIconFile`) to `Contents/Resources/AppIcon.icns` and `Packaging/Logo/` to `Contents/Resources/Logo/`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Havooch.app` and never touches the prototype apps or `/Applications/Video Review.app`; with `HAVOOCH_SUPPORT_DIR` set it opens the app on that folder.
+- `Package.swift`: tools 6.2, macOS 26, no dependencies; `ReviewApp` uses `.defaultIsolation(MainActor.self)`; explicit `@MainActor` marks that the default makes redundant are removed (D A.2). `ReviewApp`, `ReviewAppTests` and the `HavoochApp` product are added under `#if os(macOS)` (D A.9).
+- `make bundle` stamps `Havooch`, the bundle id and `0.2.0` into `Info.plist`, copies the app icon (`assets/images/logo/v2-havuc/AppIcon-light.icns`, `CFBundleIconFile`) to `Contents/Resources/AppIcon.icns` and `Packaging/Logo/` to `Contents/Resources/Logo/`, copies `Packaging/Themes/` to `Contents/Resources/Themes/`, `Packaging/AgentLogos/` (the logo PDFs and their `NOTICE.md`) to `Contents/Resources/AgentLogos/` and `fixtures/sample/` to `Contents/Resources/Demo/` (L17), and signs ad hoc. `make install` installs `/Applications/Havooch.app` and never touches the prototype apps; with `HAVOOCH_SUPPORT_DIR` set it opens the app on that folder.
 - A release is a `v<version>` tag; the tag must match `Version.app`. `.github/workflows/release.yml` reads the name, the command and the version through `make identity`, zips the bundle with `ditto -c -k --keepParent` as `<command>-<version>.zip` with `<command>-<version>.zip.sha256` beside it, and publishes both. `scripts/install.sh` reads the app and command names from the zip, never from a constant; it finds an installed copy for `--uninstall` by the bundle id `com.<repository owner>.<command>`. The app is ad-hoc signed and not notarized, so the first launch needs Open Anyway (#49).
 - Owner tests, one per contract at its strongest boundary:
 

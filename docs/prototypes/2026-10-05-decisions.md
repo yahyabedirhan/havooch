@@ -1,6 +1,6 @@
 # Decisions from the prototype round
 
-The itemized decisions for Video Review 0.1.0, taken from the maintainer's feedback in [round 1](2026-10-05-feedback-round-1-screenshots.md) and [round 2](2026-10-05-feedback-round-2-ux.md). The spec `Spec: Video Review 0.1.0` holds the same decisions in structured form. Where an item says *default*, the agent chose it and the maintainer did not object. The [0.2.0 decisions](2026-10-05-decisions-0.2.0.md) continue the numbering and replace 3.3, 3.4, 3.5, 3.6 and 5.9.
+The itemized decisions for Havooch 0.1.0, taken from the maintainer's feedback in [round 1](2026-10-05-feedback-round-1-screenshots.md) and [round 2](2026-10-05-feedback-round-2-ux.md). The spec `Spec: Havooch 0.1.0` holds the same decisions in structured form. Where an item says *default*, the agent chose it and the maintainer did not object. The [0.2.0 decisions](2026-10-05-decisions-0.2.0.md) continue the numbering and replace 3.3, 3.4, 3.5, 3.6 and 5.9.
 
 Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), `proto-3` (PR #19). The code assessment of each is in [assessments.md](assessments.md).
 
@@ -26,7 +26,7 @@ Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), 
 | A.7 | Lease and Wire | proto-1's: `Holder` lives in Lease, which depends on nothing. Wire depends on Lease. |
 | A.8 | Control server | proto-1's split: socket and hang-up handling in a `SocketListener`; `ControlServer` only dispatches. |
 | A.9 | Linux | Keep proto-2's `#if canImport` guards, so every module except the app builds on Linux. |
-| A.10 | Identity | No prototype suffix: `Video Review.app`, its own bundle id, `~/Library/Application Support/Video Review/`. |
+| A.10 | Identity | No prototype suffix: `Havooch.app`, its own bundle id, `~/Library/Application Support/Havooch/`. |
 | A.11 | Stuck work | Both prototypes requeue unfinished work only for a new listener key. Kept as is for 0.1.0; a follow-up decides the rule for a listener that never comes back. |
 
 ## 1. The player bar
@@ -99,7 +99,7 @@ Prototype branches, kept for reference: `proto-1` (PR #17), `proto-2` (PR #18), 
 |---|---|
 | 5.1 | Every colour is a semantic token. Views never use a raw colour. |
 | 5.2 | Themes are JSON files with a `kind` (light or dark). Built-in themes ship with the app; user themes go in the support folder's `Themes/`. A theme can extend another. |
-| 5.3 | People pick a theme in the app; agents pick one with `video-review theme list` and `theme set <name>`. |
+| 5.3 | People pick a theme in the app; agents pick one with `havooch theme list` and `theme set <name>`. |
 | 5.4 | By default the app follows the system appearance with a light and a dark theme; a person can pin one theme. |
 | 5.5 | Per-token overrides in the settings, on top of the active theme. |
 | 5.6 | Theme files reload when they change on disk. |

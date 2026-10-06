@@ -6,7 +6,7 @@
 #
 # The cask is Packaging/homebrew/<command>.rb, copied to Casks/<command>.rb in
 # the tap with its `version` and `sha256` lines filled in. A release whose
-# command has no cask here (the app before its rename) is skipped.
+# command has no cask here is skipped.
 #
 # Environment: TAP_TOKEN, a token that can push to the tap (a fine-grained
 # token with Contents: read and write on that repository only); TAP_REPO, the

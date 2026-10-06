@@ -1,6 +1,6 @@
 ---
 name: havooch-mate
-description: Listen for the feedback the person sends from the Havooch player - take each send, do what each message on each thread asks in this repo, and answer on its thread in the player. Use when asked to listen for Havooch or video review feedback, or to be the Havooch mate or listener.
+description: Listen for the feedback the person sends from the Havooch player - take each send, do what each message on each thread asks in this repo, and answer on its thread in the player. Use when asked to listen for Havooch or video feedback, or to be the Havooch mate or listener.
 ---
 
 # Havooch Mate
@@ -13,7 +13,7 @@ You are the **listener**: you take each send, do what each message asks in this 
 
 `havooch` below stands for the CLI inside the app bundle. Write it as a quoted absolute path in every command. Find it once, at the start:
 
-1. `$HAVOOCH_CLI`, when it is set, else `$VIDEO_REVIEW_CLI` (its name before the app was renamed Havooch).
+1. `$HAVOOCH_CLI`, when it is set.
 2. Else `/Applications/Havooch.app/Contents/Helpers/havooch`.
 3. Else the one match of `/Applications/Havooch*.app/Contents/Helpers/havooch`. With several matches, ask the person which app they review in.
 
@@ -21,7 +21,7 @@ Every text argument is one quoted argument, and it must not start with `--`: the
 
 You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, and the free `state --json` and `app status`. Every other command drives the player and takes control of the app from the person.
 
-The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` (or its earlier name `$VIDEO_REVIEW_CONTROL_KEY`) when set, else `$CLAUDE_CODE_SESSION_ID`. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
+The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else `$CLAUDE_CODE_SESSION_ID`. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
 ## The loop
 

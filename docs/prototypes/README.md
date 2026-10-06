@@ -1,6 +1,6 @@
-# The Video Review prototype round
+# The Havooch prototype round
 
-In October 2026, three agents built the spec `Spec: Video Review v1` on their own, on the branches `proto-1`, `proto-2` and `proto-3` (draft PRs #17, #18 and #19). The maintainer reviewed them in two rounds and chose to combine proto-1 and proto-2 into Video Review 0.1.0, with a few pieces from proto-3. The spec for that build is `Spec: Video Review 0.1.0`.
+In October 2026, three agents built the spec `Spec: Havooch v1` on their own, on the branches `proto-1`, `proto-2` and `proto-3` (draft PRs #17, #18 and #19). The maintainer reviewed them in two rounds and chose to combine proto-1 and proto-2 into Havooch 0.1.0, with a few pieces from proto-3. The spec for that build is `Spec: Havooch 0.1.0`.
 
 | File | What it holds |
 |---|---|

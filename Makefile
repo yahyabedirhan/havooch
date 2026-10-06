@@ -54,9 +54,7 @@ TEST_FLAGS := -Xswiftc -F -Xswiftc $(TESTING_FRAMEWORKS) \
 # checkout's first build compiles Swift, Foundation, SwiftUI and the rest
 # from their interfaces. One module cache shared by every checkout and
 # worktree pays that once.
-# The folder keeps the app's earlier name (docs/adr/0002): checkouts and
-# worktrees of both names share it, and the agents' install lock beside it.
-MODULE_CACHE := $(HOME)/Library/Caches/video-review/ModuleCache
+MODULE_CACHE := $(HOME)/Library/Caches/havooch/ModuleCache
 SWIFT_FLAGS  := -Xswiftc -module-cache-path -Xswiftc $(MODULE_CACHE)
 endif
 
@@ -120,7 +118,7 @@ install: bundle
 	@echo "installed $(INSTALLED)"
 	@# In the background: the terminal keeps the focus. With
 	@# HAVOOCH_SUPPORT_DIR set, on that folder: a check that installs never
-	@# opens the person's data, nor moves the earlier name's folder.
+	@# opens the person's data.
 	open -g $(if $(HAVOOCH_SUPPORT_DIR),--env "HAVOOCH_SUPPORT_DIR=$(HAVOOCH_SUPPORT_DIR)") "$(INSTALLED)"
 
 # Drives the installed app, in demo mode only. It is not part of `make test`.

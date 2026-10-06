@@ -44,7 +44,7 @@ public struct Holder: Codable, Hashable, Sendable {
     public static func find(variables: [String: String], workingDirectory: URL, processes: any ProcessTable) -> Holder {
         let place = variables["HERDR_PANE_ID"].flatMap { $0.isEmpty ? nil : "Herdr pane \($0)" } ?? workingDirectory.path
         var holder = automatic(variables: variables, place: place, processes: processes)
-        if let key = AppVariable.value(keyVariable, in: variables), !key.allSatisfy(\.isWhitespace) {
+        if let key = variables[keyVariable], !key.allSatisfy(\.isWhitespace) {
             holder.key = key
         }
         return holder
