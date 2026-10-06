@@ -37,7 +37,9 @@ struct SidebarFooter: View {
                     }
                 }
             }
-            Spacer(minLength: 8)
+            // The pill and the activity take all the width the count and Send
+            // leave, so the activity truncates only when there is no room.
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text("\(model.queuedCount) queued")
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(palette[.textSecondary])
