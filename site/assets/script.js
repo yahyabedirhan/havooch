@@ -1,4 +1,4 @@
-// Havooch prototype: the copy buttons, the home page's table of contents,
+// Havooch landing page: the copy buttons, the home page's table of contents,
 // the studio callouts, and the CLI terminal and packet. One script for all
 // three pages; each part does nothing when its markup is absent. The pixel
 // world is in world.js. Every page reads fully without either script.
