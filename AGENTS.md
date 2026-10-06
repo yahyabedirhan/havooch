@@ -45,7 +45,7 @@ Build and test with SwiftPM through the `Makefile` only; there is no Xcode proje
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues in `yahyabedirhan/video-review`, handled with the `gh` CLI. The repository keeps its old name until the maintainer renames it `yahyabedirhan/havooch`. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `yahyabedirhan/havooch`, handled with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
