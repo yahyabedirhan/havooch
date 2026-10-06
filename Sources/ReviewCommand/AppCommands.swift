@@ -128,7 +128,7 @@ enum AppCommands {
         case let answer: return HavoochCLI.result(of: answer)
         }
         var outcome: CommandResult?
-        var environment = [SupportFolder.overrideVariable: demo.path]
+        var environment = [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]
         for other in [context.support, previous].compactMap(\.self) where outcome == nil {
             switch quitIfRunning(context.client(in: other), context) {
             case .stayed(let refused): outcome = refused

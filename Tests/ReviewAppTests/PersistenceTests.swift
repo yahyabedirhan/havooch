@@ -33,7 +33,7 @@ struct PersistenceTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech)
         if reopening, let last = model.recents.first { try? await model.open(last.url) }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: model.listeners,
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -177,9 +177,7 @@ struct PersistenceTests {
     @Test("a launch opens nothing, says nothing and writes nothing, with or without a last video")
     func launchOpensNothing() async throws {
         defer { cleanUp() }
-        let environment = [SupportFolder.overrideVariable: support.path]
         let (empty, _) = await run()
-        await empty.openAtLaunch(environment: environment)
         #expect(empty.video == nil)
         #expect(!FileManager.default.fileExists(atPath: support.path))
 
@@ -189,7 +187,6 @@ struct PersistenceTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])
 
         let (again, _) = await run()
-        await again.openAtLaunch(environment: environment)
         #expect(again.video == nil)
         #expect(again.problem == nil)
         #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])

@@ -87,8 +87,16 @@ final class ControlServer {
 
     let socket: URL
     private let app: any AppControlling
-    /// The listener's side: the open `wait` and the sends in line.
-    private let listeners: ListenerQueue
+    /// The listener's side on the data the app is on now: the open `wait`
+    /// and the sends in line. Asked at each request, since an in-app demo
+    /// switches the app's data (L27).
+    private let currentListeners: @MainActor () -> ListenerQueue
+    /// The listener's side on the data the app is on now.
+    private var listeners: ListenerQueue { currentListeners() }
+    /// The queue that handed out each send whose reply is being written:
+    /// its `written` or `undelivered` goes back there, also when the app
+    /// switched its data meanwhile.
+    private var deliveredBy: [SendRef: ListenerQueue] = [:]
     private let screenshotter: any Screenshotting
     private let quit: @MainActor () -> Void
     /// The time the lease is decided at, and the zone its refusals name it in.
@@ -127,7 +135,7 @@ final class ControlServer {
     init(
         socket: URL,
         app: any AppControlling,
-        listeners: ListenerQueue,
+        listeners: @escaping @MainActor () -> ListenerQueue,
         screenshotter: any Screenshotting,
         lease: ControlLease = ControlLease(),
         indicator: AgentControlIcon = AgentControlIcon(),
@@ -137,7 +145,7 @@ final class ControlServer {
     ) {
         self.socket = socket
         self.app = app
-        self.listeners = listeners
+        currentListeners = listeners
         self.screenshotter = screenshotter
         self.lease = lease
         self.indicator = indicator
@@ -258,8 +266,10 @@ final class ControlServer {
                     + (delivered ? "taken by the listener" : "waiting for a listener")
                 return done(line, Output(send: send), json)
             case .wait(let timeout):
-                switch await listeners.wait(by: message.holder, timeout: timeout, connection: connection) {
+                let queue = listeners
+                switch await queue.wait(by: message.holder, timeout: timeout, connection: connection) {
                 case .send(let ref, let payload):
+                    deliveredBy[ref] = queue
                     return Answer(reply: .done(payload), delivered: ref)
                 case .ranOut:
                     return Answer(reply: .ranOut)
@@ -445,7 +455,7 @@ final class ControlServer {
     /// A `wait`'s reply that carried a send and couldn't be written: the
     /// listener never got the send, so it's first in its line again.
     func undelivered(_ answer: Answer) {
-        if let ref = answer.delivered { listeners.undelivered(ref) }
+        if let ref = answer.delivered { handedBack(ref).undelivered(ref) }
         guard let granted = answer.granted, let term = lease.current(at: now()),
               term.holder.key == granted.holder.key, term.taken == granted.taken else { return }
         _ = lease.release(by: granted.holder, at: now())
@@ -454,7 +464,12 @@ final class ControlServer {
     /// A reply was written to its client: a send it carried is taken from
     /// now on.
     func written(_ answer: Answer) {
-        if let ref = answer.delivered { listeners.written(ref) }
+        if let ref = answer.delivered { handedBack(ref).written(ref) }
+    }
+
+    /// The queue that handed out `ref`, which hears how its reply went.
+    private func handedBack(_ ref: SendRef) -> ListenerQueue {
+        deliveredBy.removeValue(forKey: ref) ?? listeners
     }
 
     /// The client of `connection` closed its socket while its request was

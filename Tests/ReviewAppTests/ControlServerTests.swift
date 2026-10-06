@@ -198,12 +198,14 @@ struct ControlServerTests {
         ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
     }
 
-    /// A listener queue nobody sends to: the fake app has no reviews on disk.
-    static func noListeners() -> ListenerQueue {
-        ListenerQueue(
+    /// A listener queue nobody sends to, the same one at each request: the
+    /// fake app has no reviews on disk.
+    static func noListeners() -> @MainActor () -> ListenerQueue {
+        let queue = ListenerQueue(
             desk: ReviewDesk(library: Library(layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true)))),
             layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
         )
+        return { queue }
     }
 
     private func answer(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {

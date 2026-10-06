@@ -45,12 +45,9 @@ struct HeaderTests {
         #expect(HeaderWords.tilde("/Users/meg/x", home: "/Users/me") == "/Users/meg/x")
     }
 
-    @Test("a demo started from the empty screen runs on a folder of its own and opens the bundled video")
-    func demoEnvironment() {
+    @Test("a demo started from the empty screen runs on a folder of its own under the temporary folder")
+    func demoFolder() {
         let folder = DemoRun.folder(temporary: URL(fileURLWithPath: "/tmp/me", isDirectory: true))
         #expect(folder.path == "/tmp/me/\(AppIdentity.appName) Demo")
-        let environment = DemoRun.environment(folder: folder, video: URL(fileURLWithPath: "/App/Demo/sample.mp4"))
-        #expect(SupportFolder.moved(environment: environment)?.path == folder.path)
-        #expect(environment[DemoRun.openVariable] == "/App/Demo/sample.mp4")
     }
 }

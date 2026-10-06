@@ -466,7 +466,7 @@ struct AppCommandTests {
         defer { run.cleanUp() }
         let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
         #expect(run("app", "open", "--demo", demo.path) == CommandResult(output: Self.status))
-        #expect(run.launcher.launches == [[SupportFolder.overrideVariable: demo.path]])
+        #expect(run.launcher.launches == [[SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]])
         #expect(apps.running == [demo.standardizedFileURL.path])
         #expect(FileManager.default.fileExists(atPath: demo.path))
         #expect(DemoPointer.recorded(in: run.support)?.path == demo.path)
@@ -493,7 +493,7 @@ struct AppCommandTests {
 
         let handover = try #require(ControlLease.handover(term).first)
         #expect(run.launcher.launches == [
-            [SupportFolder.overrideVariable: demo.path, handover.key: handover.value],
+            [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1", handover.key: handover.value],
             [handover.key: handover.value],
         ])
         #expect(ControlLease(environment: run.launcher.launches[0], at: Date(timeIntervalSince1970: 30))

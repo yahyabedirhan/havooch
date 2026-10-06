@@ -42,6 +42,15 @@ struct LocationTests {
         #expect(SupportFolder.moved(environment: [:]) == nil)
     }
 
+    @Test("a run is the demo only when app open --demo marked its launch beside the moved folder")
+    func demoRun() {
+        let moved = ["HAVOOCH_SUPPORT_DIR": "/tmp/demo"]
+        #expect(SupportFolder.isDemoRun(environment: moved.merging(["HAVOOCH_DEMO_RUN": "1"]) { _, new in new }))
+        #expect(!SupportFolder.isDemoRun(environment: moved))
+        #expect(!SupportFolder.isDemoRun(environment: ["HAVOOCH_DEMO_RUN": "1"]))
+        #expect(!SupportFolder.isDemoRun(environment: [:]))
+    }
+
     @Test("the demo pointer is recorded, read and removed")
     func pointer() throws {
         try withFolder { support in

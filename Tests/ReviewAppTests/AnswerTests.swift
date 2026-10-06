@@ -41,7 +41,7 @@ struct AnswerTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model, listeners: model.listeners, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))

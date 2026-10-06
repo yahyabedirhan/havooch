@@ -16,9 +16,20 @@ public enum SupportFolder {
     }
 
     /// The folder `HAVOOCH_SUPPORT_DIR` moves the app's to, when it's an
-    /// absolute path: what makes a run a demo run.
+    /// absolute path.
     public static func moved(environment: [String: String]) -> URL? {
         guard let override = environment[overrideVariable], override.hasPrefix("/") else { return nil }
         return URL(fileURLWithPath: override, isDirectory: true)
+    }
+
+    /// The variable `havooch app open --demo` launches the app with, set
+    /// to `1` beside `HAVOOCH_SUPPORT_DIR`: the run is the demo.
+    public static let demoRunVariable = "HAVOOCH_DEMO_RUN"
+
+    /// Whether `environment` launches a demo run: `app open --demo` moved
+    /// the support folder and marked the launch. A folder moved with no
+    /// mark (a check's scratch folder) is a normal run on that folder.
+    public static func isDemoRun(environment: [String: String]) -> Bool {
+        moved(environment: environment) != nil && environment[demoRunVariable] == "1"
     }
 }

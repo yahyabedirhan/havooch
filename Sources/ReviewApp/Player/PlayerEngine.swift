@@ -103,6 +103,16 @@ final class PlayerEngine {
         time = 0
     }
 
+    /// Closes the open video: the player stops and holds nothing.
+    func close() {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        asset = nil
+        duration = 0
+        videoSize = .zero
+        time = 0
+    }
+
     /// One frame's length from the track's nominal rate, which comes as a
     /// `Float` a hair off the real rate (29.999998 for 30). A rate that
     /// close to a whole one, or to an NTSC one (n × 1000 / 1001), is that

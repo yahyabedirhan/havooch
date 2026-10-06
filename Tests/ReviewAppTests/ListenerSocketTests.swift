@@ -41,7 +41,7 @@ struct ListenerSocketTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: ControlSocket.url(in: folder), app: model, listeners: model.listeners,
+            socket: ControlSocket.url(in: folder), app: model, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         try server.start()

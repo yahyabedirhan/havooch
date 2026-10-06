@@ -95,7 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         OutsideClicks.install(for: model)
         model.themes.followSystemAppearance()
         let server = ControlServer(
-            socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,
+            // The socket stays on the folder the run started on, also during
+            // an in-app demo; the listener's requests go to the data the run is on.
+            socket: ControlSocket.url(in: model.launchSupport), app: model, listeners: { [model] in model.listeners },
             screenshotter: Screenshotter(indicator: lease, settings: settings),
             // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
             lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
@@ -107,8 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.server = server
             // A theme file or settings.json edited by hand shows at once.
             model.themes.startWatching()
-            // Only the one copy that has the socket touches the data.
-            server.ready = Task { await model.openAtLaunch(environment: ProcessInfo.processInfo.environment) }
+            // A launch opens no video: the window shows home.
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))
