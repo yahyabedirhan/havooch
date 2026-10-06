@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Havooch landing page prototypes</title>
-  <meta name="description" content="Three alternative landing pages for Havooch, each a self-contained static page with desktop and phone previews.">
+  <meta name="description" content="The landing page prototypes for Havooch: the chosen storybook site and the three references it came from, with desktop and phone previews.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="pixel-world/logo.svg" type="image/svg+xml">
   <style>
@@ -31,19 +31,43 @@
     .previews .desk { aspect-ratio: 1440 / 900; overflow: hidden; }
     .previews .phone img, .previews .desk img { object-fit: cover; object-position: top; height: 100%; }
     @media (max-width: 820px) { .proto { grid-template-columns: 1fr; } }
+    .subs { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tag { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 2px 8px; vertical-align: 4px; margin-left: 6px; }
+    .pages { margin: 14px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 15px; display: grid; gap: 4px; }
+    .pages a { color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; margin-right: 6px; }
     footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
   </style>
 </head>
 <body>
   <main>
     <h1>Havooch landing page prototypes</h1>
-    <p class="intro">Three directions for the public page, each a self-contained static page beside the <a href="../index.html">current landing page</a>. Each folder has a README with the design plan, and a <code>preview/</code> folder with the desktop and phone screenshots shown here. Open a prototype and resize the window; switch your system appearance to see light and dark.</p>
+    <p class="intro">Storybook is the chosen direction for the public page: one three-page site with the pixel-world story at <code>/</code>, the app at <code>/studio</code> and the command line at <code>/cli</code>, all in one look and feel. Below it are the three references it was built from. They are self-contained static pages beside the <a href="../index.html">current landing page</a>. Each folder has a README with the design plan, and a <code>preview/</code> folder with the screenshots shown here. Open a prototype and resize the window; switch your system appearance to see light and dark.</p>
 
     <ul class="list">
       <li class="proto">
         <div>
-          <h2><a href="pixel-world/">pixel-world</a></h2>
-          <p>A lit isometric pixel diorama of the loop, rendered in software from code: the screening room where Havuç pauses and points, the path the notes travel, and the agent's workshop where the replies come from. Dark first, with a dusk light mode.</p>
+          <h2><a href="storybook/">storybook</a> <small class="tag">chosen</small></h2>
+          <p>Ink on paper, a picture book: ivory paper and ink-blue type in Young Serif and Source Serif 4, the diorama as a tipped-in colour plate, scenes as alternating book spreads, a Contents list in the margin.</p>
+          <ul class="pages">
+            <li><a href="storybook/">/</a> the pixel-world story</li>
+            <li><a href="storybook/studio/">/studio</a> the app, with screenshots</li>
+            <li><a href="storybook/cli/">/cli</a> the command line</li>
+          </ul>
+          <a class="open" href="storybook/">Open the prototype</a>
+        </div>
+        <div class="previews">
+          <a class="desk" href="storybook/preview/desktop.png"><img src="storybook/preview/desktop.png" width="1440" height="900" alt="storybook home at 1440 px, light" loading="lazy"></a>
+          <a class="phone" href="storybook/preview/phone.png"><img src="storybook/preview/phone.png" width="390" height="844" alt="storybook home at 390 px, light" loading="lazy"></a>
+          <div class="subs">
+            <a class="desk" href="storybook/studio/"><img src="storybook/preview/studio-desktop.png" width="1440" height="900" alt="storybook /studio at 1440 px, light" loading="lazy"></a>
+            <a class="desk" href="storybook/cli/"><img src="storybook/preview/cli-desktop.png" width="1440" height="900" alt="storybook /cli at 1440 px, light" loading="lazy"></a>
+          </div>
+        </div>
+      </li>
+      <li class="proto">
+        <div>
+          <h2><a href="pixel-world/">pixel-world</a> <small class="tag">reference</small></h2>
+          <p>The starting point of storybook's home page. A lit isometric pixel diorama of the loop, rendered in software from code: the screening room where Havuç pauses and points, the path the notes travel, and the agent's workshop where the replies come from. Dark first, with a dusk light mode.</p>
           <a class="open" href="pixel-world/">Open the prototype</a>
         </div>
         <div class="previews">
@@ -51,11 +75,10 @@
           <a class="phone" href="pixel-world/preview/phone.png"><img src="pixel-world/preview/phone.png" width="390" height="844" alt="pixel-world at 390 px, dark" loading="lazy"></a>
         </div>
       </li>
-
       <li class="proto">
         <div>
-          <h2><a href="studio/">studio</a></h2>
-          <p>A calm product page in the native-Mac tradition: real screenshots, an annotated hero window with callouts, and the loop explained in five moves. One typeface, one accent, a lot of air.</p>
+          <h2><a href="studio/">studio</a> <small class="tag">reference</small></h2>
+          <p>The source of storybook's /studio page. A calm product page in the native-Mac tradition: real screenshots, an annotated hero window with callouts, and the loop explained in five moves. One typeface, one accent, a lot of air.</p>
           <a class="open" href="studio/">Open the prototype</a>
         </div>
         <div class="previews">
@@ -63,11 +86,10 @@
           <a class="phone" href="studio/preview/phone.png"><img src="studio/preview/phone.png" width="390" height="844" alt="studio at 390 px, light" loading="lazy"></a>
         </div>
       </li>
-
       <li class="proto">
         <div>
-          <h2><a href="wire/">wire</a></h2>
-          <p>The developer-tool direction, centred on the agent's side of the loop: a terminal that plays one send, both ends of the wire laid side by side, the JSON the agent reads and the command line. Blueprint paper with a faint grid.</p>
+          <h2><a href="wire/">wire</a> <small class="tag">reference</small></h2>
+          <p>The source of storybook's /cli page. The developer-tool direction, centred on the agent's side of the loop: a terminal that plays one send, both ends of the wire laid side by side, the JSON the agent reads and the command line. Blueprint paper with a faint grid.</p>
           <a class="open" href="wire/">Open the prototype</a>
         </div>
         <div class="previews">

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Havooch CLI — the wire between your video and your agent</title>
+  <meta name="description" content="Havooch is a native macOS video player with a command line on the other end. You comment on frames; your coding agent reads the send in its shell, works in your repo and answers on the frame.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#eef0e6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#23211e" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="../logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght,8..60,400..700;1,8..60,400..700&family=Young+Serif&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../script.js" defer></script>
+</head>
+<body class="page-cli">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="brand" href="../" aria-label="Havooch, home"><img src="../logo.svg" alt="" width="28" height="28"><span>Havooch</span></a>
+      <nav aria-label="Pages">
+        <a href="../">Home</a>
+        <a href="../studio/">Studio</a>
+        <a href="./" aria-current="page">CLI</a>
+        <a class="gh" href="https://github.com/yahyabedirhan/havooch">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero sub-hero cli-hero" id="top">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="kicker">A video player for one side, a command line for the other.</p>
+          <h1>Point at a frame. Your agent reads it as JSON.</h1>
+          <p class="lede">Havooch is a native macOS video player for giving feedback to coding agents. You pause, draw a region and write a note. <kbd>⌘↩</kbd> sends the queue down the wire, and the agent that is listening in your shell gets the time, the keyframe, the crop and the transcript. It works in your repo and replies on the frame.</p>
+          <div class="actions">
+            <a class="button primary" href="#install">Install for Mac</a>
+            <a class="button" href="#wire">See the whole loop</a>
+          </div>
+          <p class="facts">Free and open source, MIT. macOS 26. The agent side is one skill that Claude Code, Codex, Gemini CLI or any agent with a shell can run.</p>
+        </div>
+
+        <div class="terminal" aria-label="The agent's shell during one send" role="img">
+          <div class="term-bar"><span></span><span></span><span></span><em>havooch-mate · zsh</em></div>
+          <pre class="term" id="term" data-play><code><span class="l"><b>$</b> havooch wait</span>
+<span class="l out">{ "send": { "id": "s-f92cbb2a-2" },
+  "threads": [{ "number": 1, "time": 3.017,
+    "keyframePath": "…/t-1.png", "region": { "x": .22, "y": .42, "w": .18, "h": .15 },
+    "messages": [{ "text": "The intro goes by too fast." }] }] }</span>
+<span class="l"><b>$</b> havooch ack s-f92cbb2a-2 "Got 1 message on 1 thread, starting."</span>
+<span class="l"><b>$</b> havooch status m-f92cbb2a-9 working</span>
+<span class="l dim">  edit src/scenes/intro.ts · commit 3f9c2ab</span>
+<span class="l"><b>$</b> havooch reply 1 "Slowed the first slide from 3 s to 4.5 s. The title holds for a full beat. 3f9c2ab"</span>
+<span class="l"><b>$</b> havooch ask 1 "Should the subtitle hold as long as the title?"</span>
+<span class="l ans">Yes, the same beat for both.</span>
+<span class="l"><b>$</b> havooch status m-f92cbb2a-9 done</span>
+<span class="l"><b>$</b> havooch wait<i class="cursor"></i></span></code></pre>
+          <button class="term-replay" type="button" hidden>Replay</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="wire" id="wire" aria-labelledby="wire-title">
+      <div class="wrap">
+        <h2 id="wire-title">Both ends of the wire</h2>
+        <p class="section-lede">Your side is a player. The agent's side is a shell. Every step on the left has one command on the right, and nothing in between needs a server.</p>
+
+        <div class="lanes" data-wire>
+          <div class="lane-head you">You, in the player</div>
+          <div class="lane-head mid"><span class="sr">The wire</span></div>
+          <div class="lane-head agent">Your agent, in its shell</div>
+
+          <div class="row">
+            <div class="you cell"><h3>Pause and point</h3><p>Space pauses. Drag on the frame to mark a region. The time becomes the thread's time.</p></div>
+            <div class="mid cell"><i class="node"></i></div>
+            <div class="agent cell quiet"><code>havooch wait</code><p>Already running in the background, so the player shows the agent as listening.</p></div>
+          </div>
+          <div class="row">
+            <div class="you cell"><h3>Comment and queue</h3><p>Write what you mean. <kbd>↩</kbd> queues it. Keep watching and keep queueing; each frame gets its own thread.</p></div>
+            <div class="mid cell"><i class="node"></i></div>
+            <div class="agent cell quiet"><p>Nothing yet. The queue is yours until you send it.</p></div>
+          </div>
+          <div class="row send-row">
+            <div class="you cell"><h3><kbd>⌘↩</kbd> sends the queue</h3><p>One send, grouped by thread. The time, the keyframe, the region crop, the transcript around it and your context for the video.</p></div>
+            <div class="mid cell"><i class="node hot"></i><span class="packet" aria-hidden="true"></span></div>
+            <div class="agent cell"><code>havooch wait</code> <span class="ret">prints the send as JSON</span><code>havooch ack s-… "Got 3 messages, starting."</code><p>Your messages turn acknowledged in the player.</p></div>
+          </div>
+          <div class="row">
+            <div class="you cell quiet"><p>Pins on the timeline show each thread's state while you keep watching.</p></div>
+            <div class="mid cell"><i class="node"></i></div>
+            <div class="agent cell"><code>havooch status m-… working</code><p>The agent reads the keyframe and the crop, edits your repo and commits once per message.</p></div>
+          </div>
+          <div class="row">
+            <div class="you cell"><h3>A question lands on the frame</h3><p>The thread moves to Needs you. Your answer skips the queue and goes straight back.</p></div>
+            <div class="mid cell"><i class="node"></i></div>
+            <div class="agent cell"><code>havooch ask 3 "Cmd+Return or Cmd+Enter?"</code> <span class="ret">waits, then prints your answer</span></div>
+          </div>
+          <div class="row">
+            <div class="you cell"><h3>The answer, beside the frame</h3><p>One to three plain sentences and the commit, in a thread you can reopen from the pin.</p></div>
+            <div class="mid cell"><i class="node"></i></div>
+            <div class="agent cell"><code>havooch reply 1 "Slowed the first slide… 3f9c2ab"</code><code>havooch status m-… done</code></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="send" id="send" aria-labelledby="send-title">
+      <div class="wrap send-grid">
+        <div>
+          <h2 id="send-title">The send, as the agent reads it</h2>
+          <p class="section-lede">One JSON document per <kbd>⌘↩</kbd>. Threads are in time order, General first. Paths are absolute, so the agent can open the keyframe and the crop with the tools it already has.</p>
+          <ul class="send-notes">
+            <li><strong>threads[].time</strong> is the exact second you paused on.</li>
+            <li><strong>keyframePath</strong> is that frame as a PNG; <strong>cropPath</strong> is the region you drew, cut out.</li>
+            <li><strong>transcript</strong> is the fifteen seconds around the moment, when the video has one.</li>
+            <li><strong>history</strong> carries the earlier messages on the thread, so a follow-up has its past.</li>
+            <li><strong>context</strong> is your note about the subject: a project, a design, a setup. Set it in the app or in a sidecar file beside the video.</li>
+          </ul>
+        </div>
+        <pre class="json" aria-label="A full send as JSON"><code>{
+  <i>"send"</i>: { <i>"id"</i>: <b>"s-f92cbb2a-2"</b>, <i>"sentAt"</i>: <b>"2026-10-06T22:52:10Z"</b> },
+  <i>"video"</i>: { <i>"title"</i>: <b>"sample.mp4"</b>, <i>"duration"</i>: 21.233,
+             <i>"path"</i>: <b>"/Users/you/Movies/sample.mp4"</b> },
+  <i>"context"</i>: <b>"The intro video for the player. Source in repo havooch."</b>,
+  <i>"threads"</i>: [
+    { <i>"id"</i>: <b>"t-f92cbb2a-1"</b>, <i>"number"</i>: 1, <i>"time"</i>: 3.017,
+      <i>"keyframePath"</i>: <b>"/Users/you/Library/…/t-f92cbb2a-1.png"</b>,
+      <i>"transcript"</i>: [{ <i>"start"</i>: 0.0, <i>"end"</i>: 6.0,
+                       <i>"text"</i>: <b>"Pause on any moment and point."</b> }],
+      <i>"history"</i>: [],
+      <i>"messages"</i>: [{
+        <i>"id"</i>: <b>"m-f92cbb2a-9"</b>,
+        <i>"text"</i>: <b>"The intro goes by too fast."</b>,
+        <i>"region"</i>: { <i>"x"</i>: 0.22, <i>"y"</i>: 0.42, <i>"w"</i>: 0.18, <i>"h"</i>: 0.15 },
+        <i>"cropPath"</i>: <b>"/Users/you/Library/…/m-f92cbb2a-9.png"</b>
+      }]
+    }
+  ]
+}</code></pre>
+      </div>
+    </section>
+
+    <section class="commands" id="commands" aria-labelledby="commands-title">
+      <div class="wrap">
+        <h2 id="commands-title">The command line</h2>
+        <p class="section-lede">The app ships a <code>havooch</code> command. The listener uses five of its verbs and never touches the player. Everything else drives the player under a lease, so an agent can review a video with you and give the controls back the moment you want them.</p>
+        <div class="cmd-cols">
+          <div>
+            <h3>For the listener</h3>
+            <dl class="cmdlist">
+              <dt><code>wait [--timeout s]</code></dt><dd>Wait for the next send and print it as JSON.</dd>
+              <dt><code>ack &lt;send&gt; [text]</code></dt><dd>Say you have it. The messages turn acknowledged.</dd>
+              <dt><code>status &lt;message&gt; working|done|failed</code></dt><dd>Say how far you are. The pin shows it.</dd>
+              <dt><code>reply &lt;thread&gt; &lt;text&gt;</code></dt><dd>Answer on a thread, by id or by number.</dd>
+              <dt><code>ask &lt;thread&gt; &lt;question&gt;</code></dt><dd>Ask on the frame and print the person's answer.</dd>
+            </dl>
+          </div>
+          <div>
+            <h3>For driving the player</h3>
+            <dl class="cmdlist">
+              <dt><code>control take</code> <code>control release</code></dt><dd>Take the lease, or hand it back.</dd>
+              <dt><code>player open &lt;path&gt;</code> <code>player seek 0:12</code></dt><dd>Open a video, move to a time, play, pause.</dd>
+              <dt><code>comment add &lt;text&gt; --at 12 --region x,y,w,h</code></dt><dd>Queue a comment where a person would.</dd>
+              <dt><code>thread show 3</code> <code>thread list</code></dt><dd>Open a thread in the sidebar, or go back to the list.</dd>
+              <dt><code>screenshot out.png --appearance dark</code></dt><dd>Capture the window as it is.</dd>
+            </dl>
+          </div>
+        </div>
+        <p class="lease-note">The lease is the whole safety story: one holder at a time, you can take it back from the toolbar, and a listener never needs it. Exit codes are plain: 0 done, 1 refused with the reason on stderr, 2 a wait ran out.</p>
+      </div>
+    </section>
+
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <h2 id="install-title">Install</h2>
+        <p class="section-lede">Either line installs the app, the <code>havooch</code> command and the <code>havooch-mate</code> skill.</p>
+        <div class="cmds">
+          <div class="cmd">
+            <span class="cmd-name">Homebrew</span>
+            <code id="cmd-brew">brew install --cask yahyabedirhan/tap/havooch</code>
+            <button type="button" class="copy" data-copy="cmd-brew" aria-label="Copy the Homebrew command">Copy</button>
+          </div>
+          <div class="cmd">
+            <span class="cmd-name">Script</span>
+            <code id="cmd-curl">curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash</code>
+            <button type="button" class="copy" data-copy="cmd-curl" aria-label="Copy the install script command">Copy</button>
+          </div>
+        </div>
+        <p class="install-note">The script checks the release's SHA-256 before it installs; <code>--uninstall</code> removes everything. Havooch is signed but not notarized, so on first launch macOS asks once: System Settings, Privacy &amp; Security, Open Anyway. Then tell your agent to listen for Havooch feedback and open the demo from the empty window.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <p>Free and open source under the <a href="https://github.com/yahyabedirhan/havooch/blob/main/LICENSE">MIT licence</a>. <a href="https://github.com/yahyabedirhan/havooch/releases/latest">Latest release</a>. <a href="https://github.com/yahyabedirhan/havooch/tree/main/.agents/skills/havooch-mate">The mate skill</a>.</p>
+      <p class="fine">macOS is a trademark of Apple Inc. Agent names belong to their owners.</p>
+    </div>
+  </footer>
+</body>
+</html>
