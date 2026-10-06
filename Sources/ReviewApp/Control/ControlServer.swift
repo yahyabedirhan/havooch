@@ -17,6 +17,12 @@ nonisolated struct AppRefusal: Error, Equatable {
 protocol AppControlling: AnyObject {
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
+    /// Goes home, as a click on the Havooch mark does: the video closes
+    /// and an in-app demo is left. Shows a closed window.
+    func goHome() async
+    /// Runs the demo in the same window, as "Try the Demo" does. Shows a
+    /// closed window.
+    func openDemo() async throws(AppRefusal)
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
@@ -127,11 +133,6 @@ final class ControlServer {
         var timeout: Task<Void, Never>?
     }
 
-    /// What the app does at launch before it answers its first request:
-    /// opening the video the launch names (a demo run). Nil when there's
-    /// nothing to wait for.
-    var ready: Task<Void, Never>?
-
     init(
         socket: URL,
         app: any AppControlling,
@@ -169,9 +170,6 @@ final class ControlServer {
     /// is made. `connection` names the connection the request came over,
     /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
-        // The app is still opening the video its launch names: a command sees the app
-        // with it open, not the moment before.
-        await ready?.value
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)
@@ -205,6 +203,19 @@ final class ControlServer {
                 let line = "\(AppIdentity.appName) quit"
                 let output = json ? StateReport.json(Output(quit: true)) : line + "\n"
                 return Answer(reply: ControlReply(ok: true, output: output, lease: held), quits: true)
+            case .appHome:
+                await app.goHome()
+                let state = app.state()
+                let count = state.recents.count
+                return done(
+                    "home, \(count) recent video\(count == 1 ? "" : "s"), \(state.app.demo ? "demo data" : "your data")",
+                    Output(app: state.app, screen: state.screen), json
+                )
+            case .appDemo:
+                try await app.openDemo()
+                let state = app.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) on demo data" } ?? "opened the demo"
+                return done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
             case .playerOpen(let path):
                 try await app.open(URL(fileURLWithPath: path))
                 let state = app.state()
@@ -333,6 +344,8 @@ final class ControlServer {
 
     /// What an action prints with `--json`: only the parts it changed.
     private struct Output: Encodable {
+        var app: StateReport.App?
+        var screen: StateReport.Screen?
         var video: StateReport.Video?
         var player: StateReport.Player?
         var path: String?

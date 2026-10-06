@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The floating group at the top right of the window, from left to
 /// right: the agent-control icon (only while an agent holds the lease),
-/// Context, and the sidebar toggle. They are toolbar items, so the system
+/// "Open a Video…", Context, and the sidebar toggle; the last three in
+/// the player only, since home has its own "Open a Video…". They are toolbar items, so the system
 /// draws them as one floating group.
 struct FloatingControls: ToolbarContent {
     let model: AppModel
@@ -21,6 +22,7 @@ struct FloatingControls: ToolbarContent {
                 AgentControlButton(model: model, indicator: lease, stop: stopLease)
             }
             if model.video != nil {
+                OpenVideoButton(model: model)
                 ContextButton(model: model)
                 SidebarToggle(model: model)
             }
@@ -41,5 +43,21 @@ private struct SidebarToggle: View {
         }
         .pressedByKeys(in: model) { model.isSidebarVisible.toggle() }
         .help(model.isSidebarVisible ? "Hide the sidebar" : "Show the sidebar")
+    }
+}
+
+/// "Open a Video…" in the header: the Open panel, without going home
+/// first. On an in-app demo the video opens on the person's data.
+private struct OpenVideoButton: View {
+    let model: AppModel
+
+    var body: some View {
+        Button {
+            model.openFromPanel()
+        } label: {
+            Label("Open a Video…", systemImage: "folder")
+        }
+        .pressedByKeys(in: model) { model.openFromPanel() }
+        .help("Open a Video…")
     }
 }

@@ -16,6 +16,13 @@ nonisolated struct StateReport: Encodable, Equatable {
         var support: String
     }
 
+    /// What the window shows: the player with a video open, else home.
+    /// The home screen and the first launch's empty state are both home:
+    /// the screen with no video.
+    enum Screen: String, Encodable, Equatable {
+        case home, player
+    }
+
     struct Video: Encodable, Equatable {
         var path: String
         var contentHash: String
@@ -370,6 +377,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// The recent videos of this run's data folder, the newest first; the
     /// app's model fills it in.
     var recents: [Recent] = []
+    /// What the window shows; the app's model fills it in.
+    var screen: Screen = .home
 
     init(
         app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, popover: Popover? = nil,
@@ -391,13 +400,14 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, lease, listener, video, player, popover, threads, queue, sends
+        case app, screen, lease, listener, video, player, popover, threads, queue, sends
         case transcript, theme, sidebar, recents
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(app, forKey: .app)
+        try container.encode(screen, forKey: .screen)
         try container.encode(lease, forKey: .lease)
         try container.encode(listener, forKey: .listener)
         try container.encode(theme, forKey: .theme)
@@ -421,6 +431,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     var lines: String {
         """
         \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
+        screen: \(screen.rawValue)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
         transcript: \(transcript?.line ?? "none")

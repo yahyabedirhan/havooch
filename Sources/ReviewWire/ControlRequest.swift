@@ -19,6 +19,13 @@ public enum ControlRequest: Equatable, Sendable {
     case appOpen
     /// `havooch app quit`: the app replies, then quits.
     case appQuit
+    /// `havooch app home`: the app goes home, as a click on the Havooch
+    /// mark in the header does: the video closes and an in-app demo is
+    /// left. A closed window shows.
+    case appHome
+    /// `havooch app demo`: the app runs the demo in the same window, as
+    /// "Try the Demo" does. A closed window shows.
+    case appDemo
     /// `havooch player open <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
@@ -173,7 +180,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
         case .themeSet: .operator
-        case .appOpen, .appQuit, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
+        case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator

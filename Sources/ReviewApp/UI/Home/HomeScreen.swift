@@ -18,6 +18,10 @@ enum StageContent: Equatable {
     /// The sidebar shows beside the player only: never on the home screen
     /// or the empty state.
     var showsSidebar: Bool { self == .player }
+
+    /// The screen `state` reports: the player, or home for the home
+    /// screen and the empty state alike, the screens with no video.
+    var screen: StateReport.Screen { self == .player ? .player : .home }
 }
 
 /// No video is open and there are recent videos: the cat mark and the

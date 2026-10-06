@@ -38,6 +38,7 @@ struct ControlServerTests {
                 sends: review.sends.map { StateReport.Send($0, in: review) }
             )
             report.sidebar = StateReport.Sidebar(thread: shown, width: 340)
+            report.screen = hasVideo ? .player : .home
             return report
         }
 
@@ -160,6 +161,16 @@ struct ControlServerTests {
             hasVideo = true
         }
 
+        func goHome() async {
+            calls.append("home")
+            hasVideo = false
+        }
+
+        func openDemo() async throws(AppRefusal) {
+            try record("demo")
+            hasVideo = true
+        }
+
         func play() throws(AppRefusal) {
             try record("play")
             playing = true
@@ -279,6 +290,7 @@ struct ControlServerTests {
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
         #expect(state["recents"] as? [AnyHashable] == [])
+        #expect(state["screen"] as? String == "player")
         #expect(state["listener"] as? [String: AnyHashable] == [
             "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
         ])
@@ -286,12 +298,14 @@ struct ControlServerTests {
         app.hasVideo = false
         state = try object(await answer(.state, json: true).reply.output)
         #expect(state["video"] is NSNull)
+        #expect(state["screen"] as? String == "home")
     }
 
     @Test("state and app status answer lines without --json")
     func lines() async {
         #expect(await answer(.state).reply.output == """
             \(AppIdentity.appName) 0.2.0, demo data in /demo
+            screen: player
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
             transcript: none

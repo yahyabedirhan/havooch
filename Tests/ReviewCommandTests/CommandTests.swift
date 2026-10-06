@@ -9,6 +9,8 @@ import Testing
 struct CommandTests {
     @Test("each command sends its request", arguments: [
         (["state"], ControlRequest.state),
+        (["app", "home"], .appHome),
+        (["app", "demo"], .appDemo),
         (["control", "take"], .controlTake(waitSeconds: nil)),
         (["control", "take", "--wait", "30"], .controlTake(waitSeconds: 30)),
         (["control", "release"], .controlRelease),
@@ -161,6 +163,8 @@ struct CommandTests {
         #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
         #expect(run("state", "--json") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "quit") == CommandResult(error: line, exitCode: 1))
+        #expect(run("app", "home") == CommandResult(error: line, exitCode: 1))
+        #expect(run("app", "demo") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "status") == CommandResult(output: "not running\n"))
         #expect(run("app", "status", "--json") == CommandResult(output: "{\"running\":false}\n"))
     }
@@ -172,7 +176,7 @@ struct CommandTests {
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["screenshot", "/tmp/shot.png", "--window", "inspector"],
-        ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
+        ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--hide-agent-indicator"],
@@ -336,6 +340,8 @@ struct CommandTests {
         defer { run.cleanUp() }
         #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
         #expect(CommandTable.usageText.contains("havooch player seek <seconds|mm:ss>"))
+        #expect(CommandTable.usageText.contains("havooch app home "))
+        #expect(CommandTable.usageText.contains("havooch app demo "))
         #expect(run.transport.sent.isEmpty)
     }
 

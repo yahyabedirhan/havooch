@@ -44,6 +44,12 @@ final class ReviewDesk {
         self.review = review
     }
 
+    /// No review is the open one: the video closed. Its review stays kept,
+    /// so a listener can still answer on it.
+    func close() {
+        review = nil
+    }
+
     /// The review of the video with `contentHash`, open or not; nil when
     /// there's none, or it doesn't read.
     func review(of contentHash: String) -> VideoReview? {

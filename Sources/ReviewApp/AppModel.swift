@@ -50,6 +50,9 @@ final class AppModel: AppControlling {
     let launchSupport: URL
     /// Where "Try the Demo" keeps the demo's data.
     let demoFolder: URL
+    /// The video "Try the Demo" opens: the one bundled in the app, nil in
+    /// a build that has none.
+    let demoVideo: URL?
     /// Whether the run started on demo data (`app open --demo`).
     let isDemoRun: Bool
     /// Whether an in-app demo runs: "Try the Demo" switched the run to
@@ -132,15 +135,16 @@ final class AppModel: AppControlling {
     /// The run on the support folder `environment` names: demo data when
     /// `app open --demo` launched it (`SupportFolder.isDemoRun`). `speech`
     /// turns a video's sound into lines when it has no sidecar, and
-    /// `demoFolder` is where "Try the Demo" keeps its data; tests give
-    /// their own.
+    /// `demoFolder` is where "Try the Demo" keeps its data and
+    /// `demoVideo` the video it opens; tests give their own.
     init(
         environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer(),
-        demoFolder: URL = DemoRun.folder()
+        demoFolder: URL = DemoRun.folder(), demoVideo: URL? = DemoRun.video()
     ) {
         launchSupport = SupportFolder.app(environment: environment)
         isDemoRun = SupportFolder.isDemoRun(environment: environment)
         self.demoFolder = demoFolder
+        self.demoVideo = demoVideo
         self.speech = speech
         data = DataFolder(support: launchSupport, speech: speech)
         themes = ThemeDesk(layout: SupportLayout(root: launchSupport))
@@ -277,19 +281,50 @@ final class AppModel: AppControlling {
     }
 
     /// "Try the Demo": the bundled sample video on demo data, in this
-    /// window (`enterDemo`).
+    /// window (`openDemo`). The person is shown why when it doesn't open.
     func tryDemo() {
-        guard let video = DemoRun.video() else {
-            problem = Problem(title: "The demo didn't open", reason: "this build has no bundled demo video; run `make bundle`")
-            return
-        }
         Task {
             do throws(AppRefusal) {
-                try await enterDemo(video)
+                try await openDemo()
             } catch {
                 problem = Problem(title: "The demo didn't open", reason: error.reason)
             }
         }
+    }
+
+    /// "Try the Demo" and `app demo`: the bundled sample video on demo
+    /// data, in this window (`enterDemo`). Refused in a build with no
+    /// bundled video.
+    func openDemo() async throws(AppRefusal) {
+        guard let demoVideo else {
+            throw AppRefusal("this build has no bundled demo video; run `make bundle`")
+        }
+        try await enterDemo(demoVideo)
+    }
+
+    /// Goes home: the open video's position is saved and the video closes,
+    /// and an in-app demo is left, so the window shows the home screen on
+    /// the person's data. As opening another video does, words in the
+    /// popover are first queued on their video, the composer's words go,
+    /// and the queue stays on the video's review. A run started with
+    /// `app open --demo` stays on its folder. Shows a closed window, for
+    /// `app home`.
+    func goHome() async {
+        if isInAppDemo {
+            await leaveDemo()
+        } else {
+            closePopover(.momentChanged)
+            await committing?.value
+            savePosition()
+            closeVideo()
+        }
+        showWindow()
+    }
+
+    /// A click on the Havooch mark in the header, and File > Close Video:
+    /// `goHome`.
+    func goHomeForPerson() {
+        Task { await goHome() }
     }
 
     /// Enters the demo: the run switches to the demo folder, in the same
@@ -345,6 +380,7 @@ final class AppModel: AppControlling {
     private func closeVideo() {
         engine.close()
         video = nil
+        desk.close()
         forgetVideoViews()
         sidecar = nil
     }
@@ -580,6 +616,7 @@ final class AppModel: AppControlling {
         report.theme = themes.report
         report.sidebar = sidebarReport
         report.recents = recents
+        report.screen = StageContent(hasVideo: video != nil, hasRecents: !report.recents.isEmpty).screen
         return report
     }
 

@@ -21,6 +21,7 @@ struct HavoochApp: App {
                 Button("Open…") { delegate.model.openFromPanel() }
                     .keyboardShortcut("o")
             }
+            CloseVideoCommand(model: delegate.model)
             AboutCommand()
             PlaybackCommands(model: delegate.model)
             ThemeMenu(model: delegate.model)
@@ -59,6 +60,20 @@ private struct PlaybackCommands: Commands {
             Button("Send Messages") { model.send() }
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!model.canSend)
+        }
+    }
+}
+
+/// File > Close Video, Shift+Cmd+W: home, as the Havooch mark in the
+/// header goes (`AppModel.goHome`). Cmd+W stays the window's Close.
+private struct CloseVideoCommand: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandGroup(after: .saveItem) {
+            Button("Close Video") { model.goHomeForPerson() }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(model.video == nil)
         }
     }
 }
