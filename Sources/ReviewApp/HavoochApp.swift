@@ -147,6 +147,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server?.stopLease()
     }
 
+    /// The person may have moved or deleted a recent video in Finder
+    /// meanwhile: the home screen reads the list again.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        model.refreshRecents()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model.savePosition()
         server?.stop()

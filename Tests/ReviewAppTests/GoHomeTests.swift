@@ -46,6 +46,11 @@ struct GoHomeTests {
         var count = 0
     }
 
+    /// Counts observation's change calls, which come on a `Sendable` closure.
+    nonisolated final class Changes: @unchecked Sendable {
+        var count = 0
+    }
+
     /// The person's own video: a copy of the fixture, so it isn't the demo's file.
     private func ownVideo() throws -> URL {
         let folder = root.appendingPathComponent("Movies", isDirectory: true)
@@ -98,6 +103,37 @@ struct GoHomeTests {
         #expect(model.recents.isEmpty)
         #expect(model.state().screen == .home)
         #expect(shown.count == 1)
+    }
+
+    @Test("going home again tells the home screen to read the recent videos, so a moved file's card turns unavailable")
+    func goHomeRereadsTheRecentVideos() async throws {
+        defer { cleanUp() }
+        let (model, _, _) = run()
+        let mine = try ownVideo()
+        try await model.open(mine)
+        await model.goHome()
+        try FileManager.default.moveItem(at: mine, to: root.appendingPathComponent("moved.mp4"))
+        let changed = Changes()
+        withObservationTracking { _ = model.recents } onChange: { changed.count += 1 }
+
+        await model.goHome()
+
+        #expect(changed.count == 1)
+        #expect(model.recents.map(\.available) == [false])
+    }
+
+    @Test("the app coming to the front tells the home screen to read the recent videos again")
+    func refreshRecents() async throws {
+        defer { cleanUp() }
+        let (model, _, _) = run()
+        try await model.open(ownVideo())
+        await model.goHome()
+        let changed = Changes()
+        withObservationTracking { _ = model.recents } onChange: { changed.count += 1 }
+
+        model.refreshRecents()
+
+        #expect(changed.count == 1)
     }
 
     @Test("going home during the demo leaves it: the run is back on the person's data, with the demo's position on the demo's list")

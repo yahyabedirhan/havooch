@@ -318,6 +318,8 @@ final class AppModel: AppControlling {
             savePosition()
             closeVideo()
         }
+        // A file moved since home last showed turns its card unavailable.
+        refreshRecents()
         showWindow()
     }
 
@@ -412,6 +414,13 @@ final class AppModel: AppControlling {
     /// stays on disk.
     func removeRecent(_ contentHash: String) {
         desk.library.removeRecent(contentHash)
+        recentsRevision += 1
+    }
+
+    /// Has the home screen read the recent videos again, with whether each
+    /// file is there now: going home and the app coming to the front call
+    /// it, since nothing tells the app that a file moved.
+    func refreshRecents() {
         recentsRevision += 1
     }
 
