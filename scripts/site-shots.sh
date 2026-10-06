@@ -27,8 +27,6 @@ question-light  question-light.png      1800
 question-dark   question-dark.png       1800
 chat-light      hero-light.png          680  676:1150:2346:325
 chat-dark       hero-dark.png           680  676:1150:2346:325
-composer-light  hero-light.png          660  676:252:2346:1526
-composer-dark   hero-dark.png           660  676:252:2346:1526
 theme-tokyo     tokyo-night-list.png    1800
 "
 
