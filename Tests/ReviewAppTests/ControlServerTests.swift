@@ -29,7 +29,7 @@ struct ControlServerTests {
 
         func state() -> StateReport {
             var report = StateReport(
-                app: .init(version: "0.2.0", demo: true, support: "/demo"),
+                app: .init(version: "0.3.0", demo: true, support: "/demo"),
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
@@ -38,6 +38,7 @@ struct ControlServerTests {
                 sends: review.sends.map { StateReport.Send($0, in: review) }
             )
             report.sidebar = StateReport.Sidebar(thread: shown, width: 340)
+            report.screen = hasVideo ? .player : .home
             return report
         }
 
@@ -160,6 +161,16 @@ struct ControlServerTests {
             hasVideo = true
         }
 
+        func goHome() async {
+            calls.append("home")
+            hasVideo = false
+        }
+
+        func openDemo() async throws(AppRefusal) {
+            try record("demo")
+            hasVideo = true
+        }
+
         func play() throws(AppRefusal) {
             try record("play")
             playing = true
@@ -198,12 +209,14 @@ struct ControlServerTests {
         ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
     }
 
-    /// A listener queue nobody sends to: the fake app has no reviews on disk.
-    static func noListeners() -> ListenerQueue {
-        ListenerQueue(
+    /// A listener queue nobody sends to, the same one at each request: the
+    /// fake app has no reviews on disk.
+    static func noListeners() -> @MainActor () -> ListenerQueue {
+        let queue = ListenerQueue(
             desk: ReviewDesk(library: Library(layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true)))),
             layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
         )
+        return { queue }
     }
 
     private func answer(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {
@@ -264,7 +277,7 @@ struct ControlServerTests {
     func stateJSON() async throws {
         app.time = 10
         var state = try object(await answer(.state, json: true).reply.output)
-        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.2.0", "demo": true, "support": "/demo"])
+        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.3.0", "demo": true, "support": "/demo"])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
             == ["path": "/videos/sample.mp4", "contentHash": "abcdef0123", "title": "sample", "duration": 21.233, "contextNote": ""])
@@ -276,6 +289,8 @@ struct ControlServerTests {
         ]])
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
+        #expect(state["recents"] as? [AnyHashable] == [])
+        #expect(state["screen"] as? String == "player")
         #expect(state["listener"] as? [String: AnyHashable] == [
             "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
         ])
@@ -283,12 +298,14 @@ struct ControlServerTests {
         app.hasVideo = false
         state = try object(await answer(.state, json: true).reply.output)
         #expect(state["video"] is NSNull)
+        #expect(state["screen"] as? String == "home")
     }
 
     @Test("state and app status answer lines without --json")
     func lines() async {
         #expect(await answer(.state).reply.output == """
-            \(AppIdentity.appName) 0.2.0, demo data in /demo
+            \(AppIdentity.appName) 0.3.0, demo data in /demo
+            screen: player
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
             transcript: none
@@ -296,10 +313,11 @@ struct ControlServerTests {
             listener: absent, 0 sends waiting, 0 taken
             threads: 1 (0 queued)
               #0 General t-abcdef01-0 -
+            recents: 0
 
             """)
         #expect(await answer(.appStatus).reply.output == """
-            running: \(AppIdentity.appName) 0.2.0
+            running: \(AppIdentity.appName) 0.3.0
             data: demo, /demo
             video: /videos/sample.mp4
             lease: free
@@ -462,6 +480,7 @@ struct ControlServerTests {
                 m-abcdef01-2 person message queued: Earlier
               #1 at 0:12.5 t-abcdef01-1 queued
                 m-abcdef01-1 person message queued: Later
+            recents: 0
 
             """))
 

@@ -237,7 +237,8 @@ crop() {
 }
 
 # The rule that keeps the person's data safe. Nothing else may run when the
-# app is not on demo data.
+# app is not on demo data. Only `app open --demo` makes a demo run (it marks
+# the launch with HAVOOCH_DEMO_RUN=1); a HAVOOCH_SUPPORT_DIR alone is not one.
 require_demo() {
     run operator app status --json
     if [ "$code" -eq 0 ] && jq -e '.demo == true' "$stdout" >/dev/null 2>&1; then

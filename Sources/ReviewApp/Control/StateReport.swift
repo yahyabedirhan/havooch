@@ -16,6 +16,13 @@ nonisolated struct StateReport: Encodable, Equatable {
         var support: String
     }
 
+    /// What the window shows: the player with a video open, else home.
+    /// The home screen and the first launch's empty state are both home:
+    /// the screen with no video.
+    enum Screen: String, Encodable, Equatable {
+        case home, player
+    }
+
     struct Video: Encodable, Equatable {
         var path: String
         var contentHash: String
@@ -222,6 +229,34 @@ nonisolated struct StateReport: Encodable, Equatable {
         var playing: Bool
     }
 
+    /// One recent video, as the home screen shows it and `state` reports it.
+    struct Recent: Encodable, Equatable {
+        /// The absolute path it was last opened at.
+        var path: String
+        /// The file's name without its extension.
+        var title: String
+        var contentHash: String
+        /// When the person last opened it.
+        var openedAt: Date
+        /// The playhead's last position, in seconds.
+        var position: Double
+        /// Whether the file is still at `path`.
+        var available: Bool
+
+        /// `video`, with whether its file is there now.
+        init(_ video: RecentVideo) {
+            let url = URL(fileURLWithPath: video.path)
+            path = video.path
+            title = url.deletingPathExtension().lastPathComponent
+            contentHash = video.contentHash
+            openedAt = video.openedAt
+            position = StateReport.milliseconds(video.position)
+            available = FileManager.default.fileExists(atPath: video.path)
+        }
+
+        var url: URL { URL(fileURLWithPath: path) }
+    }
+
     /// The open video's transcript: where it comes from and how far it is.
     struct Transcript: Encodable, Equatable {
         /// `voiceover`, `subtitles` or `speech`.
@@ -339,6 +374,11 @@ nonisolated struct StateReport: Encodable, Equatable {
     var queue: [String]
     /// The open video's sends, in the order they were sent.
     var sends: [Send]
+    /// The recent videos of this run's data folder, the newest first; the
+    /// app's model fills it in.
+    var recents: [Recent] = []
+    /// What the window shows; the app's model fills it in.
+    var screen: Screen = .home
 
     init(
         app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, popover: Popover? = nil,
@@ -360,13 +400,14 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, sidebar
+        case app, screen, lease, listener, video, player, popover, threads, queue, sends
+        case transcript, theme, sidebar, recents
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(app, forKey: .app)
+        try container.encode(screen, forKey: .screen)
         try container.encode(lease, forKey: .lease)
         try container.encode(listener, forKey: .listener)
         try container.encode(theme, forKey: .theme)
@@ -378,6 +419,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(threads, forKey: .threads)
         try container.encode(queue, forKey: .queue)
         try container.encode(sends, forKey: .sends)
+        try container.encode(recents, forKey: .recents)
     }
 
     // MARK: - state
@@ -389,14 +431,26 @@ nonisolated struct StateReport: Encodable, Equatable {
     var lines: String {
         """
         \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
+        screen: \(screen.rawValue)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
         \(theme.map { $0.line + "\n" } ?? "")threads: \(threadLines)
+        recents: \(recentLines)
 
         """
+    }
+
+    /// The recent videos, one line each: `sample at 0:12, 2026-10-06T…, /videos/sample.mp4`.
+    private var recentLines: String {
+        let lines = recents.map { recent in
+            let gone = recent.available ? "" : " unavailable"
+            return "  \(recent.title) at \(TimeCode.text(recent.position)), "
+                + "\(recent.openedAt.formatted(.iso8601))\(gone) \(recent.path)"
+        }
+        return ([String(recents.count)] + lines).joined(separator: "\n")
     }
 
     /// `listener: listening (Claude Code), 0 sends waiting, 1 taken`.
@@ -486,7 +540,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     /// `seconds` to the millisecond: a time read back from the player
     /// carries the noise of its timescale.
-    private static func milliseconds(_ seconds: Double) -> Double {
+    fileprivate static func milliseconds(_ seconds: Double) -> Double {
         (seconds * 1000).rounded() / 1000
     }
 }

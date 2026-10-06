@@ -78,7 +78,7 @@ struct LeaseServerTests {
     // MARK: - Operator requests
 
     @Test("an operator request from another holder is refused, naming the holder and when the lease ends, with nothing done", arguments: [
-        ControlRequest.appOpen, .appQuit, .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause,
+        ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 3), .screenshot(path: "/tmp/shot.png", appearance: nil), .contextSet(text: "A note"),
     ])
     func refusesAnotherHolder(request: ControlRequest) async {

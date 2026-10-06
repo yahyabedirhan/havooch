@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 
 /// Loads and saves what the app keeps between runs: the reviews, the
-/// outbox and the last open video, at the paths its `SupportLayout` gives.
+/// outbox and the recent videos, at the paths its `SupportLayout` gives.
 /// Every save writes the whole file to a
 /// temporary one and renames it over the old one: a reader, and a run that
 /// ends half way, see the old file or the new one, never a part of one.
@@ -31,6 +31,9 @@ public final class Library {
     /// eight digits: a listener's command names an id, whose prefix names
     /// its video.
     private var index: [String: String] = [:]
+    /// The content hash of each video with a review on disk, by the path
+    /// its review records: `recent.json` named a path only.
+    private var paths: [String: String] = [:]
     /// The sends on disk with a message the listener hasn't finished, in
     /// the order they were sent, as the reviews read at launch.
     private var unfinished: [SendRef] = []
@@ -90,6 +93,7 @@ public final class Library {
 
     private func note(_ review: VideoReview) {
         index[review.hash8] = review.video.contentHash
+        paths[review.video.path] = review.video.contentHash
     }
 
     // MARK: - The outbox
@@ -118,26 +122,112 @@ public final class Library {
         try write(Kept(content: outbox), to: layout.outboxFile)
     }
 
-    // MARK: - The last open video
+    // MARK: - Recent videos
 
-    private struct Recent: Codable {
+    /// How many recent videos are kept.
+    public static let recentLimit = 10
+
+    private struct Recents: Codable {
+        var videos: [RecentVideo]
+    }
+
+    /// The last open video, as `recent.json` kept it before the list.
+    private struct FormerRecent: Codable {
         var path: String
     }
 
-    /// The path of the video that was open last; nil when there's none, or
-    /// the file doesn't read.
-    public func recent() -> URL? {
-        guard FileManager.default.fileExists(atPath: layout.recentFile.path),
-              let kept: Kept<Recent> = try? read(layout.recentFile), kept.content.path.hasPrefix("/")
-        else { return nil }
-        return URL(fileURLWithPath: kept.content.path)
+    /// The recent videos, the newest first, as the last save left them;
+    /// nil until the first read.
+    private var recentList: [RecentVideo]?
+    /// Whether `recents.json` is a newer build's, which is left as it is.
+    private var recentsAreNewer = false
+
+    /// The recent videos, the newest first: at most `recentLimit`. Empty
+    /// when there are none, or `recents.json` doesn't read. The first read
+    /// on a folder with only `recent.json` makes its video the one entry
+    /// and deletes `recent.json`.
+    public func recents() -> [RecentVideo] {
+        if let recentList { return recentList }
+        var list: [RecentVideo] = []
+        let file = layout.recentsFile
+        if FileManager.default.fileExists(atPath: file.path) {
+            do throws(Failure) {
+                let kept: Kept<Recents> = try read(file)
+                list = Array(kept.content.videos.prefix(Self.recentLimit))
+            } catch {
+                recentsAreNewer = isNewer(file)
+            }
+        } else {
+            list = migrateFormerRecent()
+        }
+        recentList = list
+        return list
     }
 
-    /// Remembers `video` as the last open one. It's a convenience: when it
-    /// can't be written, the next launch opens no video.
-    public func saveRecent(_ video: URL) {
-        guard !isNewer(layout.recentFile) else { return }
-        try? write(Kept(content: Recent(path: video.path)), to: layout.recentFile)
+    /// Puts `video` first on the recent videos, opened at `time`. A video
+    /// already on the list, by its content, moves to the front with its new
+    /// path and keeps its position. It's a convenience: when it can't be
+    /// written, the list stays as it was on disk.
+    public func recordOpened(_ video: URL, contentHash: String, at time: Date) {
+        var list = recents()
+        let position = list.first { $0.contentHash == contentHash }?.position ?? 0
+        list.removeAll { $0.contentHash == contentHash }
+        list.insert(RecentVideo(path: video.path, contentHash: contentHash, openedAt: time, position: position), at: 0)
+        saveRecents(Array(list.prefix(Self.recentLimit)))
+    }
+
+    /// Keeps `seconds` as the last position of the recent video with
+    /// `contentHash`. A video not on the list saves nothing.
+    public func savePosition(_ seconds: Double, of contentHash: String) {
+        var list = recents()
+        guard let index = list.firstIndex(where: { $0.contentHash == contentHash }), list[index].position != seconds else { return }
+        list[index].position = seconds
+        saveRecents(list)
+    }
+
+    /// Takes the video with `contentHash` off the recent videos. Its review
+    /// stays on disk.
+    public func removeRecent(_ contentHash: String) {
+        let list = recents()
+        guard list.contains(where: { $0.contentHash == contentHash }) else { return }
+        saveRecents(list.filter { $0.contentHash != contentHash })
+    }
+
+    private func saveRecents(_ list: [RecentVideo]) {
+        guard !recentsAreNewer else { return }
+        recentList = list
+        try? write(Kept(content: Recents(videos: list)), to: layout.recentsFile)
+    }
+
+    /// The one entry `recent.json` gives, then `recent.json` deleted. Its
+    /// content hash is the one of the review that records its path, else
+    /// the file's own; a video that's neither gives no entry. A newer
+    /// build's file is left as it is.
+    private func migrateFormerRecent() -> [RecentVideo] {
+        let file = layout.formerRecentFile
+        guard FileManager.default.fileExists(atPath: file.path), !isNewer(file) else { return [] }
+        var list: [RecentVideo] = []
+        if let kept: Kept<FormerRecent> = try? read(file), kept.content.path.hasPrefix("/"),
+           let hash = paths[kept.content.path] ?? Self.hashOfFile(at: kept.content.path) {
+            let opened = (try? FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate]) as? Date
+            list = [RecentVideo(path: kept.content.path, contentHash: hash, openedAt: opened ?? Date(), position: 0)]
+            do throws(Failure) {
+                try write(Kept(content: Recents(videos: list)), to: layout.recentsFile)
+            } catch {
+                // Read again next time.
+                return list
+            }
+        }
+        try? FileManager.default.removeItem(at: file)
+        return list
+    }
+
+    private static func hashOfFile(at path: String) -> String? {
+        #if canImport(CryptoKit)
+        ContentHash.of(URL(fileURLWithPath: path))
+        #else
+        nil
+        #endif
     }
 
     // MARK: - Files

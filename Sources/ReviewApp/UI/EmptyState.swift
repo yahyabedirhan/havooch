@@ -7,8 +7,6 @@ import SwiftUI
 /// build with no bundled demo leaves the button out.
 struct EmptyState: View {
     let model: AppModel
-    @State private var isTargeted = false
-    @Environment(\.palette) private var palette
 
     var body: some View {
         ContentUnavailableView {
@@ -32,16 +30,30 @@ struct EmptyState: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay { dropOutline }
-        .animation(.smooth(duration: 0.15), value: isTargeted)
-        .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            model.openForPerson(url)
-            return true
-        } isTargeted: { isTargeted = $0 }
+        .videoDropTarget(model)
+    }
+}
+
+/// The stage with no video takes a dropped video: the empty state and the
+/// home screen alike. A dashed outline over it shows while a file is
+/// dragged over it.
+private struct VideoDropTarget: ViewModifier {
+    let model: AppModel
+    @State private var isTargeted = false
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .overlay { dropOutline }
+            .animation(.smooth(duration: 0.15), value: isTargeted)
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first else { return false }
+                model.openForPerson(url)
+                return true
+            } isTargeted: { isTargeted = $0 }
     }
 
-    /// The drop target, over the empty state while a file is over it.
+    /// The drop target, over the stage while a file is over it.
     @ViewBuilder private var dropOutline: some View {
         if isTargeted {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -52,5 +64,12 @@ struct EmptyState: View {
                 .transition(.opacity)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+extension View {
+    /// Takes a video dropped anywhere on this view, with the drop outline.
+    func videoDropTarget(_ model: AppModel) -> some View {
+        modifier(VideoDropTarget(model: model))
     }
 }

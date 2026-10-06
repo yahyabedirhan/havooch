@@ -17,6 +17,12 @@ nonisolated struct AppRefusal: Error, Equatable {
 protocol AppControlling: AnyObject {
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
+    /// Goes home, as a click on the Havooch mark does: the video closes
+    /// and an in-app demo is left. Shows a closed window.
+    func goHome() async
+    /// Runs the demo in the same window, as "Try the Demo" does. Shows a
+    /// closed window.
+    func openDemo() async throws(AppRefusal)
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
@@ -87,8 +93,16 @@ final class ControlServer {
 
     let socket: URL
     private let app: any AppControlling
-    /// The listener's side: the open `wait` and the sends in line.
-    private let listeners: ListenerQueue
+    /// The listener's side on the data the app is on now: the open `wait`
+    /// and the sends in line. Asked at each request, since an in-app demo
+    /// switches the app's data (L27).
+    private let currentListeners: @MainActor () -> ListenerQueue
+    /// The listener's side on the data the app is on now.
+    private var listeners: ListenerQueue { currentListeners() }
+    /// The queue that handed out each send whose reply is being written:
+    /// its `written` or `undelivered` goes back there, also when the app
+    /// switched its data meanwhile.
+    private var deliveredBy: [SendRef: ListenerQueue] = [:]
     private let screenshotter: any Screenshotting
     private let quit: @MainActor () -> Void
     /// The time the lease is decided at, and the zone its refusals name it in.
@@ -119,14 +133,10 @@ final class ControlServer {
         var timeout: Task<Void, Never>?
     }
 
-    /// What the app does at launch before it answers its first request:
-    /// opening the last video again. Nil when there's nothing to wait for.
-    var ready: Task<Void, Never>?
-
     init(
         socket: URL,
         app: any AppControlling,
-        listeners: ListenerQueue,
+        listeners: @escaping @MainActor () -> ListenerQueue,
         screenshotter: any Screenshotting,
         lease: ControlLease = ControlLease(),
         indicator: AgentControlIcon = AgentControlIcon(),
@@ -136,7 +146,7 @@ final class ControlServer {
     ) {
         self.socket = socket
         self.app = app
-        self.listeners = listeners
+        currentListeners = listeners
         self.screenshotter = screenshotter
         self.lease = lease
         self.indicator = indicator
@@ -160,9 +170,6 @@ final class ControlServer {
     /// is made. `connection` names the connection the request came over,
     /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
-        // The app is still opening its last video: a command sees the app
-        // with it open, not the moment before.
-        await ready?.value
         let message: ControlMessage
         do throws(ControlProtocolError) {
             message = try ControlMessage.decode(data)
@@ -196,6 +203,19 @@ final class ControlServer {
                 let line = "\(AppIdentity.appName) quit"
                 let output = json ? StateReport.json(Output(quit: true)) : line + "\n"
                 return Answer(reply: ControlReply(ok: true, output: output, lease: held), quits: true)
+            case .appHome:
+                await app.goHome()
+                let state = app.state()
+                let count = state.recents.count
+                return done(
+                    "home, \(count) recent video\(count == 1 ? "" : "s"), \(state.app.demo ? "demo data" : "your data")",
+                    Output(app: state.app, screen: state.screen), json
+                )
+            case .appDemo:
+                try await app.openDemo()
+                let state = app.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) on demo data" } ?? "opened the demo"
+                return done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
             case .playerOpen(let path):
                 try await app.open(URL(fileURLWithPath: path))
                 let state = app.state()
@@ -257,8 +277,10 @@ final class ControlServer {
                     + (delivered ? "taken by the listener" : "waiting for a listener")
                 return done(line, Output(send: send), json)
             case .wait(let timeout):
-                switch await listeners.wait(by: message.holder, timeout: timeout, connection: connection) {
+                let queue = listeners
+                switch await queue.wait(by: message.holder, timeout: timeout, connection: connection) {
                 case .send(let ref, let payload):
+                    deliveredBy[ref] = queue
                     return Answer(reply: .done(payload), delivered: ref)
                 case .ranOut:
                     return Answer(reply: .ranOut)
@@ -322,6 +344,8 @@ final class ControlServer {
 
     /// What an action prints with `--json`: only the parts it changed.
     private struct Output: Encodable {
+        var app: StateReport.App?
+        var screen: StateReport.Screen?
         var video: StateReport.Video?
         var player: StateReport.Player?
         var path: String?
@@ -444,7 +468,7 @@ final class ControlServer {
     /// A `wait`'s reply that carried a send and couldn't be written: the
     /// listener never got the send, so it's first in its line again.
     func undelivered(_ answer: Answer) {
-        if let ref = answer.delivered { listeners.undelivered(ref) }
+        if let ref = answer.delivered { handedBack(ref).undelivered(ref) }
         guard let granted = answer.granted, let term = lease.current(at: now()),
               term.holder.key == granted.holder.key, term.taken == granted.taken else { return }
         _ = lease.release(by: granted.holder, at: now())
@@ -453,7 +477,12 @@ final class ControlServer {
     /// A reply was written to its client: a send it carried is taken from
     /// now on.
     func written(_ answer: Answer) {
-        if let ref = answer.delivered { listeners.written(ref) }
+        if let ref = answer.delivered { handedBack(ref).written(ref) }
+    }
+
+    /// The queue that handed out `ref`, which hears how its reply went.
+    private func handedBack(_ ref: SendRef) -> ListenerQueue {
+        deliveredBy.removeValue(forKey: ref) ?? listeners
     }
 
     /// The client of `connection` closed its socket while its request was

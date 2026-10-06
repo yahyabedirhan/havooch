@@ -29,6 +29,7 @@ Shipyard's rules, unchanged:
 ## Demo mode and screenshots
 
 - `app open --demo <folder>` runs the app on a separate support folder and writes a pointer so later commands reach the demo's socket. Plain `app open` removes the pointer and returns to the person's own data.
+- `app demo` runs the demo in the running app's window, as "Try the Demo" does, and `app home` goes home and leaves it (0.3.0, #69). Both are operator commands.
 - `screenshot <abs.png> [--appearance light|dark]` captures only the app's own window through ScreenCaptureKit.
 - Accessibility and System Events stay closed to agents. The CLI is the only way in.
 

@@ -27,7 +27,7 @@ struct SendDeliveryTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model, listeners: model.listeners, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
     }

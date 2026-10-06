@@ -24,7 +24,7 @@ struct ThemeDeskTests {
     private func model() -> (AppModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: layout.root.path])
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: model.listeners,
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)

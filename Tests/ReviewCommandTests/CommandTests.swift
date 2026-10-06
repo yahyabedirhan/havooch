@@ -9,6 +9,8 @@ import Testing
 struct CommandTests {
     @Test("each command sends its request", arguments: [
         (["state"], ControlRequest.state),
+        (["app", "home"], .appHome),
+        (["app", "demo"], .appDemo),
         (["control", "take"], .controlTake(waitSeconds: nil)),
         (["control", "take", "--wait", "30"], .controlTake(waitSeconds: 30)),
         (["control", "release"], .controlRelease),
@@ -161,6 +163,8 @@ struct CommandTests {
         #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
         #expect(run("state", "--json") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "quit") == CommandResult(error: line, exitCode: 1))
+        #expect(run("app", "home") == CommandResult(error: line, exitCode: 1))
+        #expect(run("app", "demo") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "status") == CommandResult(output: "not running\n"))
         #expect(run("app", "status", "--json") == CommandResult(output: "{\"running\":false}\n"))
     }
@@ -172,7 +176,7 @@ struct CommandTests {
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["screenshot", "/tmp/shot.png", "--window", "inspector"],
-        ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"],
+        ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--hide-agent-indicator"],
@@ -336,16 +340,18 @@ struct CommandTests {
         defer { run.cleanUp() }
         #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
         #expect(CommandTable.usageText.contains("havooch player seek <seconds|mm:ss>"))
+        #expect(CommandTable.usageText.contains("havooch app home "))
+        #expect(CommandTable.usageText.contains("havooch app demo "))
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("--version prints 0.2.0 without asking the app, as JSON with --json")
+    @Test("--version prints 0.3.0 without asking the app, as JSON with --json")
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.2.0\n"))
+        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.3.0\n"))
         #expect(HavoochCLI.run(["--version", "--json"], environment: run.environment)
-            == CommandResult(output: "{\n  \"version\" : \"0.2.0\"\n}\n"))
+            == CommandResult(output: "{\n  \"version\" : \"0.3.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
 
@@ -466,7 +472,7 @@ struct AppCommandTests {
         defer { run.cleanUp() }
         let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
         #expect(run("app", "open", "--demo", demo.path) == CommandResult(output: Self.status))
-        #expect(run.launcher.launches == [[SupportFolder.overrideVariable: demo.path]])
+        #expect(run.launcher.launches == [[SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]])
         #expect(apps.running == [demo.standardizedFileURL.path])
         #expect(FileManager.default.fileExists(atPath: demo.path))
         #expect(DemoPointer.recorded(in: run.support)?.path == demo.path)
@@ -493,7 +499,7 @@ struct AppCommandTests {
 
         let handover = try #require(ControlLease.handover(term).first)
         #expect(run.launcher.launches == [
-            [SupportFolder.overrideVariable: demo.path, handover.key: handover.value],
+            [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1", handover.key: handover.value],
             [handover.key: handover.value],
         ])
         #expect(ControlLease(environment: run.launcher.launches[0], at: Date(timeIntervalSince1970: 30))

@@ -29,19 +29,38 @@ final class AppModel: AppControlling {
     }
 
     let engine = PlayerEngine()
+    /// The data the run is on now: the support folder it started on, or
+    /// the demo folder while an in-app demo runs (L27).
+    private(set) var data: DataFolder
     /// The open video's review, and the one path for changing it.
-    let desk: ReviewDesk
+    var desk: ReviewDesk { data.desk }
     /// The listener's side: the sends in line and whether an agent is
     /// there for them.
-    let listeners: ListenerQueue
-    /// The transcripts of the videos opened in this run.
-    let transcripts: TranscriptDesk
-    /// The active theme, the pin and the overrides.
+    var listeners: ListenerQueue { data.listeners }
+    /// The transcripts of the videos opened on this data in this run.
+    var transcripts: TranscriptDesk { data.transcripts }
+    /// The active theme, the pin and the overrides: on the folder the run
+    /// started on, also during an in-app demo.
     let themes: ThemeDesk
-    /// Where this run keeps its data: the person's own, or a demo's.
-    let support: URL
-    /// Whether this run is on demo data (`app open --demo`).
-    let isDemo: Bool
+    /// Where the run keeps its data now: the person's own, or a demo's.
+    var support: URL { data.support }
+    /// The folder the run started on: the person's, or the one
+    /// `app open --demo` named. The control socket and the theme stay on
+    /// it, and leaving an in-app demo comes back to it.
+    let launchSupport: URL
+    /// Where "Try the Demo" keeps the demo's data.
+    let demoFolder: URL
+    /// The video "Try the Demo" opens: the one bundled in the app, nil in
+    /// a build that has none.
+    let demoVideo: URL?
+    /// Whether the run started on demo data (`app open --demo`).
+    let isDemoRun: Bool
+    /// Whether an in-app demo runs: "Try the Demo" switched the run to
+    /// the demo folder.
+    private(set) var isInAppDemo = false
+    /// Whether the run is on demo data: started there, or in an in-app
+    /// demo. The header's demo words follow it.
+    var isDemo: Bool { isDemoRun || isInAppDemo }
     private(set) var video: OpenVideo?
     /// The message being written; nil while the popover is closed.
     var draft: Draft?
@@ -96,7 +115,12 @@ final class AppModel: AppControlling {
     /// popover on a moment points at the playhead on it.
     var trackArea: CGRect = .zero
 
-    @ObservationIgnored private let layout: SupportLayout
+    /// Shows the player's window when it's closed; the app sets it.
+    @ObservationIgnored var showWindow: () -> Void = {}
+
+    private var layout: SupportLayout { data.layout }
+    /// Turns a video's sound into lines, on every data folder of the run.
+    @ObservationIgnored private let speech: any SpeechRecognizing
     /// The message the popover is queueing: its pictures are being
     /// written. A send waits for it.
     @ObservationIgnored private var committing: Task<Void, Never>?
@@ -108,16 +132,27 @@ final class AppModel: AppControlling {
     /// The files the Open panel offers: what the spec names.
     static let videoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, UTType("com.apple.m4v-video")].compactMap(\.self)
 
-    /// `speech` turns a video's sound into lines when it has no sidecar;
-    /// tests give their own.
-    init(environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer()) {
-        support = SupportFolder.app(environment: environment)
-        isDemo = SupportFolder.moved(environment: environment) != nil
-        layout = SupportLayout(root: support)
-        desk = ReviewDesk(library: Library(layout: layout))
-        listeners = ListenerQueue(desk: desk, layout: layout)
-        transcripts = TranscriptDesk(layout: layout, speech: speech)
-        themes = ThemeDesk(layout: layout)
+    /// The run on the support folder `environment` names: demo data when
+    /// `app open --demo` launched it (`SupportFolder.isDemoRun`). `speech`
+    /// turns a video's sound into lines when it has no sidecar, and
+    /// `demoFolder` is where "Try the Demo" keeps its data and
+    /// `demoVideo` the video it opens; tests give their own.
+    init(
+        environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer(),
+        demoFolder: URL = DemoRun.folder(), demoVideo: URL? = DemoRun.video()
+    ) {
+        launchSupport = SupportFolder.app(environment: environment)
+        isDemoRun = SupportFolder.isDemoRun(environment: environment)
+        self.demoFolder = demoFolder
+        self.demoVideo = demoVideo
+        self.speech = speech
+        data = DataFolder(support: launchSupport, speech: speech)
+        themes = ThemeDesk(layout: SupportLayout(root: launchSupport))
+        listenToAgent()
+    }
+
+    /// What the agent says on the data the run is on shows as a notice.
+    private func listenToAgent() {
         listeners.announce = { [weak self] notice in self?.raise(notice) }
     }
 
@@ -155,7 +190,11 @@ final class AppModel: AppControlling {
 
     // MARK: - Actions, for the person and the operator alike
 
+    /// Opens `url` on the data the run is on when it's asked. Refused when
+    /// the run switches to other data (the demo, or back) before it's open,
+    /// so a video never lands on data it wasn't opened for.
     func open(_ url: URL) async throws(AppRefusal) {
+        let data = self.data
         let url = url.standardizedFileURL
         var isFolder: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
@@ -172,23 +211,30 @@ final class AppModel: AppControlling {
         // queued on the video they were written on, before it goes.
         closePopover(.momentChanged)
         await committing?.value
-        let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
-        try await engine.load(url)
+        try needData(data, for: url)
+        let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
+        // Where the person left the video that goes, before the player takes the new one.
+        savePosition()
+        let closesBefore = closes
+        loads += 1
+        do {
+            try await engine.load(url)
+        } catch {
+            loads -= 1
+            throw error
+        }
+        loads -= 1
+        guard self.data.support == data.support, closes == closesBefore else {
+            // The switch, or going home, closed the video; the player stays empty.
+            if video == nil { engine.close() }
+            try needData(data, for: url)
+            throw AppRefusal("\(url.path) didn't open: the video was closed meanwhile")
+        }
         // The review as it is now, not as it was before the load: a
         // listener may have answered on one of its threads meanwhile.
-        var review = desk.review(of: contentHash) ?? found
+        var review = data.desk.review(of: contentHash) ?? found
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
-        draft = nil
-        selection = nil
-        shown = nil
-        isDrawingRegion = false
-        // The composer's words were on the video that was open.
-        composerDrafts = [:]
-        isComposerGeneral = false
-        drawnRegion = nil
-        // They point at threads of the video that was open.
-        notices = []
-        isContextShown = false
+        forgetVideoViews()
         sidecar = ContextReader.sidecar(beside: url)
         let frameRate = 1 / engine.frameDuration
         // The same content, where and as it is now: a renamed or moved copy
@@ -197,8 +243,19 @@ final class AppModel: AppControlling {
             contentHash: contentHash, title: title, duration: engine.duration, path: url.path, frameRate: frameRate
         )
         desk.open(review)
-        desk.library.saveRecent(url)
+        desk.library.recordOpened(url, contentHash: contentHash, at: Date())
+        recentsRevision += 1
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
+        // A control command's open is seen when the window was closed.
+        showWindow()
+    }
+
+    /// The player's window closed; the app and this model stay. The video
+    /// pauses and keeps its position for its recent-video entry, and the
+    /// Dock icon shows it again where it was.
+    func windowClosed() {
+        engine.pause()
+        savePosition()
     }
 
     /// The hash of the file at `url`, read off the main actor: it reads the
@@ -208,52 +265,192 @@ final class AppModel: AppControlling {
         ContentHash.of(url)
     }
 
-    /// At launch: the video that was open last opens again, paused at its
-    /// start, with its history. One whose file is gone, or that doesn't
-    /// open any more, leaves the app with no video.
-    /// At launch: the video the launch names (`DemoRun.openVariable`, a
-    /// demo started from the empty screen), else the last one.
-    func openAtLaunch(environment: [String: String]) async {
-        guard let path = environment[DemoRun.openVariable], path.hasPrefix("/") else {
-            await openRecent()
-            return
-        }
-        do throws(AppRefusal) {
-            try await open(URL(fileURLWithPath: path))
-        } catch {
-            problem = Problem(title: "The video didn't open", reason: error.reason)
+    /// Refused when the run is no longer on `data`, the data `url` was
+    /// being opened on.
+    private func needData(_ data: DataFolder, for url: URL) throws(AppRefusal) {
+        guard self.data.support == data.support else {
+            throw AppRefusal("\(url.path) didn't open: the app switched to the data in \(self.data.support.path) meanwhile")
         }
     }
 
-    /// "Try the demo": the bundled sample video on demo data. A demo run
-    /// opens it here; a run on the person's data starts a demo copy of the
-    /// app and quits, so demo threads never mix with the person's.
+    /// What the window showed on the video that was open goes: the
+    /// popover, the picked and shown threads, the drawn region, the
+    /// composer's words and the notices.
+    private func forgetVideoViews() {
+        draft = nil
+        selection = nil
+        shown = nil
+        isDrawingRegion = false
+        composerDrafts = [:]
+        isComposerGeneral = false
+        drawnRegion = nil
+        notices = []
+        isContextShown = false
+    }
+
+    /// "Try the Demo": the bundled sample video on demo data, in this
+    /// window (`openDemo`). The person is shown why when it doesn't open.
     func tryDemo() {
-        guard let video = DemoRun.video() else {
-            problem = Problem(title: "The demo didn't open", reason: "this build has no bundled demo video; run `make bundle`")
-            return
-        }
-        if isDemo {
-            openForPerson(video)
-            return
-        }
-        DemoRun.launch(video: video, normalSupport: support) { [weak self] reason in
-            if let reason {
-                self?.problem = Problem(title: "The demo didn't open", reason: reason)
-            } else {
-                NSApp.terminate(nil)
+        Task {
+            do throws(AppRefusal) {
+                try await openDemo()
+            } catch {
+                problem = Problem(title: "The demo didn't open", reason: error.reason)
             }
         }
     }
 
-    func openRecent() async {
-        guard video == nil, let url = desk.library.recent(), FileManager.default.fileExists(atPath: url.path) else { return }
+    /// "Try the Demo" and `app demo`: the bundled sample video on demo
+    /// data, in this window (`enterDemo`). Refused in a build with no
+    /// bundled video.
+    func openDemo() async throws(AppRefusal) {
+        guard let demoVideo else {
+            throw AppRefusal("this build has no bundled demo video; run `make bundle`")
+        }
+        try await enterDemo(demoVideo)
+    }
+
+    /// Goes home: the open video's position is saved and the video closes,
+    /// and an in-app demo is left, so the window shows the home screen on
+    /// the person's data. As opening another video does, words in the
+    /// popover are first queued on their video, the composer's words go,
+    /// and the queue stays on the video's review. A run started with
+    /// `app open --demo` stays on its folder. Shows a closed window, for
+    /// `app home`.
+    func goHome() async {
+        if isInAppDemo {
+            await leaveDemo()
+        } else {
+            closePopover(.momentChanged)
+            await committing?.value
+            savePosition()
+            closeVideo()
+        }
+        // A file moved since home last showed turns its card unavailable.
+        refreshRecents()
+        showWindow()
+    }
+
+    /// A click on the Havooch mark in the header, and File > Close Video:
+    /// `goHome`.
+    func goHomeForPerson() {
+        Task { await goHome() }
+    }
+
+    /// Enters the demo: the run switches to the demo folder, in the same
+    /// window, and opens `video` there, so demo threads never mix with the
+    /// person's (L17, L27). A run already on demo data (an in-app demo, or
+    /// `app open --demo`) opens it where it is. When the video doesn't
+    /// open, the demo this call entered is left again.
+    func enterDemo(_ video: URL) async throws(AppRefusal) {
+        let entered = isDemo ? false : await switchData(to: demoFolder)
         do throws(AppRefusal) {
-            try await open(url)
+            try await open(video)
         } catch {
-            problem = Problem(title: "The last video didn't open", reason: error.reason)
+            if entered { await leaveDemo() }
+            throw error
         }
     }
+
+    /// Leaves an in-app demo: its video closes and the run is back on the
+    /// folder it started on. Nothing changes otherwise, so a run started
+    /// with `app open --demo` stays on its folder.
+    func leaveDemo() async {
+        guard isInAppDemo else { return }
+        await switchData(to: launchSupport)
+    }
+
+    /// Puts the run on the data in `folder`. Words in the popover are first
+    /// queued on the video they were written on, on that video's data;
+    /// then the video closes. The listener's held `wait` and `ask`s end as
+    /// when the app quits, so their commands connect again and reach the
+    /// new data. Returns whether this call switched: another one may have
+    /// switched to `folder` while the words were queued.
+    @discardableResult
+    private func switchData(to folder: URL) async -> Bool {
+        closePopover(.momentChanged)
+        await committing?.value
+        guard data.support != folder else { return false }
+        // Where the video was left, in the recent videos of its own data.
+        savePosition()
+        closeVideo()
+        let left = data
+        data = DataFolder(support: folder, speech: speech)
+        isInAppDemo = folder != launchSupport
+        listenToAgent()
+        // The home screen shows the recent videos of the new data.
+        recentsRevision += 1
+        left.listeners.announce = nil
+        left.listeners.stop()
+        return true
+    }
+
+    /// No video is open any more: the player is empty, and what was on
+    /// the video goes with it.
+    private func closeVideo() {
+        closes += 1
+        engine.close()
+        video = nil
+        desk.close()
+        forgetVideoViews()
+        sidecar = nil
+    }
+
+    // MARK: - Recent videos
+
+    /// The recent videos of this run's data folder, the newest first, with
+    /// whether each file is there now: the home screen's cards.
+    var recents: [StateReport.Recent] {
+        // Read so a view that shows the list follows its changes.
+        _ = recentsRevision
+        return desk.library.recents().map(StateReport.Recent.init)
+    }
+
+    /// Grows each time the recent videos change: `recents` reads the
+    /// library, which observation doesn't follow.
+    private var recentsRevision = 0
+
+    /// How many `open`s are loading their video into the player.
+    @ObservationIgnored private var loads = 0
+    /// Grows each time the open video closes: an `open` whose load a close
+    /// overtook leaves the player empty.
+    @ObservationIgnored private var closes = 0
+
+    /// Keeps where the playhead is as the open video's last position, for
+    /// its recent-video entry. Opening another video, closing the window,
+    /// quitting and going home call it. Nothing with no video.
+    func savePosition() {
+        // While a load runs, the player already holds the next video's
+        // time; `open` saved this one's before the load.
+        guard let video, loads == 0 else { return }
+        desk.library.savePosition(engine.time, of: video.contentHash)
+        recentsRevision += 1
+    }
+
+    /// Takes the video with `contentHash` off the recent videos. Its review
+    /// stays on disk.
+    func removeRecent(_ contentHash: String) {
+        desk.library.removeRecent(contentHash)
+        recentsRevision += 1
+    }
+
+    /// Has the home screen read the recent videos again, with whether each
+    /// file is there now: going home and the app coming to the front call
+    /// it, since nothing tells the app that a file moved.
+    func refreshRecents() {
+        recentsRevision += 1
+    }
+
+    /// A click on a recent video's card: opens its video. A card whose
+    /// file is not there does nothing; its trash button removes it.
+    func openRecent(_ recent: StateReport.Recent) {
+        guard recent.available else { return }
+        openForPerson(recent.url)
+    }
+
+    /// The recent videos' thumbnails, made as their cards first show and
+    /// kept in memory for this run.
+    let thumbnails = Thumbnails()
 
     func play() throws(AppRefusal) {
         try needVideo()
@@ -444,6 +641,8 @@ final class AppModel: AppControlling {
         report.transcript = transcript
         report.theme = themes.report
         report.sidebar = sidebarReport
+        report.recents = recents
+        report.screen = StageContent(hasVideo: video != nil, hasRecents: !report.recents.isEmpty).screen
         return report
     }
 
@@ -458,6 +657,9 @@ final class AppModel: AppControlling {
     private func queueMessage(
         text: String, time: Double?, region: Region?, thread: ThreadID?
     ) async throws(AppRefusal) -> VideoReview.Written {
+        // The message and its pictures stay on the data its video is on,
+        // also when the run switches to other data meanwhile.
+        let (desk, layout) = (self.desk, self.layout)
         guard let video, let asset = engine.asset, var trial = desk.review else { throw Self.noVideo }
         // What the write will do, refused before any picture is written.
         let planned: VideoReview.Written
@@ -508,7 +710,8 @@ final class AppModel: AppControlling {
                 throw AppRefusal("couldn't keep the crop of the region: \(error.localizedDescription)")
             }
         }
-        selection = written.thread.id
+        // A pin is picked out only while its video is still the open one.
+        if self.video == video { selection = written.thread.id }
         return written
     }
 
@@ -1286,8 +1489,11 @@ final class AppModel: AppControlling {
     }
 
     /// Opens `url` for the person, who is shown why when it doesn't play.
+    /// The Open panel and a drop open the person's video on their own
+    /// data: an in-app demo is left first.
     func openForPerson(_ url: URL) {
         Task {
+            await leaveDemo()
             do throws(AppRefusal) {
                 try await open(url)
             } catch {

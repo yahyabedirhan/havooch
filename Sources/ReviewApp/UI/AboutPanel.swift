@@ -21,7 +21,7 @@ enum AboutPanel {
         ])
         let before = Set(NSApp.windows.map(ObjectIdentifier.init))
         if activating { NSApp.activate() }
-        // The build number is the version: an empty one keeps "(0.2.0)" off.
+        // The build number is the version: an empty one keeps "(0.3.0)" off.
         NSApp.orderFrontStandardAboutPanel(options: [.credits: text, .version: ""])
         // AppKit makes the panel on first use and has no public way to it:
         // it's the window that wasn't there before.

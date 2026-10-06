@@ -53,19 +53,29 @@ struct HeaderWords: Equatable {
 }
 
 /// The header's title, at the window's leading edge beside the traffic
-/// lights: the cat mark, a video icon and the file name, and under it a folder icon and
-/// the folder, with the full path on hover.
+/// lights: the cat mark, which goes home, a video icon and the file name,
+/// and under it a folder icon and the folder, with the full path on hover.
 struct TitleView: View {
     let words: HeaderWords
+    /// A click on the cat mark goes home on it (`AppModel.goHome`).
+    let model: AppModel
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 8) {
-            HavoochMark(size: 22)
+            Button {
+                model.goHomeForPerson()
+            } label: {
+                HavoochMark(size: 22)
+            }
+            .buttonStyle(.plain)
+            .pressedByKeys(in: model) { model.goHomeForPerson() }
+            .help("Home")
+            .accessibilityLabel("Home")
             lines
+                .accessibilityElement(children: .combine)
         }
         .padding(.leading, 4)
-        .accessibilityElement(children: .combine)
     }
 
     /// The file name, and under it the folder.

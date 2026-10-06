@@ -12,12 +12,12 @@ struct LocationTests {
         try body(folder)
     }
 
-    @Test("the app is Havooch 0.2.0, with no prototype suffix in its name, bundle id or support folder")
+    @Test("the app is Havooch 0.3.0, with no prototype suffix in its name, bundle id or support folder")
     func identity() {
         #expect(AppIdentity.appName == "Havooch")
         #expect(AppIdentity.bundleID == "com.yahyabedirhan.havooch")
         #expect(SupportFolder.app(environment: [:]).lastPathComponent == "Havooch")
-        #expect(Version.app == "0.2.0")
+        #expect(Version.app == "0.3.0")
     }
 
     /// Whether the tests run on the Mac, where the support folder is
@@ -40,6 +40,15 @@ struct LocationTests {
         #expect(SupportFolder.app(environment: ["HAVOOCH_SUPPORT_DIR": "/tmp/demo"]).path == "/tmp/demo")
         #expect(SupportFolder.moved(environment: ["HAVOOCH_SUPPORT_DIR": "demo"]) == nil)
         #expect(SupportFolder.moved(environment: [:]) == nil)
+    }
+
+    @Test("a run is the demo only when app open --demo marked its launch beside the moved folder")
+    func demoRun() {
+        let moved = ["HAVOOCH_SUPPORT_DIR": "/tmp/demo"]
+        #expect(SupportFolder.isDemoRun(environment: moved.merging(["HAVOOCH_DEMO_RUN": "1"]) { _, new in new }))
+        #expect(!SupportFolder.isDemoRun(environment: moved))
+        #expect(!SupportFolder.isDemoRun(environment: ["HAVOOCH_DEMO_RUN": "1"]))
+        #expect(!SupportFolder.isDemoRun(environment: [:]))
     }
 
     @Test("the demo pointer is recorded, read and removed")

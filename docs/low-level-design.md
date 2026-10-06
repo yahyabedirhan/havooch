@@ -128,7 +128,7 @@ Entities (hold changing state or enforce rules):
 
 | Entity | Owns | Lives in |
 |---|---|---|
-| `AppModel` (orchestrator) | the open video, the open popover and its draft, the thread the sidebar shows (none for the thread list), the notices | ReviewApp |
+| `AppModel` (orchestrator) | the open video, the open popover and its draft, the thread the sidebar shows (none for the thread list), the notices, the `DataFolder` the run is on and whether an in-app demo runs (L27) | ReviewApp |
 | `PlayerEngine` | the AVPlayer, the time, playing or paused, the frame time of a moment | ReviewApp |
 | `VideoReview` | one video's threads, messages and sends, and every rule about them | ReviewCore |
 | `ReviewDesk` | the one path for changing a `VideoReview`: change, save, publish | ReviewApp |
@@ -146,16 +146,17 @@ Fields, not entities: `Region`, `Message`, `MessageState`, `Send`, `SendRef`, `P
 
 ```text
 AppModel ──owns──▶ PlayerEngine
-AppModel ──owns──▶ ReviewDesk ──holds──▶ VideoReview ──contains──▶ ReviewThread ──contains──▶ Message
+AppModel ──owns──▶ DataFolder (support folder, SupportLayout; replaced on entering and leaving the demo, L27)
+DataFolder ──holds──▶ ReviewDesk ──holds──▶ VideoReview ──contains──▶ ReviewThread ──contains──▶ Message
                         │                     └──contains──▶ Send ──refers to──▶ Message (by id); keeps the transcript per thread
                         └──saves through──▶ Library ──paths from──▶ SupportLayout
-AppModel ──owns──▶ ListenerQueue ──holds──▶ Outbox ──refers to──▶ Send (SendRef: id + content hash)
+DataFolder ──holds──▶ ListenerQueue ──holds──▶ Outbox ──refers to──▶ Send (SendRef: id + content hash)
                         ├──changes reviews through──▶ ReviewDesk
                         └──reads──▶ ContextReader, SupportLayout (image paths)
-AppModel ──owns──▶ TranscriptDesk ──asks──▶ TranscriptSources        (read at send time, not at delivery)
-AppModel ──owns──▶ ThemeDesk ──resolves with──▶ ThemeCatalog; ──reads──▶ ThemeFiles, Settings
+DataFolder ──holds──▶ TranscriptDesk ──asks──▶ TranscriptSources        (read at send time, not at delivery)
+AppModel ──owns──▶ ThemeDesk ──resolves with──▶ ThemeCatalog; ──reads──▶ ThemeFiles, Settings   (on the folder the run started on)
 SocketListener ──hands bytes to──▶ ControlServer ──holds──▶ ControlLease
-ControlServer ──calls──▶ AppModel (operator and free), ListenerQueue (listener)
+ControlServer ──calls──▶ AppModel (operator and free), the ListenerQueue the AppModel is on now (listener)
 UI views ──read──▶ AppModel, ReviewDesk, ListenerQueue, PlayerEngine, ThemeDesk (as Palette)   ──call──▶ AppModel
 ```
 
@@ -242,11 +243,11 @@ Sources/
     ControlClient.swift            one exchange over the socket, skipping heartbeat spaces; the ControlTransport seam
     ControlSocket.swift            where control.sock is; follows the demo pointer
     DemoPointer.swift              demo.json in the normal support folder
-    SupportFolder.swift            the support folder; HAVOOCH_SUPPORT_DIR moves it
+    SupportFolder.swift            the support folder; HAVOOCH_SUPPORT_DIR moves it; HAVOOCH_DEMO_RUN marks the demo run (L27)
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
     HavoochCLI.swift               run(arguments, environment) → output, error, exit code
-    AppCommands.swift              app status | open [--demo] | quit, state, --version
+    AppCommands.swift              app status | open [--demo] | home | demo | quit, state, --version (L49)
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
     CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | choose | open | show | list, context set
@@ -280,14 +281,15 @@ Sources/
     VoiceoverSource.swift, SubtitleSource.swift, SpeechSource.swift, AppleSpeechRecognizer.swift
   ReviewStore/
     SupportLayout.swift            every path under a support folder (pure), and the pending name of a picture (L19)
-    Library.swift                  reviews, the outbox, recent, settings: load and save, the schema version; the hash-prefix index
+    Library.swift                  reviews, the outbox, the recent videos, settings: load and save, the schema version; the hash-prefix index
+    RecentVideo.swift              one recent video: path, content hash, opened time, last position
     ContentHash.swift              SHA-256 of the file, streamed
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
     Settings.swift                 the pinned theme, the overrides, the sidebar width; settings.json load and save
   ReviewApp/
-    HavoochApp.swift               @main; the one window, Settings (L42); the menu commands
+    HavoochApp.swift               @main; the one window, Settings (L42); the menu commands, File > Close Video (L49); the app stays when the window closes, the Dock icon shows it (L47)
     AppModel.swift                 the orchestrator; every action a person or an operator can take
     Draft.swift                    `AppModel.Draft`: the open popover's time, text and region (view state, never
                                    saved; its thread number is `AppModel.draftThreadNumber`); `PopoverClose`; `FrameMark`
@@ -296,7 +298,8 @@ Sources/
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
     ThemeDesk.swift                the active theme, pin and overrides; watches Themes/ and settings.json; AppModel's theme actions
     ContextReader.swift            the sidecar context file plus the note
-    DemoRun.swift                  "Try the demo": the bundled sample, a demo folder under the temporary folder, the launch (L27)
+    DataFolder.swift               the data a run is on: support folder, SupportLayout, ReviewDesk, ListenerQueue, TranscriptDesk (L27)
+    DemoRun.swift                  "Try the demo": the bundled sample, the demo folder under the temporary folder (L17)
     Notice.swift                   one notice: its thread, the agent's name, the words, when it fades
     Player/
       PlayerEngine.swift           AVPlayer: open, play, pause, exact seek, time, frameTime(of:)
@@ -311,18 +314,26 @@ Sources/
       ThemeReport.swift            the theme in `state`, `theme list` and `theme set`
       Screenshotter.swift          the app window, or Settings (L42), through ScreenCaptureKit, in an appearance
     UI/
-      RootView.swift               stage, player bar, sidebar, header, all on the `window` surface; injects the Palette; a pinned theme's kind as the window's colour
+      RootView.swift               stage, player bar, sidebar, header, all on the `window` surface; with no video the home screen or the empty state (`StageContent`); injects the Palette; a pinned theme's kind as the window's colour
                                    scheme; `SidebarColumn`: the threads, the composer and the footer, resizable, the width kept in settings, proto-1's spring in and out, a
                                    hairline on its leading edge; `Hairline`, one pixel of `separator`
       Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
       SettingsView.swift           the Settings window (⌘,) with the cat mark, the name and version, and the theme picker View › Theme shares; `SettingsWindow` opens and finds it for app control (L42)
       MessageEditor.swift          the one text view messages are written in, its keys, and `MessageField`'s look with the system focus ring (L42)
-      EmptyState.swift             `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo", the drop target over it (L42)
+      EmptyState.swift             `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo"; `videoDropTarget`, the drop target and its
+                                   outline, which the home screen shares (L42)
+      Home/
+        HomeScreen.swift           `StageContent` (player, home or empty, and whether the sidebar shows); `HomeScreen`: the cat mark, the name,
+                                   "Open a Video…", "Try the Demo" and the "Recent Videos" grid of adaptive columns (L48)
+        RecentCard.swift           one recent video: thumbnail at 16:9, name without extension, relative time, the path on hover; the context
+                                   menu; dimmed with the "unavailable" symbol and a trash button when its file is gone (L48)
+        Thumbnails.swift           the cards' thumbnails, made with `AVAssetImageGenerator` and kept in memory only, by content hash and position (L48)
       AgentMark.swift              `AgentLogoImage`, the logo loader (Contents/Resources/AgentLogos/, else Packaging/AgentLogos/);
                                    `AgentMark`, a known agent's logo at any size; `AgentAvatar`, the logo or the neutral symbol
-      HavoochMark.swift            the cat mark at any size (the small cut at 32 pt and under), on the empty screen, in Settings and in the header
+      HavoochMark.swift            the cat mark at any size (the small cut at 32 pt and under), on the empty screen, the home screen, in Settings and in the header, where it goes home (L49)
       AboutPanel.swift             Havooch › About Havooch: the standard About panel with the app icon and the name's story; found for `screenshot --window about`
+      PlayerWindow.swift           the player's window: found, shown again when closed, its close watched (L47); `PlayerWindowOpener` hands it SwiftUI's `openWindow`
       KeyPress.swift               `pressedByKeys(in:isFocused:action:)`: a control tells the model when it has the keyboard focus and what pressing it does, and can follow its focus to show itself (L45)
       Header/
         TitleView.swift            the cat mark at the leading edge; video icon and file name; folder icon and folder, shortened in the middle, or "Demo"
@@ -400,7 +411,7 @@ As proto-2, with these changes:
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
-| operator | `appOpen`, `appQuit`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentOpen(text, region?)`, `commentCompose(text, region?, general)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadChoose(thread, choice)`, `threadOpen(thread, frame?)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
+| operator | `appOpen`, `appQuit`, `appHome`, `appDemo`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentOpen(text, region?)`, `commentCompose(text, region?, general)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadChoose(thread, choice)`, `threadOpen(thread, frame?)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state, text?)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?, choices)` | none |
 
 - A thread reference on the wire (`commentAdd.thread`, `threadAnswer`, `threadChoose`, `threadOpen`, `threadShow`, `reply`, `ask`) is a `ThreadRef`: a full thread id, or a bare number for the open video (`0` is General) (L5). The CLI sends the text as written; the server resolves it.
@@ -412,6 +423,8 @@ As proto-2, with the spec's names and outputs:
 
 | Command | Prints | `--json` |
 |---|---|---|
+| `app home` (L49) | `home, 3 recent videos, your data` (`demo data` on a run started with `app open --demo`) | `{"app": {…}, "screen": "home"}` |
+| `app demo` (L49) | `opened sample.mp4 (0:21.233) on demo data` | `{"app": {…}, "screen": "player", "video": {…}, "player": {…}}` |
 | `comment add <text> [--at] [--region] [--thread]` | `m-f92cbb2a-3 queued on #2 at 0:12` (`… on the region 0.25,0.2,0.3,0.25`) | `{"message": {…}, "thread": {"id", "number"}}` |
 | `comment edit <message-id> <text>` | `m-f92cbb2a-3 edited` | `{"message": {…}}` |
 | `comment delete <message-id>` | `m-f92cbb2a-3 deleted` | `{"deleted": "m-…"}` |
@@ -581,7 +594,7 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
   control.sock                           while the app runs (ReviewWire)
   demo.json                              the demo pointer; only in the normal folder (ReviewWire)
   outbox.json                            the Outbox
-  recent.json                            the last open video
+  recents.json                           the 10 recent videos, the newest first: path, content hash, opened time, last position
   settings.json                          pinned theme or null, token overrides, sidebar width
   Themes/<any name>.json                 user themes
   videos/<contentHash>/
@@ -594,7 +607,8 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
 ```swift
 public struct SupportLayout: Sendable {
     public let root: URL
-    public var outboxFile, recentFile, settingsFile, themesFolder, videosFolder: URL
+    public var outboxFile, recentsFile, settingsFile, themesFolder, videosFolder: URL
+    public var formerRecentFile: URL                                    // recent.json, read once into recents.json
     public func folder(_ hash: String) -> URL
     public func reviewFile(_ hash: String) -> URL
     public func transcriptFile(_ hash: String) -> URL
@@ -604,7 +618,8 @@ public struct SupportLayout: Sendable {
 }
 ```
 
-- `Library(layout:)` only loads and saves: reviews, the outbox (through `Outbox.reconcile` with the unfinished sends on disk), `recent.json` and `settings.json`. Its `init` reads every `review.json` once for the hash-prefix index (`contentHash(prefix:)`) and the unfinished sends. It writes nothing until the first save.
+- `Library(layout:)` only loads and saves: reviews, the outbox (through `Outbox.reconcile` with the unfinished sends on disk), `recents.json` and `settings.json`. Its `init` reads every `review.json` once for the hash-prefix index (`contentHash(prefix:)`), the path index and the unfinished sends. It writes nothing until the first save.
+- The recent videos: `recents()`, `recordOpened(url, contentHash:, at:)`, `savePosition(seconds, of:)` and `removeRecent(contentHash)`. At most `recentLimit` (10) entries, the newest first. Opening a video on the list moves it to the front with its new path and keeps its position; the match is by content hash. Removing an entry leaves its review on disk. The list is read once and kept in memory. On the first read with no `recents.json` and a `recent.json`, the old path becomes the one entry, with the hash of the review that records that path, else of the file itself (no entry when neither is there), and the file's modification time as its opened time; then `recent.json` is deleted. A `recents.json` from a newer schema is never written over.
 - Every save is atomic, pretty-printed, sorted keys, ISO 8601 with milliseconds, with `schemaVersion`. `review.json` starts at schema 1 again for this product (L9); the prototypes' files are never read, since they live in other support folders.
 - A file from a newer schema, or one that does not read, is never written over (proto-2 D140).
 - `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); `ThemeFiles.user(layout)` reads `Themes/`. A file that does not read is skipped with its reason.
@@ -616,7 +631,11 @@ public struct SupportLayout: Sendable {
 
 | Method | Rules it owns | Refuses |
 |---|---|---|
-| `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, remember as recent; closes any popover | a file AVPlayer cannot play; a review that does not read |
+| `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, save the position of the video that goes, put it first on the recent videos; closes any popover; then `showWindow()`, so a control command's open shows a closed window (L47) | a file AVPlayer cannot play; a review that does not read |
+| `enterDemo(video)`, `leaveDemo()` | the in-app demo (L27): switch the `DataFolder` to the demo folder and open the video there, or close it and switch back to `launchSupport`; a run started on demo data never switches. `openForPerson` (the Open panel, a drop) calls `leaveDemo()` first | as `open(url)` |
+| `goHome()`, `goHomeForPerson()` | home (L49): an in-app demo is left (`leaveDemo`); otherwise the popover's words are queued on their video, the position saved and the video closed (`closeVideo`, which also closes `ReviewDesk`'s open review). Then `refreshRecents()`, so a moved file's card turns unavailable, and `showWindow()`. `goHomeForPerson` runs it from the header's mark and File > Close Video | |
+| `openDemo()` | "Try the Demo" and `app demo` (L49): `enterDemo` on the bundled video (`demoVideo`, `DemoRun.video()` by default) | no bundled video; as `enterDemo` |
+| `windowClosed()` | the player's window closed (Cmd+W): pause and save the position; the video, the playhead and the sidebar stay for the Dock icon (L47) | |
 | `play()`, `seek(seconds)`, `togglePlay()` to play, `scrub`, `skip`, `step(frames)`, `showThread(thread)` with a frame, `addMessage` that seeks, `open(url)` | each one is a **moment change**: it first calls `closePopover(.momentChanged)` (D 2.2, D 2.3); `seek` and `open` wait until those words are queued. Pausing is none (L23) | no video; a time outside the video |
 | `startDraft(region?)` | C, the Comment button, the end of a drag: pause, fix the frame time, open the popover on the thread at that frame (or the next number) with an empty draft. C over an open popover does nothing; a new region closes it as a click outside (L24) | no video |
 | `closePopover(reason)` | `.clickOutside`: queue the text; `.discard` (× or Escape): drop it; `.momentChanged`: queue text at its own time and region, drop an empty draft and its region. An empty draft is only closed in every case (D 1.4). A click on the frame, the start of a drag, and `OutsideClicks` are clicks outside | |
@@ -653,6 +672,7 @@ public struct SupportLayout: Sendable {
 ```json
 {
   "app":      { "version": "0.2.0", "demo": true, "support": "/abs/demo" },
+  "screen":   "player",
   "lease":    { "holder": {…}, "taken": "…", "ends": "…", "secondsLeft": 48, "waiting": 0 },
   "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingSends": 0, "takenSends": 0, "activity": [] },
   "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "overrides": 0 },
@@ -667,9 +687,12 @@ public struct SupportLayout: Sendable {
                   "messages": [ { "id": "m-f92cbb2a-1", "author": "person", "kind": "message", "text": "…", "at": "…",
                                   "state": "queued", "region": null, "cropPath": null, "sendId": null } ] } ],
   "queue":    [ "m-f92cbb2a-1" ],
-  "sends":    [ { "id": "s-…", "sentAt": "…", "messageIds": [ "m-…" ] } ]
+  "sends":    [ { "id": "s-…", "sentAt": "…", "messageIds": [ "m-…" ] } ],
+  "recents":  [ { "path": "/abs/sample.mp4", "title": "sample", "contentHash": "…", "openedAt": "…", "position": 10.017, "available": true } ]
 }
 ```
+
+- Recent videos: `AppModel.open` calls `Library.recordOpened` (the newest first, matched by content hash, at most 10). `AppModel.savePosition()` keeps the player's time on the open video's entry; `open` calls it for the video that goes, `AppDelegate` on every window's `willClose` and in `applicationWillTerminate`, and `goHome()` (L49). `AppModel.recents` is the list as `StateReport.Recent` (path, title without the extension, content hash, opened time, position, `available`: whether the file is there now), read from `desk.library` on each call, so it belongs to the data folder the run is on; a revision counter makes views follow it. Nothing tells the app that a file moved, so `refreshRecents()` has the views read the list again, with each file's `available` as it is now: `goHome()` calls it, and `AppDelegate` on `applicationDidBecomeActive`, when the person comes back from Finder. `removeRecent(contentHash)` takes an entry off the list and leaves the review on disk. `openRecent(recent)` opens an available entry's video for the person and does nothing for one whose file is gone. The home screen shows the list (L48). `state` reports the list as `recents`, and its lines end with one line per entry. `state` reports `screen`: `player` with a video open, else `home`, for the home screen and the empty state alike (`StageContent.screen`, L49); its lines say `screen: home` under the first line.
 
 - `Screenshotter`, `PlayerEngine`, `PlayerSurface`, `FrameGrabber` (keyframe at the thread's time, crop cut from it in memory), `Shortcuts`, `ContextReader`, `TranscriptDesk` and `VideoFrameGeometry` keep proto-2's rules. `Shortcuts` adds proto-1's J and L (10 s back and forward) and the comma and the period (one frame), and `PlayerEngine` adds proto-1's speeds (0.5× to 2×, through `defaultRate`). proto-1's region-crop tests at several window sizes come with `VideoFrameGeometry`.
 
@@ -688,10 +711,11 @@ Each choice cites its decision; the views get every colour from `Palette` and ev
 | Conversation | A chat (L40), from variant 02. The person's messages trailing, 46 pt in from the leading side, in `bubblePerson` (16 pt corners, a 5 pt corner at the trailing foot for the tail), no avatar; a quiet line under the bubble holds the state chip (an answer: `Answer · sent at once` in `question`), the `Region` tag in `regionOutline` and the time. A queued message: a dashed `stateQueued` outline, `controlHover` on hover, Edit and Delete beside it on hover, edited in place (Return saves, Escape cancels). An answer: `question` at 15% with a 40% border. The agent's messages leading, 34 pt in from the trailing side, in `bubbleAgent` (the tail at the leading foot); the 24 pt avatar (the harness logo, else the sparkle) beside the last bubble of a run, the name (`agent`) and time over the first. A question: a card in `bubbleQuestion` with a `question` border at 32%, headed `<agent> asks`; an answered one at 80% opacity. A region message's crop under its bubble. Messages 8 pt apart, 4 pt inside a run of the agent's. The name and logo are the message's `sessionName`, else the listener's. A right-click: Edit, Delete (queued only), Copy. VoiceOver reads one element per message: writer, kind, state, words (`MessageVoice`), with the menu's actions. The thread popover shows the same `Conversation`. In the thread view only, an open question with choices has a row under it: `Quick reply` in `textTertiary`, then one capsule chip per choice in `question` at 12% (22% on hover) with a 45% border, wrapping; a click answers at once. The row hides while a rectangle is drawn and while a drawn one is in the composer (`isPointingAtRegion`), #46. | D 3.4 replaced (spec 0.2.0) |
 | Composer | Variant 02's composer at the sidebar's foot, above the footer, under a hairline (L41): a 22 pt target line (glyph, "New thread at 0:12", "Reply on #3", "Follow up on #3", or "Answer #3 · goes at once" in `question`), the `regionOutline` region chip with its ×, and in the list the General toggle (native borderless). The field: `field` with a `separator` border (`question` for an answer), 15 pt corners, the keys at its trailing foot, the system focus ring round the whole field; it grows from one line to about six. | L41 |
 | Footer | proto-3's line: presence pill (`Listening`, `Working`, `No listener`; hover names the agent), the newest activity in `textSecondary` beside it (#47; it takes the width first and truncates only when the count and Send leave no room), the queued count, Send. Same height as the player bar, a `separator` hairline above it inside that height (L36). | D 4.8, D 4.9 |
-| Header | Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `window` token, or the native toolbar when `window` is `system` (L26, L36, L37). | D 4.1 to D 4.4, D 4.7 |
+| Header | The cat mark at the leading edge, a button that goes home (`goHome`, help tag "Home", L49). Title: video icon, full file name with extension. Subtitle: folder icon, the folder shortened in the middle, full path on hover, "Demo" in demo mode. Floating group at the top right: agent-control icon (while held), "Open a Video…" (the `folder` symbol, the Open panel, L49), Context, sidebar toggle. proto-2's Context popover. The title is a toolbar item with no shared background; the band is the `window` token, or the native toolbar when `window` is `system` (L26, L36, L37). | D 4.1 to D 4.4, D 4.7 |
 | Notices | Top right of the stage, name the thread, open it on click, fade after 5 s, a question's too (L28). | D 4.10 |
 | Structure | One surface, `window`, for the header, the stage, the player bar, the sidebar and its footer, native in the default themes (L37); `separator` hairlines on the sidebar's leading edge and above the footer; bubbles only for messages; no bordered cards. | L36, L37, replaces D 5.9 |
-| Empty screen | The native `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo" (opens the bundled fixture in a demo folder under the user's temporary folder, L27). The whole stage is the drop target; a dashed accent outline shows over it while a file is over it (L42). | D 5.11 |
+| Empty screen | The native `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo" (switches the run to a demo folder under the user's temporary folder and opens the bundled fixture there, in the same window, L27). The whole stage is the drop target; a dashed accent outline shows over it while a file is over it (L42). | D 5.11 |
+| Home screen | With no video and one or more recent videos, in place of the empty screen (L48): the cat mark at 64 pt and the app's name, "Open a Video…" (the default button) and "Try the Demo", then "Recent Videos" over a grid of adaptive columns (200 to 300 pt) of 16:9 cards, the newest first. A card: the thumbnail on the `well` surface with a `separator` outline (`accent` on hover), the name without its extension, the relative time in `textSecondary`, the path as its help tag. An unavailable card: dimmed, `video.slash` in place of the thumbnail, "Unavailable" in place of the time, a trash button at its top-right corner. No sidebar. The whole screen is the drop target, with the empty screen's outline. | Spec 0.3.0 (#65) |
 
 ### The listener skill
 
@@ -948,7 +972,7 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L14 | The open popover's field answers at once when the thread has an open question, else it queues. | D 2.16 and D 3.6 for one field, with no second control. |
 | L15 | (Replaced by L46.) No unread marks. A notice and the thread's state carry the news. | The spec names none. proto-2's unread set was in memory only. |
 | L16 | A send is marked `taken` only after its reply was written; until then it is in flight and no other `wait` gets it. | proto-1's rule, which pairs with the heartbeat of D A.8: a dead listener never loses a send. |
-| L17 | "Try the demo" opens the fixture bundled in the app in a demo folder under the user's temporary folder. | The empty screen needs a demo with no command line (D 5.11), and demo data must never mix with the person's. |
+| L17 | "Try the demo" opens the fixture bundled in the app on the demo folder, `<temporary folder>/Havooch Demo`, in the same window (L27). The demo folder keeps its threads between demos. | The empty screen needs a demo with no command line (D 5.11), and demo data must never mix with the person's. |
 | L18 | Notices for General say `General · <agent>: …` and show General's thread view on click (L38). | General has no frame to open (D 4.10). |
 | L19 | A message's pictures are written under a pending name in `frames/` and renamed to `frames/<thread-id>.png` and `crops/<message-id>.png` once the review gave the ids. | The ids come from the review's counters, and a listener's `reply` written while the frame is read takes the next message number. Predicted names could be taken or overwritten; a rename on the main actor right after the write can't. |
 | L20 | `PlayerEngine` snaps the track's nominal frame rate to a whole rate or an NTSC rate (n × 1000 / 1001) when it is within 0.001 of one. | AVFoundation gives the rate as a `Float` a hair off (29.999998 for 30), which put 10.0 s in the frame before. |
@@ -958,7 +982,7 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L24 | A drag on the frame with the popover open is a click outside it: the words are queued on their region, or an empty popover goes, and the new rectangle opens a new popover. | D 1.4 for every click outside. proto-2 moved the open popover to the new region instead. |
 | L25 | The popover on a moment points at the playhead on the player bar's track, whose frame in the window the bar reports (`AppModel.trackArea`). | The bar's track sits between its buttons, not under the stage's whole width. |
 | L26 | (Replaced by L36: the band is `window`.) The `header` token paints the window's toolbar band (`toolbarBackground`), behind the title and the floating group. | The token was in the palette with no view; the header is a surface of its own, and a theme may set it apart from `window` (the built-in themes keep them equal). |
-| L27 | "Try the demo" on a run on the person's data starts a new copy of the app on `<temporary folder>/Havooch Demo`, with `HAVOOCH_OPEN_VIDEO` naming the bundled `Contents/Resources/Demo/sample.mp4`, records the demo pointer, and quits. A demo run opens the video itself. | The support folder is fixed for a run, and demo data must never mix with the person's (L17). The pointer lets `havooch` reach the demo copy as after `app open --demo`. |
+| L27 | (Replaces the relaunch of 0.2.0, spec 0.3.0 #65, ticket #67.) `AppModel` holds the run's data as a `DataFolder` it can replace: the support folder, its `SupportLayout`, the `ReviewDesk`, the `ListenerQueue` and the `TranscriptDesk`. `enterDemo(video)` ("Try the Demo") queues the popover's words on their video, closes it and switches to a new `DataFolder` on `<temporary folder>/Havooch Demo`, then opens the bundled `Contents/Resources/Demo/sample.mp4` there; `leaveDemo()` closes the demo's video and switches back to the folder the run started on (`launchSupport`). The Open panel and a drop (`openForPerson`) leave an in-app demo first; `open` itself, and so `havooch open`, opens on the data the run is on. The `ListenerQueue` left behind ends its held `wait` and `ask`s as `gone`, as on quit, so their commands connect again; `ControlServer` asks `AppModel` for the current queue at each request, and hands a send's `written` or `undelivered` back to the queue that handed it out. An `open` still under way when the data switches, or when going home closes the video, is refused, and the player's time is not saved as a position while a load runs, and a message being queued keeps its review and pictures on the data its video is on. The `ThemeDesk` and the control socket stay on `launchSupport`, and no demo pointer is recorded. `isDemo` is true during an in-app demo and on a demo run: `app open --demo` launches the app with `HAVOOCH_DEMO_RUN=1` beside `HAVOOCH_SUPPORT_DIR` (`SupportFolder.isDemoRun`). On a demo run, "Try the Demo" opens the demo video on its own folder and never switches; its launch, as every launch, opens no video (L47). A run with `HAVOOCH_SUPPORT_DIR` alone, as a check's scratch `make install` has, is a normal run on that folder: its "Try the Demo" switches to the in-app demo, and leaving it comes back to the scratch folder. `HAVOOCH_OPEN_VIDEO` is gone. | A second copy of the app closed the window and changed the Dock icon. The theme is a preference, not review data. One socket keeps `havooch` on the same app all the time. |
 | L28 | Every notice fades after 5 s, a question's too. The question stays open on its thread and in `state`. | D 4.10 says a notice fades; a question that stayed over the video had no way to close but a click (the 0.1.0 acceptance run). |
 | L29 | `thread open <thread> [--frame x,y,w,h]` opens a thread's popover on its frame, as a click on its pin or badge does; `--frame` first keeps the popover at that rectangle of the video area, as a drag and a resize leave it. An operator command, an addition to the contract. | The CLI cannot click, drag or resize. Without it the thread popover, its kept frame and its persistence can't be shown, checked or screenshotted in the real app. |
 | L30 | Only a popover on an existing thread drags and resizes. A popover that will start a thread opens at its placement and gets the handles once its first message is queued. | The frame is kept per thread (D 2.10); before the first message there is no thread to keep it on, and a frame held in the draft would be lost on every close. |
@@ -978,3 +1002,6 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L44 | The protocol version is 3. | 0.2.0 changed the requests' shape: `thread.expand` became `thread.show`, `state` names `sidebar.thread` in place of `sidebar.expanded`, and `screenshot` takes a `window` that a 0.1.0 app would ignore and capture the player's window. A 0.1.0 CLI or app that meets this one is told to reinstall, not given a wrong answer (L1). |
 | L45 | Space and Return press the control with the keyboard focus (ticket #52). Under keyboard navigation every focusable control in the player's window reports its focus through `pressedByKeys(in:action:)`: a thread row, a notice card, the header's symbol buttons (agent control, Context, the sidebar toggle), the thread view's Back, Previous and Next, a queued message's Edit and Delete and its editor's Cancel and Save, the composer's region × and General toggle, the footer's Send, the comment popover's Discard and Answer or Queue, the player bar's Play and Comment, the timeline's pins, and Stop in the agent-control popover. `AppModel` keeps the focused controls of the key window as a stack (`focusControl`, `blurControl`, `pressFocusedControl`): the last to take the focus is pressed, and `blurControl` removes only its own entry, so when a popover's control (Stop) loses the focus or goes, a control still focused in the player's window gets the keys again. `Shortcuts` gives Space, Return and Enter with no modifier to it (`pressControl`) in place of play, a new message or the row's own rule; `AppModel.focusedRow` is gone. An AppKit control that is the first responder (a pop-up button) takes those keys itself, only while keyboard navigation is on (`Shortcuts.isControlFocused`, `NSApp.isFullKeyboardAccessEnabled`): with it off a clicked AppKit control can stay first responder, and Space still plays and pauses. A queued message's Edit and Delete, hidden until hover, also show while either has the keyboard focus (`pressedByKeys`' `isFocused`), so a key never presses a button the person can't see. With no control focused, Space plays and pauses as before. | The player's key monitor sees every key before SwiftUI, so a focused button never got Space; one general rule replaces the thread row's own. |
 | L46 | Unread threads (ticket #48). `ReviewThread.lastSeen` is when the person last opened the thread's view, kept in the review file (`null` until then); `isUnread` is whether an agent message (`reply`, `ask`, an `ack`'s words on General) is newer than it, or there is one and it's `null`. `AppModel.shown`'s `didSet` calls `VideoReview.markSeen` with the time now, so a row click, Previous and Next, `thread show`, a pin, a badge and a notice all clear it; an agent message on the thread the sidebar shows is read as it comes (`raise`). A review file from before has no `lastSeen` key, and its agent messages count as read, so an update marks nothing. `state --json` reports `unread` per thread, and `state` ends a thread's line with `unread`. | Spec 0.2.0 (#36), ticket #48. The thread view is the one place the conversation shows in full; the popover shows the thread view too. Replaces L15. |
+| L47 | The window and launch (spec 0.3.0, ticket #66). `applicationShouldTerminateAfterLastWindowClosed` is false: Cmd+W closes the window, the app stays in the Dock with its `AppModel`, and Cmd+Q quits. `PlayerWindow` finds the player's window (titled, not a panel, not Settings; `Screenshotter` uses it too), watches `NSWindow.willCloseNotification` for it, which calls `AppModel.windowClosed()` to pause and save the position, and shows it again through SwiftUI's `openWindow`, captured when the window first appears. A click on the Dock icon with no window on screen shows it (`applicationShouldHandleReopen`); so does `open(url)`, through `AppModel.showWindow`, so a control command's open is seen, and `goHome()` (L49). `ControlServer.ready` is gone, since a launch opens nothing to wait for. Showing the window does not activate the app. A launch opens no video: the launch-time `openRecent()` and `openAtLaunch` are gone (`openRecent(_:)` is now a card's click, L48), and so is `HAVOOCH_OPEN_VIDEO`, since the demo runs in the same window (L27). | Spec 0.3.0, "The window and quitting": the window comes and goes, the app and its video stay. A control command must not take the person's focus from another app. |
+| L48 | The home screen (spec 0.3.0, ticket #70). `StageContent` decides what the stage shows: the player with a video, the home screen with none and one or more recent videos, else the empty state; the sidebar shows beside the player only. A card's click calls `AppModel.openRecent`, which does nothing for an entry whose file is gone; the trash button and "Remove from Recents" call `removeRecent`, which leaves the review on disk; "Show in Finder" selects the file in Finder. A thumbnail is the frame at the entry's position, or at 1 second when the position is 0 (`RecentCard.thumbnailTime`), inside the video's duration, at most 640 × 360 pixels, made when the card first shows by `Thumbnails` on `AppModel` and kept in memory for the run, keyed by content hash and position; nothing is written to disk. The relative time is `RelativeDateTimeFormatter`'s, "Just now" under a minute, and moves on each minute. Cards show no thread counts or unread dots. | Spec 0.3.0, "The home screen". The frame where the person stopped costs no more than the first frame. In memory only, so the support folder holds no cache to clean. |
+| L49 | Going home from the player (spec 0.3.0, ticket #69). `AppModel.goHome()` leaves an in-app demo (`leaveDemo`), or else queues the popover's words on their video, saves the position and closes the video; then it shows a closed window (`showWindow`). Words in the composer go and the queue stays on the video's review, as when another video opens. Closing a video also closes `ReviewDesk`'s open review, so `state` reports no threads with no video. Its callers: the cat mark at the header's leading edge (`TitleView`, a plain button, help tag "Home"), File > Close Video with Shift+Cmd+W (disabled with no video), and `havooch app home`. The header's floating group has "Open a Video…" with the `folder` symbol beside a video, which calls `openFromPanel()` and leaves an in-app demo as the Open panel does. `havooch app demo` runs `openDemo()`, what "Try the Demo" does, and its open shows a closed window. `app home` and `app demo` are operator requests (`app.home`, `app.demo`); the protocol version stays 3, since an older app refuses an unknown command in words. `state` reports `screen` (`StateReport.Screen`): `player` with a video, else `home`, the empty state included. | Spec 0.3.0, "Going home from the player". Cmd+W is the window's Close (L47), so Close Video takes Shift+Cmd+W. `app demo` lets the visual checks run "Try the Demo" without a click. One `screen` word for every screen with no video keeps `state` simple; `recents` tells the home screen from the empty state. |

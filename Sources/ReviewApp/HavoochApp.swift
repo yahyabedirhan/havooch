@@ -9,9 +9,10 @@ struct HavoochApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window(AppIdentity.appName, id: "main") {
+        Window(AppIdentity.appName, id: PlayerWindow.sceneID) {
             RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
                 .modifier(SettingsOpener(settings: delegate.settings))
+                .modifier(PlayerWindowOpener(window: delegate.window))
         }
         // A 16:9 video fills the stage beside the sidebar with no letterbox.
         .defaultSize(width: 1360, height: 730)
@@ -20,6 +21,7 @@ struct HavoochApp: App {
                 Button("Open…") { delegate.model.openFromPanel() }
                     .keyboardShortcut("o")
             }
+            CloseVideoCommand(model: delegate.model)
             AboutCommand()
             PlaybackCommands(model: delegate.model)
             ThemeMenu(model: delegate.model)
@@ -62,6 +64,20 @@ private struct PlaybackCommands: Commands {
     }
 }
 
+/// File > Close Video, Shift+Cmd+W: home, as the Havooch mark in the
+/// header goes (`AppModel.goHome`). Cmd+W stays the window's Close.
+private struct CloseVideoCommand: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandGroup(after: .saveItem) {
+            Button("Close Video") { model.goHomeForPerson() }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(model.video == nil)
+        }
+    }
+}
+
 /// View > Theme: follow the system appearance, or pin one theme. The
 /// same choice as Settings and `havooch theme set`.
 private struct ThemeMenu: Commands {
@@ -81,16 +97,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.
     let settings = SettingsWindow()
+    /// The player's window, which closes while the app runs on.
+    let window = PlayerWindow()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
+        model.showWindow = { [window] in window.show() }
+        window.watchClose { [model] in model.windowClosed() }
         Shortcuts.install(for: model)
         OutsideClicks.install(for: model)
         model.themes.followSystemAppearance()
         let server = ControlServer(
-            socket: ControlSocket.url(in: model.support), app: model, listeners: model.listeners,
+            // The socket stays on the folder the run started on, also during
+            // an in-app demo; the listener's requests go to the data the run is on.
+            socket: ControlSocket.url(in: model.launchSupport), app: model, listeners: { [model] in model.listeners },
             screenshotter: Screenshotter(indicator: lease, settings: settings),
             // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
             lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
@@ -102,8 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.server = server
             // A theme file or settings.json edited by hand shows at once.
             model.themes.startWatching()
-            // Only the one copy that has the socket touches the data.
-            server.ready = Task { await model.openAtLaunch(environment: ProcessInfo.processInfo.environment) }
+            // A launch opens no video: the window shows home.
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))
@@ -126,11 +147,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server?.stopLease()
     }
 
+    /// The person may have moved or deleted a recent video in Finder
+    /// meanwhile: the home screen reads the list again.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        model.refreshRecents()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        model.savePosition()
         server?.stop()
     }
 
+    /// Cmd+W closes the window and the app stays in the Dock, with its
+    /// model: the video, the playhead and the sidebar. Cmd+Q quits.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// A click on the Dock icon with the window closed shows it again, as
+    /// it was. Before the window has been on screen once, SwiftUI's own
+    /// reopen shows it.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        flag || !window.show()
     }
 }

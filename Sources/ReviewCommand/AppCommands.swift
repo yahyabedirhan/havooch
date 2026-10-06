@@ -2,7 +2,8 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// `havooch app status | open [--demo <folder>] | quit`, and `state`.
+/// `havooch app status | open [--demo <folder>] | home | demo | quit`, and
+/// `state`. `home` and `demo` are plain requests to the running app.
 /// `status` answers without the app; `open` launches it (through
 /// `AppLaunching`) when it doesn't run on the data asked for; `quit` waits
 /// until it's gone.
@@ -22,6 +23,16 @@ enum AppCommands {
             guard let folder = arguments.options["--demo"] else { return .appOpen(demo: nil) }
             guard !folder.isEmpty else { throw UsageError("`--demo` needs a folder") }
             return .appOpen(demo: URL(fileURLWithPath: folder, isDirectory: true, relativeTo: environment.workingDirectory).standardizedFileURL)
+        },
+        Command(name: "app home", synopsis: "app home", summary: "go home: close the video and leave the demo, as the Havooch mark does") {
+            arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.appHome)
+        },
+        Command(name: "app demo", synopsis: "app demo", summary: "run the demo in the same window, as \"Try the Demo\" does") {
+            arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.appDemo)
         },
         Command(name: "app quit", synopsis: "app quit", summary: "quit the app, and wait until it's gone") {
             arguments, _ throws(UsageError) in
@@ -128,7 +139,7 @@ enum AppCommands {
         case let answer: return HavoochCLI.result(of: answer)
         }
         var outcome: CommandResult?
-        var environment = [SupportFolder.overrideVariable: demo.path]
+        var environment = [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]
         for other in [context.support, previous].compactMap(\.self) where outcome == nil {
             switch quitIfRunning(context.client(in: other), context) {
             case .stayed(let refused): outcome = refused

@@ -25,14 +25,15 @@ struct PersistenceTests {
     }
 
     /// One run of the app on `support`: its model and the server in front
-    /// of it. With `reopening`, it opens the last video as a launch does.
+    /// of it. With `reopening`, the person opens the last video again; a
+    /// launch opens none by itself.
     private func run(
         on support: URL? = nil, reopening: Bool = false, speech: any SpeechRecognizing = SlowRecognizer()
     ) async -> (AppModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech)
-        if reopening { await model.openRecent() }
+        if reopening, let last = model.recents.first { try? await model.open(last.url) }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: model.listeners,
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -103,7 +104,7 @@ struct PersistenceTests {
 
     // MARK: - A restart
 
-    @Test("after a restart the last video is open again, paused at its start, with the same threads, messages, states, sends, popover frames and note")
+    @Test("after a restart the last video opened again is paused at its start, with the same threads, messages, states, sends, popover frames and note")
     func restart() async throws {
         defer { cleanUp() }
         let (model, server) = await run()
@@ -173,22 +174,114 @@ struct PersistenceTests {
         #expect(unread(again) == [false, false])
     }
 
-    @Test("a launch with no last video, or one whose file is gone, opens nothing, says nothing and writes nothing")
-    func nothingToReopen() async throws {
+    @Test("a launch opens nothing, says nothing and writes nothing, with or without a last video")
+    func launchOpensNothing() async throws {
         defer { cleanUp() }
-        let (empty, _) = await run(reopening: true)
+        let (empty, _) = await run()
         #expect(empty.video == nil)
         #expect(!FileManager.default.fileExists(atPath: support.path))
 
         let video = try copy(to: "videos")
         try await empty.open(video)
         // A video with no message yet has no review file.
-        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recent.json"])
-        try FileManager.default.removeItem(at: video)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])
 
-        let (again, _) = await run(reopening: true)
+        let (again, _) = await run()
         #expect(again.video == nil)
         #expect(again.problem == nil)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])
+    }
+
+    // MARK: - Recent videos
+
+    /// A second video, with content of its own.
+    static let showcase = MessageTests.fixture.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("showcase/halcyon-teaser.mp4")
+
+    @Test("opening a video puts it first on the recent videos, opening another keeps where the first was left, and state reports each one")
+    func recentVideos() async throws {
+        defer { cleanUp() }
+        let first = try copy(to: "first", as: "sample take.mp4")
+        let (model, _) = await run()
+        #expect(model.recents.isEmpty)
+        let before = Date()
+        try await model.open(first)
+        await model.engine.seek(to: 4)
+        try await model.open(Self.showcase)
+
+        #expect(model.recents.map(\.path) == [Self.showcase.path, first.path])
+        #expect(model.recents.map(\.title) == ["halcyon-teaser", "sample take"])
+        #expect(model.recents.map(\.position) == [0, 4])
+        #expect(model.recents.map(\.available) == [true, true])
+        #expect(model.recents.allSatisfy { $0.openedAt >= before.addingTimeInterval(-1) && $0.openedAt <= Date() })
+
+        let recents = try #require(try state(model)["recents"] as? [[String: Any]])
+        #expect(recents.count == 2)
+        #expect(Set(recents[1].keys) == ["path", "title", "contentHash", "openedAt", "position", "available"])
+        #expect(recents[1]["path"] as? String == first.path)
+        #expect(recents[1]["title"] as? String == "sample take")
+        #expect(recents[1]["position"] as? Double == 4)
+        #expect(recents[1]["available"] as? Bool == true)
+        #expect((recents[1]["openedAt"] as? String).flatMap { try? Date($0, strategy: .iso8601) } != nil)
+        #expect(model.state().lines.contains("recents: 2\n  halcyon-teaser at 0:00"))
+
+        // A new run reads the same list.
+        let (again, _) = await run()
+        #expect(again.recents.map(\.path) == [Self.showcase.path, first.path])
+        #expect(again.recents.map(\.position) == [0, 4])
+    }
+
+    @Test("savePosition keeps where the open video is on its recent entry; with no video it does nothing")
+    func recentPosition() async throws {
+        defer { cleanUp() }
+        let (model, _) = await run()
+        model.savePosition()
+        #expect(!FileManager.default.fileExists(atPath: support.path))
+
+        try await model.open(MessageTests.fixture)
+        await model.engine.seek(to: 2.5)
+        model.savePosition()
+        #expect(model.recents.map(\.position) == [2.5])
+        let (again, _) = await run()
+        #expect(again.recents.map(\.position) == [2.5])
+        // Opening it again keeps the position and doesn't add a second entry.
+        try await again.open(MessageTests.fixture)
+        #expect(again.recents.map(\.position) == [2.5])
+    }
+
+    @Test("a moved video is reported unavailable; removing a recent video takes it off the list and the state, and keeps its review")
+    func recentRemoval() async throws {
+        defer { cleanUp() }
+        let first = try copy(to: "first")
+        let (model, _) = await run()
+        try await model.open(first)
+        _ = try await model.addMessage(text: "Too fast here", at: 1)
+        let hash = try #require(model.video?.contentHash)
+        try await model.open(Self.showcase)
+        try FileManager.default.removeItem(at: first)
+
+        #expect(model.recents.map(\.available) == [true, false])
+        model.removeRecent(hash)
+        #expect(model.recents.map(\.path) == [Self.showcase.path])
+        #expect((try state(model)["recents"] as? [[String: Any]])?.count == 1)
+        let (again, _) = await run()
+        #expect(again.recents.map(\.path) == [Self.showcase.path])
+        #expect(try Library(layout: SupportLayout(root: support)).load(hash)?.threads.count == 2)
+    }
+
+    @Test("each data folder keeps its own recent videos: a demo's video never joins the person's list")
+    func recentVideosPerFolder() async throws {
+        defer { cleanUp() }
+        let demo = root.appendingPathComponent("demo", isDirectory: true)
+        let (demoRun, _) = await run(on: demo)
+        try await demoRun.open(MessageTests.fixture)
+        let (real, _) = await run()
+        try await real.open(Self.showcase)
+
+        #expect(real.recents.map(\.path) == [Self.showcase.path])
+        #expect(demoRun.recents.map(\.path) == [MessageTests.fixture.path])
+        let (demoAgain, _) = await run(on: demo)
+        #expect(demoAgain.recents.map(\.path) == [MessageTests.fixture.path])
     }
 
     // MARK: - The same video elsewhere
@@ -274,7 +367,7 @@ struct PersistenceTests {
         #expect(await listen(.wait(timeoutSeconds: 0), realServer).timedOut == true)
         // The real folder holds nothing of the demo's.
         let files = try FileManager.default.subpathsOfDirectory(atPath: support.path)
-        #expect(files.sorted() == ["outbox.json", "recent.json"])
+        #expect(files.sorted() == ["outbox.json", "recents.json"])
 
         let (again, _) = await run(on: demo, reopening: true)
         #expect(states(again).count == 3)
@@ -425,10 +518,14 @@ struct PersistenceTests {
         let half = try Data(contentsOf: file).prefix(120)
         try half.write(to: file)
 
-        let (again, later) = await run(reopening: true)
+        let (again, later) = await run()
+        do throws(AppRefusal) {
+            try await again.open(other)
+            Issue.record("a review that doesn't read opened")
+        } catch {
+            #expect(error.reason.contains("review.json doesn't read"))
+        }
         #expect(again.video == nil)
-        #expect(again.problem?.title == "The last video didn't open")
-        #expect(again.problem?.reason.contains("review.json doesn't read") == true)
         try await again.open(MessageTests.fixture)
         await #expect(throws: AppRefusal.self) { try await again.open(other) }
         #expect(again.video?.url == MessageTests.fixture.standardizedFileURL)

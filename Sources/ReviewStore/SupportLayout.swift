@@ -8,7 +8,7 @@ import ReviewCore
 /// file.
 ///
 ///     <root>/outbox.json                              the sends in line for the listener
-///     <root>/recent.json                              the path of the last open video
+///     <root>/recents.json                             the 10 recent videos, the newest first, with their last position
 ///     <root>/settings.json                            the pinned theme, token overrides, sidebar width
 ///     <root>/Themes/<any name>.json                   the person's own themes
 ///     <root>/videos/<contentHash>/review.json         one video's review
@@ -27,7 +27,10 @@ public struct SupportLayout: Equatable, Sendable {
     }
 
     public var outboxFile: URL { root.appendingPathComponent("outbox.json") }
-    public var recentFile: URL { root.appendingPathComponent("recent.json") }
+    public var recentsFile: URL { root.appendingPathComponent("recents.json") }
+    /// The last open video as builds before the recent videos kept it: read
+    /// once into `recentsFile`, then deleted.
+    public var formerRecentFile: URL { root.appendingPathComponent("recent.json") }
     public var settingsFile: URL { root.appendingPathComponent("settings.json") }
     public var themesFolder: URL { root.appendingPathComponent("Themes", isDirectory: true) }
     public var videosFolder: URL { root.appendingPathComponent("videos", isDirectory: true) }
