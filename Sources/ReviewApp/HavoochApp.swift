@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        model.savePosition()
         server?.stop()
     }
 

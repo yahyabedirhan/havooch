@@ -202,7 +202,7 @@ struct LibraryTests {
         let library = Library(layout: SupportLayout(root: support))
         #expect(try library.load(Self.hash) == nil)
         #expect(library.loadOutbox() == Outbox())
-        #expect(library.recent() == nil)
+        #expect(library.recents().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: support.path))
     }
 
@@ -217,15 +217,15 @@ struct LibraryTests {
         var outbox = Outbox()
         outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
         try library.save(outbox)
-        library.saveRecent(URL(fileURLWithPath: "/videos/sample.mp4"))
+        library.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: Self.hash, at: at(1_800_000_000))
 
         #expect(!FileManager.default.fileExists(atPath: real.path))
         let other = Library(layout: SupportLayout(root: real))
         #expect(try other.load(Self.hash) == nil)
         #expect(other.contentHash(of: try item("m", 1)) == nil)
         #expect(other.loadOutbox() == Outbox())
-        #expect(other.recent() == nil)
-        #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outbox.json", "recent.json"])
+        #expect(other.recents().isEmpty)
+        #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outbox.json", "recents.json"])
     }
 
     // MARK: - The outbox
@@ -305,23 +305,149 @@ struct LibraryTests {
         #expect(try Data(contentsOf: library.layout.outboxFile) == newer)
     }
 
-    // MARK: - The last video
+    // MARK: - Recent videos
 
-    @Test("the last open video's path reads back; a file that doesn't read is no video")
-    func recent() throws {
+    /// The content hash numbered `number`: 64 hex digits.
+    private func hash(_ number: Int) -> String {
+        String(format: "%064x", number)
+    }
+
+    /// The library on `folder`, as a new run reads it.
+    private func reread(_ folder: URL) -> Library {
+        Library(layout: SupportLayout(root: folder))
+    }
+
+    @Test("an opened video goes first on the recent videos with its path, hash, time and no position, and reads back in a new library")
+    func recentRoundTrip() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        let library = Library(layout: SupportLayout(root: scratch.folder))
-        #expect(library.recent() == nil)
-        library.saveRecent(URL(fileURLWithPath: "/videos/a b/sample.mp4"))
-        #expect(Library(layout: SupportLayout(root: scratch.folder)).recent()?.path == "/videos/a b/sample.mp4")
-        library.saveRecent(URL(fileURLWithPath: "/videos/other.mov"))
-        #expect(Library(layout: SupportLayout(root: scratch.folder)).recent()?.path == "/videos/other.mov")
+        let library = reread(scratch.folder)
+        #expect(library.recents().isEmpty)
+        library.recordOpened(URL(fileURLWithPath: "/videos/a b/sample.mp4"), contentHash: hash(1), at: at(1_800_000_000))
+        library.recordOpened(URL(fileURLWithPath: "/videos/other.mov"), contentHash: hash(2), at: at(1_800_000_060))
 
-        try Data("{".utf8).write(to: library.layout.recentFile)
-        #expect(library.recent() == nil)
-        try Data("{ \"schemaVersion\": 1, \"path\": \"relative.mp4\" }".utf8).write(to: library.layout.recentFile)
-        #expect(library.recent() == nil)
+        let expected = [
+            RecentVideo(path: "/videos/other.mov", contentHash: hash(2), openedAt: at(1_800_000_060), position: 0),
+            RecentVideo(path: "/videos/a b/sample.mp4", contentHash: hash(1), openedAt: at(1_800_000_000), position: 0),
+        ]
+        #expect(library.recents() == expected)
+        #expect(reread(scratch.folder).recents() == expected)
+        #expect(files(under: scratch.folder) == ["recents.json"])
+    }
+
+    @Test("the recent videos keep the 10 newest, the newest first")
+    func recentLimit() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let library = reread(scratch.folder)
+        for number in 1...12 {
+            library.recordOpened(
+                URL(fileURLWithPath: "/videos/\(number).mp4"), contentHash: hash(number), at: at(1_800_000_000 + Double(number))
+            )
+        }
+        #expect(Library.recentLimit == 10)
+        #expect(reread(scratch.folder).recents().map(\.contentHash) == (3...12).reversed().map(hash))
+    }
+
+    @Test("a video opened again moves to the front, matched by its content hash: one entry, with the new path and time, and its position kept")
+    func recentMovesToFront() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let library = reread(scratch.folder)
+        library.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: hash(1), at: at(1_800_000_000))
+        library.savePosition(12.5, of: hash(1))
+        library.recordOpened(URL(fileURLWithPath: "/videos/other.mov"), contentHash: hash(2), at: at(1_800_000_010))
+        library.recordOpened(URL(fileURLWithPath: "/moved/renamed take 2.mov"), contentHash: hash(1), at: at(1_800_000_020))
+
+        #expect(reread(scratch.folder).recents() == [
+            RecentVideo(path: "/moved/renamed take 2.mov", contentHash: hash(1), openedAt: at(1_800_000_020), position: 12.5),
+            RecentVideo(path: "/videos/other.mov", contentHash: hash(2), openedAt: at(1_800_000_010), position: 0),
+        ])
+    }
+
+    @Test("a saved position is kept on its entry only and leaves the order as it is; a video not on the list saves nothing")
+    func recentPosition() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let library = reread(scratch.folder)
+        library.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: hash(1), at: at(1_800_000_000))
+        library.recordOpened(URL(fileURLWithPath: "/videos/other.mov"), contentHash: hash(2), at: at(1_800_000_010))
+        library.savePosition(7.25, of: hash(1))
+        library.savePosition(3, of: hash(9))
+
+        #expect(reread(scratch.folder).recents().map(\.contentHash) == [hash(2), hash(1)])
+        #expect(reread(scratch.folder).recents().map(\.position) == [0, 7.25])
+    }
+
+    @Test("removing a recent video takes it off the list only: its review stays on disk")
+    func recentRemoval() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let library = reread(scratch.folder)
+        try library.save(try review())
+        library.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: Self.hash, at: at(1_800_000_000))
+        library.recordOpened(URL(fileURLWithPath: "/videos/other.mov"), contentHash: Self.other, at: at(1_800_000_010))
+        library.removeRecent(Self.hash)
+        library.removeRecent(hash(9))
+
+        #expect(reread(scratch.folder).recents().map(\.contentHash) == [Self.other])
+        #expect(try reread(scratch.folder).load(Self.hash) == review())
+    }
+
+    @Test("on the first read, the last video of recent.json becomes the one recent video, by its review's hash, and recent.json goes")
+    func recentMigration() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        try reread(scratch.folder).save(try review(path: "/videos/sample.mp4"))
+        let old = scratch.folder.appendingPathComponent("recent.json")
+        try Data("{ \"schemaVersion\": 1, \"path\": \"/videos/sample.mp4\" }".utf8).write(to: old)
+        try FileManager.default.setAttributes([.modificationDate: at(1_800_000_000)], ofItemAtPath: old.path)
+
+        let expected = [RecentVideo(path: "/videos/sample.mp4", contentHash: Self.hash, openedAt: at(1_800_000_000), position: 0)]
+        #expect(reread(scratch.folder).recents() == expected)
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+        #expect(reread(scratch.folder).recents() == expected)
+    }
+
+    @Test("a video in recent.json with no review is hashed from its file; one that can't be read, or a recent.json that doesn't read, leaves no entry")
+    func recentMigrationWithoutReview() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let support = scratch.folder.appendingPathComponent("support", isDirectory: true)
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let video = scratch.folder.appendingPathComponent("clip.mp4")
+        try Data("not really a video".utf8).write(to: video)
+        let old = support.appendingPathComponent("recent.json")
+        try Data("{ \"schemaVersion\": 1, \"path\": \"\(video.path)\" }".utf8).write(to: old)
+
+        let recents = reread(support).recents()
+        #expect(recents.map(\.path) == [video.path])
+        #expect(recents.map(\.contentHash) == [ContentHash.of(video)])
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+
+        for text in ["{ \"schemaVersion\": 1, \"path\": \"/gone/clip.mp4\" }", "{"] {
+            let fresh = try Scratch()
+            defer { fresh.cleanUp() }
+            try Data(text.utf8).write(to: fresh.folder.appendingPathComponent("recent.json"))
+            #expect(reread(fresh.folder).recents().isEmpty)
+            #expect(files(under: fresh.folder).isEmpty)
+        }
+    }
+
+    @Test("a recents.json that doesn't read is no list; one a newer build wrote is never written over")
+    func recentUnreadable() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let library = reread(scratch.folder)
+        try Data("{".utf8).write(to: library.layout.recentsFile)
+        #expect(reread(scratch.folder).recents().isEmpty)
+
+        let newer = Data("{ \"schemaVersion\": 99, \"videos\": [] }".utf8)
+        try newer.write(to: library.layout.recentsFile)
+        let again = reread(scratch.folder)
+        #expect(again.recents().isEmpty)
+        again.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: hash(1), at: at(1_800_000_000))
+        #expect(try Data(contentsOf: library.layout.recentsFile) == newer)
     }
 }
 

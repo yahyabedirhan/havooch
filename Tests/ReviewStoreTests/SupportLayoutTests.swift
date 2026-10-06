@@ -12,7 +12,8 @@ struct SupportLayoutTests {
         let message = try #require(ItemID("m-f92cbb2a-2"))
 
         #expect(layout.outboxFile.path == "/support/outbox.json")
-        #expect(layout.recentFile.path == "/support/recent.json")
+        #expect(layout.recentsFile.path == "/support/recents.json")
+        #expect(layout.formerRecentFile.path == "/support/recent.json")
         #expect(layout.settingsFile.path == "/support/settings.json")
         #expect(layout.themesFolder.path == "/support/Themes")
         #expect(layout.videosFolder.path == "/support/videos")

@@ -176,6 +176,8 @@ final class AppModel: AppControlling {
         closePopover(.momentChanged)
         await committing?.value
         let found = try desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
+        // Where the person left the video that goes, before the player takes the new one.
+        savePosition()
         try await engine.load(url)
         // The review as it is now, not as it was before the load: a
         // listener may have answered on one of its threads meanwhile.
@@ -200,16 +202,19 @@ final class AppModel: AppControlling {
             contentHash: contentHash, title: title, duration: engine.duration, path: url.path, frameRate: frameRate
         )
         desk.open(review)
-        desk.library.saveRecent(url)
+        desk.library.recordOpened(url, contentHash: contentHash, at: Date())
+        recentsRevision += 1
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
         // A control command's open is seen when the window was closed.
         showWindow()
     }
 
     /// The player's window closed; the app and this model stay. The video
-    /// pauses, and the Dock icon shows it again where it was.
+    /// pauses and keeps its position for its recent-video entry, and the
+    /// Dock icon shows it again where it was.
     func windowClosed() {
         engine.pause()
+        savePosition()
     }
 
     /// The hash of the file at `url`, read off the main actor: it reads the
@@ -250,6 +255,36 @@ final class AppModel: AppControlling {
                 NSApp.terminate(nil)
             }
         }
+    }
+
+    // MARK: - Recent videos
+
+    /// The recent videos of this run's data folder, the newest first, with
+    /// whether each file is there now: the home screen's cards.
+    var recents: [StateReport.Recent] {
+        // Read so a view that shows the list follows its changes.
+        _ = recentsRevision
+        return desk.library.recents().map(StateReport.Recent.init)
+    }
+
+    /// Grows each time the recent videos change: `recents` reads the
+    /// library, which observation doesn't follow.
+    private var recentsRevision = 0
+
+    /// Keeps where the playhead is as the open video's last position, for
+    /// its recent-video entry. Opening another video, closing the window,
+    /// quitting and going home call it. Nothing with no video.
+    func savePosition() {
+        guard let video else { return }
+        desk.library.savePosition(engine.time, of: video.contentHash)
+        recentsRevision += 1
+    }
+
+    /// Takes the video with `contentHash` off the recent videos. Its review
+    /// stays on disk.
+    func removeRecent(_ contentHash: String) {
+        desk.library.removeRecent(contentHash)
+        recentsRevision += 1
     }
 
     func play() throws(AppRefusal) {
@@ -441,6 +476,7 @@ final class AppModel: AppControlling {
         report.transcript = transcript
         report.theme = themes.report
         report.sidebar = sidebarReport
+        report.recents = recents
         return report
     }
 

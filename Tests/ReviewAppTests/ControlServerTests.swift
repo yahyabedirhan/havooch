@@ -276,6 +276,7 @@ struct ControlServerTests {
         ]])
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
+        #expect(state["recents"] as? [AnyHashable] == [])
         #expect(state["listener"] as? [String: AnyHashable] == [
             "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
         ])
@@ -296,6 +297,7 @@ struct ControlServerTests {
             listener: absent, 0 sends waiting, 0 taken
             threads: 1 (0 queued)
               #0 General t-abcdef01-0 -
+            recents: 0
 
             """)
         #expect(await answer(.appStatus).reply.output == """
@@ -462,6 +464,7 @@ struct ControlServerTests {
                 m-abcdef01-2 person message queued: Earlier
               #1 at 0:12.5 t-abcdef01-1 queued
                 m-abcdef01-1 person message queued: Later
+            recents: 0
 
             """))
 

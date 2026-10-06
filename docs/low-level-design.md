@@ -280,7 +280,8 @@ Sources/
     VoiceoverSource.swift, SubtitleSource.swift, SpeechSource.swift, AppleSpeechRecognizer.swift
   ReviewStore/
     SupportLayout.swift            every path under a support folder (pure), and the pending name of a picture (L19)
-    Library.swift                  reviews, the outbox, recent, settings: load and save, the schema version; the hash-prefix index
+    Library.swift                  reviews, the outbox, the recent videos, settings: load and save, the schema version; the hash-prefix index
+    RecentVideo.swift              one recent video: path, content hash, opened time, last position
     ContentHash.swift              SHA-256 of the file, streamed
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
@@ -582,7 +583,7 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
   control.sock                           while the app runs (ReviewWire)
   demo.json                              the demo pointer; only in the normal folder (ReviewWire)
   outbox.json                            the Outbox
-  recent.json                            the last open video
+  recents.json                           the 10 recent videos, the newest first: path, content hash, opened time, last position
   settings.json                          pinned theme or null, token overrides, sidebar width
   Themes/<any name>.json                 user themes
   videos/<contentHash>/
@@ -595,7 +596,8 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
 ```swift
 public struct SupportLayout: Sendable {
     public let root: URL
-    public var outboxFile, recentFile, settingsFile, themesFolder, videosFolder: URL
+    public var outboxFile, recentsFile, settingsFile, themesFolder, videosFolder: URL
+    public var formerRecentFile: URL                                    // recent.json, read once into recents.json
     public func folder(_ hash: String) -> URL
     public func reviewFile(_ hash: String) -> URL
     public func transcriptFile(_ hash: String) -> URL
@@ -605,7 +607,8 @@ public struct SupportLayout: Sendable {
 }
 ```
 
-- `Library(layout:)` only loads and saves: reviews, the outbox (through `Outbox.reconcile` with the unfinished sends on disk), `recent.json` and `settings.json`. Its `init` reads every `review.json` once for the hash-prefix index (`contentHash(prefix:)`) and the unfinished sends. It writes nothing until the first save.
+- `Library(layout:)` only loads and saves: reviews, the outbox (through `Outbox.reconcile` with the unfinished sends on disk), `recents.json` and `settings.json`. Its `init` reads every `review.json` once for the hash-prefix index (`contentHash(prefix:)`), the path index and the unfinished sends. It writes nothing until the first save.
+- The recent videos: `recents()`, `recordOpened(url, contentHash:, at:)`, `savePosition(seconds, of:)` and `removeRecent(contentHash)`. At most `recentLimit` (10) entries, the newest first. Opening a video on the list moves it to the front with its new path and keeps its position; the match is by content hash. Removing an entry leaves its review on disk. The list is read once and kept in memory. On the first read with no `recents.json` and a `recent.json`, the old path becomes the one entry, with the hash of the review that records that path, else of the file itself (no entry when neither is there), and the file's modification time as its opened time; then `recent.json` is deleted. A `recents.json` from a newer schema is never written over.
 - Every save is atomic, pretty-printed, sorted keys, ISO 8601 with milliseconds, with `schemaVersion`. `review.json` starts at schema 1 again for this product (L9); the prototypes' files are never read, since they live in other support folders.
 - A file from a newer schema, or one that does not read, is never written over (proto-2 D140).
 - `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); `ThemeFiles.user(layout)` reads `Themes/`. A file that does not read is skipped with its reason.
@@ -617,9 +620,9 @@ public struct SupportLayout: Sendable {
 
 | Method | Rules it owns | Refuses |
 |---|---|---|
-| `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, remember as recent; closes any popover; then `showWindow()`, so a control command's open shows a closed window (L47) | a file AVPlayer cannot play; a review that does not read |
+| `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, save the position of the video that goes, put it first on the recent videos; closes any popover; then `showWindow()`, so a control command's open shows a closed window (L47) | a file AVPlayer cannot play; a review that does not read |
 | `openAtLaunch(environment)` | the video `HAVOOCH_OPEN_VIDEO` names (a demo run, L27), else none: a launch never opens the last video (L47) | |
-| `windowClosed()` | the player's window closed (Cmd+W): pause; the video, the playhead and the sidebar stay for the Dock icon (L47) | |
+| `windowClosed()` | the player's window closed (Cmd+W): pause and save the position; the video, the playhead and the sidebar stay for the Dock icon (L47) | |
 | `play()`, `seek(seconds)`, `togglePlay()` to play, `scrub`, `skip`, `step(frames)`, `showThread(thread)` with a frame, `addMessage` that seeks, `open(url)` | each one is a **moment change**: it first calls `closePopover(.momentChanged)` (D 2.2, D 2.3); `seek` and `open` wait until those words are queued. Pausing is none (L23) | no video; a time outside the video |
 | `startDraft(region?)` | C, the Comment button, the end of a drag: pause, fix the frame time, open the popover on the thread at that frame (or the next number) with an empty draft. C over an open popover does nothing; a new region closes it as a click outside (L24) | no video |
 | `closePopover(reason)` | `.clickOutside`: queue the text; `.discard` (× or Escape): drop it; `.momentChanged`: queue text at its own time and region, drop an empty draft and its region. An empty draft is only closed in every case (D 1.4). A click on the frame, the start of a drag, and `OutsideClicks` are clicks outside | |
@@ -670,9 +673,12 @@ public struct SupportLayout: Sendable {
                   "messages": [ { "id": "m-f92cbb2a-1", "author": "person", "kind": "message", "text": "…", "at": "…",
                                   "state": "queued", "region": null, "cropPath": null, "sendId": null } ] } ],
   "queue":    [ "m-f92cbb2a-1" ],
-  "sends":    [ { "id": "s-…", "sentAt": "…", "messageIds": [ "m-…" ] } ]
+  "sends":    [ { "id": "s-…", "sentAt": "…", "messageIds": [ "m-…" ] } ],
+  "recents":  [ { "path": "/abs/sample.mp4", "title": "sample", "contentHash": "…", "openedAt": "…", "position": 10.017, "available": true } ]
 }
 ```
+
+- Recent videos: `AppModel.open` calls `Library.recordOpened` (the newest first, matched by content hash, at most 10). `AppModel.savePosition()` keeps the player's time on the open video's entry; `open` calls it for the video that goes, `AppDelegate` on every window's `willClose` and in `applicationWillTerminate`, and `goHome()` (#69) is to call it. `AppModel.recents` is the list as `StateReport.Recent` (path, title without the extension, content hash, opened time, position, `available`: whether the file is there now), read from `desk.library` on each call, so it belongs to the data folder the run is on; a revision counter makes views follow it. `removeRecent(contentHash)` takes an entry off the list and leaves the review on disk. `state` reports the list as `recents`, and its lines end with one line per entry.
 
 - `Screenshotter`, `PlayerEngine`, `PlayerSurface`, `FrameGrabber` (keyframe at the thread's time, crop cut from it in memory), `Shortcuts`, `ContextReader`, `TranscriptDesk` and `VideoFrameGeometry` keep proto-2's rules. `Shortcuts` adds proto-1's J and L (10 s back and forward) and the comma and the period (one frame), and `PlayerEngine` adds proto-1's speeds (0.5× to 2×, through `defaultRate`). proto-1's region-crop tests at several window sizes come with `VideoFrameGeometry`.
 
@@ -981,4 +987,4 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L44 | The protocol version is 3. | 0.2.0 changed the requests' shape: `thread.expand` became `thread.show`, `state` names `sidebar.thread` in place of `sidebar.expanded`, and `screenshot` takes a `window` that a 0.1.0 app would ignore and capture the player's window. A 0.1.0 CLI or app that meets this one is told to reinstall, not given a wrong answer (L1). |
 | L45 | Space and Return press the control with the keyboard focus (ticket #52). Under keyboard navigation every focusable control in the player's window reports its focus through `pressedByKeys(in:action:)`: a thread row, a notice card, the header's symbol buttons (agent control, Context, the sidebar toggle), the thread view's Back, Previous and Next, a queued message's Edit and Delete and its editor's Cancel and Save, the composer's region × and General toggle, the footer's Send, the comment popover's Discard and Answer or Queue, the player bar's Play and Comment, the timeline's pins, and Stop in the agent-control popover. `AppModel` keeps the focused controls of the key window as a stack (`focusControl`, `blurControl`, `pressFocusedControl`): the last to take the focus is pressed, and `blurControl` removes only its own entry, so when a popover's control (Stop) loses the focus or goes, a control still focused in the player's window gets the keys again. `Shortcuts` gives Space, Return and Enter with no modifier to it (`pressControl`) in place of play, a new message or the row's own rule; `AppModel.focusedRow` is gone. An AppKit control that is the first responder (a pop-up button) takes those keys itself, only while keyboard navigation is on (`Shortcuts.isControlFocused`, `NSApp.isFullKeyboardAccessEnabled`): with it off a clicked AppKit control can stay first responder, and Space still plays and pauses. A queued message's Edit and Delete, hidden until hover, also show while either has the keyboard focus (`pressedByKeys`' `isFocused`), so a key never presses a button the person can't see. With no control focused, Space plays and pauses as before. | The player's key monitor sees every key before SwiftUI, so a focused button never got Space; one general rule replaces the thread row's own. |
 | L46 | Unread threads (ticket #48). `ReviewThread.lastSeen` is when the person last opened the thread's view, kept in the review file (`null` until then); `isUnread` is whether an agent message (`reply`, `ask`, an `ack`'s words on General) is newer than it, or there is one and it's `null`. `AppModel.shown`'s `didSet` calls `VideoReview.markSeen` with the time now, so a row click, Previous and Next, `thread show`, a pin, a badge and a notice all clear it; an agent message on the thread the sidebar shows is read as it comes (`raise`). A review file from before has no `lastSeen` key, and its agent messages count as read, so an update marks nothing. `state --json` reports `unread` per thread, and `state` ends a thread's line with `unread`. | Spec 0.2.0 (#36), ticket #48. The thread view is the one place the conversation shows in full; the popover shows the thread view too. Replaces L15. |
-| L47 | The window and launch (spec 0.3.0, ticket #66). `applicationShouldTerminateAfterLastWindowClosed` is false: Cmd+W closes the window, the app stays in the Dock with its `AppModel`, and Cmd+Q quits. `PlayerWindow` finds the player's window (titled, not a panel, not Settings; `Screenshotter` uses it too), watches `NSWindow.willCloseNotification` for it, which calls `AppModel.windowClosed()` to pause, and shows it again through SwiftUI's `openWindow`, captured when the window first appears. A click on the Dock icon with no window on screen shows it (`applicationShouldHandleReopen`); so does `open(url)`, through `AppModel.showWindow`, so a control command's open is seen. Showing the window does not activate the app. A launch opens no video: `openRecent` is gone, and `openAtLaunch` opens only what `HAVOOCH_OPEN_VIDEO` names, which only the demo relaunch (L27) sets. | Spec 0.3.0, "The window and quitting": the window comes and goes, the app and its video stay. A control command must not take the person's focus from another app. |
+| L47 | The window and launch (spec 0.3.0, ticket #66). `applicationShouldTerminateAfterLastWindowClosed` is false: Cmd+W closes the window, the app stays in the Dock with its `AppModel`, and Cmd+Q quits. `PlayerWindow` finds the player's window (titled, not a panel, not Settings; `Screenshotter` uses it too), watches `NSWindow.willCloseNotification` for it, which calls `AppModel.windowClosed()` to pause and save the position, and shows it again through SwiftUI's `openWindow`, captured when the window first appears. A click on the Dock icon with no window on screen shows it (`applicationShouldHandleReopen`); so does `open(url)`, through `AppModel.showWindow`, so a control command's open is seen. Showing the window does not activate the app. A launch opens no video: `openRecent` is gone, and `openAtLaunch` opens only what `HAVOOCH_OPEN_VIDEO` names, which only the demo relaunch (L27) sets. | Spec 0.3.0, "The window and quitting": the window comes and goes, the app and its video stay. A control command must not take the person's focus from another app. |
