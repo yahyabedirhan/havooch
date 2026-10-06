@@ -111,13 +111,13 @@ struct SubtitleSourceTests {
 
         intro
         00:01.000 --> 00:04.500 position:50% align:middle
-        <v Narrator>This is <b>Video Review</b>.
+        <v Narrator>This is <b>Havooch</b>.
 
         00:00:06.067 --> 00:00:14.333
         Your comments <00:00:07.000>queue up.
         """
         #expect(SubtitleSource.parse(text) == [
-            TranscriptLine(start: 1, end: 4.5, text: "This is Video Review."),
+            TranscriptLine(start: 1, end: 4.5, text: "This is Havooch."),
             TranscriptLine(start: 6.067, end: 14.333, text: "Your comments queue up."),
         ])
     }

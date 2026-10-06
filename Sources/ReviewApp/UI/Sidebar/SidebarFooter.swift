@@ -32,6 +32,7 @@ struct SidebarFooter: View {
                 .fixedSize()
             Button("Send") { model.send() }
                 .buttonStyle(.borderedProminent)
+                .pressedByKeys(in: model) { model.send() }
                 .fixedSize()
                 .disabled(!model.canSend)
                 .help(model.canSend ? "Send the queue to your agent at once (⌘↩)" : "Nothing is queued")

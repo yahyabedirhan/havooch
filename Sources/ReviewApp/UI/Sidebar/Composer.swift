@@ -50,11 +50,12 @@ struct Composer: View {
             .lineLimit(1)
             .accessibilityElement(children: .combine)
             if let region = model.composerRegion {
-                RegionChip(region: region) { model.removeComposerRegion() }
+                RegionChip(model: model, region: region) { model.removeComposerRegion() }
             }
             Spacer(minLength: 4)
             if model.shown == nil {
                 GeneralToggle(isOn: model.isComposerGeneral) { model.toggleComposerGeneral() }
+                    .pressedByKeys(in: model) { model.toggleComposerGeneral() }
             }
         }
         .font(.callout.monospacedDigit())
@@ -84,6 +85,7 @@ struct Composer: View {
 
 /// The chip of the region that goes with the words, with its remove button.
 private struct RegionChip: View {
+    let model: AppModel
     let region: Region
     let remove: () -> Void
     @Environment(\.palette) private var palette
@@ -102,6 +104,7 @@ private struct RegionChip: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .pressedByKeys(in: model, action: remove)
             .help("Remove the region")
             .accessibilityLabel("Remove the region")
         }

@@ -7,6 +7,8 @@ import SwiftUI
 /// Light time labels with short ticks sit under the track when the bar has
 /// the room. A click on a pin goes to its thread's frame.
 struct Timeline: View {
+    /// Told which pin has the keyboard focus, so Space and Return press it.
+    let model: AppModel
     let time: Double
     let duration: Double
     /// The threads on a frame, in time order. General has no pin.
@@ -140,6 +142,7 @@ struct Timeline: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .pressedByKeys(in: model) { select(thread.id) }
         .help(look.help)
         .position(x: Self.place(of: look.time, in: duration, width: width), y: Self.markCentre)
         // The thread in focus stays on top of its neighbours.

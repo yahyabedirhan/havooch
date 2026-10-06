@@ -1,6 +1,6 @@
 1
 00:00:00,000 --> 00:00:06,067
-This is Video Review. Pause any video, or draw a box on the frame, and write a comment.
+This is Havooch. Pause any video, or draw a box on the frame, and write a comment.
 
 2
 00:00:06,067 --> 00:00:14,333

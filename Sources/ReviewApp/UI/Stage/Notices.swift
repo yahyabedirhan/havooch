@@ -18,6 +18,7 @@ struct Notices: View {
         VStack(alignment: .trailing, spacing: 8) {
             ForEach(model.notices.suffix(Self.most)) { notice in
                 NoticeCard(notice: notice) { model.openNotice(notice.id) }
+                    .pressedByKeys(in: model) { model.openNotice(notice.id) }
                     // In from the edge, and out as a fade.
                     .transition(.asymmetric(
                         insertion: reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity),

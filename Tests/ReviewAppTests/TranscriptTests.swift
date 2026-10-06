@@ -18,7 +18,7 @@ struct TranscriptDeliveryTests {
     nonisolated static let restarted = Holder(key: "listener-2", name: "Claude Code", place: "/shop")
 
     static let pause: [String: AnyHashable] = [
-        "start": 0, "end": 6.067, "text": "This is Video Review. Pause any video, or draw a box on the frame, and write a comment.",
+        "start": 0, "end": 6.067, "text": "This is Havooch. Pause any video, or draw a box on the frame, and write a comment.",
     ]
     static let send: [String: AnyHashable] = [
         "start": 6.067, "end": 14.333,
@@ -140,10 +140,10 @@ struct TranscriptDeliveryTests {
         #expect(try await delivered(server) == [[]])
 
         // The first line is there, the rest isn't.
-        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review."))
+        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch."))
         await eventually { model.transcript?.lines == 1 }
         _ = try await model.addMessage(text: "A little later", at: 4)
-        #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Video Review."]]])
+        #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Havooch."]]])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 1, "problem": NSNull()])
 
         // A send made now and taken only once the transcript is whole gets
@@ -157,7 +157,7 @@ struct TranscriptDeliveryTests {
         await eventually { model.transcript?.complete == true }
         let wait = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         let thread = try #require((try object(wait.reply.output)["threads"] as? [[String: Any]])?.first)
-        #expect((thread["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Video Review."])
+        #expect((thread["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Havooch."])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": true, "lines": 3, "problem": NSNull()])
 
         // A new listener session gets the three unfinished sends again, each
@@ -168,12 +168,12 @@ struct TranscriptDeliveryTests {
             let redelivered = try #require((try object(again.reply.output)["threads"] as? [[String: Any]])?.first)
             kept.append(try #require(redelivered["transcript"] as? [[String: AnyHashable]]))
         }
-        #expect(kept == [[], [["start": 0.2, "end": 5.1, "text": "This is Video Review."]], try #require(thread["transcript"] as? [[String: AnyHashable]])])
+        #expect(kept == [[], [["start": 0.2, "end": 5.1, "text": "This is Havooch."]], try #require(thread["transcript"] as? [[String: AnyHashable]])])
 
         // The next send cuts its window from the whole transcript.
         _ = try await model.addMessage(text: "Sent once it's whole", at: 6)
         #expect(try await delivered(server, as: Self.restarted) == [[
-            ["start": 0.2, "end": 5.1, "text": "This is Video Review."], ["start": 6.4, "end": 13.4, "text": "Your comments queue up."],
+            ["start": 0.2, "end": 5.1, "text": "This is Havooch."], ["start": 6.4, "end": 13.4, "text": "Your comments queue up."],
             ["start": 20.5, "end": 21, "text": "The end."],
         ]])
     }
@@ -184,12 +184,12 @@ struct TranscriptDeliveryTests {
         let video = try copy(sidecars: [])
         let speech = SlowRecognizer()
         let (model, _) = try await app(video, speech: speech)
-        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review."))
+        speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch."))
         speech.finish()
         await eventually { model.transcript?.complete == true }
 
         let hash = try #require(model.video?.contentHash)
-        let whole = Transcript(source: .speech, lines: [TranscriptLine(start: 0.2, end: 5.1, text: "This is Video Review.")], complete: true)
+        let whole = Transcript(source: .speech, lines: [TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch.")], complete: true)
         #expect(TranscriptFiles(layout: SupportLayout(root: support)).load(hash) == whole)
         #expect(TranscriptFiles(layout: SupportLayout(root: support)).layout.transcriptFile(hash).path == support.path + "/videos/\(hash)/transcript.json")
 
@@ -197,7 +197,7 @@ struct TranscriptDeliveryTests {
         let (again, server) = try await app(video, speech: later)
         await eventually { again.transcript?.complete == true }
         _ = try await again.addMessage(text: "After a restart", at: 3)
-        #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Video Review."]]])
+        #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Havooch."]]])
         #expect(later.runs == 0)
     }
 

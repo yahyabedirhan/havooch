@@ -52,6 +52,7 @@ struct ContextButton: View {
             Label("Context", systemImage: model.contextText == nil ? "doc.text" : "doc.text.fill")
                 .symbolEffect(.pulse, isActive: isTranscribing && !reduceMotion)
         }
+        .pressedByKeys(in: model) { model.isContextShown.toggle() }
         .help(isTranscribing ? "\(words.help). \(transcript?.title ?? "")" : words.help)
         .popover(isPresented: $model.isContextShown, arrowEdge: .bottom) {
             ContextPopover(model: model)

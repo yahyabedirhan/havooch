@@ -50,10 +50,13 @@ final class AppModel: AppControlling {
     /// The thread the sidebar shows in its thread view; nil while it
     /// shows the thread list (L38).
     private(set) var shown: ThreadID?
-    /// The thread whose row in the thread list has the keyboard focus
-    /// under keyboard navigation: Space and Return open it. Nil while no
-    /// row has it.
-    @ObservationIgnored var focusedRow: ThreadID?
+    /// The controls that have the keyboard focus under keyboard navigation
+    /// (`focusControl(_:press:)`), the last to take it at the end: Space
+    /// and Return press that one. A control in a popover takes the focus
+    /// while one in the player's window keeps its own; when the popover's
+    /// control loses it, the window's control is pressed again. Empty
+    /// while no control has the focus, and Space is the player's.
+    @ObservationIgnored private var focusedControls: [(id: UUID, press: () -> Void)] = []
     /// Whether the person is dragging a rectangle on the frame.
     private(set) var isDrawingRegion = false
     /// Whether the sidebar is shown beside the stage.
@@ -855,6 +858,32 @@ final class AppModel: AppControlling {
         shown = id
         engine.pause()
         return thread
+    }
+
+    /// Whether a control has the keyboard focus, so Space and Return
+    /// press it and don't reach the player.
+    var isControlFocused: Bool { !focusedControls.isEmpty }
+
+    /// The control `id` took the keyboard focus; Space and Return now
+    /// call `press`, as a click does.
+    func focusControl(_ id: UUID, press: @escaping () -> Void) {
+        focusedControls.removeAll { $0.id == id }
+        focusedControls.append((id, press))
+    }
+
+    /// The control `id` lost the keyboard focus, or left the window. A
+    /// control that took the focus since keeps it; else the one that had
+    /// it before and still has it gets it back.
+    func blurControl(_ id: UUID) {
+        focusedControls.removeAll { $0.id == id }
+    }
+
+    /// Presses the control that has the keyboard focus; false when none has.
+    @discardableResult
+    func pressFocusedControl() -> Bool {
+        guard let control = focusedControls.last else { return false }
+        control.press()
+        return true
     }
 
     /// A row's action on thread `id`: the one path for a click, Space or

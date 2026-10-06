@@ -1,5 +1,6 @@
 import AppKit
 @testable import ReviewApp
+import ReviewWire
 import Testing
 
 @Suite("The player's keys")
@@ -72,17 +73,99 @@ struct ShortcutsTests {
     }
 
     /// Space, Return and the keypad's Enter.
-    @Test("while a row of the thread list has the keyboard focus, Space and Return open its thread; other keys stay the player's",
+    @Test("while a control has the keyboard focus, Space and Return press it; other keys stay the player's",
           arguments: [49, 36, 76] as [UInt16])
-    func focusedRowKeys(keyCode: UInt16) {
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isRowFocused: true) == .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .numericPad, isRowFocused: true) == .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .shift, isRowFocused: true) != .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isRowFocused: true) != .openRow)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true, isRowFocused: true) == nil)
-        #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != .openRow)
-        #expect(Shortcuts.action(keyCode: 125, modifiers: [], isRowFocused: true) == .marker(forward: true))
-        #expect(Shortcuts.action(keyCode: 40, modifiers: [], isRowFocused: true) == .togglePlay)
+    func focusedControlKeys(keyCode: UInt16) {
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .numericPad, isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .shift, isControlFocused: true) != .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isControlFocused: true) != .pressControl)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true, isControlFocused: true) == nil)
+        #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != .pressControl)
+        #expect(Shortcuts.action(keyCode: 125, modifiers: [], isControlFocused: true) == .marker(forward: true))
+        #expect(Shortcuts.action(keyCode: 40, modifiers: [], isControlFocused: true) == .togglePlay)
+    }
+
+    @Test("Space on a focused control presses it and doesn't play; with no control focused, Space plays and pauses")
+    func spaceOnFocusedControl() {
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: false) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: 36, modifiers: [], isControlFocused: false) == .startMessage)
+    }
+
+    @Test("Space presses the control that has the keyboard focus: a notice card, a symbol button, a chip or a row")
+    func pressFocusedControl() {
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        var pressed: [String] = []
+        let notice = UUID(), symbol = UUID()
+        #expect(!model.isControlFocused)
+        #expect(!model.pressFocusedControl())
+
+        model.focusControl(notice) { pressed.append("notice") }
+        #expect(model.isControlFocused)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["notice"])
+
+        // Tab gives the next control the focus before the last one hears
+        // that it lost it: the late loss leaves the new control focused.
+        model.focusControl(symbol) { pressed.append("symbol") }
+        model.blurControl(notice)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["notice", "symbol"])
+
+        // The focus leaves for the video: Space is the player's again.
+        model.blurControl(symbol)
+        #expect(!model.isControlFocused)
+        #expect(!model.pressFocusedControl())
+        #expect(pressed == ["notice", "symbol"])
+    }
+
+    @Test("when a popover's control loses the focus, the control still focused in the player's window gets Space again")
+    func blurRestoresEarlierControl() {
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        var pressed: [String] = []
+        let row = UUID(), stop = UUID()
+
+        model.focusControl(row) { pressed.append("row") }
+        // The agent-control popover opens, and its Stop button takes the focus.
+        model.focusControl(stop) { pressed.append("stop") }
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["stop"])
+
+        // The popover closes: the row in the player's window has the focus again.
+        model.blurControl(stop)
+        #expect(model.isControlFocused)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["stop", "row"])
+
+        // A control that takes the focus again is the one Space presses.
+        model.focusControl(stop) { pressed.append("stop") }
+        model.focusControl(row) { pressed.append("row") }
+        model.blurControl(row)
+        #expect(model.pressFocusedControl())
+        #expect(pressed == ["stop", "row", "stop"])
+
+        model.blurControl(stop)
+        #expect(!model.isControlFocused)
+        #expect(!model.pressFocusedControl())
+    }
+
+    @Test("an AppKit control with the focus takes Space only while keyboard navigation is on; a SwiftUI control that reports the focus always does")
+    func appKitControlFocus() {
+        #expect(Shortcuts.isControlFocused(reported: false, firstResponderIsControl: true, keyboardNavigation: true))
+        #expect(!Shortcuts.isControlFocused(reported: false, firstResponderIsControl: true, keyboardNavigation: false))
+        #expect(Shortcuts.isControlFocused(reported: true, firstResponderIsControl: false, keyboardNavigation: false))
+        #expect(Shortcuts.isControlFocused(reported: true, firstResponderIsControl: true, keyboardNavigation: false))
+        #expect(!Shortcuts.isControlFocused(reported: false, firstResponderIsControl: false, keyboardNavigation: true))
+        // With keyboard navigation off and nothing reported, Space plays and pauses.
+        let focused = Shortcuts.isControlFocused(reported: false, firstResponderIsControl: true, keyboardNavigation: false)
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: focused) == .togglePlay)
     }
 
     @Test("a key with Command, Option or Control, or any other key, is left alone")

@@ -9,7 +9,7 @@ enum Fixture {
         .appendingPathComponent("fixtures/sample", isDirectory: true)
 
     static let pause = TranscriptLine(
-        start: 0, end: 6.067, text: "This is Video Review. Pause any video, or draw a box on the frame, and write a comment."
+        start: 0, end: 6.067, text: "This is Havooch. Pause any video, or draw a box on the frame, and write a comment."
     )
     static let send = TranscriptLine(
         start: 6.067, end: 14.333,

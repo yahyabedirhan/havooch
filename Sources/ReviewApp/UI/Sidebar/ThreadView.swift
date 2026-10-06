@@ -100,6 +100,7 @@ private struct ThreadViewBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
+        .pressedByKeys(in: model) { _ = model.showThreadList() }
         .help("Back to the threads (Esc)")
         .accessibilityLabel(others > 0 ? "Threads, \(others) more \(others == 1 ? "needs" : "need") you" : "Threads")
         .accessibilityHint("Shows the thread list")
@@ -135,6 +136,7 @@ private struct ThreadViewBar: View {
         // A native borderless button: it dims while pressed and when
         // disabled, and takes the focus ring with keyboard navigation.
         .buttonStyle(.borderless)
+        .pressedByKeys(in: model) { model.showNeighbour(forward: forward) }
         .disabled(model.neighbour(forward: forward) == nil)
         .help("\(title) (\(key))")
         .accessibilityLabel(title)
