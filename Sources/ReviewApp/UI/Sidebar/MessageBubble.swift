@@ -99,6 +99,10 @@ struct MessageBubble: View {
     /// The text being edited; nil while the message only shows.
     @State private var edited: String?
     @State private var isHovered = false
+    /// Whether Edit or Delete has the keyboard focus: they show then as on
+    /// hover, so Space never presses a button the person can't see.
+    @State private var isEditFocused = false
+    @State private var isDeleteFocused = false
     @Environment(\.palette) private var palette
 
     static let avatar: CGFloat = 24
@@ -152,6 +156,9 @@ struct MessageBubble: View {
 
     private var isQueued: Bool { message.isWork && message.state?.isEditable == true }
 
+    /// Edit and Delete show on hover, and while either has the keyboard focus.
+    private var areActionsShown: Bool { isHovered || isEditFocused || isDeleteFocused }
+
     @ViewBuilder
     private var person: some View {
         if let edited {
@@ -163,12 +170,12 @@ struct MessageBubble: View {
                     if isQueued {
                         HStack(spacing: 1) {
                             RowButton("Edit", symbol: "pencil") { edited = message.text }
-                                .pressedByKeys(in: model) { edited = message.text }
+                                .pressedByKeys(in: model, isFocused: $isEditFocused) { edited = message.text }
                             RowButton("Delete", symbol: "trash") { model.delete(message.id) }
-                                .pressedByKeys(in: model) { model.delete(message.id) }
+                                .pressedByKeys(in: model, isFocused: $isDeleteFocused) { model.delete(message.id) }
                         }
-                        .opacity(isHovered ? 1 : 0)
-                        .animation(.smooth(duration: 0.12), value: isHovered)
+                        .opacity(areActionsShown ? 1 : 0)
+                        .animation(.smooth(duration: 0.12), value: areActionsShown)
                     }
                     words
                         .background { personBubble }

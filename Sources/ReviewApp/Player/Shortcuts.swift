@@ -63,6 +63,16 @@ enum Shortcuts {
         }
     }
 
+    /// Whether a control other than the video has the keyboard focus, so
+    /// Space and Return are its own: a SwiftUI control that `reported` it
+    /// to the model, or an AppKit control that is the first responder (a
+    /// pop-up button) while keyboard navigation is on. With keyboard
+    /// navigation off an AppKit control can stay first responder after a
+    /// click, and Space must still play and pause.
+    static func isControlFocused(reported: Bool, firstResponderIsControl: Bool, keyboardNavigation: Bool) -> Bool {
+        reported || (keyboardNavigation && firstResponderIsControl)
+    }
+
     /// Starts handling the player's keys for `model`, for as long as the
     /// app runs.
     static func install(for model: AppModel) {
@@ -80,7 +90,10 @@ enum Shortcuts {
               let window = event.window, window.isKeyWindow, window.attachedSheet == nil,
               let action = action(
                   keyCode: event.keyCode, modifiers: event.modifierFlags, isTyping: window.firstResponder is NSText,
-                  isControlFocused: model.isControlFocused || window.firstResponder is NSControl
+                  isControlFocused: isControlFocused(
+                      reported: model.isControlFocused, firstResponderIsControl: window.firstResponder is NSControl,
+                      keyboardNavigation: NSApp.isFullKeyboardAccessEnabled
+                  )
               )
         else { return false }
         switch action {
