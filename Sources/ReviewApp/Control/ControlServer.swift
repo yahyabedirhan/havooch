@@ -39,6 +39,9 @@ protocol AppControlling: AnyObject {
     func sendQueue() async throws(AppRefusal) -> StateReport.Send
     /// Answers the open question on a thread, as the answer field does.
     func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
+    /// Answers the open question on a thread with its quick-reply choice
+    /// `number` (from 1), as a click on that choice's button does.
+    func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
     /// Opens a thread's popover on its frame, as a click on its pin does,
     /// first keeping it at `frame` when there is one.
     func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover
@@ -268,16 +271,18 @@ final class ControlServer {
                 let send = try listeners.ack(sendID, text: text)
                 let count = send.messageIds.count
                 return done("\(send.id) acknowledged, \(count) message\(count == 1 ? "" : "s")", Output(send: send), json)
-            case .status(let messageID, let status):
+            case .status(let messageID, let status, let text):
                 // Every status is a message state of the same name.
                 let state = MessageState(rawValue: status.rawValue) ?? .working
-                let message = try listeners.status(messageID, state)
+                let message = try listeners.status(messageID, state, text: text)
                 return done("\(message.id) \(message.state ?? status.rawValue)", Output(message: message), json)
             case .reply(let thread, let text):
                 let message = try listeners.reply(on: thread, text: text)
                 return done("\(message.id) on \(Self.name(ThreadRef(thread)) ?? thread)", Output(message: message), json)
-            case .ask(let thread, let question, let waitSeconds):
-                switch try await listeners.ask(on: thread, question: question, waitSeconds: waitSeconds, connection: connection) {
+            case .ask(let thread, let question, let waitSeconds, let choices):
+                switch try await listeners.ask(
+                    on: thread, question: question, choices: choices, waitSeconds: waitSeconds, connection: connection
+                ) {
                 case .answered(let answer):
                     return done(answer.text, Output(answer: answer), json)
                 case .ranOut:
@@ -288,6 +293,9 @@ final class ControlServer {
             case .threadAnswer(let thread, let text):
                 let answered = try app.answer(thread, text: text)
                 return done("#\(answered.number) answered", Output(message: answered.message), json)
+            case .threadChoose(let thread, let choice):
+                let answered = try app.choose(thread, choice: choice)
+                return done("#\(answered.number) answered: \(answered.message.text)", Output(message: answered.message), json)
             case .threadOpen(let thread, let rectangle):
                 // A frame is a rectangle of the video area, checked as a region is.
                 let frame = try Self.region(rectangle).map { PopoverFrame(x: $0.x, y: $0.y, w: $0.w, h: $0.h) }

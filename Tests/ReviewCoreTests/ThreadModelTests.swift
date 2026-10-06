@@ -224,6 +224,65 @@ struct SessionNameTests {
     }
 }
 
+@Suite("Quick-reply choices on a question")
+struct ChoiceTests {
+    /// A review whose thread 1 was sent, so the listener may ask on it.
+    private func sentReview() throws -> VideoReview {
+        var review = newReview()
+        try review.write(text: "Too fast", at: 10, now: now)
+        try review.send(at: now)
+        return review
+    }
+
+    @Test("a question keeps its choices in order, trimmed, each once, and they survive a save")
+    func kept() throws {
+        var review = try sentReview()
+        let asked = try review.ask(on: thread(1), question: "Which part?", choices: [" The intro ", "The end", "The intro"], now: now)
+
+        #expect(asked.choices == ["The intro", "The end"])
+        #expect(review.thread(thread(1))?.openQuestion?.choices == ["The intro", "The end"])
+        let read = try JSONDecoder().decode(VideoReview.self, from: try JSONEncoder().encode(review))
+        #expect(read.thread(thread(1))?.openQuestion?.choices == ["The intro", "The end"])
+    }
+
+    @Test("a question with no choices has none, as before")
+    func none() throws {
+        var review = try sentReview()
+        #expect(try review.ask(on: thread(1), question: "Which part?", now: now).choices == nil)
+        #expect(try review.reply(on: thread(1), text: "Noted", now: now).choices == nil)
+    }
+
+    @Test("a choice with no words is refused, and the question isn't asked")
+    func emptyChoice() throws {
+        var review = try sentReview()
+        #expect(throws: ReviewRefusal.emptyChoice) {
+            try review.ask(on: thread(1), question: "Which part?", choices: ["The intro", "  "], now: now)
+        }
+        #expect(review.thread(thread(1))?.openQuestion == nil)
+    }
+
+    @Test("a choice is found by its number from 1, and a number past them is refused")
+    func choiceByNumber() throws {
+        var review = try sentReview()
+        try review.ask(on: thread(1), question: "Which part?", choices: ["The intro", "The end"], now: now)
+
+        #expect(try review.choice(2, on: thread(1)) == "The end")
+        #expect(throws: ReviewRefusal.noChoice(thread(1), 3)) { try review.choice(3, on: thread(1)) }
+        #expect(throws: ReviewRefusal.noChoice(thread(1), 0)) { try review.choice(0, on: thread(1)) }
+
+        try review.answer(thread(1), text: "The end", now: now)
+        #expect(throws: ReviewRefusal.noQuestion(thread(1))) { try review.choice(1, on: thread(1)) }
+    }
+
+    @Test("a message kept before choices were reads with none")
+    func oldFile() throws {
+        let read = try JSONDecoder().decode(Message.self, from: Data("""
+        { "id": "m-f92cbb2a-5", "author": "agent", "kind": "question", "text": "Which?", "at": 0 }
+        """.utf8))
+        #expect(read.choices == nil)
+    }
+}
+
 @Suite("Ids")
 struct ItemIDTests {
     @Test("an id carries its kind, the video's hash prefix and its counter", arguments: [

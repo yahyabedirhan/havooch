@@ -42,10 +42,15 @@ public struct Message: Codable, Equatable, Sendable, Identifiable {
     /// under, so a later listener doesn't rename it; nil for the person's
     /// messages, and for an agent's message kept before names were.
     public let sessionName: String?
+    /// The quick replies an agent's question offers, in order: a click on
+    /// one answers with its words. Nil for a question with none, for every
+    /// other message, and for a question kept before choices were.
+    public let choices: [String]?
 
     public init(
         id: MessageID, author: Author, kind: Kind, text: String, at: Date,
-        region: Region? = nil, state: MessageState? = nil, sendID: SendID? = nil, sessionName: String? = nil
+        region: Region? = nil, state: MessageState? = nil, sendID: SendID? = nil, sessionName: String? = nil,
+        choices: [String]? = nil
     ) {
         self.id = id
         self.author = author
@@ -56,6 +61,7 @@ public struct Message: Codable, Equatable, Sendable, Identifiable {
         self.state = state
         self.sendID = sendID
         self.sessionName = sessionName
+        self.choices = choices
     }
 
     /// Whether the message is a work item: a person's `message`.

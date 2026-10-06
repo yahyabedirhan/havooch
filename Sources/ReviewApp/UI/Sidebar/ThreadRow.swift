@@ -26,6 +26,9 @@ struct ThreadSummary: Hashable {
     var lastAt: Date?
     /// Whether the agent waits for the person's answer on the thread.
     var waitsForAnswer: Bool
+    /// Whether an agent message came after the person last opened the
+    /// thread's view: the row shows the unread dot (L46).
+    var isUnread: Bool
     /// The name of the agent that wrote the last message, for VoiceOver's
     /// reading of a question.
     private var agent: String
@@ -37,6 +40,7 @@ struct ThreadSummary: Hashable {
         time = thread.time.map { TimeCode.text($0.rounded(.down)) }
         state = thread.state
         waitsForAnswer = thread.openQuestion != nil
+        isUnread = thread.isUnread
         if let last = thread.messages.last {
             let lastWriter = MessageWriter(last, listener: agent)
             switch (last.author, last.kind) {
@@ -59,12 +63,13 @@ struct ThreadSummary: Hashable {
         writer.map { "\($0): \(words)" } ?? words
     }
 
-    /// The row as one line, for VoiceOver: the number, the time, the state
-    /// and the preview. A question is read as the agent asking.
+    /// The row as one line, for VoiceOver: unread first when it is, the
+    /// number, the time, the state and the preview. A question is read as
+    /// the agent asking.
     var text: String {
         let state = waitsForAnswer ? "waiting for your answer" : self.state.map(StateLook.name)
         let preview = writer == "Asks" ? "\(agent) asks: \(words)" : self.preview
-        return [title, time, state, preview].compactMap(\.self).joined(separator: ", ")
+        return [isUnread ? "Unread" : nil, title, time, state, preview].compactMap(\.self).joined(separator: ", ")
     }
 }
 
@@ -116,6 +121,9 @@ enum RelativeTime {
 /// two-line preview of its last message. General has a symbol in the
 /// keyframe's place. A click shows the thread's view and moves the player
 /// to its frame. The row of the thread on the stage sits in a `well`.
+/// An unread row (L46) has an 8 pt dot in the accent colour at its left,
+/// its title bold, its preview in the primary text colour and its time in
+/// the accent colour.
 /// Keyboard navigation reaches the row, with the system focus ring, and
 /// Space or Return opens it as a click does.
 struct ThreadRow: View {
@@ -133,6 +141,8 @@ struct ThreadRow: View {
     static let spacing: CGFloat = 11
     /// The row's inner padding at either side.
     static let padding: CGFloat = 10
+    /// The unread dot's diameter.
+    static let unreadDot: CGFloat = 8
 
     var body: some View {
         let summary = ThreadSummary(thread, agent: model.agentName)
@@ -150,6 +160,9 @@ struct ThreadRow: View {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(fill, in: Self.shape)
+            .overlay(alignment: .topLeading) {
+                if summary.isUnread { unreadDot }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(RowButtonStyle())
@@ -188,7 +201,7 @@ struct ThreadRow: View {
     private func firstLine(_ summary: ThreadSummary) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(summary.title)
-                .font(.body.weight(.semibold).monospacedDigit())
+                .font(.body.weight(summary.isUnread ? .bold : .semibold).monospacedDigit())
             if let time = summary.time {
                 Text(time)
                     .font(.callout.monospacedDigit())
@@ -210,7 +223,7 @@ struct ThreadRow: View {
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text(RelativeTime.short(at, now: context.date))
                         .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(palette[.textTertiary])
+                        .foregroundStyle(palette[summary.isUnread ? .accent : .textTertiary])
                         .fixedSize()
                 }
             }
@@ -228,10 +241,22 @@ struct ThreadRow: View {
         let mark = summary.byAgent ? Text("\(agentMark(summary.writerAgent)) ") : Text("")
         return Text("\(mark)\(writer)\(summary.words)")
             .font(.callout)
-            .foregroundStyle(palette[.textSecondary])
+            .foregroundStyle(palette[summary.isUnread ? .textPrimary : .textSecondary])
             .lineLimit(2, reservesSpace: false)
             .truncationMode(.tail)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The unread dot, centred in the gap at the row's left and on its
+    /// first line; it straddles the row's edge so the thumbnail keeps its
+    /// place.
+    private var unreadDot: some View {
+        Circle()
+            .fill(palette[.accent])
+            .frame(width: Self.unreadDot, height: Self.unreadDot)
+            // The first line is 18 pt high, under the row's 8 pt top padding.
+            .offset(x: -Self.unreadDot / 2 + 1, y: 8 + (18 - Self.unreadDot) / 2)
+            .accessibilityHidden(true)
     }
 
     /// The agent's logo at the size of the preview's text, inside the

@@ -4,8 +4,9 @@ import SwiftUI
 
 /// The sidebar's view of one thread (L38): a top bar with Back, the
 /// thread's number and time, and Previous and Next; then the conversation.
-/// No keyframe: the stage shows the thread's frame. The composer under it
-/// (`Composer`) writes on the thread.
+/// No keyframe: the stage shows the thread's frame. Under the conversation,
+/// the live line says what the agent does now (`ThreadActivity`). The
+/// composer under it (`Composer`) writes on the thread.
 struct ThreadView: View {
     let model: AppModel
     let thread: ReviewThread
@@ -19,7 +20,8 @@ struct ThreadView: View {
                     if thread.messages.isEmpty {
                         GeneralIntro()
                     }
-                    Conversation(model: model, thread: thread)
+                    Conversation(model: model, thread: thread, offersQuickReplies: true)
+                    ThreadActivity(model: model, thread: thread.id)
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
@@ -36,16 +38,22 @@ struct ThreadView: View {
 }
 
 /// A thread's messages as a chat (L40), in the order written: in the
-/// thread view and in the thread popover alike.
+/// thread view and in the thread popover alike. The thread view offers the
+/// open question's quick replies under it.
 struct Conversation: View {
     let model: AppModel
     let thread: ReviewThread
+    var offersQuickReplies = false
 
     var body: some View {
         let messages = thread.messages
         let open = thread.openQuestion?.id
+        let choices = offersQuickReplies ? QuickReplies.choices(of: thread, isPointingAtRegion: model.isPointingAtRegion) : []
         ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
             MessageBubble(model: model, message: message, isOpenQuestion: message.id == open, run: ChatRun(of: index, in: messages))
+            if message.id == open, !choices.isEmpty {
+                QuickReplies(model: model, thread: thread.id, choices: choices)
+            }
         }
     }
 }

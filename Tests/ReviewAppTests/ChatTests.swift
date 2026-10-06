@@ -44,7 +44,7 @@ struct ChatTests {
         #expect(codex.preview == "Codex CLI: Words 1")
         #expect(codex.writerAgent == .codex)
         let old = ThreadSummary(ReviewThread(id: id, time: 5, messages: [message(2, .agent, .question)]), agent: "Claude Code")
-        #expect(old.text == "#1, 0:05, waiting for your answer, Claude Code asks: Words 2")
+        #expect(old.text == "Unread, #1, 0:05, waiting for your answer, Claude Code asks: Words 2")
         #expect(old.writerAgent == .claude)
         let person = ThreadSummary(ReviewThread(id: id, time: 5, messages: [message(3, .person, state: .queued)]), agent: "Claude Code")
         #expect(person.writerAgent == nil)
@@ -87,5 +87,22 @@ struct ChatTests {
         #expect(MessageAction.all(for: message(3, .person, .answer)) == [.copy])
         #expect(MessageAction.all(for: message(4, .agent)) == [.copy])
         #expect(MessageAction.all(for: message(5, .agent, .question)) == [.copy])
+    }
+
+    @Test("the quick replies are the open question's choices, none for a question with none or answered, and none while the person points at a region")
+    func quickReplies() {
+        let id = ItemID("t-f92cbb2a-1")!
+        let asked = Message(
+            id: ItemID("m-f92cbb2a-2")!, author: .agent, kind: .question, text: "Which part?", at: Self.now, choices: ["The intro", "The end"]
+        )
+        let open = ReviewThread(id: id, time: 5, messages: [message(1, .person, state: .sent), asked])
+        #expect(QuickReplies.choices(of: open, isPointingAtRegion: false) == ["The intro", "The end"])
+        #expect(QuickReplies.choices(of: open, isPointingAtRegion: true).isEmpty)
+
+        let plain = ReviewThread(id: id, time: 5, messages: [message(1, .person, state: .sent), message(2, .agent, .question)])
+        #expect(QuickReplies.choices(of: plain, isPointingAtRegion: false).isEmpty)
+
+        let answered = ReviewThread(id: id, time: 5, messages: [asked, message(3, .person, .answer)])
+        #expect(QuickReplies.choices(of: answered, isPointingAtRegion: false).isEmpty)
     }
 }

@@ -174,6 +174,62 @@ struct AnswerTests {
         _ = await wait.value
     }
 
+    @Test("status working with a text shows what the agent does now on its thread, the latest one, and done or failed clears it")
+    func activity() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let listeners = app.model.listeners
+        let one = try thread(app.one, app).id, two = try thread(app.two, app).id
+        func line(_ id: ThreadID) -> String? { listeners.activity(on: id, at: Date())?.text }
+
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "Reading the intro"), app).ok)
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "  Rendering 0:14 to 0:21\n"), app)
+            == .done("\(app.first) working\n"))
+        #expect(line(one) == "Rendering 0:14 to 0:21")
+        #expect(line(two) == nil)
+        #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping the box"), app).ok)
+
+        // The newest first, as `state` reports it and the footer shows it.
+        let state = try object(await operate(.state, app, json: true).output)
+        let activity = try #require((state["listener"] as? [String: Any])?["activity"] as? [[String: Any]])
+        #expect(activity.map { $0["text"] as? String } == ["Cropping the box", "Rendering 0:14 to 0:21"])
+        #expect(activity.map { $0["thread"] as? String } == [app.two, app.one])
+        #expect(activity.map { $0["message"] as? String } == [app.second, app.first])
+        #expect(await operate(.state, app).output.contains("  now on \(app.two): Cropping the box\n"))
+
+        // A status with no text keeps the line; done and failed clear it.
+        #expect(await listen(.status(messageID: app.first, state: .working), app).ok)
+        #expect(line(one) == "Rendering 0:14 to 0:21")
+        #expect(await listen(.status(messageID: app.first, state: .done), app).ok)
+        #expect(line(one) == nil)
+        #expect(line(two) == "Cropping the box")
+        #expect(await listen(.status(messageID: app.second, state: .failed), app).ok)
+        #expect(listeners.activities(at: Date()).isEmpty)
+        #expect(listeners.report(at: Date()).activity.isEmpty)
+    }
+
+    @Test("an empty text clears the line, a new listener session clears every line, and no line shows while no agent is there")
+    func activityCleared() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let listeners = app.model.listeners
+        let one = try thread(app.one, app).id
+        #expect(await listen(.status(messageID: app.first, state: .working, text: "Reading"), app).ok)
+        #expect(await listen(.status(messageID: app.first, state: .working, text: " "), app).ok)
+        #expect(listeners.activity(on: one, at: Date()) == nil)
+
+        #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping"), app).ok)
+        // The agent went quiet: past the grace, nothing it said still shows.
+        let later = Date().addingTimeInterval(Outbox.workingGrace + 1)
+        #expect(listeners.activities(at: later).isEmpty)
+        #expect(listeners.activity(on: try thread(app.two, app).id, at: later) == nil)
+
+        // Another listener takes the unfinished send over: its work starts again.
+        let other = Holder(key: "listener-2", name: "Mate", place: "/shop")
+        #expect(await app.server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: other)).reply.ok)
+        #expect(listeners.activities(at: Date()).isEmpty)
+    }
+
     @Test("a status that moves a message back, or names no message, is refused")
     func statusRefused() async throws {
         defer { cleanUp() }
@@ -331,6 +387,64 @@ struct AnswerTests {
         #expect(app.server.lease.current(at: Date()) == nil)
     }
 
+    @Test("an ask with choices keeps them on its question, which state --json lists, and thread choose answers with one at once")
+    func askWithChoicesAnsweredByChoose() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let server = app.server
+        let two = app.two
+        let asking = Task {
+            await server.reply(
+                to: ControlRequest.ask(thread: two, question: "Which box?", waitSeconds: 30, choices: ["The left one", "The right one"])
+                    .sent(by: Self.listener)
+            )
+        }
+        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        #expect(try thread(app.two, app).openQuestion?.choices == ["The left one", "The right one"])
+        let state = try object(await operate(.state, app, json: true).output)
+        let threads = try #require(state["threads"] as? [[String: Any]])
+        let messages = try #require(threads.first { $0["id"] as? String == two }?["messages"] as? [[String: Any]])
+        #expect(messages.last?["choices"] as? [String] == ["The left one", "The right one"])
+        // Only a question with choices names them.
+        #expect(messages.first?["choices"] == nil)
+
+        #expect(await operate(.threadChoose(thread: "2", choice: 3), app) == .refused(ReviewRefusal.noChoice(try #require(ItemID(two)), 3).line))
+        let chosen = await operate(.threadChoose(thread: "2", choice: 2), app)
+        let reply = await asking.value.reply
+
+        #expect(chosen == .done("#2 answered: The right one\n"))
+        #expect(reply == .done("The right one\n"))
+        #expect(try thread(app.two, app).openQuestion == nil)
+        #expect(try thread(app.two, app).messages.last?.kind == .answer)
+        #expect(app.model.state().queue.isEmpty)
+    }
+
+    @Test("a click on a quick reply answers the open question at once, and one on a question no longer open is refused in words")
+    func quickReplyClick() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        let one = try #require(ItemID(app.one))
+        _ = await listen(.ask(thread: app.one, question: "Which part?", waitSeconds: 0, choices: ["The intro", "The end"]), app)
+
+        #expect(app.model.chooseAnswer(one, choice: 1))
+        #expect(try thread(app.one, app).messages.last?.text == "The intro")
+        #expect(app.model.problem == nil)
+
+        #expect(!app.model.chooseAnswer(one, choice: 1))
+        #expect(app.model.problem?.reason == ReviewRefusal.noQuestion(one).line)
+    }
+
+    @Test("the person points at a region while drawing a rectangle, and stops when it's cancelled")
+    func pointingAtRegion() async throws {
+        defer { cleanUp() }
+        let app = try await taken()
+        #expect(!app.model.isPointingAtRegion)
+        app.model.beginRegion()
+        #expect(app.model.isPointingAtRegion)
+        app.model.endRegion(nil)
+        #expect(!app.model.isPointingAtRegion)
+    }
+
     @Test("an ask whose wait runs out answers that it ran out; the question stays open, and a late answer stays on the thread")
     func askRunsOut() async throws {
         defer { cleanUp() }
@@ -392,7 +506,7 @@ struct AnswerTests {
         _ = await listen(.reply(thread: app.one, text: "Looking"), app)
         let lines = await listen(.state, app).output
         #expect(lines.contains("threads: 3 (0 queued)\n"))
-        #expect(lines.contains("  #1 at 0:10 \(app.one) sent\n"))
+        #expect(lines.contains("  #1 at 0:10 \(app.one) sent unread\n"))
         #expect(lines.contains("    \(app.first) person message sent: Too fast here\n"))
         #expect(lines.contains(" agent message: Looking\n"))
         #expect(lines.contains(" region 0.25,0.2,0.3,0.25: This box\n"))

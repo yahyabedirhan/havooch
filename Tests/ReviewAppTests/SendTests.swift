@@ -168,7 +168,7 @@ struct SendDeliveryTests {
         #expect(model.listeners.presence(at: Date()) == .absent)
         var state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0,
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0, "activity": [AnyHashable](),
         ])
 
         let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
@@ -178,7 +178,7 @@ struct SendDeliveryTests {
         #expect((payload["threads"] as? [[String: Any]])?.count == 2)
         state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1,
+            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1, "activity": [AnyHashable](),
         ])
         #expect(await server.reply(to: ControlRequest.state.sent(by: Self.listener)).reply.output
             .contains("listener: working (Claude Code), 0 sends waiting, 1 taken\n"))

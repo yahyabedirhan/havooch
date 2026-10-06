@@ -63,6 +63,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         var keyframePath: String?
         /// Where the person left its popover; `null` until they move it.
         var popoverFrame: PopoverFrame?
+        /// Whether an agent message came after the person last opened
+        /// the thread's view: its row shows the unread dot.
+        var unread: Bool
         var messages: [Message]
 
         func encode(to encoder: any Encoder) throws {
@@ -73,11 +76,12 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(state, forKey: .state)
             try container.encode(keyframePath, forKey: .keyframePath)
             try container.encode(popoverFrame, forKey: .popoverFrame)
+            try container.encode(unread, forKey: .unread)
             try container.encode(messages, forKey: .messages)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, number, time, state, keyframePath, popoverFrame, messages
+            case id, number, time, state, keyframePath, popoverFrame, unread, messages
         }
 
         /// `thread` of the video with `contentHash`, whose pictures are
@@ -89,6 +93,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             state = thread.state?.rawValue
             keyframePath = layout.keyframe(of: thread, on: contentHash)?.path
             popoverFrame = thread.popoverFrame
+            unread = thread.isUnread
             messages = thread.messages.map { Message($0, contentHash: contentHash, layout: layout) }
         }
     }
@@ -112,6 +117,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// The send it went out in; `null` while it's queued, and for
         /// every message but a person's `message`.
         var sendId: String?
+        /// A question's quick-reply choices, in order; left out of the JSON
+        /// for a question with none and for every other message.
+        var choices: [String]?
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -124,10 +132,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(region, forKey: .region)
             try container.encode(cropPath, forKey: .cropPath)
             try container.encode(sendId, forKey: .sendId)
+            try container.encodeIfPresent(choices, forKey: .choices)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, author, kind, text, at, state, region, cropPath, sendId
+            case id, author, kind, text, at, state, region, cropPath, sendId, choices
         }
 
         init(_ message: ReviewCore.Message, contentHash: String, layout: SupportLayout) {
@@ -140,6 +149,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             region = message.region
             cropPath = layout.crop(of: message, on: contentHash)?.path
             sendId = message.sendID?.text
+            choices = message.choices
         }
     }
 
@@ -177,6 +187,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         var pendingSends: Int
         /// The sends a `wait` took that aren't finished.
         var takenSends: Int
+        /// What the agent does now, the newest first: the live lines the
+        /// thread views and the footer show. Empty while no agent is there.
+        var activity: [Activity] = []
 
         /// Nobody has listened yet.
         static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingSends: 0, takenSends: 0)
@@ -188,11 +201,20 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(session, forKey: .session)
             try container.encode(pendingSends, forKey: .pendingSends)
             try container.encode(takenSends, forKey: .takenSends)
+            try container.encode(activity, forKey: .activity)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case presence, waitOpen, session, pendingSends, takenSends
+            case presence, waitOpen, session, pendingSends, takenSends, activity
         }
+    }
+
+    /// One live line: what the agent does now on a thread, for a message,
+    /// as its last `status working` said it.
+    struct Activity: Encodable, Equatable {
+        var thread: String
+        var message: String
+        var text: String
     }
 
     struct Player: Encodable, Equatable {
@@ -381,14 +403,15 @@ nonisolated struct StateReport: Encodable, Equatable {
     private var listenerLine: String {
         let who = listener.session.map { " (\($0))" } ?? ""
         let waiting = "\(listener.pendingSends) \(listener.pendingSends == 1 ? "send" : "sends") waiting"
-        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken"
+        let now = listener.activity.map { "\n  now on \($0.thread): \($0.text.replacing("\n", with: " "))" }.joined()
+        return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken" + now
     }
 
     /// The threads, one line each with their messages under them.
     private var threadLines: String {
         let lines = threads.flatMap { thread in
             let place = thread.time.map { "#\(thread.number) at \(TimeCode.text($0))" } ?? "#0 General"
-            let head = "  \(place) \(thread.id) \(thread.state ?? "-")"
+            let head = "  \(place) \(thread.id) \(thread.state ?? "-")\(thread.unread ? " unread" : "")"
             return [head] + thread.messages.map { message in
                 let region = message.region.map { " region \($0.text)" } ?? ""
                 let state = message.state.map { " \($0)" } ?? ""

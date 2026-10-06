@@ -109,6 +109,14 @@ struct ControlServerTests {
             return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
         }
 
+        func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
+            let threadID = try id(thread)
+            let message = try change("thread choose \(thread) \(number)") { review throws(ReviewRefusal) in
+                try review.answer(threadID, text: try review.choice(number, on: threadID), now: Self.sentAt)
+            }
+            return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
+        }
+
         func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
             let place = frame.map { " at \($0.x),\($0.y),\($0.w),\($0.h)" } ?? ""
             try record("thread open \(thread)\(place)")
@@ -264,12 +272,12 @@ struct ControlServerTests {
         #expect(state["popover"] is NSNull)
         #expect(state["threads"] as? [[String: AnyHashable]] == [[
             "id": "t-abcdef01-0", "number": 0, "time": NSNull(), "state": NSNull(), "keyframePath": NSNull(),
-            "popoverFrame": NSNull(), "messages": [] as [String],
+            "popoverFrame": NSNull(), "unread": false, "messages": [] as [String],
         ]])
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0,
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
         ])
 
         app.hasVideo = false

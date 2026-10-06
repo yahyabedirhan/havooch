@@ -205,6 +205,12 @@ public struct VideoReview: Codable, Equatable, Sendable {
         threads[index].popoverFrame = frame
     }
 
+    /// The person opened thread `id`'s view at `now`: the agent's messages
+    /// on it until then are read.
+    public mutating func markSeen(_ id: ThreadID, at now: Date) throws(ReviewRefusal) {
+        threads[try threadIndex(id)].lastSeen = Self.kept(now)
+    }
+
     /// Sends every queued message as one send: each moves to `sent` and
     /// names the send. `transcript` gives each thread with a frame its
     /// window as it is now; the send keeps those lines, so a delivery again
@@ -245,6 +251,16 @@ public struct VideoReview: Codable, Equatable, Sendable {
         let message = Message(id: nextID(.message), author: .person, kind: .answer, text: try Self.trimmed(text, or: .emptyMessage), at: Self.kept(now))
         threads[index].messages.append(message)
         return message
+    }
+
+    /// The quick-reply choice `number` (from 1) of the open question on
+    /// `thread`: the words a click on its button answers with.
+    public func choice(_ number: Int, on thread: ThreadID) throws(ReviewRefusal) -> String {
+        let index = try threadIndex(thread)
+        guard let question = threads[index].openQuestion else { throw .noQuestion(thread) }
+        let choices = question.choices ?? []
+        guard choices.indices.contains(number - 1) else { throw .noChoice(thread, number) }
+        return choices[number - 1]
     }
 
     // MARK: - The listener
@@ -304,12 +320,25 @@ public struct VideoReview: Codable, Equatable, Sendable {
     /// The agent's question on `thread`, under the name of the listener
     /// `session`. Refused while the thread has a question with no answer:
     /// an answer names a thread, so it must have one question to go to.
+    /// `choices` are the quick replies the person may answer with in one
+    /// click: kept trimmed, in order, each once; one with no words is
+    /// refused.
     @discardableResult
-    public mutating func ask(on thread: ThreadID, question: String, session: String? = nil, now: Date) throws(ReviewRefusal) -> Message {
+    public mutating func ask(
+        on thread: ThreadID, question: String, choices: [String] = [], session: String? = nil, now: Date
+    ) throws(ReviewRefusal) -> Message {
         let index = try answerableIndex(thread)
         let words = try Self.trimmed(question, or: .emptyMessage)
+        var kept: [String] = []
+        for choice in choices {
+            let trimmed = try Self.trimmed(choice, or: .emptyChoice)
+            if !kept.contains(trimmed) { kept.append(trimmed) }
+        }
         guard threads[index].openQuestion == nil else { throw .questionOpen(thread) }
-        let message = Message(id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now), sessionName: session)
+        let message = Message(
+            id: nextID(.message), author: .agent, kind: .question, text: words, at: Self.kept(now), sessionName: session,
+            choices: kept.isEmpty ? nil : kept
+        )
         threads[index].messages.append(message)
         return message
     }

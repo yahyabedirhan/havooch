@@ -173,9 +173,9 @@
             <dl class="cmdlist">
               <dt><code>wait [--timeout s]</code></dt><dd>Wait for the next send and print it as JSON.</dd>
               <dt><code>ack &lt;send&gt; [text]</code></dt><dd>Say you have it. The messages turn acknowledged.</dd>
-              <dt><code>status &lt;message&gt; working|done|failed</code></dt><dd>Say how far you are. The pin shows it.</dd>
+              <dt><code>status &lt;message&gt; working|done|failed [&lt;text&gt;]</code></dt><dd>Say how far you are. The pin shows it, and the text with <code>working</code> shows what you do now.</dd>
               <dt><code>reply &lt;thread&gt; &lt;text&gt;</code></dt><dd>Answer on a thread, by id or by number.</dd>
-              <dt><code>ask &lt;thread&gt; &lt;question&gt;</code></dt><dd>Ask on the frame and print the person's answer.</dd>
+              <dt><code>ask &lt;thread&gt; &lt;question&gt; [--choice text]…</code></dt><dd>Ask on the frame and print the person's answer. Each choice is a button the person can click.</dd>
             </dl>
           </div>
           <div>

@@ -48,6 +48,10 @@ _Avoid_: inbox
 The sidebar's view of one thread: its conversation, with Back to the thread list and Previous and Next. It has no keyframe, since the stage shows it.
 _Avoid_: detail, expanded thread
 
+**Unread**:
+A thread with an agent message newer than the last time the person opened its thread view. Its row in the thread list shows a dot in the accent colour.
+_Avoid_: new, unseen, badge
+
 **Composer**:
 The one field at the foot of the sidebar. In a thread view it follows up on that thread or answers its open question; in the thread list it writes at the playhead, to the thread of that frame or a new one. It keeps a draft per thread.
 _Avoid_: reply box, thread field, input
@@ -68,6 +72,10 @@ _Avoid_: ask (as a noun), prompt
 A message by the person to an open question. It goes to the agent at once and never into the queue.
 _Avoid_: response, reply (reply is what the agent writes)
 
+**Choice**:
+A short answer the agent offers with a question. The thread view shows each one as a button under the open question, after the label "Quick reply"; a click on it sends it as the answer at once.
+_Avoid_: option (an option is a command's `--flag`), suggestion
+
 **Reply**:
 A message by the agent on a thread that waits for nothing.
 _Avoid_: response, answer
@@ -75,6 +83,10 @@ _Avoid_: response, answer
 **State**:
 Where a person's message is in its life: queued, sent, acknowledged, working, done or failed. A thread's state is that of its latest open person message.
 _Avoid_: status (except as the CLI command's name), progress
+
+**Activity**:
+What the agent says it does now on a thread, given as the text of `status <message> working`. It shows as a live line under the thread view's conversation and in the footer, until the message is done or failed.
+_Avoid_: progress, status text
 
 ### Sending
 
