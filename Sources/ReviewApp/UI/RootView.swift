@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The window: the header at the top, the stage with the player bar under
 /// it, and the sidebar at the side with its footer under it. With no
-/// video, a place to open one. All of it is on one surface, the theme's
+/// video, the home screen with the recent videos, or with none a place to
+/// open one. All of it is on one surface, the theme's
 /// `window`; hairlines, not background colours, separate the parts.
 struct RootView: View {
     @Bindable var model: AppModel
@@ -18,13 +19,16 @@ struct RootView: View {
         let palette = Palette(theme: model.themes.theme)
         HStack(spacing: 0) {
             Group {
-                if model.video == nil {
-                    EmptyState(model: model)
-                } else {
+                switch StageContent(model) {
+                case .player:
                     VStack(spacing: 0) {
                         StageView(model: model)
                         PlayerBar(model: model)
                     }
+                case .home:
+                    HomeScreen(model: model)
+                case .empty:
+                    EmptyState(model: model)
                 }
             }
             .frame(minWidth: 480, maxWidth: .infinity)
@@ -91,9 +95,10 @@ struct RootView: View {
         lease.shown(at: Date()) != nil
     }
 
-    /// The sidebar shows beside a video only.
+    /// The sidebar shows beside a video only: never on the home screen or
+    /// the empty state.
     private var sidebarShown: Bool {
-        model.video != nil && model.isSidebarVisible
+        StageContent(model).showsSidebar && model.isSidebarVisible
     }
 
     private var hasProblem: Binding<Bool> {

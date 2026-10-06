@@ -10,6 +10,14 @@ Havooch is a native macOS video player for giving feedback to agents. A person w
 A local video file the person opens. Its identity is its content, so a renamed or moved copy is the same video.
 _Avoid_: file, clip
 
+**Recent video**:
+A video the person opened lately, kept with the path it was last opened at, when it was opened and where its playhead stopped. The app keeps the 10 newest. Removing one leaves its review on the disk.
+_Avoid_: history, recent file
+
+**Home screen**:
+The stage with no video open and one or more recent videos: the cat mark, "Open a Video…", "Try the Demo" and the recent videos as cards with thumbnails. With no recent videos the stage shows the empty state.
+_Avoid_: start screen, welcome screen, launcher
+
 **Review**:
 Everything kept about one video: its threads, its sends and its context note.
 _Avoid_: session, project

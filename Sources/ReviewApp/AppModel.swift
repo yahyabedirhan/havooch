@@ -287,6 +287,17 @@ final class AppModel: AppControlling {
         recentsRevision += 1
     }
 
+    /// A click on a recent video's card: opens its video. A card whose
+    /// file is not there does nothing; its trash button removes it.
+    func openRecent(_ recent: StateReport.Recent) {
+        guard recent.available else { return }
+        openForPerson(recent.url)
+    }
+
+    /// The recent videos' thumbnails, made as their cards first show and
+    /// kept in memory for this run.
+    let thumbnails = Thumbnails()
+
     func play() throws(AppRefusal) {
         try needVideo()
         closePopover(.momentChanged)
