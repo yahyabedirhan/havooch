@@ -1,6 +1,6 @@
 # Prototype feedback, round 2: choosing and combining
 
-The maintainer's feedback after the round-1 rework, given while using the three installed prototypes side by side. It led to building Video Review 0.1.0 from proto-2's code with pieces from proto-1, and a few from proto-3. The text below is verbatim, as dictated, in the order given. Notes in square brackets are not the maintainer's words. The itemized decisions are in [2026-10-05-decisions.md](2026-10-05-decisions.md).
+The maintainer's feedback after the round-1 rework, given while using the three installed prototypes side by side. It led to building Havooch 0.1.0 from proto-2's code with pieces from proto-1, and a few from proto-3. The text below is verbatim, as dictated, in the order given. Notes in square brackets are not the maintainer's words. The itemized decisions are in [2026-10-05-decisions.md](2026-10-05-decisions.md).
 
 ## Choosing the base
 

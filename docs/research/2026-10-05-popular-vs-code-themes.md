@@ -405,7 +405,7 @@ UI roles (built theme):
 | Blue | token `entity.name.function` | `#4078F2` |
 | Purple | token `keyword` | `#A626A4` |
 
-### 3.7 How the picks map onto Video Review's tokens
+### 3.7 How the picks map onto Havooch's tokens
 
 The files are `Packaging/Themes/<name>.json`, credited in `Packaging/Themes/NOTICE.md`. Each one sets every token but `letterbox`, `popoverBorder`, `well`, `knob`, `shadow`, `controlHover`, `regionDim` and `sizeLabel`, which come from the default theme of its kind.
 

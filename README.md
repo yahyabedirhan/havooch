@@ -50,8 +50,6 @@ Or clear the quarantine flag from a terminal:
 xattr -dr com.apple.quarantine /Applications/Havooch.app
 ```
 
-Havooch was called Video Review before its first release. Its first launch moves your reviews, themes and settings from `~/Library/Application Support/Video Review/` to `~/Library/Application Support/Havooch/`, and the old `VIDEO_REVIEW_*` variables still work.
-
 ## The command and the mate skill
 
 The app carries a command, `havooch`, in `Havooch.app/Contents/Helpers/`; both installs link it onto your `PATH`. An agent drives the app through it:

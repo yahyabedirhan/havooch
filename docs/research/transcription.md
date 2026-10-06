@@ -1,6 +1,6 @@
 # Research: transcribe a local video on macOS
 
-Ticket: #14 (`Research: Find the best way to transcribe a local video`). Spec: #1 (`Spec: Video Review v1`). Researched and measured on 2026-10-04.
+Ticket: #14 (`Research: Find the best way to transcribe a local video`). Spec: #1 (`Spec: Havooch v1`). Researched and measured on 2026-10-04.
 
 ## Question
 

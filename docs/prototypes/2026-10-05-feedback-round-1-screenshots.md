@@ -1,6 +1,6 @@
 # Prototype feedback, round 1: from the PR screenshots
 
-The maintainer's feedback on the three Video Review v1 prototypes, given from the screenshots on their draft pull requests: proto-1 (#17), proto-2 (#18) and proto-3 (#19). It was passed to three agents on a Linux VPS, which reworked each prototype on its own branch. The text below is verbatim, as dictated. Notes in square brackets are not the maintainer's words.
+The maintainer's feedback on the three Havooch v1 prototypes, given from the screenshots on their draft pull requests: proto-1 (#17), proto-2 (#18) and proto-3 (#19). It was passed to three agents on a Linux VPS, which reworked each prototype on its own branch. The text below is verbatim, as dictated. Notes in square brackets are not the maintainer's words.
 
 ## The request for all three prototypes
 
