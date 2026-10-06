@@ -4,7 +4,7 @@ You build five new landing page prototypes for Havooch. Each one is a whole smal
 
 ## Where things are
 
-- **Worktree:** `/Users/yahyabedirhanpak/.treehouse/video-review-14a6ef/7/video-review`, detached at `a673701` (`main` after the launch PR #54). Another session shares this worktree. It has uncommitted edits to `AGENTS.md` and `docs/agents/issue-tracker.md`. Don't touch those two files.
+- **Worktree:** `~/.treehouse/video-review-14a6ef/7/video-review`, detached at `a673701` (`main` after the launch PR #54). Another session shares this worktree. It has uncommitted edits to `AGENTS.md` and `docs/agents/issue-tracker.md`. Don't touch those two files.
 - **Server:** `python3 -m http.server 8765` already serves `site/` from Herdr pane `w2M:p6`. Don't start another one. The prototypes are at `http://localhost:8765/prototypes/`.
 - **Context:** read `AGENTS.md`, the landing page issue (#50, "Feature: Build a landing page for Video Review") with its comments, and PR #54's description (`gh pr view 54 --repo yahyabedirhan/havooch`). The repository is private. It was just renamed to `yahyabedirhan/havooch`.
 

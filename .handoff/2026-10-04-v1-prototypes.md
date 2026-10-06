@@ -7,7 +7,7 @@ Three orchestrators build the same spec on their own, at the same time, on `prot
 - Spec: #1 `Spec: Video Review v1`. Tickets: every issue labelled `effort:v1`. Start with #15 (the low-level design), then follow the blocking links.
 - `AGENTS.md` and `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md`.
 - Shipyard (`~/Developer/yahyabedirhan/shipyard`) is the working example for the build, the CLI, the socket, the lease, demo mode and screenshots: its `Package.swift`, `Makefile`, `Sources/ShipyardControl/`, `Sources/ShipyardApp/Control/`, ADR 0006, ADR 0007 and the Testing section of its `AGENTS.md`. Copy its patterns; don't link its code.
-- ReviewMate (the review loop in `~/Documents/Vault/job-search`, private) is the working example for the listener loop: `.agents/skills/company-review/SKILL.md`, `apps/vault-api/src/cli/commands/review.ts` and `apps/vault-api/src/vault/vault.ts`. Read it for the principles only. Never copy its code or name its private details in this repo.
+- ReviewMate, a review loop in one of the maintainer's private repositories, is the working example for the listener loop. Read it for the principles only. Never copy its code or name its private details in this repo.
 - The fixture video is in `fixtures/sample/`.
 
 ## Why this exists
