@@ -124,25 +124,39 @@ private struct GeneralToggle: View {
     let isOn: Bool
     let toggle: () -> Void
     @Environment(\.palette) private var palette
+    @State private var isHovered = false
+
+    private static let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
 
     var body: some View {
         Button(action: toggle) {
             Label("General", systemImage: "globe")
                 .font(.subheadline)
                 .labelStyle(.titleAndIcon)
-                .foregroundStyle(isOn ? palette[.accent] : palette[.textTertiary])
+                .foregroundStyle(isOn ? palette[.accent] : palette[isHovered ? .textPrimary : .textSecondary])
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(
-                    isOn ? palette[.accent].opacity(0.14) : .clear,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                )
-                .contentShape(Rectangle())
+                .background(fill, in: Self.shape)
+                .overlay(Self.shape.strokeBorder(border, lineWidth: 1))
+                .contentShape(Self.shape)
         }
         .buttonStyle(.borderless)
         .fixedSize()
+        .onHover { isHovered = $0 }
+        .animation(.smooth(duration: 0.12), value: isHovered)
         .help(isOn ? "Write at the playhead" : "Write in General, not at a moment")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// Off, a hairline outline that takes `controlHover` under the pointer;
+    /// on, the accent tint, a shade stronger under the pointer.
+    private var fill: Color {
+        if isOn { return palette[.accent].opacity(isHovered ? 0.22 : 0.14) }
+        return isHovered ? palette[.controlHover] : .clear
+    }
+
+    private var border: Color {
+        isOn ? palette[.accent].opacity(0.4) : palette[.separator]
     }
 }
 
