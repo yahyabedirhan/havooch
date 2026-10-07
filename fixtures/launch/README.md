@@ -4,20 +4,20 @@ A 55 s narrated launch explainer of Havooch, made in the local explainer studio 
 
 | File | What it is |
 |---|---|
-| `havooch-launch.mp4` | H.264 1920x1080 at 30 fps, yuv420p, AAC audio, 1651 frames, 55.033 s, 3.4 MB |
-| `havooch-launch.srt` | the narration, one cue per scene |
-| `havooch-launch.context.md` | topic, goal and source repo, which the app sends to the agent |
+| `havooch-demo.mp4` | H.264 1920x1080 at 30 fps, yuv420p, AAC audio, 1651 frames, 55.033 s, 3.4 MB |
+| `havooch-demo.srt` | the narration, one cue per scene |
+| `havooch-demo.context.md` | topic, goal and source repo, which the app sends to the agent |
 | `voiceover.json` | the studio's scene list: narration text, measured `durationSeconds` and `paddingSeconds` per scene |
 
 ## Refreshing it
 
-The studio project is `havooch-launch`. Git doesn't track its render, so copy the files from the studio's checkout:
+The studio project is `havooch-launch`. Git doesn't track its render, so copy the files from the studio's checkout, renaming `havooch-launch` to `havooch-demo`: the app finds the captions and the context by the video's base name.
 
 | File here | Studio source |
 |---|---|
-| `havooch-launch.mp4` | `out/havooch-launch/havooch-launch.mp4`, re-encoded (below) |
-| `havooch-launch.srt` | `out/havooch-launch/havooch-launch.srt` |
-| `havooch-launch.context.md` | `out/havooch-launch/havooch-launch.context.md` |
+| `havooch-demo.mp4` | `out/havooch-launch/havooch-launch.mp4`, re-encoded (below) |
+| `havooch-demo.srt` | `out/havooch-launch/havooch-launch.srt` |
+| `havooch-demo.context.md` | `out/havooch-launch/havooch-launch.context.md` |
 | `voiceover.json` | `videos/havooch-launch/voiceover.json` |
 
 The studio's render is about 64 MB. Re-encode it before committing; the flat, code-drawn picture compresses well:
@@ -27,7 +27,7 @@ ffmpeg -i <studio>/out/havooch-launch/havooch-launch.mp4 \
   -vf "scale=in_range=pc:out_range=tv,format=yuv420p" \
   -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
   -c:v libx264 -preset veryslow -tune animation -crf 26 -r 30 \
-  -c:a aac -b:a 128k -movflags +faststart fixtures/launch/havooch-launch.mp4
+  -c:a aac -b:a 128k -movflags +faststart fixtures/launch/havooch-demo.mp4
 ```
 
 The studio renders full-range `yuvj420p`; the `scale` filter converts it to the limited-range `yuv420p` the other fixtures use. Check the frame count against the scene table, and compare a few frames with the render for damage to text, the logo and thin lines.

@@ -27,8 +27,8 @@ struct HeaderTests {
 
     @Test("demo mode says Demo, and no video shows the app's name")
     func demoAndEmpty() {
-        let demo = HeaderWords(video: URL(fileURLWithPath: "/Applications/Havooch.app/Contents/Resources/Demo/havooch-launch.mp4"), isDemo: true)
-        #expect(demo.title == "havooch-launch.mp4")
+        let demo = HeaderWords(video: URL(fileURLWithPath: "/Applications/Havooch.app/Contents/Resources/Demo/havooch-demo.mp4"), isDemo: true)
+        #expect(demo.title == "havooch-demo.mp4")
         #expect(demo.subtitle == "Demo")
 
         let empty = HeaderWords(video: nil, isDemo: false)

@@ -9,7 +9,7 @@ import ReviewWire
 /// folder in the same window (`AppModel.enterDemo`, L27).
 enum DemoRun {
     /// The demo video's file name, in `fixtures/launch/` and in the bundle.
-    static let videoName = "havooch-launch.mp4"
+    static let videoName = "havooch-demo.mp4"
 
     /// The bundled launch video, when this build has one: a bundle made by
     /// `make bundle` does, a bare `swift build` doesn't.
