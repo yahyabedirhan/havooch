@@ -51,7 +51,7 @@ struct HeaderTests {
         #expect(folder.path == "/tmp/me/\(AppIdentity.appName) Demo")
     }
 
-    @Test("Try the Demo opens the launch video bundled in Contents/Resources/Demo, and nothing when the bundle has none")
+    @Test("the demo video is the one in the bundle's Demo folder, and none when the bundle has none")
     func bundledDemoVideo() throws {
         let app = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-\(UUID().uuidString)/Fake.app", isDirectory: true)
@@ -63,8 +63,9 @@ struct HeaderTests {
         let bundle = try #require(Bundle(url: app))
         #expect(DemoRun.video(in: bundle) == nil)
 
-        try Data().write(to: demo.appendingPathComponent("havooch-launch.mp4"))
-        #expect(DemoRun.video(in: bundle)?.lastPathComponent == "havooch-launch.mp4")
+        let video = demo.appendingPathComponent(DemoRun.videoName)
+        try Data().write(to: video)
+        #expect(DemoRun.video(in: bundle)?.lastPathComponent == video.lastPathComponent)
     }
 
     @Test("the launch fixture make bundle copies holds the video the demo opens")
