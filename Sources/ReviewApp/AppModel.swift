@@ -288,7 +288,7 @@ final class AppModel: AppControlling {
         isContextShown = false
     }
 
-    /// "Try the Demo": the bundled sample video on demo data, in this
+    /// "Try the Demo": the bundled launch video on demo data, in this
     /// window (`openDemo`). The person is shown why when it doesn't open.
     func tryDemo() {
         Task {
@@ -300,7 +300,7 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// "Try the Demo" and `app demo`: the bundled sample video on demo
+    /// "Try the Demo" and `app demo`: the bundled launch video on demo
     /// data, in this window (`enterDemo`). Refused in a build with no
     /// bundled video.
     func openDemo() async throws(AppRefusal) {

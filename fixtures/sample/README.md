@@ -1,6 +1,6 @@
 # Sample fixture
 
-A 21 s narrated explainer of Havooch, made in the local explainer studio with the Kokoro voice `af_heart`. Tests and demo mode use it.
+A 21 s narrated explainer of Havooch, made in the local explainer studio with the Kokoro voice `af_heart`. The tests and the acceptance and screenshot scripts use it. "Try the Demo" opens `fixtures/launch` instead.
 
 | File | What it is |
 |---|---|
