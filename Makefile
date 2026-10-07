@@ -91,7 +91,7 @@ bundle: build
 	cp Packaging/AgentLogos/*.pdf Packaging/AgentLogos/NOTICE.md "$(CONTENTS)/Resources/AgentLogos/"
 	@# The demo the empty screen's "Try the demo" opens (Contents/Resources/Demo).
 	@mkdir -p "$(CONTENTS)/Resources/Demo"
-	cp fixtures/sample/* "$(CONTENTS)/Resources/Demo/"
+	cp fixtures/launch/* "$(CONTENTS)/Resources/Demo/"
 	@# Ad-hoc: no Developer ID. The command is signed first: the bundle's
 	@# signature seals nested code.
 	codesign --force --sign - --timestamp=none "$(CONTENTS)/Helpers/$(CLI)"

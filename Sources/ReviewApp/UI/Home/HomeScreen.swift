@@ -61,7 +61,7 @@ struct HomeScreen: View {
                     .keyboardShortcut(.defaultAction)
                 if DemoRun.video() != nil {
                     Button("Try the Demo") { model.tryDemo() }
-                        .help("Open the sample video on demo data, apart from your own reviews")
+                        .help("Open the launch video on demo data, apart from your own reviews")
                 }
             }
             .padding(.top, 4)

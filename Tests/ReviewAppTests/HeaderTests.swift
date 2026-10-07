@@ -27,8 +27,8 @@ struct HeaderTests {
 
     @Test("demo mode says Demo, and no video shows the app's name")
     func demoAndEmpty() {
-        let demo = HeaderWords(video: URL(fileURLWithPath: "/Applications/Havooch.app/Contents/Resources/Demo/sample.mp4"), isDemo: true)
-        #expect(demo.title == "sample.mp4")
+        let demo = HeaderWords(video: URL(fileURLWithPath: "/Applications/Havooch.app/Contents/Resources/Demo/havooch-launch.mp4"), isDemo: true)
+        #expect(demo.title == "havooch-launch.mp4")
         #expect(demo.subtitle == "Demo")
 
         let empty = HeaderWords(video: nil, isDemo: false)
@@ -49,5 +49,28 @@ struct HeaderTests {
     func demoFolder() {
         let folder = DemoRun.folder(temporary: URL(fileURLWithPath: "/tmp/me", isDirectory: true))
         #expect(folder.path == "/tmp/me/\(AppIdentity.appName) Demo")
+    }
+
+    @Test("Try the Demo opens the launch video bundled in Contents/Resources/Demo, and nothing when the bundle has none")
+    func bundledDemoVideo() throws {
+        let app = FileManager.default.temporaryDirectory
+            .appendingPathComponent("havooch-tests-\(UUID().uuidString)/Fake.app", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: app.deletingLastPathComponent()) }
+        let contents = app.appendingPathComponent("Contents", isDirectory: true)
+        let demo = contents.appendingPathComponent("Resources/Demo", isDirectory: true)
+        try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
+        try Data("<plist version=\"1.0\"><dict/></plist>".utf8).write(to: contents.appendingPathComponent("Info.plist"))
+        let bundle = try #require(Bundle(url: app))
+        #expect(DemoRun.video(in: bundle) == nil)
+
+        try Data().write(to: demo.appendingPathComponent("havooch-launch.mp4"))
+        #expect(DemoRun.video(in: bundle)?.lastPathComponent == "havooch-launch.mp4")
+    }
+
+    @Test("the launch fixture make bundle copies holds the video the demo opens")
+    func launchFixtureHoldsTheDemoVideo() {
+        let launch = MessageTests.fixture.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("launch/\(DemoRun.videoName)")
+        #expect(FileManager.default.fileExists(atPath: launch.path))
     }
 }

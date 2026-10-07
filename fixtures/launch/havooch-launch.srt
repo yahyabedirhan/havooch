@@ -1,0 +1,39 @@
+1
+00:00:00,000 --> 00:00:04,900
+Meet Havooch, named after an orange cat whose name means carrot.
+
+2
+00:00:04,900 --> 00:00:09,267
+It's a video player that carries your feedback to your coding agent.
+
+3
+00:00:09,267 --> 00:00:14,600
+Pause on any frame, drag a box around what you mean, and write what should change.
+
+4
+00:00:14,600 --> 00:00:19,700
+Each frame you comment on becomes a numbered thread, and your notes wait in a queue.
+
+5
+00:00:19,700 --> 00:00:26,500
+Then send them all. One batch goes to your agent, with the time, the frame, the region, and the transcript.
+
+6
+00:00:26,500 --> 00:00:32,533
+Your agent knows the project behind the video. It does the work, and makes you a new version.
+
+7
+00:00:32,533 --> 00:00:38,433
+Answers land on the right threads, beside the video. When it's unsure, it asks you there.
+
+8
+00:00:38,433 --> 00:00:44,133
+And there's nothing to set up. No API key, no account, no agents to connect.
+
+9
+00:00:44,133 --> 00:00:50,333
+Havooch talks to the agent you already run. Claude Code, Codex, OpenCode, and more.
+
+10
+00:00:50,333 --> 00:00:55,033
+Havooch. Watch videos together with your agents.
