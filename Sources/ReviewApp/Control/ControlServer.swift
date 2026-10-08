@@ -17,6 +17,9 @@ nonisolated struct AppRefusal: Error, Equatable {
 protocol AppControlling: AnyObject {
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
+    /// `havooch open`: opens the video for the person, plays it and
+    /// brings the app to the front. A file that doesn't play changes nothing.
+    func openInFront(_ url: URL) async throws(AppRefusal)
     /// Goes home, as a click on the Havooch mark does: the video closes
     /// and an in-app demo is left. Shows a closed window.
     func goHome() async
@@ -216,6 +219,15 @@ final class ControlServer {
                 let state = app.state()
                 let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) on demo data" } ?? "opened the demo"
                 return done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
+            case .open(let path):
+                try await app.openInFront(URL(fileURLWithPath: path))
+                let state = app.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))), playing" } ?? "opened \(path)"
+                var answer = done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
+                // The command brings this process to the front: the app
+                // asked to activate itself, but macOS may keep it behind.
+                answer.reply.pid = ProcessInfo.processInfo.processIdentifier
+                return answer
             case .playerOpen(let path):
                 try await app.open(URL(fileURLWithPath: path))
                 let state = app.state()

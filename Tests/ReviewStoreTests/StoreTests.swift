@@ -5,6 +5,7 @@ import ImageIO
 import Foundation
 import ReviewCore
 import ReviewStore
+import Synchronization
 import Testing
 
 /// A temporary folder, removed with `cleanUp()`.
@@ -54,6 +55,30 @@ struct ContentHashTests {
     @Test("a file that isn't there has no hash")
     func missing() {
         #expect(ContentHash.of(URL(fileURLWithPath: "/nowhere/a.mp4")) == nil)
+    }
+
+    @Test("the cache reads a file once while it stays the same, and again once it's written over")
+    func cached() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let file = scratch.folder.appendingPathComponent("a.mp4")
+        try Data("abc".utf8).write(to: file)
+        let reads = Mutex(0)
+        let cache = ContentHashCache { url in
+            reads.withLock { $0 += 1 }
+            return ContentHash.of(url)
+        }
+        let first = try #require(cache.of(file))
+        #expect(cache.of(file) == first)
+        #expect(cache.of(scratch.folder.appendingPathComponent("./a.mp4")) == first)
+        #expect(reads.withLock { $0 } == 1)
+
+        try Data("abcd".utf8).write(to: file)
+        let second = try #require(cache.of(file))
+        #expect(second != first)
+        #expect(second == ContentHash.of(file))
+        #expect(reads.withLock { $0 } == 2)
+        #expect(cache.of(URL(fileURLWithPath: "/nowhere/a.mp4")) == nil)
     }
 }
 #endif

@@ -34,6 +34,7 @@ public struct ControlMessage: Equatable, Sendable {
         case .appQuit: wire = Wire(command: "app.quit")
         case .appHome: wire = Wire(command: "app.home")
         case .appDemo: wire = Wire(command: "app.demo")
+        case .open(let path): wire = Wire(command: "open", path: path)
         case .playerOpen(let path): wire = Wire(command: "player.open", path: path)
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
@@ -115,6 +116,7 @@ public struct ControlMessage: Equatable, Sendable {
         case "app.quit": return .appQuit
         case "app.home": return .appHome
         case "app.demo": return .appDemo
+        case "open": return .open(path: try absolute(wire))
         case "player.open": return .playerOpen(path: try absolute(wire))
         case "player.play": return .playerPlay
         case "player.pause": return .playerPause

@@ -117,6 +117,12 @@ final class AppModel: AppControlling {
 
     /// Shows the player's window when it's closed; the app sets it.
     @ObservationIgnored var showWindow: () -> Void = {}
+    /// Brings the app and the player's window to the front, as `havooch
+    /// open` does; the app sets it.
+    @ObservationIgnored var bringToFront: () -> Void = {}
+    /// The content hashes of the files opened in this run, so opening one
+    /// again skips reading it whole (P6).
+    @ObservationIgnored private let hashes = ContentHashCache()
 
     private var layout: SupportLayout { data.layout }
     /// Turns a video's sound into lines, on every data folder of the run.
@@ -200,7 +206,7 @@ final class AppModel: AppControlling {
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
             throw AppRefusal("no video file at \(url.path)")
         }
-        guard let contentHash = await Self.contentHash(of: url) else {
+        guard let contentHash = await Self.contentHash(of: url, in: hashes) else {
             throw AppRefusal("can't read \(url.path)")
         }
         // Before the player changes: a history that doesn't read keeps the
@@ -250,6 +256,25 @@ final class AppModel: AppControlling {
         showWindow()
     }
 
+    /// `havooch open`: opens `url` for the person, as the Open panel does,
+    /// then plays it and brings the app to the front. A file that doesn't
+    /// play is refused before anything changes: an in-app demo stays, and
+    /// the video that was open stays open. No lease: it's the person's
+    /// open, whoever asks for it.
+    func openInFront(_ url: URL) async throws(AppRefusal) {
+        let url = url.standardizedFileURL
+        var isFolder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
+            throw AppRefusal("no video file at \(url.path)")
+        }
+        try await PlayerEngine.checkPlayable(url)
+        // The person's video, on their own data, as the Open panel opens it.
+        await leaveDemo()
+        try await open(url)
+        engine.play()
+        bringToFront()
+    }
+
     /// The player's window closed; the app and this model stay. The video
     /// pauses and keeps its position for its recent-video entry, and the
     /// Dock icon shows it again where it was.
@@ -261,8 +286,8 @@ final class AppModel: AppControlling {
     /// The hash of the file at `url`, read off the main actor: it reads the
     /// whole file, and a long video would hold the window still.
     @concurrent
-    private nonisolated static func contentHash(of url: URL) async -> String? {
-        ContentHash.of(url)
+    private nonisolated static func contentHash(of url: URL, in hashes: ContentHashCache) async -> String? {
+        hashes.of(url)
     }
 
     /// Refused when the run is no longer on `data`, the data `url` was
@@ -625,7 +650,7 @@ final class AppModel: AppControlling {
         let hash = video?.contentHash ?? ""
         let review = desk.review
         var report = StateReport(
-            app: .init(version: Version.app, demo: isDemo, support: support.path),
+            app: .init(version: Version.app, demo: isDemo, support: support.path, active: NSApp?.isActive ?? false),
             video: video.map {
                 .init(
                     path: $0.url.path, contentHash: $0.contentHash, title: $0.title, duration: engine.duration,

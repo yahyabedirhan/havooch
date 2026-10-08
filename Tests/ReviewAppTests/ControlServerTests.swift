@@ -29,7 +29,7 @@ struct ControlServerTests {
 
         func state() -> StateReport {
             var report = StateReport(
-                app: .init(version: "0.3.0", demo: true, support: "/demo"),
+                app: .init(version: "0.3.0", demo: true, support: "/demo", active: active),
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
@@ -161,6 +161,16 @@ struct ControlServerTests {
             hasVideo = true
         }
 
+        /// Whether the app is in front, as `openInFront` leaves it.
+        var active = false
+
+        func openInFront(_ url: URL) async throws(AppRefusal) {
+            try record("open in front \(url.path)")
+            hasVideo = true
+            playing = true
+            active = true
+        }
+
         func goHome() async {
             calls.append("home")
             hasVideo = false
@@ -256,6 +266,48 @@ struct ControlServerTests {
         #expect(app.calls == ["open /videos/sample.mp4", "seek 10.0", "play", "pause"])
     }
 
+    @Test("open answers once the video plays in front, and --json reports the app, the video and the player")
+    func openInFront() async throws {
+        app.hasVideo = false
+        // The reply names the app's process, for the command to bring to the front.
+        #expect(await answer(.open(path: "/videos/sample.mp4")).reply
+            == ControlReply(ok: true, output: "opened sample (0:21.233), playing\n", pid: ProcessInfo.processInfo.processIdentifier))
+        #expect(app.calls == ["open in front /videos/sample.mp4"])
+        let open = try object(await answer(.open(path: "/videos/sample.mp4"), json: true).reply.output)
+        #expect((open["app"] as? [String: Any])?["active"] as? Bool == true)
+        #expect(open["screen"] as? String == "player")
+        #expect((open["video"] as? [String: Any])?["path"] as? String == "/videos/sample.mp4")
+        #expect(open["player"] as? [String: AnyHashable] == ["time": 0, "playing": true])
+    }
+
+    @Test("open needs no lease: it goes through while another agent holds it, which keeps it, and shows no agent-control icon")
+    func openWithoutLease() async throws {
+        let server = server()
+        let other = Holder(key: "agent-2", name: "Codex", place: "/Users/me/other")
+        let take = await server.reply(to: ControlMessage(.controlTake(waitSeconds: nil), holder: other).encoded())
+        #expect(take.reply.ok)
+        let open = await server.reply(to: ControlMessage(.open(path: "/videos/sample.mp4"), holder: Self.holder).encoded())
+        #expect(open.reply.ok)
+        #expect(open.granted == nil)
+        #expect(server.lease.status(at: Date())?.holder == other)
+        #expect(app.calls == ["open in front /videos/sample.mp4"])
+
+        // With no lease held, an open takes none: the icon stays hidden.
+        let free = self.server()
+        _ = await free.reply(to: ControlMessage(.open(path: "/videos/sample.mp4"), holder: Self.holder).encoded())
+        #expect(free.lease.status(at: Date()) == nil)
+        #expect(free.indicator.shown(at: Date()) == nil)
+    }
+
+    @Test("a file the app can't play is refused, and the reply says why")
+    func openRefused() async {
+        app.hasVideo = false
+        app.refusal = AppRefusal("can't play /videos/notes.txt: it has no video this Mac can play")
+        #expect(await answer(.open(path: "/videos/notes.txt")).reply
+            == .refused("can't play /videos/notes.txt: it has no video this Mac can play"))
+        #expect(!app.hasVideo)
+    }
+
     @Test("with --json an action answers the parts it changed")
     func playerJSON() async throws {
         let seek = try object(await answer(.playerSeek(seconds: 10), json: true).reply.output)
@@ -277,7 +329,7 @@ struct ControlServerTests {
     func stateJSON() async throws {
         app.time = 10
         var state = try object(await answer(.state, json: true).reply.output)
-        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.3.0", "demo": true, "support": "/demo"])
+        #expect(state["app"] as? [String: AnyHashable] == ["version": "0.3.0", "demo": true, "support": "/demo", "active": false])
         #expect(state["player"] as? [String: AnyHashable] == ["time": 10, "playing": false])
         #expect(state["video"] as? [String: AnyHashable]
             == ["path": "/videos/sample.mp4", "contentHash": "abcdef0123", "title": "sample", "duration": 21.233, "contextNote": ""])

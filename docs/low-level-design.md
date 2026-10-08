@@ -156,7 +156,7 @@ DataFolder ──holds──▶ ListenerQueue ──holds──▶ Outbox ──
 DataFolder ──holds──▶ TranscriptDesk ──asks──▶ TranscriptSources        (read at send time, not at delivery)
 AppModel ──owns──▶ ThemeDesk ──resolves with──▶ ThemeCatalog; ──reads──▶ ThemeFiles, Settings   (on the folder the run started on)
 SocketListener ──hands bytes to──▶ ControlServer ──holds──▶ ControlLease
-ControlServer ──calls──▶ AppModel (operator and free), the ListenerQueue the AppModel is on now (listener)
+ControlServer ──calls──▶ AppModel (operator, person and free), the ListenerQueue the AppModel is on now (listener)
 UI views ──read──▶ AppModel, ReviewDesk, ListenerQueue, PlayerEngine, ThemeDesk (as Palette)   ──call──▶ AppModel
 ```
 
@@ -248,6 +248,7 @@ Sources/
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
     HavoochCLI.swift               run(arguments, environment) → output, error, exit code
+    OpenCommand.swift              open <path>: the person's open, no lease; launches the app in front when it doesn't run (L51)
     AppCommands.swift              app status | open [--demo] | home | demo | quit, state, --version (L49)
     ControlCommands.swift          control take [--wait] | release
     PlayerCommands.swift           player open | play | pause | seek
@@ -255,7 +256,7 @@ Sources/
     ThemeCommands.swift            theme list | set
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42)
     ListenerCommands.swift         wait, ack, status, reply, ask
-    AppLauncher.swift              starts the app through Launch Services; the AppLaunching seam
+    AppLauncher.swift              starts the app through Launch Services, in the background or in front, and brings a process to the front; the AppLaunching seam
   ReviewCLI/
     main.swift                     exit(HavoochCLI.run(...))
   ReviewCore/
@@ -284,7 +285,7 @@ Sources/
     SupportLayout.swift            every path under a support folder (pure), and the pending name of a picture (L19)
     Library.swift                  reviews, the outbox, the recent videos, settings: load and save, the schema version; the hash-prefix index
     RecentVideo.swift              one recent video: path, content hash, opened time, last position
-    ContentHash.swift              SHA-256 of the file, streamed
+    ContentHash.swift              SHA-256 of the file, streamed; ContentHashCache keeps it by path, size and modification time (L51)
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
@@ -412,6 +413,7 @@ As proto-2, with these changes:
 | Role | Cases | Lease |
 |---|---|---|
 | free | `appStatus`, `state`, `controlTake(waitSeconds?)`, `controlRelease`, `themeList` | none |
+| person (L51) | `open(path)` | none, and no agent-control icon |
 | operator | `appOpen`, `appQuit`, `appHome`, `appDemo`, `playerOpen(path)`, `playerPlay`, `playerPause`, `playerSeek(seconds)`, `commentAdd(text, at?, region?, thread?)`, `commentOpen(text, region?)`, `commentCompose(text, region?, general)`, `commentEdit(id, text)`, `commentDelete(id)`, `send`, `threadAnswer(thread, text)`, `threadChoose(thread, choice)`, `threadOpen(thread, frame?)`, `threadShow(thread)`, `threadList`, `contextSet(text)`, `themeSet(name)`, `screenshot(path, appearance?, hideAgentIndicator, window)` | takes or renews |
 | listener | `wait(timeout?)`, `ack(sendID, text?)`, `status(messageID, state, text?)`, `reply(thread, text)`, `ask(thread, question, waitSeconds?, choices)` | none |
 
@@ -424,6 +426,7 @@ As proto-2, with the spec's names and outputs:
 
 | Command | Prints | `--json` |
 |---|---|---|
+| `open <path>` (L51) | `opened cut2.mp4 (0:55.033), playing`; exit 1 with `can't play …` or `no video file at …` | `{"app": {…, "active": true}, "screen": "player", "video": {…}, "player": {…}}` |
 | `app home` (L49) | `home, 3 recent videos, your data` (`demo data` on a run started with `app open --demo`) | `{"app": {…}, "screen": "home"}` |
 | `app demo` (L49) | `opened havooch-demo.mp4 (0:55.033) on demo data` | `{"app": {…}, "screen": "player", "video": {…}, "player": {…}}` |
 | `comment add <text> [--at] [--region] [--thread]` | `m-f92cbb2a-3 queued on #2 at 0:12` (`… on the region 0.25,0.2,0.3,0.25`) | `{"message": {…}, "thread": {"id", "number"}}` |
@@ -638,6 +641,7 @@ public struct SupportLayout: Sendable {
 | Method | Rules it owns | Refuses |
 |---|---|---|
 | `open(url)` | as proto-2: hash, load the review, load the video, record path and frame rate, prepare the transcript, read the context, save the position of the video that goes, put it first on the recent videos; closes any popover; then `showWindow()`, so a control command's open shows a closed window (L47) | a file AVPlayer cannot play; a review that does not read |
+| `openInFront(url)` | `havooch open` (L51): refuses a missing file or one AVPlayer cannot play (`PlayerEngine.checkPlayable`) before anything changes, then `leaveDemo()` as the Open panel does, `open(url)`, play, and `bringToFront()` (the app sets it: show the window, `NSApp.activate()`, make it key) | no file; a file AVPlayer cannot play; as `open(url)` |
 | `enterDemo(video)`, `leaveDemo()` | the in-app demo (L27): switch the `DataFolder` to the demo folder and open the video there, or close it and switch back to `launchSupport`; a run started on demo data never switches. `openForPerson` (the Open panel, a drop) calls `leaveDemo()` first | as `open(url)` |
 | `goHome()`, `goHomeForPerson()` | home (L49): an in-app demo is left (`leaveDemo`); otherwise the popover's words are queued on their video, the position saved and the video closed (`closeVideo`, which also closes `ReviewDesk`'s open review). Then `refreshRecents()`, so a moved file's card turns unavailable, and `showWindow()`. `goHomeForPerson` runs it from the header's mark and File > Close Video | |
 | `openDemo()` | "Try the Demo" and `app demo` (L49): `enterDemo` on the bundled video (`demoVideo`, `DemoRun.video()` by default) | no bundled video; as `enterDemo` |
@@ -938,7 +942,7 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 | the listener's round: ack, status, reply, ask and answer, a follow-up, a listener restart | `ReviewAppTests` over the real socket (`ListenerSocketTests`) |
 | region crops at several window sizes | `ReviewAppTests` (proto-1's) |
 | what a restart keeps | `ReviewAppTests`, a second `AppModel` on the same support folder |
-| everything end to end | `scripts/acceptance.sh`, the spec's 10 steps against the installed app in demo mode |
+| everything end to end | `scripts/acceptance.sh`, the spec's 10 steps and `havooch open` (step 11, L51) against the installed app in demo mode |
 
 ## 5. Extensibility
 
@@ -1012,3 +1016,4 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L48 | The home screen (spec 0.3.0, ticket #70). `StageContent` decides what the stage shows: the player with a video, the home screen with none and one or more recent videos, else the empty state; the sidebar shows beside the player only. A card's click calls `AppModel.openRecent`, which does nothing for an entry whose file is gone; the trash button and "Remove from Recents" call `removeRecent`, which leaves the review on disk; "Show in Finder" selects the file in Finder. A thumbnail is the frame at the entry's position, or at 1 second when the position is 0 (`RecentCard.thumbnailTime`), inside the video's duration, at most 640 × 360 pixels, made when the card first shows by `Thumbnails` on `AppModel` and kept in memory for the run, keyed by content hash and position; nothing is written to disk. The relative time is `RelativeDateTimeFormatter`'s, "Just now" under a minute, and moves on each minute. Cards show no thread counts or unread dots. | Spec 0.3.0, "The home screen". The frame where the person stopped costs no more than the first frame. In memory only, so the support folder holds no cache to clean. |
 | L49 | Going home from the player (spec 0.3.0, ticket #69). `AppModel.goHome()` leaves an in-app demo (`leaveDemo`), or else queues the popover's words on their video, saves the position and closes the video; then it shows a closed window (`showWindow`). Words in the composer go and the queue stays on the video's review, as when another video opens. Closing a video also closes `ReviewDesk`'s open review, so `state` reports no threads with no video. Its callers: the cat mark at the header's leading edge (`TitleView`, a plain button, help tag "Home"), File > Close Video with Shift+Cmd+W (disabled with no video), and `havooch app home`. The header's floating group has "Open a Video…" with the `folder` symbol beside a video, which calls `openFromPanel()` and leaves an in-app demo as the Open panel does. `havooch app demo` runs `openDemo()`, what "Try the Demo" does, and its open shows a closed window. `app home` and `app demo` are operator requests (`app.home`, `app.demo`); the protocol version stays 3, since an older app refuses an unknown command in words. `state` reports `screen` (`StateReport.Screen`): `player` with a video, else `home`, the empty state included. | Spec 0.3.0, "Going home from the player". Cmd+W is the window's Close (L47), so Close Video takes Shift+Cmd+W. `app demo` lets the visual checks run "Try the Demo" without a click. One `screen` word for every screen with no video keeps `state` simple; `recents` tells the home screen from the empty state. |
 | L50 | Filled controls (ADR 0006, ticket #81). `ThemeToken.accentFill` is the fill of every prominent button; `accent` stays for lines, selections, rings and pins, and is still the window's tint. Views make a prominent button only through `View.filledButton(palette)` in `Palette.swift` (`.borderedProminent` tinted `accentFill`); a source test in `ReviewAppTests` (`ThemeDeskTests`) fails on `.borderedProminent` anywhere else. Its callers: Send, both "Open a Video…", the comment popover's Queue and Answer, the message editor's Save and the context note's Save. Answer was tinted `question`, which white text does not read on, so it is on `accentFill` too; the field's `question` border and the "Answer" key hint still mark an answer. Every shipped theme with its own `accent` sets `accentFill`: Default Light and Default Dark `#48689d` (Dimmed inherits it), the VS Code themes a deeper shade of their own accent. A theme that sets `accent` nearer than `accentFill` gets `accent.filled()`, so a theme written before this token keeps its hue and passes. `state` reports the active fill as `theme.accentFill`. | ADR 0006, decision I4: white text read at about 1.9:1 on Default Dark's light accent. A test in `ReviewStoreTests` checks white on every shipped theme's `accentFill` for 4.5:1, so a new theme cannot break it. |
+| L51 | `havooch open <path>` (#82, decisions C1 and C2, target design Trace 1 and P6). A new request role, **person**: a request a person's click would make, which takes no lease, so the agent-control icon never shows for it; its one request is `open(path)` (wire `open`, protocol version stays 3 as in L49). The command (`OpenCommand`) refuses a path with no file before anything else. It asks the running app; when none answers it launches the app through `AppLaunching.launch(environment: [:], inFront: true)`, looks every 0.05 s with `app status` until the app answers (10 s at most), then asks for the open once, so a slow first look never opens the file twice. A launch in front never waits for or quits a running copy of the app, so the person's app survives. In the app, `ControlServer` calls `AppModel.openInFront`, which checks the file plays first (an in-app demo and the open video stay when it doesn't), leaves an in-app demo, opens, plays and calls `bringToFront`. macOS's cooperative activation keeps an app in the background from activating itself on a socket request, so the reply carries the app's `pid` (`ControlReply.pid`) and the command brings that process to the front (`AppLaunching.bringToFront(pid:)`, `NSRunningApplication.activate()`): by process, since the installed app and a build share the bundle id. When that fails the command still exits 0, with a note on standard error. `state` reports `app.active`. `ContentHashCache` keeps each content hash by path, size and modification time for the run, so opening a file again skips reading it whole. `player open` stays the operator's leased open, paused. The cold path launches the app and then asks it over the socket; the Launch Services open-document event (Finder's Open With, a Dock drop, `open -a`) is #83's. | C1: opening a file never takes control from the person. C2: 1 s warm, measured at 0.13 s to 0.47 s on this machine with the fixtures. A launch with the file as an open-document event would need the app to tell the command whether the file played; asking over the socket once the app answers gives the command the app's own refusal and exit code. |

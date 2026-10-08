@@ -30,6 +30,7 @@ struct ControlMessageTests {
         .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
         .screenshot(path: "/tmp/shot.png", appearance: .light, hideAgentIndicator: true),
         .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings), .screenshot(path: "/tmp/about.png", appearance: nil, window: .about),
+        .open(path: "/videos/sample.mp4"),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
@@ -123,6 +124,8 @@ struct ControlMessageTests {
             more.merging(["version": Version.controlProtocol, "command": command, "holder": holderFields]) { _, new in new }
         }
         #expect(refusal(fields("player.open", [:])) == .unreadable("the control command `player.open` needs its `path`"))
+        #expect(refusal(fields("open", ["path": "cut2.mp4"]))
+            == .unreadable("the control command `open` needs an absolute `path`, not `cut2.mp4`"))
         #expect(refusal(fields("player.open", ["path": "sample.mp4"]))
             == .unreadable("the control command `player.open` needs an absolute `path`, not `sample.mp4`"))
         #expect(refusal(fields("screenshot", ["path": "shot.png"]))

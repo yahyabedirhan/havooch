@@ -12,6 +12,9 @@ enum Invocation: Equatable, Sendable {
     case appOpen(demo: URL?)
     /// `app quit`: ask the app to quit, then wait until it's gone.
     case appQuit
+    /// `open <path>`: the video at the absolute `file` opened in front,
+    /// with the app launched first when it doesn't run.
+    case open(URL)
     /// `wait`: hold a request until a send is made, for `timeout` seconds
     /// or with no limit, connecting again while the app isn't running.
     case wait(timeout: Int?)
@@ -110,7 +113,7 @@ struct Command: Sendable {
 /// The commands of `havooch`, by name. A new command is a `Command` in
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
-    static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
+    static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
         + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.

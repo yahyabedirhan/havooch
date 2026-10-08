@@ -14,6 +14,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         var demo: Bool
         /// The support folder this run keeps its data in.
         var support: String
+        /// Whether the app is the active app, in front of the others:
+        /// `havooch open` brings it there.
+        var active = false
     }
 
     /// What the window shows: the player with a video open, else home.

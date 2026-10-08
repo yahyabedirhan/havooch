@@ -2,7 +2,8 @@
 # The 0.2.0 acceptance scenario (`Spec: Havooch 0.2.0`, #36): the 10
 # steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
 # `havooch` CLI only, against the installed app in demo mode with the
-# fixture video.
+# fixture video. Step 11 adds `havooch open` (#82): the person's open,
+# run by the listener with no lease.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -43,7 +44,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 10 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 11 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -700,11 +701,31 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 11 -------------------------------------------------------------------
+
+begin 11 "Run havooch open as the listener, with no lease. Check that the video plays in front, no lease is taken, and a file that doesn't play is refused"
+mkdir -p "$out/open"
+cut="$out/open/cut2.mp4"
+cp "$video" "$cut"
+printf 'These are notes, not a video.\n' >"$out/open/notes.mp4"
+run listener open "$cut"
+exits 0 "open $cut (the listener, no lease)"
+state
+holds "the copy is open and playing, and the app is in front" "$stdout" \
+    '.video.path == $path and .player.playing == true and .app.active == true' --arg path "$cut"
+holds "no lease is held: the agent-control icon doesn't show" "$stdout" '.lease == null'
+run listener open "$out/open/notes.mp4"
+exits 1 "open of a file that doesn't play"
+state
+holds "the copy is still open" "$stdout" '.video.path == $path' --arg path "$cut"
+holds "still no lease is held" "$stdout" '.lease == null'
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 10 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 11 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 10 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 11 steps. Screenshots: %s\n' "$shots"
 exit 0

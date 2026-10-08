@@ -105,6 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
         model.showWindow = { [window] in window.show() }
+        model.bringToFront = { [window] in
+            window.show()
+            NSApp.activate()
+            PlayerWindow.window?.makeKeyAndOrderFront(nil)
+        }
         window.watchClose { [model] in model.windowClosed() }
         Shortcuts.install(for: model)
         OutsideClicks.install(for: model)

@@ -54,17 +54,7 @@ final class PlayerEngine {
     /// play is refused with the reason, and the video that was open stays.
     func load(_ url: URL) async throws(AppRefusal) {
         let asset = AVURLAsset(url: url)
-        let playable: Bool
-        let track: AVAssetTrack?
-        do {
-            playable = try await asset.load(.isPlayable)
-            track = try await asset.loadTracks(withMediaType: .video).first
-        } catch {
-            throw AppRefusal("can't play \(url.path): \(error.localizedDescription)")
-        }
-        guard playable, let track else {
-            throw AppRefusal("can't play \(url.path): it has no video this Mac can play")
-        }
+        let track = try await Self.videoTrack(of: asset, at: url)
         let length: CMTime
         let frameRate: Float
         let shown: CGSize
@@ -101,6 +91,28 @@ final class PlayerEngine {
         videoSize = shown
         frameDuration = Self.frameDuration(nominalRate: Double(frameRate))
         time = 0
+    }
+
+    /// Refused with the reason when the file at `url` has no video this
+    /// Mac can play, before anything changes: `havooch open` asks first.
+    static func checkPlayable(_ url: URL) async throws(AppRefusal) {
+        _ = try await videoTrack(of: AVURLAsset(url: url), at: url)
+    }
+
+    /// The asset's video track, when the asset plays and has one.
+    private static func videoTrack(of asset: AVURLAsset, at url: URL) async throws(AppRefusal) -> AVAssetTrack {
+        let playable: Bool
+        let track: AVAssetTrack?
+        do {
+            playable = try await asset.load(.isPlayable)
+            track = try await asset.loadTracks(withMediaType: .video).first
+        } catch {
+            throw AppRefusal("can't play \(url.path): \(error.localizedDescription)")
+        }
+        guard playable, let track else {
+            throw AppRefusal("can't play \(url.path): it has no video this Mac can play")
+        }
+        return track
     }
 
     /// Closes the open video: the player stops and holds nothing.

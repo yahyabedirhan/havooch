@@ -26,6 +26,10 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch app demo`: the app runs the demo in the same window, as
     /// "Try the Demo" does. A closed window shows.
     case appDemo
+    /// `havooch open <path>`: the video at the absolute `path` opened
+    /// for a person, playing, with the app brought to the front. No lease:
+    /// opening a file never takes control of the app from the person.
+    case open(path: String)
     /// `havooch player open <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
@@ -168,6 +172,10 @@ public enum ControlRequest: Equatable, Sendable {
     public enum Role: Equatable, Sendable {
         /// Anyone, at any time: it changes nothing a person sees.
         case free
+        /// A person, or an agent on a person's behalf: it changes what the
+        /// person sees as their own click would, with no lease and no
+        /// agent-control icon.
+        case person
         /// An agent that drives the UI: one at a time, under the lease.
         case `operator`
         /// The agent that receives sends, beside the person: no lease.
@@ -179,6 +187,7 @@ public enum ControlRequest: Equatable, Sendable {
     public var role: Role {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
+        case .open: .person
         case .themeSet: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
