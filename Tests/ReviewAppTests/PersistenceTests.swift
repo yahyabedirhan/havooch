@@ -34,7 +34,7 @@ struct PersistenceTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech).makeWindow()
         if reopening, let last = model.recents.first { try? await model.open(last.url) }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -112,7 +112,7 @@ struct PersistenceTests {
         try await model.open(MessageTests.fixture)
         _ = try await build(model, server)
         let before = try state(model)
-        model.listeners.stop()
+        model.listeners().stop()
 
         let (again, _) = await run(reopening: true)
 
@@ -131,7 +131,7 @@ struct PersistenceTests {
         #expect(again.problem == nil)
         // The agent keeps its name; nobody listens yet.
         #expect(again.agentName == "Mate")
-        #expect(again.listeners.report(at: Date()) == StateReport.Listener(
+        #expect(again.listeners().report(at: Date()) == StateReport.Listener(
             presence: "absent", waitOpen: false, session: "Mate", pendingSends: 0, takenSends: 1
         ))
         // Every picture the state names is still there.
@@ -167,7 +167,7 @@ struct PersistenceTests {
         #expect(await listen(.reply(thread: one, text: "And the title"), server).ok)
         #expect(await listen(.reply(thread: "0", text: "One left"), server).ok)
         #expect(unread(model) == [true, false])
-        model.listeners.stop()
+        model.listeners().stop()
 
         let (again, _) = await run(reopening: true)
         #expect(unread(again) == [true, false])
@@ -306,7 +306,7 @@ struct PersistenceTests {
         try await model.open(original)
         let ids = try await build(model, server)
         let before = try state(model)
-        model.listeners.stop()
+        model.listeners().stop()
 
         let renamed = try copy(to: "second/deeper", as: "renamed take 2.mov")
         let (again, later) = await run()
@@ -339,7 +339,7 @@ struct PersistenceTests {
         let (model, server) = await run()
         try await model.open(MessageTests.fixture)
         let ids = try await build(model, server)
-        model.listeners.stop()
+        model.listeners().stop()
 
         let (again, later) = await run()
         let opening = Task { try await again.open(MessageTests.fixture) }
@@ -366,7 +366,7 @@ struct PersistenceTests {
         let (model, server) = await run(on: demo)
         try await model.open(MessageTests.fixture)
         let ids = try await build(model, server)
-        model.listeners.stop()
+        model.listeners().stop()
 
         let (real, realServer) = await run(reopening: true)
         #expect(real.video == nil)
@@ -374,11 +374,11 @@ struct PersistenceTests {
         #expect(real.threads.map(\.number) == [0])
         #expect(real.sends.isEmpty)
         #expect(real.contextNote == "")
-        #expect(real.listeners.outbox == Outbox())
+        #expect(real.listeners().outbox == Outbox())
         #expect(await listen(.status(messageID: ids.first, state: .done), realServer).error.contains("no message"))
         #expect(await listen(.wait(timeoutSeconds: 0), realServer).timedOut == true)
         // The real folder holds nothing of the demo's.
-        #expect(try dataFiles() == ["outbox.json", "recents.json"])
+        #expect(try dataFiles() == ["outboxes", "outboxes/\(try #require(real.reviewKey).fileName).json", "recents.json"])
 
         let (again, _) = await run(on: demo, reopening: true)
         #expect(states(again).count == 3)
@@ -396,12 +396,13 @@ struct PersistenceTests {
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
         try model.setContextNote("Look at the pricing page")
         let send = try await model.sendQueue()
-        model.listeners.stop()
+        let key = try #require(model.reviewKey)
+        model.listeners().stop()
 
-        // The next run opens no video.
+        // The next run opens no video: the listener names it.
         let (again, server) = await run()
-        #expect(again.listeners.outbox.pending.map(\.sendID.text) == [send.id])
-        let reply = await listen(.wait(timeoutSeconds: 0), server)
+        #expect(again.app.listeners.queue(for: key).outbox.pending.map(\.sendID.text) == [send.id])
+        let reply = await listen(.wait(timeoutSeconds: 0, video: video.path), server)
 
         #expect(reply.ok)
         let payload = try object(reply.output)
@@ -427,13 +428,13 @@ struct PersistenceTests {
         #expect(comments[0]["cropPath"] is NSNull)
         let crop = try #require(comments[1]["cropPath"] as? String)
         #expect(FileManager.default.fileExists(atPath: crop))
-        #expect(again.listeners.outbox.taken.map(\.sendID.text) == [send.id])
+        #expect(again.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [send.id])
 
         // The listener answers it, still with no video open, and that's kept too.
         #expect(await listen(.ack(sendID: send.id, text: nil), server).ok)
         #expect(await listen(.status(messageID: first.message.id, state: .done), server).ok)
         #expect(await listen(.reply(thread: second.thread.id, text: "Looking"), server).ok)
-        again.listeners.stop()
+        again.app.listeners.stop()
         let (third, _) = await run(reopening: true)
         #expect(states(third) == [.done, .acknowledged])
         #expect(third.threads[2].messages.map(\.text) == ["This box", "Looking"])
@@ -451,11 +452,11 @@ struct PersistenceTests {
         await eventually { model.transcript?.complete == true }
         _ = try await model.addMessage(text: "Too fast here", at: 3)
         _ = try await model.sendQueue()
-        model.listeners.stop()
+        model.listeners().stop()
 
         let later = SlowRecognizer()
         let (_, server) = await run(speech: later)
-        let payload = try object(await listen(.wait(timeoutSeconds: 0), server).output)
+        let payload = try object(await listen(.wait(timeoutSeconds: 0, video: video.path), server).output)
         let threads = try #require(payload["threads"] as? [[String: Any]])
         #expect(threads.first?["transcript"] as? [[String: AnyHashable]] == [["start": 0.2, "end": 5.1, "text": "This is Havooch."]])
         #expect(later.runs == 0)
@@ -467,18 +468,20 @@ struct PersistenceTests {
         let (model, server) = await run()
         try await model.open(MessageTests.fixture)
         let ids = try await build(model, server)
-        model.listeners.stop()
+        let key = try #require(model.reviewKey)
+        let video = MessageTests.fixture.path
+        model.listeners().stop()
 
         // The same listener: it has the send, and gets nothing twice.
         let (same, sameServer) = await run()
-        #expect(same.listeners.outbox.taken.map(\.sendID.text) == [ids.send])
-        #expect(await listen(.wait(timeoutSeconds: 0), sameServer).timedOut == true)
-        #expect(same.listeners.outbox.taken.map(\.sendID.text) == [ids.send])
-        same.listeners.stop()
+        #expect(same.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [ids.send])
+        #expect(await listen(.wait(timeoutSeconds: 0, video: video), sameServer).timedOut == true)
+        #expect(same.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [ids.send])
+        same.app.listeners.stop()
 
         // A new listener session: the send is first in line again.
         let (again, againServer) = await run()
-        let reply = await listen(.wait(timeoutSeconds: 0), againServer, as: Self.restarted)
+        let reply = await listen(.wait(timeoutSeconds: 0, video: video), againServer, as: Self.restarted)
         #expect(reply.ok)
         let payload = try object(reply.output)
         #expect((payload["send"] as? [String: Any])?["id"] as? String == ids.send)
@@ -486,13 +489,13 @@ struct PersistenceTests {
         let threads = try #require(payload["threads"] as? [[String: Any]])
         #expect(threads.flatMap { ($0["messages"] as? [[String: Any]]) ?? [] }.map { $0["id"] as? String } == [ids.first])
         #expect((payload["context"] as? String)?.contains("Look at the pricing page") == true)
-        again.listeners.stop()
+        again.app.listeners.stop()
 
         // The message went back to sent, and that's on disk as well.
         let (last, _) = await run(reopening: true)
         #expect(states(last) == [.queued, .sent, .done])
-        #expect(last.listeners.outbox.session?.key == "listener-2")
-        #expect(last.listeners.outbox.taken.map(\.sendID.text) == [ids.send])
+        #expect(last.listeners().outbox.session?.key == "listener-2")
+        #expect(last.listeners().outbox.taken.map(\.sendID.text) == [ids.send])
     }
 
     @Test("a send whose outbox file was lost is in line again at the next launch")
@@ -502,12 +505,13 @@ struct PersistenceTests {
         try await model.open(MessageTests.fixture)
         _ = try await model.addMessage(text: "Too fast here", at: 10)
         let send = try await model.sendQueue()
-        model.listeners.stop()
-        try FileManager.default.removeItem(at: support.appendingPathComponent("outbox.json"))
+        let key = try #require(model.reviewKey)
+        model.listeners().stop()
+        try FileManager.default.removeItem(at: support.appendingPathComponent("outboxes"))
 
         let (again, server) = await run()
-        #expect(again.listeners.outbox.pending.map(\.sendID.text) == [send.id])
-        #expect(await listen(.wait(timeoutSeconds: 0), server).ok)
+        #expect(again.app.listeners.queue(for: key).outbox.pending.map(\.sendID.text) == [send.id])
+        #expect(await listen(.wait(timeoutSeconds: 0, video: MessageTests.fixture.path), server).ok)
     }
 
     // MARK: - Files that go wrong
@@ -524,7 +528,7 @@ struct PersistenceTests {
         try await model.open(other)
         let comment = try await model.addMessage(text: "Kept", at: 1).message
         let hash = try #require(model.video?.contentHash)
-        model.listeners.stop()
+        model.listeners().stop()
         let file = Library(layout: SupportLayout(root: support)).layout.reviewFile(hash)
         let half = try Data(contentsOf: file).prefix(120)
         try half.write(to: file)

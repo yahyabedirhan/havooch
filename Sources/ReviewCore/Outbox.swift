@@ -100,6 +100,19 @@ public struct Outbox: Codable, Equatable, Sendable {
         for ref in unfinished where present.insert(ref).inserted { pending.append(ref) }
     }
 
+    /// The part of this outbox that is the review `key`'s: its sends in
+    /// line and taken, and the context its listener had of its videos,
+    /// with the same listener session. The outbox of builds before a
+    /// listener per review held every video's sends, and splits this way.
+    public func part(for key: ReviewKey) -> Outbox {
+        var part = Outbox()
+        part.pending = pending.filter(key.holds)
+        part.taken = taken.filter(key.holds)
+        part.session = session
+        part.contextSent = contextSent.filter { key.covers($0.key) }
+        return part
+    }
+
     /// Whether `other` is the same on disk: the same line, taken sends,
     /// session and context sent.
     public func isKeptAs(_ other: Outbox) -> Bool {

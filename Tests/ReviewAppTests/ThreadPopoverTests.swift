@@ -102,7 +102,7 @@ struct ThreadPopoverTests {
         let model = try await model()
         let added = try await model.addMessage(text: "Keys", at: 12.5)
         _ = try await model.sendQueue()
-        _ = try await model.listeners.ask(on: added.thread.id, question: "Cmd+Return or Cmd+Enter?", waitSeconds: 0)
+        _ = try await model.app.listeners.ask(on: added.thread.id, question: "Cmd+Return or Cmd+Enter?", waitSeconds: 0)
 
         model.openThread(try id(added.thread.id))
         #expect(model.draftThread?.openQuestion?.text == "Cmd+Return or Cmd+Enter?")
@@ -116,7 +116,7 @@ struct ThreadPopoverTests {
         #expect(model.threads.first { $0.id == thread.id } == thread)
 
         // A message the agent writes meanwhile shows in the open popover.
-        _ = try model.listeners.reply(on: added.thread.id, text: "Cmd+Return it is.")
+        _ = try model.app.listeners.reply(on: added.thread.id, text: "Cmd+Return it is.")
         #expect(model.draftThread?.messages.last?.text == "Cmd+Return it is.")
     }
 
@@ -148,7 +148,7 @@ struct ThreadPopoverTests {
         _ = try await model.sendQueue()
         try await model.seek(to: 2)
         try model.play()
-        _ = try model.listeners.reply(on: added.thread.id, text: "On it.")
+        _ = try model.app.listeners.reply(on: added.thread.id, text: "On it.")
         #expect(model.draft == nil)
         try model.pause()
     }

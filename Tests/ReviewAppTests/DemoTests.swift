@@ -30,7 +30,7 @@ struct DemoTests {
             environment: environment ?? [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo
         ).makeWindow()
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)

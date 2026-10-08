@@ -31,7 +31,7 @@ struct OpenInFrontTests {
         let fronts = Fronts()
         model.app.bringToFront = { _ in fronts.count += 1 }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server, fronts)

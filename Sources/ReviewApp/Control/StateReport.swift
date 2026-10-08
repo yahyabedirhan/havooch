@@ -38,6 +38,25 @@ nonisolated struct StateReport: Encodable, Equatable {
         var screen: Screen
         /// The video it holds; `null` for none.
         var video: Held?
+        /// The listener of the video it holds: `presence` and `session` as
+        /// `listener` has them; `null` with no video.
+        var listener: Heard?
+
+        /// Whether an agent listens to a window's video, and which.
+        struct Heard: Encodable, Equatable {
+            var presence: String
+            var session: String?
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(presence, forKey: .presence)
+                try container.encode(session, forKey: .session)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case presence, session
+            }
+        }
 
         /// The video a window holds.
         struct Held: Encodable, Equatable {
@@ -53,16 +72,18 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(onScreen, forKey: .onScreen)
             try container.encode(screen, forKey: .screen)
             try container.encode(video, forKey: .video)
+            try container.encode(listener, forKey: .listener)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, key, onScreen, screen, video
+            case id, key, onScreen, screen, video, listener
         }
 
         /// `w1 key player cut1.mp4 /Movies/cut1.mp4`, or `w2 home off screen`.
         var line: String {
             let held = video.map { " \($0.title) \($0.path)" } ?? ""
-            return "\(id)\(key ? " key" : "") \(screen.rawValue)\(onScreen ? "" : " off screen")\(held)"
+            let heard = listener.map { " listener \($0.presence)" + ($0.session.map { " (\($0))" } ?? "") } ?? ""
+            return "\(id)\(key ? " key" : "") \(screen.rawValue)\(onScreen ? "" : " off screen")\(held)\(heard)"
         }
     }
 
@@ -240,6 +261,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// What the agent does now, the newest first: the live lines the
         /// thread views and the footer show. Empty while no agent is there.
         var activity: [Activity] = []
+        /// The agent the listener took over from, when it replaced one
+        /// that was there ("Codex took over from Claude Code"); `null` otherwise.
+        var tookOverFrom: String?
 
         /// Nobody has listened yet.
         static let absent = Listener(presence: "absent", waitOpen: false, session: nil, pendingSends: 0, takenSends: 0)
@@ -252,10 +276,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(pendingSends, forKey: .pendingSends)
             try container.encode(takenSends, forKey: .takenSends)
             try container.encode(activity, forKey: .activity)
+            try container.encode(tookOverFrom, forKey: .tookOverFrom)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case presence, waitOpen, session, pendingSends, takenSends, activity
+            case presence, waitOpen, session, pendingSends, takenSends, activity, tookOverFrom
         }
     }
 
@@ -519,7 +544,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     /// `listener: listening (Claude Code), 0 sends waiting, 1 taken`.
     private var listenerLine: String {
-        let who = listener.session.map { " (\($0))" } ?? ""
+        let who = listener.session.map { " (\($0)" + (listener.tookOverFrom.map { ", took over from \($0)" } ?? "") + ")" } ?? ""
         let waiting = "\(listener.pendingSends) \(listener.pendingSends == 1 ? "send" : "sends") waiting"
         let now = listener.activity.map { "\n  now on \($0.thread): \($0.text.replacing("\n", with: " "))" }.joined()
         return "listener: \(listener.presence)\(who), \(waiting), \(listener.takenSends) taken" + now

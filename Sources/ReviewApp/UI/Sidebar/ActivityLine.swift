@@ -13,7 +13,7 @@ struct ThreadActivity: View {
     var body: some View {
         // Each second: an agent that stops answering takes its line with it.
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            if let activity = model.listeners.activity(on: thread, at: context.date) {
+            if let activity = model.listener?.activity(on: thread, at: context.date) {
                 ActivityLine(text: activity.text, agent: model.agentName)
                     // Under the agent's bubbles, past the avatar's column.
                     .padding(.leading, MessageBubble.avatar + 8)

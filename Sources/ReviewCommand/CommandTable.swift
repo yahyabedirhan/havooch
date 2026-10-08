@@ -15,9 +15,10 @@ enum Invocation: Equatable, Sendable {
     /// `open <path>`: the video at the absolute `file` opened in front,
     /// with the app launched first when it doesn't run.
     case open(URL)
-    /// `wait`: hold a request until a send is made, for `timeout` seconds
+    /// `wait`: hold a request until a send of the review of the video at
+    /// the absolute `video` path (else the key window's) is made, for `timeout` seconds
     /// or with no limit, connecting again while the app isn't running.
-    case wait(timeout: Int?)
+    case wait(timeout: Int?, video: URL? = nil)
     /// `config path`: answered without the app.
     case configPath
     /// `config check`: answered without the app.

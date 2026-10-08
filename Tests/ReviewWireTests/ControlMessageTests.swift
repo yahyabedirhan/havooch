@@ -43,6 +43,7 @@ struct ControlMessageTests {
         .commentCompose(text: "Overall", general: true),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .send, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
+        .wait(timeoutSeconds: 30, video: "/Movies/cut1.mp4"),
         .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
         .status(messageID: "m-f92cbb2a-1", state: .working), .status(messageID: "m-f92cbb2a-1", state: .done),
         .status(messageID: "m-f92cbb2a-1", state: .failed),

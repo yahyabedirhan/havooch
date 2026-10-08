@@ -19,9 +19,9 @@ final class AppModel: AppControlling {
     private(set) var data: DataFolder
     /// The reviews of every window, and the one path for changing them.
     var desk: ReviewDesk { data.desk }
-    /// The listener's side: the sends in line and whether an agent is
-    /// there for them. One for the app until each window has its own.
-    var listeners: ListenerQueue { data.listeners }
+    /// The listeners, one per review: each window's video has its own
+    /// sends in line and its own agent.
+    var listeners: ListenerHub { data.listeners }
     /// The transcripts of the videos opened on this data in this run.
     var transcripts: TranscriptDesk { data.transcripts }
     /// `config.toml`: the settings a person or an agent sets on purpose,
@@ -121,19 +121,33 @@ final class AppModel: AppControlling {
         config.dismissNotice()
     }
 
-    /// What the agent says on the data the run is on shows as a notice in
-    /// the window that holds its video; a bare thread number is the key
-    /// window's.
+    /// What an agent says on the data the run is on, and a takeover, shows
+    /// as a notice in the window that holds its video; a bare thread
+    /// number is the key window's.
     private func listenToAgent() {
-        listeners.announce = { [weak self] notice in self?.announce(notice) }
+        listeners.announce = { [weak self] key, notice in self?.windows.holding(key)?.raise(notice) }
         listeners.keyVideo = { [weak self] in self?.windows.key?.video?.contentHash }
     }
 
-    /// `notice` goes up in the window that holds its thread's video; with
-    /// no such window, nobody sees it.
-    private func announce(_ notice: Notice) {
-        guard let hash = desk.contentHash(of: notice.thread) else { return }
-        windows.holding(hash)?.raise(notice)
+    // MARK: - Listeners
+
+    /// The review a `wait` listens to: the video at `path` (`--video`),
+    /// by its content, open in a window or not; with no path, the key
+    /// window's (P5). Refused for a path with no file, and with no path
+    /// when the key window holds no video.
+    func listenedReview(video path: String?) async throws(AppRefusal) -> ReviewKey {
+        if let path {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            try Self.needFile(url)
+            guard let hash = await WindowModel.contentHash(of: url, in: hashes) else {
+                throw AppRefusal("can't read \(url.path)")
+            }
+            return .video(contentHash: hash)
+        }
+        guard let key = windows.key?.reviewKey else {
+            throw AppRefusal("no window holds a video to listen to; name one with `havooch wait --video <path>`")
+        }
+        return key
     }
 
     // MARK: - Windows

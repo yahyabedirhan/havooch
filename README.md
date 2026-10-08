@@ -54,7 +54,7 @@ xattr -dr com.apple.quarantine /Applications/Havooch.app
 
 The app carries a command, `havooch`, in `Havooch.app/Contents/Helpers/`; both installs link it onto your `PATH`. An agent drives the app through it:
 
-- `havooch wait`, `ack`, `status`, `reply` and `ask` are the listener's commands: take a send, acknowledge it, report progress, answer on a thread, ask a question.
+- `havooch wait`, `ack`, `status`, `reply` and `ask` are the listener's commands: take a send, acknowledge it, report progress, answer on a thread, ask a question. Each window has its own listener: `havooch wait --video <path>` listens to the window of that video, so two agents can work on two videos at the same time.
 - `havooch app open --demo <folder>`, the player and comment commands and `havooch screenshot` drive the app, under a lease the agent takes with `havooch control take` and gives back with `control release`, so it never fights you for the player.
 - `havooch --help` lists every command.
 

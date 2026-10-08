@@ -326,7 +326,7 @@ struct SidebarTests {
         let added = try await model.addMessage(text: "One", at: 5)
         _ = try await model.addMessage(text: "Two", at: 15)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let holder = Holder(key: "operator", name: "Claude Code", place: "/work")

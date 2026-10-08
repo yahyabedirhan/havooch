@@ -59,7 +59,7 @@ public struct ControlMessage: Equatable, Sendable {
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
         case .send: wire = Wire(command: "send")
-        case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
+        case .wait(let timeoutSeconds, let video): wire = Wire(command: "wait", path: video, timeoutSeconds: timeoutSeconds)
         case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
         case .status(let messageID, let state, let text):
             wire = Wire(command: "status", id: messageID, text: text, state: state.rawValue)
@@ -185,7 +185,7 @@ public struct ControlMessage: Equatable, Sendable {
                     "the control command `wait` needs a `timeoutSeconds` from 0 to \(ControlRequest.longestListen), not \(seconds)"
                 )
             }
-            return .wait(timeoutSeconds: wire.timeoutSeconds)
+            return .wait(timeoutSeconds: wire.timeoutSeconds, video: wire.path == nil ? nil : try absolute(wire))
         case "ack":
             return .ack(sendID: try field(wire.id, "id", of: wire), text: wire.text)
         case "status":

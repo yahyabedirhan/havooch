@@ -1,24 +1,29 @@
 import Foundation
 import ReviewWire
 
-/// The listener's commands, which need no lease. `havooch wait
-/// [--timeout <seconds>]` is a long-poll: it exits 0 with the next send as
-/// JSON, and the listener is present in the app while it's open. `ack`,
-/// `status`, `reply` and `ask` answer in the player; `ask` is held until
-/// the person answers, and exits 0 with the answer.
+/// The listener's commands, which need no lease. `havooch wait [--video
+/// <path>] [--timeout <seconds>]` is a long-poll: it exits 0 with the next
+/// send of one video as JSON, and that video's window shows the listener
+/// while it's open. `ack`, `status`, `reply` and `ask` answer in the
+/// player, on the video their id names; `ask` is held until the person
+/// answers, and exits 0 with the answer.
 enum ListenerCommands {
     static let commands: [Command] = [
         Command(
-            name: "wait", synopsis: "wait [--timeout <seconds>]",
-            summary: "wait for the next send and print it as JSON; exit 2 when --timeout runs out with none",
-            valuedOptions: ["--timeout"]
-        ) { arguments, _ throws(UsageError) in
+            name: "wait", synopsis: "wait [--video <path>] [--timeout <seconds>]",
+            summary: "wait for the next send of the video at <path> (else the key window's) and print it as JSON; exit 2 when --timeout runs out with none",
+            valuedOptions: ["--timeout", "--video"]
+        ) { arguments, environment throws(UsageError) in
             try arguments.none()
-            guard let seconds = arguments.options["--timeout"] else { return .wait(timeout: nil) }
+            // Made absolute here: the app runs in another folder.
+            let video = arguments.options["--video"].map {
+                URL(fileURLWithPath: $0, relativeTo: environment.workingDirectory).standardizedFileURL
+            }
+            guard let seconds = arguments.options["--timeout"] else { return .wait(timeout: nil, video: video) }
             guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
                 throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
             }
-            return .wait(timeout: whole)
+            return .wait(timeout: whole, video: video)
         },
         Command(
             name: "ack", synopsis: "ack <send-id> [<text>]",
@@ -71,12 +76,13 @@ enum ListenerCommands {
     /// How long `wait` rests before it looks for the app again.
     static let retry: TimeInterval = 1
 
-    /// Waits for the next send, for `timeout` seconds or with no limit.
+    /// Waits for the next send of the video at `video` (else the key
+    /// window's), for `timeout` seconds or with no limit.
     /// The payload is JSON with or without `--json`. While the app isn't
     /// running, or quits, the command connects again each second, so a
     /// listener can start before the app and outlive its restart. Exit 0
     /// with the send, 2 when the time ran out, 1 when the app refuses.
-    static func wait(timeout: Int?, client: ControlClient, environment: CommandEnvironment) -> CommandResult {
+    static func wait(timeout: Int?, video: URL? = nil, client: ControlClient, environment: CommandEnvironment) -> CommandResult {
         let deadline = timeout.map { environment.now().addingTimeInterval(TimeInterval($0)) }
         var client = client
         while true {
@@ -84,7 +90,7 @@ enum ListenerCommands {
             client.socket = ControlSocket.locate(support: SupportFolder.app(environment: environment.variables))
             // What's left of the time, rounded up: the app holds the request for it.
             let left = deadline.map { max(Int($0.timeIntervalSince(environment.now()).rounded(.up)), 0) }
-            switch client.send(.wait(timeoutSeconds: left)) {
+            switch client.send(.wait(timeoutSeconds: left, video: video?.path)) {
             case .success(let reply) where reply.timedOut == true:
                 return CommandResult(exitCode: CommandResult.timedOutCode)
             case .failure(.notRunning):

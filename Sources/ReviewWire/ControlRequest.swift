@@ -71,11 +71,13 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch send`: every queued message of the open video sent as
     /// one send, which the listener's `wait` gets.
     case send
-    /// `havooch wait [--timeout <seconds>]`: the next send as its
-    /// JSON payload. The app holds the request until a send is made, up to
-    /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
-    /// listener, present while its `wait` is open.
-    case wait(timeoutSeconds: Int?)
+    /// `havooch wait [--video <path>] [--timeout <seconds>]`: the next
+    /// send of one review as its JSON payload: the review of the video at
+    /// the absolute `video` path, else the key window's. The app holds the
+    /// request until a send is made, up to `timeoutSeconds`, or with no
+    /// limit when it's nil. The sender is that review's listener, present
+    /// while its `wait` is open.
+    case wait(timeoutSeconds: Int?, video: String? = nil)
     /// `havooch ack <send-id> [<text>]`: the listener has the send.
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
@@ -236,7 +238,7 @@ public enum ControlRequest: Equatable, Sendable {
     public var holdSeconds: TimeInterval? {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
-        case .wait(let timeoutSeconds): timeoutSeconds.map(TimeInterval.init)
+        case .wait(let timeoutSeconds, _): timeoutSeconds.map(TimeInterval.init)
         case .ask(_, _, let waitSeconds, _): waitSeconds.map(TimeInterval.init)
         default: 0
         }

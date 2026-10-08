@@ -27,7 +27,7 @@ struct SendDeliveryTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model.app, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model.app, listeners: { model.app.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
     }
@@ -71,8 +71,8 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let wait = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.presence(at: Date()) == .listening)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().presence(at: Date()) == .listening)
         let (first, second) = try await queueTwo(model)
 
         let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
@@ -121,9 +121,9 @@ struct SendDeliveryTests {
         }
 
         // The listener has the send: it works, and waits no longer.
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.presence(at: Date()) == .working)
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().presence(at: Date()) == .working)
     }
 
     @Test("sent messages are sent in the state report, name their send, and leave the queue")
@@ -164,11 +164,11 @@ struct SendDeliveryTests {
 
         let send = try #require(model.sends.first)
         #expect(sent.reply == .done("\(send.id) sent: 2 messages on 2 threads, waiting for a listener\n"))
-        #expect(model.listeners.outbox.pending.map(\.sendID) == [send.id])
-        #expect(model.listeners.presence(at: Date()) == .absent)
+        #expect(model.listeners().outbox.pending.map(\.sendID) == [send.id])
+        #expect(model.listeners().presence(at: Date()) == .absent)
         var state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0, "activity": [AnyHashable](),
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
         ])
 
         let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
@@ -178,7 +178,7 @@ struct SendDeliveryTests {
         #expect((payload["threads"] as? [[String: Any]])?.count == 2)
         state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1, "activity": [AnyHashable](),
+            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
         ])
         #expect(await server.reply(to: ControlRequest.state.sent(by: Self.listener)).reply.output
             .contains("listener: working (Claude Code), 0 sends waiting, 1 taken\n"))
@@ -211,7 +211,7 @@ struct SendDeliveryTests {
         #expect(!sent.reply.ok)
         #expect(sent.reply.error.hasPrefix("no message is queued"))
         #expect(model.sends.isEmpty)
-        #expect(model.listeners.outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.pending.isEmpty)
     }
 
     // MARK: - The person's key
@@ -234,7 +234,7 @@ struct SendDeliveryTests {
         #expect(work(model).map(\.text) == ["Queued", "Still in the box"])
         #expect(work(model).map(\.state) == [.sent, .sent])
         #expect(model.sends.count == 1)
-        #expect(model.listeners.outbox.pending.count == 1)
+        #expect(model.listeners().outbox.pending.count == 1)
         #expect(model.sendCount == 0)
 
         // With nothing to send the key does nothing: no send, no problem shown.
@@ -270,18 +270,18 @@ struct SendDeliveryTests {
         let (model, server) = try await app()
         let started = Date()
         let wait = waiting(server, timeout: 1)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.presence(at: Date()) == .listening)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().presence(at: Date()) == .listening)
 
         let answer = await wait.value
 
         #expect(answer.reply == .ranOut)
         #expect(answer.delivered == nil)
         #expect(Date().timeIntervalSince(started) >= 1)
-        #expect(!model.listeners.outbox.isWaitOpen)
-        let closed = try #require(model.listeners.outbox.lastHeard)
-        #expect(model.listeners.presence(at: closed.addingTimeInterval(4)) == .listening)
-        #expect(model.listeners.presence(at: closed.addingTimeInterval(5)) == .absent)
+        #expect(!model.listeners().outbox.isWaitOpen)
+        let closed = try #require(model.listeners().outbox.lastHeard)
+        #expect(model.listeners().presence(at: closed.addingTimeInterval(4)) == .listening)
+        #expect(model.listeners().presence(at: closed.addingTimeInterval(5)) == .absent)
     }
 
     @Test("a newer wait replaces the one that's open: one listener at a time")
@@ -289,11 +289,11 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let older = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         let newer = waiting(server)
 
         #expect(await older.value.reply == .refused("a newer `havooch wait` took this one's place: one listener at a time"))
-        #expect(model.listeners.outbox.isWaitOpen)
+        #expect(model.listeners().outbox.isWaitOpen)
         _ = try await model.addMessage(text: "For the newer one", at: 3)
         _ = try await model.sendQueue()
         #expect(await newer.value.reply.ok)
@@ -304,7 +304,7 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let wait = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         server.stop()
         let answer = await wait.value
         #expect(answer.silent)
@@ -325,16 +325,16 @@ struct SendDeliveryTests {
 
         // The same session waits again before it works on the send: nothing for it.
         #expect(await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
 
         // The listener restarts: another holder key.
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
 
         #expect(again.delivered == first.delivered)
         #expect(again.reply.output == first.reply.output)
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.outbox.session?.key == Self.restarted.key)
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.session?.key == Self.restarted.key)
         #expect(work(model).map(\.state) == [.sent, .sent])
     }
 
@@ -348,8 +348,8 @@ struct SendDeliveryTests {
 
         server.undelivered(lost)
 
-        #expect(model.listeners.outbox.taken.isEmpty)
-        #expect(model.listeners.outbox.pending == [try #require(lost.delivered)])
+        #expect(model.listeners().outbox.taken.isEmpty)
+        #expect(model.listeners().outbox.pending == [try #require(lost.delivered)])
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(again.reply.output == lost.reply.output)
     }
@@ -365,17 +365,17 @@ struct SendDeliveryTests {
         let handed = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
 
         #expect(handed.delivered == ref)
-        #expect(model.listeners.outbox.pending == [ref])
-        #expect(model.listeners.outbox.taken.isEmpty)
-        #expect(model.listeners.isDelivered(send.id))
+        #expect(model.listeners().outbox.pending == [ref])
+        #expect(model.listeners().outbox.taken.isEmpty)
+        #expect(model.listeners().isDelivered(send.id))
         // A second wait while the reply is written gets nothing.
         #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
 
         server.written(handed)
 
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.outbox.taken == [ref])
-        #expect(model.listeners.outbox.inFlight.isEmpty)
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.taken == [ref])
+        #expect(model.listeners().outbox.inFlight.isEmpty)
     }
 
     // MARK: - Over the socket
@@ -400,7 +400,7 @@ struct SendDeliveryTests {
         async let waited = LeaseServerTests.sending {
             ControlClient(socket: socket, holder: Self.listener, transport: UnixSocketTransport()).send(.wait(timeoutSeconds: 30))
         }
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         let sent = await LeaseServerTests.sending {
             ControlClient(socket: socket, holder: Self.operatorAgent, transport: UnixSocketTransport()).send(.send)
         }
@@ -410,9 +410,9 @@ struct SendDeliveryTests {
         #expect(reply.ok)
         #expect((try object(reply.output)["send"] as? [String: String])?["id"] == model.sends.first?.id.text)
         // Taken once the socket wrote the reply.
-        await eventually { model.listeners.outbox.taken.count == 1 }
-        #expect(model.listeners.outbox.taken.count == 1)
-        #expect(model.listeners.outbox.inFlight.isEmpty)
+        await eventually { model.listeners().outbox.taken.count == 1 }
+        #expect(model.listeners().outbox.taken.count == 1)
+        #expect(model.listeners().outbox.inFlight.isEmpty)
     }
 
     @Test("a wait whose client goes away is closed: the listener no longer waits, and a send made then waits for the next one")
@@ -430,11 +430,11 @@ struct SendDeliveryTests {
         #expect(UnixSocket.connectSocket(descriptor, to: address) == 0)
         #expect(UnixSocket.writeAll(descriptor, ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)))
         UnixSocket.finishWriting(descriptor)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.outbox.isWaitOpen)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().outbox.isWaitOpen)
         // Half-closed isn't gone: the wait stays open while its client reads.
         try await Task.sleep(for: .milliseconds(1200))
-        #expect(model.listeners.outbox.isWaitOpen)
+        #expect(model.listeners().outbox.isWaitOpen)
         // Meanwhile the held wait got the heartbeat: spaces, and nothing else.
         var buffer = [UInt8](repeating: 0, count: 64)
         let count = buffer.withUnsafeMutableBytes { recv(descriptor, $0.baseAddress, $0.count, Int32(MSG_DONTWAIT)) }
@@ -442,13 +442,13 @@ struct SendDeliveryTests {
         #expect(buffer.prefix(max(count, 0)).allSatisfy { $0 == UInt8(ascii: " ") })
 
         close(descriptor)
-        await eventually { !model.listeners.outbox.isWaitOpen }
+        await eventually { !model.listeners().outbox.isWaitOpen }
 
-        #expect(!model.listeners.outbox.isWaitOpen)
+        #expect(!model.listeners().outbox.isWaitOpen)
         _ = try await model.addMessage(text: "After the listener left", at: 3)
         _ = try await model.sendQueue()
-        #expect(model.listeners.outbox.pending.count == 1)
-        #expect(model.listeners.outbox.taken.isEmpty)
+        #expect(model.listeners().outbox.pending.count == 1)
+        #expect(model.listeners().outbox.taken.isEmpty)
     }
 }
 

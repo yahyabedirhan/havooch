@@ -5,13 +5,14 @@ import Testing
 
 @Suite("Where the store keeps each file")
 struct SupportLayoutTests {
-    @Test("every file is under the root: the outbox and the last video at the top, a video's files in its content hash's folder, a thread's keyframe and a message's crop by their ids")
+    @Test("every file is under the root: each review's outbox in outboxes, the recent videos at the top, a video's files in its content hash's folder, a thread's keyframe and a message's crop by their ids")
     func paths() throws {
         let layout = SupportLayout(root: URL(fileURLWithPath: "/support", isDirectory: true))
         let thread = try #require(ItemID("t-f92cbb2a-1"))
         let message = try #require(ItemID("m-f92cbb2a-2"))
 
-        #expect(layout.outboxFile.path == "/support/outbox.json")
+        #expect(layout.outboxFile(.video(contentHash: "abc")).path == "/support/outboxes/video-abc.json")
+        #expect(layout.formerOutboxFile.path == "/support/outbox.json")
         #expect(layout.recentsFile.path == "/support/recents.json")
         #expect(layout.formerRecentFile.path == "/support/recent.json")
         #expect(layout.settingsFile.path == "/support/settings.json")

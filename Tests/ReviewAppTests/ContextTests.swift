@@ -45,7 +45,7 @@ struct ContextDeliveryTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(video)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -159,7 +159,7 @@ struct ContextDeliveryTests {
         // The listener restarts under another key: both sends are in line again.
         #expect(try await contextOfWait(server, as: Self.restarted) == "About the clip")
         #expect(try await contextOfWait(server, as: Self.restarted) == nil)
-        #expect(model.listeners.outbox.session?.key == Self.restarted.key)
+        #expect(model.listeners().outbox.session?.key == Self.restarted.key)
     }
 
     @Test("a payload that couldn't be written takes its context back: the next wait gets the text again")

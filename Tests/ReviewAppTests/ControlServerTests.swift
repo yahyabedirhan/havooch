@@ -206,6 +206,11 @@ struct ControlServerTests {
             return self
         }
 
+        /// A `wait` listens to the open video's review, or to the one its path names.
+        func listenedReview(video: String?) async throws(AppRefusal) -> ReviewKey {
+            .video(contentHash: video ?? Self.hash)
+        }
+
         func goHome() async {
             calls.append("home")
             hasVideo = false
@@ -255,14 +260,14 @@ struct ControlServerTests {
         ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
     }
 
-    /// A listener queue nobody sends to, the same one at each request: the
-    /// fake app has no reviews on disk.
-    static func noListeners() -> @MainActor () -> ListenerQueue {
-        let queue = ListenerQueue(
+    /// Listeners nobody sends to, the same ones at each request: the fake
+    /// app has no reviews on disk.
+    static func noListeners() -> @MainActor () -> ListenerHub {
+        let hub = ListenerHub(
             desk: ReviewDesk(library: Library(layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true)))),
             layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
         )
-        return { queue }
+        return { hub }
     }
 
     private func answer(_ request: ControlRequest, json: Bool = false) async -> ControlServer.Answer {
@@ -380,7 +385,7 @@ struct ControlServerTests {
         #expect(state["recents"] as? [AnyHashable] == [])
         #expect(state["screen"] as? String == "player")
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](),
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
         ])
 
         app.hasVideo = false

@@ -50,6 +50,8 @@ struct CommandTests {
         (["send"], .send),
         (["wait"], .wait(timeoutSeconds: nil)),
         (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
+        (["wait", "--video", "cuts/../cut1.mp4", "--timeout", "5"], .wait(timeoutSeconds: 5, video: "/Users/me/shop/cut1.mp4")),
+        (["wait", "--video", "/Movies/cut2.mp4"], .wait(timeoutSeconds: nil, video: "/Movies/cut2.mp4")),
         (["ack", "s-f92cbb2a-1"], .ack(sendID: "s-f92cbb2a-1", text: nil)),
         (["ack", "s-f92cbb2a-1", "On it"], .ack(sendID: "s-f92cbb2a-1", text: "On it")),
         (["status", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),

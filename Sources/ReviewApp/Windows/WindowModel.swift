@@ -43,9 +43,12 @@ final class WindowModel: WindowControlling {
     var data: DataFolder { app.data }
     /// The reviews, and the one path for changing them.
     var desk: ReviewDesk { data.desk }
-    /// The listener's side: the sends in line and whether an agent is
-    /// there for them.
-    var listeners: ListenerQueue { data.listeners }
+    /// The review the window's video is on; nil with no video. Its
+    /// listener is the window's.
+    var reviewKey: ReviewKey? { video.map { .video(contentHash: $0.contentHash) } }
+    /// The window's listener (ADR 0003): its review's sends in line and
+    /// whether an agent is there for them; nil with no video.
+    var listener: ListenerQueue? { reviewKey.map(data.listeners.queue(for:)) }
     /// The transcripts of the videos opened on this data in this run.
     var transcripts: TranscriptDesk { data.transcripts }
     /// The active theme, the app's.
@@ -531,7 +534,7 @@ final class WindowModel: WindowControlling {
             try review.send(at: Date()) { thread in thread.time.map { transcripts.lines(around: $0, of: info) } ?? [] }
         }
         guard let video, let review = review else { throw Self.noVideo }
-        listeners.enqueue(SendRef(sendID: send.id, contentHash: video.contentHash))
+        data.listeners.queue(ofVideo: video.contentHash).enqueue(SendRef(sendID: send.id, contentHash: video.contentHash))
         return StateReport.Send(send, in: review)
     }
 
@@ -541,7 +544,7 @@ final class WindowModel: WindowControlling {
         let (id, hash) = try desk.threadID(thread, open: video?.contentHash)
         let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.answer(id, text: text, now: Date()) }
         let report = StateReport.Message(message, contentHash: hash, layout: layout)
-        listeners.answered(id, with: report)
+        data.listeners.queue(ofVideo: hash).answered(id, with: report)
         notices.removeAll { $0.thread == id && $0.kind == .question }
         return (report, id.number)
     }
@@ -579,6 +582,7 @@ final class WindowModel: WindowControlling {
             sends: review.map { review in sends.map { StateReport.Send($0, in: review) } } ?? []
         )
         report.transcript = transcript
+        report.listener = listener?.report(at: Date()) ?? .absent
         report.theme = themes.report
         report.setup = app.setupReport(for: self)
         report.config = app.config.report
@@ -599,7 +603,11 @@ final class WindowModel: WindowControlling {
     func report(isKey: Bool) -> StateReport.Window {
         StateReport.Window(
             id: id, key: isKey, onScreen: nsWindow?.isVisible ?? false, screen: screen,
-            video: video.map { StateReport.Window.Held(path: $0.url.path, title: $0.title, contentHash: $0.contentHash) }
+            video: video.map { StateReport.Window.Held(path: $0.url.path, title: $0.title, contentHash: $0.contentHash) },
+            listener: listener.map { listener in
+                let heard = listener.report(at: Date())
+                return StateReport.Window.Heard(presence: heard.presence, session: heard.session)
+            }
         )
     }
 
@@ -1315,11 +1323,11 @@ final class WindowModel: WindowControlling {
 
     /// The agent's name as the threads and the notices show it: the
     /// listener's, or "Agent" before anyone listened.
-    var agentName: String { listeners.outbox.session?.name ?? "Agent" }
+    var agentName: String { listener?.outbox.session?.name ?? "Agent" }
 
     /// The agent harness the listener's name says, for its logo; nil before
     /// anyone listened, or for a name no known agent has.
-    var agent: KnownAgent? { listeners.outbox.session?.agent }
+    var agent: KnownAgent? { listener?.outbox.session?.agent }
 
     /// The agent said something: a notice goes up on the stage. Every
     /// notice goes by itself; a question stays open on its thread.
@@ -1414,7 +1422,7 @@ final class WindowModel: WindowControlling {
     /// context: there is one, and this listener session hasn't had it.
     var isContextDue: Bool {
         guard let video else { return false }
-        return listeners.outbox.isContextDue(for: video.contentHash, text: contextText)
+        return listener?.outbox.isContextDue(for: video.contentHash, text: contextText) ?? false
     }
 
     /// The context popover opens: the sidecar is read again, since nothing

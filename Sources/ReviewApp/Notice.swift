@@ -12,6 +12,9 @@ struct Notice: Equatable, Identifiable {
         case message
         /// The agent asks, and waits for the answer (`ask`).
         case question
+        /// Another agent's `wait` replaced the listener that was there
+        /// (F3): "Codex took over from Claude Code", on General.
+        case takeover
     }
 
     let id: UUID
@@ -41,9 +44,11 @@ struct Notice: Equatable, Identifiable {
     var knownAgent: KnownAgent? { KnownAgent(sender: agent) }
 
     /// The notice's first line, which names the thread: `#3 · Claude
-    /// Code`, or `General · Claude Code`.
+    /// Code`, or `General · Claude Code`. A takeover names no thread: it
+    /// is about the listener, `New listener`.
     var title: String {
-        "\(thread.number == 0 ? "General" : "#\(thread.number)") · \(agent)"
+        guard kind != .takeover else { return "New listener" }
+        return "\(thread.number == 0 ? "General" : "#\(thread.number)") · \(agent)"
     }
 
     /// What a click on the notice does, under its text.

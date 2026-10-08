@@ -18,7 +18,8 @@ struct SidebarFooter: View {
         HStack(spacing: 8) {
             // Each second: an agent that stops answering turns absent with no event.
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                let outbox = model.listeners.outbox
+                // The window's own listener; a window with no video has none.
+                let outbox = model.listener?.outbox ?? Outbox()
                 let presence = outbox.presence(at: context.date)
                 HStack(spacing: 8) {
                     PresenceChip(
@@ -26,7 +27,7 @@ struct SidebarFooter: View {
                         pill: PresencePill(presence: presence, session: outbox.session?.name, pendingSends: outbox.pending.count)
                     )
                     // The newest activity of any thread, with no glyph: the chip pulses beside it.
-                    if let activity = model.listeners.activities(at: context.date).first {
+                    if let activity = model.listener?.activities(at: context.date).first {
                         Text(activity.text)
                             .font(.callout)
                             .foregroundStyle(palette[.textSecondary])

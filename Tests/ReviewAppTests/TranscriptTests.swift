@@ -55,7 +55,7 @@ struct TranscriptDeliveryTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: speech).makeWindow()
         try await model.open(video)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)

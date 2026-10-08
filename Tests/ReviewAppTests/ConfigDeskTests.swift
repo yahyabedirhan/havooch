@@ -199,7 +199,7 @@ struct ConfigDeskTests {
         let model = model()
         #expect(model.config.notes == ["The 1 token override in settings.json no longer applies. To keep it, write a theme that extends another in \(location.themesFolder.path)."])
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let holder = ThemeDeskTests.operatorAgent

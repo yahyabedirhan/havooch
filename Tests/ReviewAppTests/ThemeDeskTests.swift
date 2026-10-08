@@ -28,7 +28,7 @@ struct ThemeDeskTests {
     private func model() -> (WindowModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: layout.root.path]).makeWindow()
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -231,8 +231,8 @@ struct ThemeDeskTests {
         let before = model.themes.reloads
 
         // Replaced, as the outbox is saved, then written in place.
-        try Data("{}".utf8).write(to: layout.outboxFile, options: .atomic)
-        try Data("{}".utf8).write(to: layout.outboxFile)
+        try Data("{}".utf8).write(to: layout.formerOutboxFile, options: .atomic)
+        try Data("{}".utf8).write(to: layout.formerOutboxFile)
         try? await Task.sleep(for: .milliseconds(500))
         #expect(model.themes.reloads == before)
 

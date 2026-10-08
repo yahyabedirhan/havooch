@@ -27,6 +27,10 @@ protocol AppControlling: AnyObject {
     /// play changes nothing.
     @discardableResult
     func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling
+    /// The review a `wait` listens to: the video at `video` (`--video`),
+    /// else the key window's. Refused for a path with no file, and with
+    /// none when the key window holds no video.
+    func listenedReview(video: String?) async throws(AppRefusal) -> ReviewKey
     /// Every window, in the order they were made.
     func windowList() -> [StateReport.Window]
     /// A new empty window, as File › New Window makes one.
@@ -113,7 +117,7 @@ protocol WindowControlling: AnyObject {
 /// command always has a line to print. The server owns the one lease: an
 /// operator request asks it first, and a `take`'s reply granting it that
 /// can't be written (its client gone) gives it up at once. A listener's
-/// requests go to the `ListenerQueue`, with no lease: a `wait` and an `ask`
+/// requests go to the `ListenerHub`, with no lease: a `wait` and an `ask`
 /// are held like a `take` in line, and a send whose reply can't be written
 /// goes back to the front of the listener's line.
 final class ControlServer {
@@ -133,12 +137,12 @@ final class ControlServer {
 
     let socket: URL
     private let app: any AppControlling
-    /// The listener's side on the data the app is on now: the open `wait`
+    /// The listeners on the data the app is on now, one per review: the open `wait`s
     /// and the sends in line. Asked at each request, since an in-app demo
     /// switches the app's data (L27).
-    private let currentListeners: @MainActor () -> ListenerQueue
+    private let currentListeners: @MainActor () -> ListenerHub
     /// The listener's side on the data the app is on now.
-    private var listeners: ListenerQueue { currentListeners() }
+    private var listeners: ListenerHub { currentListeners() }
     /// The queue that handed out each send whose reply is being written:
     /// its `written` or `undelivered` goes back there, also when the app
     /// switched its data meanwhile.
@@ -176,7 +180,7 @@ final class ControlServer {
     init(
         socket: URL,
         app: any AppControlling,
-        listeners: @escaping @MainActor () -> ListenerQueue,
+        listeners: @escaping @MainActor () -> ListenerHub,
         screenshotter: any Screenshotting,
         lease: ControlLease = ControlLease(),
         indicator: AgentControlIcon = AgentControlIcon(),
@@ -354,8 +358,8 @@ final class ControlServer {
                 let line = "\(send.id) sent: \(messages) message\(messages == 1 ? "" : "s") on \(threads) thread\(threads == 1 ? "" : "s"), "
                     + (delivered ? "taken by the listener" : "waiting for a listener")
                 return done(line, Output(send: send), json)
-            case .wait(let timeout):
-                let queue = listeners
+            case .wait(let timeout, let video):
+                let queue = listeners.queue(for: try await app.listenedReview(video: video))
                 switch await queue.wait(by: message.holder, timeout: timeout, connection: connection) {
                 case .send(let ref, let payload):
                     deliveredBy[ref] = queue
@@ -364,6 +368,10 @@ final class ControlServer {
                     return Answer(reply: .ranOut)
                 case .replaced:
                     return Answer(reply: .refused("a newer `havooch wait` took this one's place: one listener at a time"))
+                case .takenOver(let agent):
+                    return Answer(reply: .refused(
+                        "\(agent) took over listening to this video: one listener per video; stop listening and tell the person"
+                    ))
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
@@ -496,7 +504,6 @@ final class ControlServer {
     private func state(window: String?) throws(AppRefusal) -> StateReport {
         var state = try app.state(window: window)
         state.lease = lease.status(at: now())
-        state.listener = listeners.report(at: now())
         return state
     }
 
@@ -585,7 +592,7 @@ final class ControlServer {
 
     /// The queue that handed out `ref`, which hears how its reply went.
     private func handedBack(_ ref: SendRef) -> ListenerQueue {
-        deliveredBy.removeValue(forKey: ref) ?? listeners
+        deliveredBy.removeValue(forKey: ref) ?? listeners.queue(ofVideo: ref.contentHash)
     }
 
     /// The client of `connection` closed its socket while its request was

@@ -72,12 +72,20 @@ private struct NoticeCard: View {
         // A native borderless button: the card dims while pressed and
         // takes the focus ring under keyboard navigation.
         .buttonStyle(.borderless)
-        .help(notice.kind == .question ? "Show the question and answer it" : "Show the message")
+        .help(help)
         .accessibilityElement(children: .combine)
     }
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
+    }
+
+    private var help: String {
+        switch notice.kind {
+        case .question: "Show the question and answer it"
+        case .takeover: "Show General"
+        case .acknowledgement, .message: "Show the message"
+        }
     }
 
     /// The symbol an unknown agent's notice shows.
@@ -86,6 +94,7 @@ private struct NoticeCard: View {
         case .acknowledgement: "checkmark"
         case .message: "sparkles"
         case .question: "questionmark"
+        case .takeover: "arrow.left.arrow.right"
         }
     }
 

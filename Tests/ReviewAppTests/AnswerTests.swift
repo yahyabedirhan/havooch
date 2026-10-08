@@ -41,7 +41,7 @@ struct AnswerTests {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model.app, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model.app, listeners: { model.app.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
@@ -151,13 +151,13 @@ struct AnswerTests {
     func status() async throws {
         defer { cleanUp() }
         let app = try await taken()
-        #expect(app.model.listeners.presence(at: Date()) == .working)
+        #expect(app.model.listeners().presence(at: Date()) == .working)
 
         #expect(await listen(.status(messageID: app.first, state: .working), app) == .done("\(app.first) working\n"))
         #expect(states(app) == [.working, .sent])
         #expect(try thread(app.one, app).state == .working)
         #expect(await listen(.status(messageID: app.first, state: .done), app) == .done("\(app.first) done\n"))
-        #expect(app.model.listeners.outbox.taken.count == 1)
+        #expect(app.model.listeners().outbox.taken.count == 1)
 
         let failed = try object(await listen(.status(messageID: app.second, state: .failed), app, json: true).output)
         #expect((failed["message"] as? [String: Any])?["state"] as? String == "failed")
@@ -165,11 +165,11 @@ struct AnswerTests {
         #expect(try thread(app.two, app).state == .failed)
 
         // Nothing is left of the send: the listener isn't working any more.
-        #expect(app.model.listeners.outbox.taken.isEmpty)
+        #expect(app.model.listeners().outbox.taken.isEmpty)
         let listening = app.server
         let wait = Task { await listening.replyWritten(to: ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)) }
-        await eventually { app.model.listeners.outbox.isWaitOpen }
-        #expect(app.model.listeners.presence(at: Date()) == .listening)
+        await eventually { app.model.listeners().outbox.isWaitOpen }
+        #expect(app.model.listeners().presence(at: Date()) == .listening)
         app.server.stop()
         _ = await wait.value
     }
@@ -178,7 +178,7 @@ struct AnswerTests {
     func activity() async throws {
         defer { cleanUp() }
         let app = try await taken()
-        let listeners = app.model.listeners
+        let listeners = app.model.listeners()
         let one = try thread(app.one, app).id, two = try thread(app.two, app).id
         func line(_ id: ThreadID) -> String? { listeners.activity(on: id, at: Date())?.text }
 
@@ -212,7 +212,7 @@ struct AnswerTests {
     func activityCleared() async throws {
         defer { cleanUp() }
         let app = try await taken()
-        let listeners = app.model.listeners
+        let listeners = app.model.listeners()
         let one = try thread(app.one, app).id
         #expect(await listen(.status(messageID: app.first, state: .working, text: "Reading"), app).ok)
         #expect(await listen(.status(messageID: app.first, state: .working, text: " "), app).ok)
@@ -344,7 +344,7 @@ struct AnswerTests {
         let server = app.server
         let two = app.two
         let asking = Task { await server.reply(to: ControlRequest.ask(thread: two, question: "Which box?", waitSeconds: 30).sent(by: Self.listener)) }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
         #expect(try thread(app.two, app).openQuestion?.text == "Which box?")
         #expect(ThreadSummary(try thread(app.two, app), agent: "Mate").waitsForAnswer)
         #expect(app.model.notices.first?.title == "#2 · Mate")
@@ -354,7 +354,7 @@ struct AnswerTests {
 
         #expect(answered == .done("#2 answered\n"))
         #expect(reply == .done("The left one\n"))
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(try thread(app.two, app).openQuestion == nil)
         // The question's notice goes with its answer.
         #expect(app.model.notices.isEmpty)
@@ -375,7 +375,7 @@ struct AnswerTests {
         let asking = Task {
             await server.reply(to: ControlRequest.ask(thread: one, question: "Which part?", waitSeconds: nil).sent(by: Self.listener, json: true))
         }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
 
         #expect(app.model.answerQuestion(try #require(ItemID(app.one)), text: " The intro "))
 
@@ -399,7 +399,7 @@ struct AnswerTests {
                     .sent(by: Self.listener)
             )
         }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
         #expect(try thread(app.two, app).openQuestion?.choices == ["The left one", "The right one"])
         let state = try object(await operate(.state, app, json: true).output)
         let threads = try #require(state["threads"] as? [[String: Any]])
@@ -455,7 +455,7 @@ struct AnswerTests {
 
         #expect(reply == .ranOut)
         #expect(Date().timeIntervalSince(started) >= 1)
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(try thread(app.one, app).openQuestion != nil)
 
         #expect(await operate(.threadAnswer(thread: app.one, text: "The intro"), app).ok)
@@ -474,7 +474,7 @@ struct AnswerTests {
         let second = await listen(.ask(thread: app.one, question: "And how?", waitSeconds: 30), app)
         #expect(second == .refused(ReviewRefusal.questionOpen(one).line))
         #expect(try thread(app.one, app).messages.count == 2)
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(await operate(.threadAnswer(thread: "t-00000000-1", text: "Yes"), app).ok == false)
         #expect(await operate(.threadAnswer(thread: app.one, text: " "), app) == .refused("a message needs text"))
 
@@ -490,12 +490,12 @@ struct AnswerTests {
         let server = app.server
         let one = app.one
         let asking = Task { await server.reply(to: ControlRequest.ask(thread: one, question: "Which part?", waitSeconds: nil).sent(by: Self.listener)) }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
 
         app.server.stop()
 
         #expect(await asking.value.silent)
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(try thread(app.one, app).openQuestion != nil)
     }
 
@@ -560,7 +560,7 @@ struct AnswerTests {
             ControlClient(socket: socket, holder: Self.listener, transport: UnixSocketTransport())
                 .send(.ask(thread: one, question: "Which part?", waitSeconds: 30))
         }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
         let answered = await LeaseServerTests.sending {
             ControlClient(socket: socket, holder: Self.operatorAgent, transport: UnixSocketTransport())
                 .send(.threadAnswer(thread: one, text: "The intro"))
@@ -574,11 +574,11 @@ struct AnswerTests {
         #expect(UnixSocket.connectSocket(descriptor, to: address) == 0)
         #expect(UnixSocket.writeAll(descriptor, ControlRequest.ask(thread: app.two, question: "Which box?", waitSeconds: nil).sent(by: Self.listener)))
         UnixSocket.finishWriting(descriptor)
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
-        #expect(app.model.listeners.outbox.openAsks == 1)
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
+        #expect(app.model.listeners().outbox.openAsks == 1)
         close(descriptor)
-        await eventually { app.model.listeners.outbox.openAsks == 0 }
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        await eventually { app.model.listeners().outbox.openAsks == 0 }
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(try thread(app.two, app).openQuestion?.text == "Which box?")
     }
 }

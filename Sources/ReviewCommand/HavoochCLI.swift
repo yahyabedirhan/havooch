@@ -140,7 +140,8 @@ public enum HavoochCLI {
         case .appOpen(let demo): return AppCommands.open(demo: demo, app)
         case .appQuit: return AppCommands.quit(app)
         case .open(let file): return OpenCommand.run(file, app)
-        case .wait(let timeout): return ListenerCommands.wait(timeout: timeout, client: client, environment: environment)
+        case .wait(let timeout, let video):
+            return ListenerCommands.wait(timeout: timeout, video: video, client: client, environment: environment)
         case .configPath: return ConfigCommands.path(json: json, environment: environment)
         case .configCheck: return ConfigCommands.check(json: json, environment: environment)
         }

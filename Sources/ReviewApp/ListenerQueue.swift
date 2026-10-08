@@ -5,12 +5,13 @@ import ReviewLease
 import ReviewStore
 import ReviewWire
 
-/// The listener's side of the app: it holds the `Outbox` (the rules), the
-/// one open `wait` and the open `ask`s (held connections, like a `take`
-/// waiting in line) and assembles the payload at the moment a `wait` takes
-/// a send. The listener's answers (`ack`, `status`, `reply`, `ask`) change
-/// a review through the `ReviewDesk` and are announced as a notice. The
-/// views read the presence from it.
+/// One review's listener (ADR 0003): it holds the review's `Outbox` (the
+/// rules), the one open `wait` and the open `ask`s (held connections, like
+/// a `take` waiting in line) and assembles the payload at the moment a
+/// `wait` takes a send. The listener's answers (`ack`, `status`, `reply`,
+/// `ask`) change the review through the `ReviewDesk` and are announced as
+/// a notice. The window that holds the review reads the presence from it.
+/// The `ListenerHub` makes one per review and routes to it.
 @Observable
 final class ListenerQueue {
     /// How a `wait` ends.
@@ -19,11 +20,30 @@ final class ListenerQueue {
         case send(SendRef, payload: String)
         /// Its time ran out with no send.
         case ranOut
-        /// A newer `wait` took its place.
+        /// A newer `wait` of the same listener took its place.
         case replaced
+        /// Another agent's `wait` on the review took its place: the agent
+        /// called `by` listens to it now.
+        case takenOver(by: String)
         /// Nobody reads the answer: its client went away, or the app quits.
         case gone
     }
+
+    /// A listener session that replaced one that was there: the window
+    /// says "Codex took over from Claude Code".
+    struct Takeover: Equatable {
+        /// The agent that listened before.
+        var from: String
+        /// The agent that listens now, and its holder key.
+        var to: String
+        var key: String
+        var at: Date
+    }
+
+    /// The review this listener listens to.
+    let key: ReviewKey
+    /// The last time a new agent replaced one that was there; nil until one does.
+    private(set) var takeover: Takeover?
 
     /// The pending and taken sends, the listener session and its presence.
     /// What of it outlives a run is saved whenever it changes.
@@ -81,22 +101,22 @@ final class ListenerQueue {
     /// The open `ask`s, by the thread each one asks on: a thread has one
     /// open question at most.
     @ObservationIgnored private var asks: [ThreadID: OpenAsk] = [:]
-    /// Told each thing the agent says, to show it as a notice.
+    /// Told each thing the agent says, and each takeover, to show it as a
+    /// notice.
     @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
-    /// The content hash of the video a bare thread number (`reply 3`) is
-    /// on: the key window's. The app sets it; nil with no video.
-    @ObservationIgnored var keyVideo: @MainActor () -> String? = { nil }
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
 
-    /// It starts from the outbox the last run left in the desk's library,
-    /// and keeps it there.
-    init(desk: ReviewDesk, layout: SupportLayout, now: @escaping @MainActor () -> Date = { Date() }) {
+    /// The listener of the review `key`. It starts from the outbox the
+    /// last run left for the review in the desk's library, and keeps it
+    /// there.
+    init(key: ReviewKey, desk: ReviewDesk, layout: SupportLayout, now: @escaping @MainActor () -> Date = { Date() }) {
+        self.key = key
         self.desk = desk
         self.layout = layout
         self.now = now
-        outbox = desk.library.loadOutbox()
+        outbox = desk.library.loadOutbox(key)
     }
 
     /// Saves `outbox`. One that can't be written is written with the next
@@ -104,7 +124,7 @@ final class ListenerQueue {
     /// unfinished one that's missing back in line (`Outbox.reconcile`).
     private func keep(_ outbox: Outbox) {
         do throws(Library.Failure) {
-            try desk.library.save(outbox)
+            try desk.library.save(outbox, of: key)
         } catch {
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.reason)\n".utf8))
         }
@@ -142,7 +162,8 @@ final class ListenerQueue {
         StateReport.Listener(
             presence: outbox.presence(at: time).rawValue, waitOpen: outbox.isWaitOpen, session: outbox.session?.name,
             pendingSends: outbox.pending.count, takenSends: outbox.taken.count,
-            activity: activities(at: time).map { StateReport.Activity(thread: $0.thread.text, message: $0.message.text, text: $0.text) }
+            activity: activities(at: time).map { StateReport.Activity(thread: $0.thread.text, message: $0.message.text, text: $0.text) },
+            tookOverFrom: takeover.flatMap { $0.key == outbox.session?.key ? $0.from : nil }
         )
     }
 
@@ -152,20 +173,25 @@ final class ListenerQueue {
     /// one, else when the person sends, for up to `timeout` seconds (nil:
     /// with no limit). A `wait` from another holder than the last is a new
     /// listener session: the sends the last one took and didn't finish are
-    /// first in line again, their unfinished messages `sent`. A
-    /// `wait` that's still open is replaced: one listener at a time.
+    /// first in line again, their unfinished messages `sent`. When the last
+    /// one was there, the new one took over from it, and the window says
+    /// so. A `wait` that's still open is replaced: one listener per review.
     func wait(by holder: Holder, timeout: Int?, connection: UUID? = nil) async -> Outcome {
         let listener = ListenerSession(key: holder.key, name: holder.name, place: holder.place)
-        let requeued = outbox.waitOpened(by: listener, at: now())
+        let time = now()
+        let last = outbox.session.flatMap { $0.key == listener.key ? nil : $0 }
+        let lastWasThere = last != nil && outbox.presence(at: time) != .absent
+        let requeued = outbox.waitOpened(by: listener, at: time)
         for ref in requeued {
             _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
         }
         // A new session starts its work over: what the last one did is past.
         if !requeued.isEmpty { activities = [:] }
+        if let last, lastWasThere { tookOver(from: last.name, to: listener, at: time) }
         if let older = open {
             open = nil
             older.timeout?.cancel()
-            older.answer.resume(returning: .replaced)
+            older.answer.resume(returning: last == nil ? .replaced : .takenOver(by: listener.name))
         }
         if let outcome = takeNext() { return outcome }
         if timeout == 0 {
@@ -267,10 +293,10 @@ final class ListenerQueue {
         return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `havooch reply`: the agent's message on a thread.
-    func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
+    /// `havooch reply`: the agent's message on the thread `id`, of the
+    /// video with `hash`.
+    func reply(on id: ThreadID, of hash: String, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        let (id, hash) = try desk.threadID(thread, open: keyVideo())
         let message = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.reply(on: id, text: text, session: session, now: time)
         }
@@ -278,15 +304,15 @@ final class ListenerQueue {
         return StateReport.Message(message, contentHash: hash, layout: layout)
     }
 
-    /// `havooch ask`: the agent's question on a thread, with its
-    /// quick-reply `choices`, held until the person answers it, for up to `waitSeconds` (nil: with no limit).
-    /// When the time runs out the question stays open, and an answer that
-    /// comes later stays on the thread.
+    /// `havooch ask`: the agent's question on the thread `id`, of the video
+    /// with `hash`, with its quick-reply `choices`, held until the person
+    /// answers it, for up to `waitSeconds` (nil: with no limit). When the
+    /// time runs out the question stays open, and an answer that comes
+    /// later stays on the thread.
     func ask(
-        on thread: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
+        on id: ThreadID, of hash: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
     ) async throws(AppRefusal) -> Asked {
         outbox.heard(at: now())
-        let (id, hash) = try desk.threadID(thread, open: keyVideo())
         let time = now()
         let message = try desk.change(hash) { [session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.ask(on: id, question: question, choices: choices, session: session, now: time)
@@ -326,6 +352,23 @@ final class ListenerQueue {
 
     private func notify(_ thread: ThreadID, _ kind: Notice.Kind, _ text: String) {
         announce?(Notice(thread: thread, kind: kind, agent: outbox.session?.name ?? "The agent", text: text, at: now()))
+    }
+
+    /// The agent `to` took over from `from`, which was there: kept for
+    /// `state`, and said on the stage of the window that holds the review,
+    /// on its General thread. A review with none yet has no window to say it in.
+    private func tookOver(from: String, to: ListenerSession, at time: Date) {
+        takeover = Takeover(from: from, to: to.name, key: to.key, at: time)
+        guard let general = review?.general.id else { return }
+        announce?(Notice(thread: general, kind: .takeover, agent: to.name, text: "\(to.name) took over from \(from)", at: time))
+    }
+
+    /// The review this listener listens to, as the desk keeps it; nil
+    /// before it has one.
+    private var review: VideoReview? {
+        switch key {
+        case .video(let contentHash): desk.review(of: contentHash)
+        }
     }
 
     // MARK: - Delivery

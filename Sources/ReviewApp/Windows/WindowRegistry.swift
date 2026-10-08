@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import ReviewCore
 
 /// The app's windows (ADR 0003): which window holds which video, which
 /// one is key, and the windows made for a scene that hasn't shown yet.
@@ -62,6 +63,12 @@ final class WindowRegistry {
     /// The window that holds the video with `contentHash`; nil when none does.
     func holding(_ contentHash: String) -> WindowModel? {
         windows.first { $0.video?.contentHash == contentHash }
+    }
+
+    /// The window that holds the review `key`, whose listener's notices it
+    /// shows; nil when none does, and nobody sees them.
+    func holding(_ key: ReviewKey) -> WindowModel? {
+        windows.first { $0.reviewKey == key }
     }
 
     /// The window `nsWindow` shows; nil for another window (Settings, a panel).

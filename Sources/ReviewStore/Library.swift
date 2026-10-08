@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 
 /// Loads and saves what the app keeps between runs: the reviews, the
-/// outbox and the recent videos, at the paths its `SupportLayout` gives.
+/// outboxes and the recent videos, at the paths its `SupportLayout` gives.
 /// Every save writes the whole file to a
 /// temporary one and renames it over the old one: a reader, and a run that
 /// ends half way, see the old file or the new one, never a part of one.
@@ -37,8 +37,8 @@ public final class Library {
     /// The sends on disk with a message the listener hasn't finished, in
     /// the order they were sent, as the reviews read at launch.
     private var unfinished: [SendRef] = []
-    /// Whether `outbox.json` is a newer build's, which is left as it is.
-    private var outboxIsNewer = false
+    /// The reviews whose outbox file a newer build wrote: each is left as it is.
+    private var newerOutboxes: Set<ReviewKey> = []
 
     /// Reads every review under `layout` once, for its video and its
     /// unfinished sends. Nothing is written.
@@ -96,30 +96,67 @@ public final class Library {
         paths[review.video.path] = review.video.contentHash
     }
 
-    // MARK: - The outbox
+    // MARK: - The outboxes
 
-    /// The outbox as the last run left it, made to agree with the reviews
-    /// on disk (`Outbox.reconcile`): with no file, or one that doesn't
-    /// read, every unfinished send is in line again, so no feedback is
-    /// lost with the file.
-    public func loadOutbox() -> Outbox {
+    /// The outbox of the review `key` as the last run left it, made to
+    /// agree with the reviews on disk (`Outbox.reconcile`): with no file,
+    /// or one that doesn't read, every unfinished send of the review is in
+    /// line again, so no feedback is lost with the file.
+    public func loadOutbox(_ key: ReviewKey) -> Outbox {
+        let file = layout.outboxFile(key)
         var outbox = Outbox()
-        if FileManager.default.fileExists(atPath: layout.outboxFile.path) {
+        if FileManager.default.fileExists(atPath: file.path) {
             do throws(Failure) {
-                let kept: Kept<Outbox> = try read(layout.outboxFile)
+                let kept: Kept<Outbox> = try read(file)
                 outbox = kept.content
             } catch {
-                outboxIsNewer = isNewer(layout.outboxFile)
+                if isNewer(file) { newerOutboxes.insert(key) }
             }
         }
-        outbox.reconcile(unfinished: unfinished)
+        outbox.reconcile(unfinished: unfinished.filter(key.holds))
         return outbox
     }
 
-    /// Keeps `outbox`. A newer build's file is left as it is.
-    public func save(_ outbox: Outbox) throws(Failure) {
-        guard !outboxIsNewer else { throw Failure(reason: "\(layout.outboxFile.path) is from a newer version of the app") }
-        try write(Kept(content: outbox), to: layout.outboxFile)
+    /// Keeps `outbox` as the review `key`'s. A newer build's file is left
+    /// as it is.
+    public func save(_ outbox: Outbox, of key: ReviewKey) throws(Failure) {
+        let file = layout.outboxFile(key)
+        guard !newerOutboxes.contains(key) else { throw Failure(reason: "\(file.path) is from a newer version of the app") }
+        try write(Kept(content: outbox), to: file)
+    }
+
+    /// Splits the one outbox of builds before a listener per review into
+    /// the outbox of each review its sends are on, once: each part keeps
+    /// its sends in line and taken, the listener session and the context
+    /// it had of that review's videos, so the listener that comes back
+    /// takes up where it was. A review that has its own outbox already
+    /// keeps it. The old file is deleted once every part is written. One
+    /// that doesn't read, or a newer build's, is left as it is: each
+    /// review's outbox puts its unfinished sends back in line all the same.
+    public func migrateFormerOutbox() {
+        let file = layout.formerOutboxFile
+        guard FileManager.default.fileExists(atPath: file.path) else { return }
+        let former: Outbox
+        do throws(Failure) {
+            let kept: Kept<Outbox> = try read(file)
+            former = kept.content
+        } catch {
+            return
+        }
+        var keys: [ReviewKey] = []
+        for ref in former.pending + former.taken {
+            let key = ReviewKey.video(contentHash: ref.contentHash)
+            if !keys.contains(key) { keys.append(key) }
+        }
+        for key in keys where !FileManager.default.fileExists(atPath: layout.outboxFile(key).path) {
+            do throws(Failure) {
+                try write(Kept(content: former.part(for: key)), to: layout.outboxFile(key))
+            } catch {
+                // Tried again on the next launch; nothing is lost meanwhile.
+                return
+            }
+        }
+        try? FileManager.default.removeItem(at: file)
     }
 
     // MARK: - Recent videos

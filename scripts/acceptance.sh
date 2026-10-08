@@ -4,7 +4,9 @@
 # `havooch` CLI only, against the installed app in demo mode with the
 # fixture video. Step 11 adds `havooch open` (#82): the person's open,
 # run by the listener with no lease. Step 12 adds the windows (#86): any
-# number of windows, each with one video, and `--window`.
+# number of windows, each with one video, and `--window`. Step 13 adds a
+# listener per window: two agents wait on two videos, each gets only
+# its own window's sends, and a third agent takes one window over.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -45,7 +47,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 12 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 13 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -95,6 +97,16 @@ operator_key="${HAVOOCH_CONTROL_KEY:-acceptance-operator-$run_id}"
 listener_key="${HAVOOCH_LISTENER_KEY:-acceptance-listener-$run_id}"
 operator() { HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@"; }
 listener() { HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@"; }
+# Step 13's agents, each named by its harness's session variable, so the
+# window can say which agent took over from which.
+claude_listener() {
+    env -u CODEX_THREAD_ID -u PI_SESSION_ID CLAUDE_CODE_SESSION_ID="acceptance-$run_id" \
+        HAVOOCH_CONTROL_KEY="acceptance-claude-$run_id" "$cli" "$@"
+}
+codex_listener() {
+    env -u CLAUDE_CODE_SESSION_ID -u PI_SESSION_ID CODEX_THREAD_ID="acceptance-$run_id" \
+        HAVOOCH_CONTROL_KEY="acceptance-codex-$run_id" "$cli" "$@"
+}
 # The settings commands read config.toml themselves, with no app: on the
 # demo's support folder, so they read its config/config.toml and never the
 # person's ~/.config/havooch.
@@ -135,6 +147,7 @@ stdout=""
 stderr=""
 listener_pid=""
 ask_pid=""
+window_pids=()
 holds_lease=0
 
 ok() { printf '  ok    %s\n' "$1"; }
@@ -287,6 +300,7 @@ heard() {
 clean_up() {
     [ -n "$listener_pid" ] && kill "$listener_pid" 2>/dev/null
     [ -n "$ask_pid" ] && kill "$ask_pid" 2>/dev/null
+    for pid in "${window_pids[@]}"; do kill "$pid" 2>/dev/null; done
     [ "$holds_lease" -eq 1 ] && operator control release >/dev/null 2>&1
 }
 trap clean_up EXIT
@@ -776,11 +790,66 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 13 -------------------------------------------------------------------
+
+begin 13 "Open the second video in a second window. Two agents wait, one on each video. Check that a send reaches only its window's listener, and that a third agent takes a window over"
+take
+run operator window new --json
+exits 0 "window new"
+run listener open "$other_video"
+exits 0 "open $other_video in the new window, w2"
+first_wait="$out/window-wait-1.json"
+second_wait="$out/window-wait-2.json"
+listener wait --video "$video" --timeout 60 >"$first_wait" 2>"$first_wait.err" &
+first_pid=$!
+claude_listener wait --video "$other_video" --timeout 60 >"$second_wait" 2>"$second_wait.err" &
+second_pid=$!
+window_pids=("$first_pid" "$second_pid")
+# Each window shows its own listener once both waits are open.
+for _ in $(seq 1 50); do
+    operator window list --json >"$logs/window-listeners.json" 2>/dev/null
+    jq -e '[.windows[] | .listener.presence] == ["listening", "listening"]' "$logs/window-listeners.json" >/dev/null 2>&1 && break
+    sleep 0.2
+done
+holds "w1 and w2 each show a listening agent, w2's is Claude Code" "$logs/window-listeners.json" \
+    '[.windows[] | .listener.presence] == ["listening", "listening"] and .windows[1].listener.session == "Claude Code"'
+run operator comment add "Brighter logo here." --window w2
+exits 0 "comment add --window w2"
+run operator send --window w2
+exits 0 "send --window w2"
+wait "$second_pid"
+code=$?
+stderr="$second_wait.err"
+exits 0 "w2's listener's wait"
+holds "w2's listener gets the send of the second video" "$second_wait" '.video.path == $path' --arg path "$other_video"
+if kill -0 "$first_pid" 2>/dev/null; then
+    ok "w1's listener still waits: the send was not its"
+else
+    bad "w1's listener's wait ended with w2's send"
+fi
+# Claude Code took the send and hadn't acknowledged it: Codex gets it again.
+run codex_listener wait --video "$other_video" --timeout 0
+exits 0 "a third agent's wait on the second video (Codex)"
+holds "Codex gets the send Claude Code didn't finish" "$stdout" '.video.path == $path' --arg path "$other_video"
+run operator state --window w2 --json
+holds "w2 says Codex took over from Claude Code" "$stdout" \
+    '.listener.session == "Codex" and .listener.tookOverFrom == "Claude Code"'
+run operator state --window w1 --json
+holds "w1's listener is untouched" "$stdout" '.listener.tookOverFrom == null and .listener.waitOpen == true'
+kill "$first_pid" 2>/dev/null
+window_pids=()
+run operator window close w2
+exits 0 "window close w2"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 12 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 13 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 12 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 13 steps. Screenshots: %s\n' "$shots"
 exit 0

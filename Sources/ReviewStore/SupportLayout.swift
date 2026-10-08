@@ -7,7 +7,8 @@ import ReviewCore
 /// root, so demo data and real data can't mix. A pure value: it touches no
 /// file.
 ///
-///     <root>/outbox.json                              the sends in line for the listener
+///     <root>/outboxes/<review>.json                   one review's sends in line for its listener (`video-<contentHash>`)
+///     <root>/outbox.json                              every video's sends, as builds before a listener per review kept them: split once into outboxes/
 ///     <root>/recents.json                             the 10 recent videos, the newest first, with their last position
 ///     <root>/settings.json                            the sidebar width (app state)
 ///     <root>/config-status.json                       the verdict on config.toml after the app's last reload
@@ -30,7 +31,15 @@ public struct SupportLayout: Equatable, Sendable {
         self.root = root
     }
 
-    public var outboxFile: URL { root.appendingPathComponent("outbox.json") }
+    /// The one outbox of builds before a listener per review: split once
+    /// into the outbox of each review its sends are on, then deleted.
+    public var formerOutboxFile: URL { root.appendingPathComponent("outbox.json") }
+    public var outboxesFolder: URL { root.appendingPathComponent("outboxes", isDirectory: true) }
+
+    /// The sends in line for the listener of the review `key`.
+    public func outboxFile(_ key: ReviewKey) -> URL {
+        outboxesFolder.appendingPathComponent("\(key.fileName).json")
+    }
     public var recentsFile: URL { root.appendingPathComponent("recents.json") }
     /// The last open video as builds before the recent videos kept it: read
     /// once into `recentsFile`, then deleted.

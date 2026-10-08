@@ -19,19 +19,29 @@ You are the **listener**: you take each send, do what each message asks in this 
 
 Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`havooch --help` prints the usage).
 
-You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the free `state --json` and `app status`, and `config path` and `config check`, which need no app. Every other command drives the player and takes control of the app from the person.
+You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the free `state --json`, `window list --json` and `app status`, and `config path` and `config check`, which need no app. Every other command drives the player and takes control of the app from the person.
 
 The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else your harness's session: `$CLAUDE_CODE_SESSION_ID` (Claude Code), `$CODEX_THREAD_ID` (Codex) or `$PI_SESSION_ID` (Pi). Any other harness is known by its process. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
+## The video you listen to
+
+Each player window holds one video and has its own listener. You listen to one video: the one the person names, as in "listen for my feedback on launch.mp4". Find its absolute path once, at the start:
+
+1. When the person gives a path, use it.
+2. Else run `havooch window list --json` and take `video.path` of the window whose video has that file name.
+3. Else, with no name or no match, ask the person which video to listen to.
+
+Pass that path as `--video <path>` on every `wait`. Another agent can listen to another video at the same time.
+
 ## The loop
 
-1. **Listen.** Run `havooch wait` as a background command, so that its exit wakes you. The player shows the person a listening agent only while a `wait` is open, so keep exactly one open at all times. `wait` keeps connecting while the app is closed, so start it whether or not the app runs.
+1. **Listen.** Run `havooch wait --video <path>` as a background command, so that its exit wakes you. The player shows the person a listening agent only while a `wait` is open, so keep exactly one open at all times. `wait` keeps connecting while the app is closed, so start it whether or not the app runs.
    - Exit `0`: the send is on standard output, as JSON.
    - Exit `2`: a `--timeout` ran out with no send. Run `wait` again.
    - Exit `1`: see [Refusals](#refusals).
 2. **Acknowledge, then listen again.** The moment a send wakes you, before you study it:
    1. `havooch ack <send id> "<one short line>"`, for example `"Got 3 messages on 2 threads, starting."` The line goes on the General thread, and every message of the send turns `acknowledged`.
-   2. Start a new background `havooch wait`.
+   2. Start a new background `havooch wait --video <path>`.
 
    A send that arrives while you work gets the same two commands at once. Its work starts when the send before it is finished.
 3. **Work each thread**, in the order of `threads[]`. Read the thread first: see [The send](#the-send). Then work each of its `messages[]`, in order:
@@ -126,6 +136,8 @@ The app applies each save at once. After a save, run `havooch config check`: exi
 Exit `1` prints why. Read the line; the same command sent again gets the same answer.
 
 - **A newer `wait` took this one's place.** You had two open. The newer one is the listener; nothing to do.
+- **Another agent took over listening to this video.** The person connected another agent to it. Do not run `wait` again: finish or fail the messages you have, then tell the person in the chat that you stopped listening.
+- **No window holds a video to listen to**, or **no video file** at the path. Ask the person which video to listen to.
 - **The app is quitting**, on `wait` or `ask`: a new `wait` reconnects once the app is back; treat an `ask` as in [Ask](#ask).
 - **The app isn't running**, on any other command: the person quit the player. Finish and commit the work, keep each result, and check `havooch app status` before the next command. When the app runs again, send the replies and statuses you kept. Tell the person in the chat when the session ends first.
 - **No such send, message or thread.** Take the ids from the payload, never from memory.
