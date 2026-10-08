@@ -2,17 +2,24 @@ import AppKit
 import ReviewCore
 import SwiftUI
 
-/// The one composer of the sidebar (L41, L68), at its foot above the
-/// footer, in the thread list and in a thread view alike: one rounded card.
-/// The words take its top, in a field that starts two lines tall and grows
-/// with them up to `ComposerEditor.maxHeight`. A slim toolbar under them
-/// says where they go (`ComposerTarget.toolbarLabel`): "New thread at 0:12",
-/// "#3", "General thread", or "Answer #3, goes at once" in the question
-/// colour. Then the region chip with its remove button, in the list the
-/// General chip, and Send, whose menu queues instead; an answer has one
-/// Answer button. Return queues, Shift+Return adds a line, Cmd+Return sends
-/// the queue with the words. No focus ring: the card's hairline turns a
-/// soft accent while the field has the focus in the key window.
+/// The dock at the sidebar's foot (L41, L68): the one composer and the
+/// one Send, in the thread list and in a thread view alike.
+///
+/// Above the card, where the words go: in the thread list one switch,
+/// "At 0:12 | General" (`PlaceSwitch`); in a thread view the thread alone
+/// ("#3"); while answering "Answer #3, goes at once" in the question
+/// colour. The card holds the writing: the field that grows with the
+/// words, two lines tall at rest, and the region chip under them. Its foot
+/// is a band on `well`: the presence pill, which opens the Connect view,
+/// and the agent's newest activity on the left, and on the right the one
+/// `SplitButton`, "Send 3" with Queue and Send in its menu, or "Answer"
+/// with Discard, after the queued count.
+///
+/// No focus ring: the card's hairline turns a soft accent while the field
+/// has the focus in the key window. Return queues, Shift+Return adds a
+/// line, Cmd+Return sends the queue with the words. While the Connect view
+/// shows, or with no video, the card holds the band alone: nothing is
+/// written there.
 struct Composer: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -31,34 +38,72 @@ struct Composer: View {
         count > 1 ? "Send \(count)" : "Send"
     }
 
+    /// Where the words go, when the person writes: none in the Connect view.
+    private var target: ComposerTarget? {
+        model.connect == nil ? model.composerTarget : nil
+    }
+
     var body: some View {
-        if let target = model.composerTarget {
-            VStack(spacing: 0) {
-                editor(target)
-                toolbar(target)
+        VStack(alignment: .leading, spacing: 6) {
+            if let target {
+                header(target)
             }
-            .background(palette[.field], in: Self.shape)
-            .overlay { Self.shape.strokeBorder(border(target), lineWidth: 1) }
+            VStack(spacing: 0) {
+                if let target {
+                    editor(target)
+                        .padding(.horizontal, 11)
+                        .padding(.top, 9)
+                        .padding(.bottom, model.composerRegion == nil ? 9 : 4)
+                    if model.composerRegion != nil {
+                        HStack {
+                            RegionChip(model: model) { model.removeComposerRegion() }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 7)
+                    }
+                }
+                DockBand(model: model, answers: target?.answers == true, hasField: target != nil)
+            }
+            .background(palette[.field])
+            .clipShape(Self.shape)
+            .overlay { Self.shape.strokeBorder(border, lineWidth: 1) }
             .animation(.smooth(duration: 0.15), value: focused)
-            // The tour's write step rings the card (H4).
+            // The tour's write step rings the dock (H4).
             .coachRing(model.tourRings(.composer), radius: Self.corner)
-            .padding(10)
-            .frame(maxWidth: .infinity)
-            .overlay(alignment: .top) { Hairline(axis: .horizontal) }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Composer")
         }
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity)
+        .background(palette[.window])
+        .overlay(alignment: .top) { Hairline(axis: .horizontal) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Composer")
     }
 
     /// The field has the focus in the key window: a window behind another
     /// draws no focus look.
-    private var focused: Bool { isFocused && activeState == .key }
+    private var focused: Bool { isFocused && activeState == .key && target != nil }
 
     /// The card's hairline: `separator` at rest, a soft accent with the
     /// focus; for an answer, the question colour, stronger with the focus.
-    private func border(_ target: ComposerTarget) -> Color {
-        if target.answers { return palette[.question].opacity(focused ? 0.7 : 0.4) }
+    private var border: Color {
+        if target?.answers == true { return palette[.question].opacity(focused ? 0.7 : 0.4) }
         return focused ? palette[.accent].opacity(0.6) : palette[.separator]
+    }
+
+    /// The switch in the thread list; the target alone in a thread view
+    /// and while answering.
+    @ViewBuilder
+    private func header(_ target: ComposerTarget) -> some View {
+        if model.shown == nil, !target.answers {
+            PlaceSwitch(model: model)
+        } else {
+            TargetLabel(target: target)
+                .padding(.leading, 4)
+                .frame(height: 22)
+        }
     }
 
     private func editor(_ target: ComposerTarget) -> some View {
@@ -89,35 +134,68 @@ struct Composer: View {
             }
         }
         .accessibilityLabel(target.answers ? "\(target.label), goes at once" : target.label)
-        .padding(.horizontal, 11)
-        .padding(.top, 9)
-        .padding(.bottom, 4)
-    }
-
-    /// Where the words go, the region chip, the General chip in the thread
-    /// list, and Send.
-    private func toolbar(_ target: ComposerTarget) -> some View {
-        HStack(spacing: 6) {
-            TargetLabel(target: target)
-            if model.composerRegion != nil {
-                RegionChip(model: model) { model.removeComposerRegion() }
-            }
-            Spacer(minLength: 4)
-            if model.shown == nil {
-                GeneralChip(isOn: model.isComposerGeneral) { model.toggleComposerGeneral() }
-                    .pressedByKeys(in: model) { model.toggleComposerGeneral() }
-            }
-            SendControl(model: model, target: target)
-        }
-        .padding(.leading, 11)
-        .padding(.trailing, 6)
-        .padding(.bottom, 6)
-        .frame(height: 30)
     }
 }
 
-/// Where the words go, as a quiet label: "New thread at 0:12", "#3",
-/// "General thread", or "Answer #3, goes at once" in the question colour.
+/// One compact switch in the thread list: write at the playhead's moment,
+/// or in General. The chosen half is a raised capsule in `field` on the
+/// switch's `well`.
+private struct PlaceSwitch: View {
+    let model: WindowModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let moment = ComposerTarget.atMoment(model.engine.frameTime(of: model.engine.time))
+        HStack(spacing: 0) {
+            segment(moment, glyph: "plus.bubble", on: !model.isComposerGeneral, help: "Write at the playhead") {
+                choose(general: false)
+            }
+            segment("General", glyph: "globe", on: model.isComposerGeneral, help: "Write in General, about the whole video") {
+                choose(general: true)
+            }
+        }
+        .padding(2)
+        .background(palette[.well], in: Capsule())
+        .overlay { Capsule().strokeBorder(palette[.separator], lineWidth: 0.5) }
+        .fixedSize()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Where the words go")
+    }
+
+    private func choose(general: Bool) {
+        if general != model.isComposerGeneral { model.toggleComposerGeneral() }
+    }
+
+    private func segment(_ title: String, glyph: String, on: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: glyph)
+                    .imageScale(.small)
+                Text(title)
+                    .monospacedDigit()
+            }
+            .font(.subheadline.weight(on ? .medium : .regular))
+            .foregroundStyle(on ? palette[.textPrimary] : palette[.textTertiary])
+            .padding(.horizontal, 9)
+            .frame(height: 20)
+            .background {
+                if on {
+                    Capsule()
+                        .fill(palette[.field])
+                        .shadow(color: palette[.shadow].opacity(0.35), radius: 1, y: 0.5)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .pressedByKeys(in: model, action: action)
+        .help(help)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// Where the words go, as a quiet label: "#3", "General thread", or
+/// "Answer #3, goes at once" in the question colour.
 private struct TargetLabel: View {
     let target: ComposerTarget
     @Environment(\.palette) private var palette
@@ -129,6 +207,7 @@ private struct TargetLabel: View {
                 .accessibilityHidden(true)
             Text(target.toolbarLabel)
                 .lineLimit(1)
+                .truncationMode(.tail)
         }
         .font(.subheadline.monospacedDigit())
         .foregroundStyle(target.answers ? palette[.question] : palette[.textTertiary])
@@ -172,89 +251,98 @@ private struct RegionChip: View {
     }
 }
 
-/// The General toggle as a small capsule chip: the words go to General,
-/// not to the frame. Quiet when off, the accent when on.
-private struct GeneralChip: View {
-    let isOn: Bool
-    let toggle: () -> Void
+/// The band at the card's foot, on `well`: whether an agent listens and
+/// what it does now (its newest activity) on the left; on the right the
+/// queued count while an answer takes Send's place, and the dock's one
+/// split button. A click on the presence pill opens the Connect view, and
+/// goes back when it shows (G1). Sending is safe either way: with no agent
+/// the send waits for the next one, and the Connect view opens to say so
+/// (G8).
+private struct DockBand: View {
+    let model: WindowModel
+    /// The field's words answer an open question.
+    let answers: Bool
+    /// The card has a field above the band, which a hairline separates.
+    let hasField: Bool
     @Environment(\.palette) private var palette
-    @State private var isHovered = false
 
     var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 3) {
-                Image(systemName: "globe")
-                    .imageScale(.small)
-                Text("General")
+        HStack(spacing: 7) {
+            // Each second: an agent that stops answering turns absent with no event.
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                // The window's own listener; a window with no video has none.
+                let outbox = model.listener?.outbox ?? Outbox()
+                let presence = outbox.presence(at: context.date)
+                let pill = PresencePill.of(model.listenerPhase(at: context.date), presence: presence, pendingSends: outbox.pending.count)
+                HStack(spacing: 7) {
+                    Button {
+                        model.toggleConnect(.pill)
+                    } label: {
+                        PresenceChip(presence: presence, pill: pill, isOpen: model.connect != nil)
+                    }
+                    .buttonStyle(.plain)
+                    .pressedByKeys(in: model) { model.toggleConnect(.pill) }
+                    // The newest activity of any thread, with no glyph: the chip pulses beside it.
+                    if let activity = model.listener?.activities(at: context.date).first {
+                        Text(activity.text)
+                            .font(.subheadline)
+                            .foregroundStyle(palette[.textSecondary])
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .help(activity.text)
+                            .accessibilityLabel(ActivityLine.voice(agent: model.agentName, text: activity.text))
+                    }
+                }
             }
-            .font(.subheadline)
-            .foregroundStyle(isOn ? palette[.accent] : palette[isHovered ? .textSecondary : .textTertiary])
-            .padding(.horizontal, 7)
-            .frame(height: 20)
-            .background(fill, in: Capsule())
-            .contentShape(Capsule())
+            // The pill and the activity take the width the button leaves,
+            // so the activity truncates only when there is no room.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if answers, model.queuedCount > 0 {
+                Text("\(model.queuedCount) queued")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(palette[.textTertiary])
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            DockSend(model: model, answers: answers)
+                .coachRing(model.tourRings(.send), radius: SplitButton<EmptyView>.corner)
         }
-        .buttonStyle(.plain)
-        .fixedSize()
-        .onHover { isHovered = $0 }
-        .animation(.smooth(duration: 0.12), value: isHovered)
-        .help(isOn ? "Write at the playhead" : "Write in General, not at a moment")
-        .accessibilityLabel("General")
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-
-    /// Off, clear, and `controlHover` under the pointer; on, the accent
-    /// tint, a shade stronger under the pointer.
-    private var fill: Color {
-        if isOn { return palette[.accent].opacity(isHovered ? 0.2 : 0.14) }
-        return isHovered ? palette[.controlHover] : .clear
+        .padding(.horizontal, 6)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .background(palette[.well])
+        .overlay(alignment: .top) {
+            if hasField { Hairline(axis: .horizontal) }
+        }
     }
 }
 
-/// Send, Cmd+Return's send with the words, and a menu beside it that
-/// queues instead. An answer has one Answer button: it goes at once, as
-/// Return takes it. Both are filled buttons on `accentFill` (ADR 0006).
-private struct SendControl: View {
+/// The dock's one Send: Cmd+Return's send with the words, its title
+/// counting what a send delivers ("Send 3"), with Queue and Send in its
+/// menu. An answer reads "Answer" on the same split button, with Discard
+/// in its menu: it goes at once, as Return takes it.
+private struct DockSend: View {
     let model: WindowModel
-    let target: ComposerTarget
-    @Environment(\.palette) private var palette
+    let answers: Bool
 
     var body: some View {
-        if target.answers {
-            Button("Answer") { model.submitComposer() }
-                .filledButton(palette)
-                .controlSize(.small)
-                .fixedSize()
-                .disabled(!hasWords)
-                .pressedByKeys(in: model) { model.submitComposer() }
-                .help("Answer at once (↩)")
-        } else {
-            // A `Menu` draws no prominent button on macOS, so Send is a
-            // filled button of its own and its menu a chevron beside it.
-            HStack(spacing: 2) {
-                Button(Composer.sendTitle(model.sendCount)) { model.send() }
-                    .filledButton(palette)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .disabled(!model.canSend)
-                    .pressedByKeys(in: model) { model.send() }
-                    .help("Send the queue (⌘↩). Return queues the message.")
-                Menu {
-                    Button("Queue  ↩") { model.submitComposer() }
-                        .disabled(!hasWords)
-                    Button("Send  ⌘↩") { model.send() }
-                        .disabled(!model.canSend)
-                } label: {
-                    Image(systemName: "chevron.down")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .foregroundStyle(palette[.textSecondary])
-                .disabled(!model.canSend)
-                .help("Queue or send")
-                .accessibilityLabel("Queue or send")
+        if answers {
+            SplitButton("Answer", help: "Answer at once (↩)", isEnabled: hasWords, action: { model.submitComposer() }) {
+                Button("Discard") { model.composerText = "" }
             }
+            .pressedByKeys(in: model)
+        } else {
+            SplitButton(
+                Composer.sendTitle(model.sendCount),
+                help: model.canSend ? "Send the queue to your agent at once (⌘↩). Return queues the message." : "Nothing to send",
+                isEnabled: model.canSend,
+                action: { model.send() }
+            ) {
+                Button("Queue  ↩") { model.submitComposer() }
+                    .disabled(!hasWords || model.composerTarget == nil || model.connect != nil)
+                Button("Send  ⌘↩") { model.send() }
+            }
+            .pressedByKeys(in: model)
         }
     }
 

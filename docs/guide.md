@@ -79,9 +79,9 @@ You can open a video from anywhere:
 
 Pause anywhere and write a comment, or drag a region on the frame first to point at something. Comments on one frame form a thread. Comments queue up until you send them: **Send**, or **Cmd+Enter**, sends the whole queue as one batch to the agent that listens, with each comment's timestamp, the keyframe, the region and the transcript around that moment.
 
-You can also write in the composer, the card at the foot of the sidebar. The bar under its field says where the words go: a new thread at the playhead, the thread of that frame (`#3`), the General thread, or the answer to the agent's question. **General** sends the words to the General thread instead of the frame, and a region you drew shows there as a chip. Return queues the words. **Send** sends the queue with them, and the menu beside it holds **Queue** and **Send** too. When the agent asks you something, the button says **Answer**, and the answer goes at once.
+You can also write in the dock at the foot of the sidebar. In the thread list, the switch above it says where the words go: **At 0:15**, the playhead's frame and its thread, or **General**, the General thread about the whole video. A thread you opened shows its number there instead. A region you drew shows as a chip under the words. Return queues the words. **Send** sends the queue with them, and its menu holds **Queue** and **Send** too. When the agent asks you something, the button says **Answer**, and the answer goes at once. The pill beside it says whether an agent listens, and opens the **Connect** view.
 
-![The composer: a card with the words, then where they go, General and Send](../assets/screenshots/composer-card/new-thread-typing-focus.png)
+![The dock: the switch, the words, then the agent's pill and Send](../assets/screenshots/sidebar-dock/typing-2-queued-light.png)
 
 A click on the video doesn't play or pause it: it only points. It also takes the keyboard from the message field, so Space plays and pauses and C starts a comment again. What you typed stays in the field.
 

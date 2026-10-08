@@ -128,7 +128,7 @@ struct RootView: View {
     }
 }
 
-/// The sidebar column: the threads, the composer and the footer, resizable from its
+/// The sidebar column: the threads and the dock at its foot, resizable from its
 /// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
 /// on that edge separates it from the stage.
 struct SidebarColumn: View {
@@ -149,12 +149,9 @@ struct SidebarColumn: View {
         VStack(spacing: 0) {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
-            // One composer for the list and the thread view alike (L41);
-            // the Connect view writes nothing.
-            if model.connect == nil {
-                Composer(model: model)
-            }
-            SidebarFooter(model: model)
+            // One dock for the list, the thread view and the Connect view
+            // alike (L41, L68): the composer, the presence pill and Send.
+            Composer(model: model)
         }
         .frame(width: width)
         .background(palette[.window])

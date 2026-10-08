@@ -99,6 +99,12 @@ struct ComposerTarget: Equatable {
     /// The label with its note, as one line: "Answer #3 · goes at once".
     var line: String { note.map { "\(label) · \($0)" } ?? label }
 
+    /// The playhead's half of the dock's switch in the thread list, for
+    /// the frame on the stage: "At 0:12".
+    static func atMoment(_ frame: Double) -> String {
+        "At \(TimeCode.text(frame.rounded(.down)))"
+    }
+
     /// The words in the empty field.
     var placeholder: String {
         switch kind {

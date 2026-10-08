@@ -57,6 +57,7 @@ struct ComposerTests {
         #expect(target.label == "New thread at 0:12")
         #expect(target.placeholder == "Comment on 0:12…")
         #expect(target.toolbarLabel == "New thread at 0:12")
+        #expect(ComposerTarget.atMoment(try #require(target.time)) == "At 0:12")
         #expect(!target.answers)
 
         let frame = try #require(try thread(1, model).time)
