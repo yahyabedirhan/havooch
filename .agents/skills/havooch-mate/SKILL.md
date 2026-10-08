@@ -9,6 +9,8 @@ The person watches a video in the Havooch app and writes messages on its frames.
 
 You are the **listener**: you take each send, do what each message asks in this repo, and answer on its thread, where the person reads it beside the video. Only sends drive this loop; what the person says in the chat is ordinary conversation.
 
+While you listen, the person reads the player, not this chat. Everything you have to say about a send goes on its thread in the player, through `reply`, `ask` and `status`. Write in the chat only to answer what the person writes there, or when you stop listening.
+
 ## The command
 
 `havooch` below stands for the CLI inside the app bundle. Write it as a quoted absolute path in every command. Find it once, at the start:
@@ -42,7 +44,7 @@ Pass your target on every `wait`. Another agent can listen to another window at 
    - Exit `2`: a `--timeout` ran out with no send. Run `wait` again.
    - Exit `1`: see [Refusals](#refusals).
 2. **Acknowledge, then listen again.** The moment a send wakes you, before you study it:
-   1. `havooch ack <send id> "<one short line>"`, for example `"Got 3 messages on 2 threads, starting."` The line goes on the General thread, and every message of the send turns `acknowledged`.
+   1. `havooch ack <send id>`, with no text. Every message of the send turns `acknowledged`, which the player shows.
    2. Start a new background `havooch wait <target>`.
 
    A send that arrives while you work gets the same two commands at once. Its work starts when the send before it is finished.
@@ -53,9 +55,7 @@ Pass your target on every `wait`. Another agent can listen to another window at 
    4. `havooch reply <thread id> "<the result>"`, then `havooch status <message id> done`.
 
    When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `done` and `failed` carry no text, so the reply is the reason.
-4. **Close the send.** `havooch reply t-<hash8>-0 "<one line for the whole send>"` on the General thread: how many messages are done, and which failed, by thread number. `<hash8>` is the part of any id between its first two dashes.
-
-A send is finished when every message in it is `done` or `failed` and has a reply on its thread, and the send has its line on General. `done` and `failed` are final.
+A send is finished when every message in it is `done` or `failed` and has a reply on its thread. `done` and `failed` are final. The player shows each message's state, so post no summary of the send.
 
 The reply is the person's only view of what you did, read in a narrow column beside the video. Write one to three plain sentences: what changed and where, or the answer, or the issue's link. Give the commit's short SHA whenever you committed. When a thread has several messages in the send, open each reply with the start of the message it answers, so the person can pair them.
 
@@ -168,4 +168,4 @@ Exit `1` prints why. Read the line; the same command sent again gets the same an
 
 ## End
 
-When the person says the session is over: finish each open message or mark it `failed` with a reply on its thread, close each send on General, then stop the background `wait` and any open `ask`. The player then shows that no agent listens, and a send that comes later waits for the next listener.
+When the person says the session is over: finish each open message or mark it `failed` with a reply on its thread, then stop the background `wait` and any open `ask`. The player then shows that no agent listens, and a send that comes later waits for the next listener.
