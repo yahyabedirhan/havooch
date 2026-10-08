@@ -70,7 +70,7 @@ The install script downloads with `curl`, which sets no quarantine flag, so macO
 
 On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
 
-![The first-run window's Connect step: pick your agent, install the skill, and copy the prompt that opens the demo video](assets/screenshots/0.4.0/first-run/connect-light.png)
+![The first-run window's Connect step: pick your agent and copy the prompt that opens the demo video](assets/screenshots/0.4.0/first-run/connect-light.png)
 
 ## Windows, home and recent videos
 
@@ -99,7 +99,7 @@ The connect button in the header, the **No agent** pill, and **Send** with no ag
 
 Havooch shows a check mark only for what it can detect: it looks in each agent's user skills folder. A skill installed in a repository shows **Not detected** and still works.
 
-![The Connect view: the command is linked, the skill isn't detected for any agent yet, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
+![The Connect view: the command isn't linked yet, the skill is installed, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
 
 Havooch supports these agents. The prompt names the window's video, or its project:
 
