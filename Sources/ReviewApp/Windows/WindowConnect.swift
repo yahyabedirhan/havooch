@@ -202,7 +202,7 @@ extension WindowModel {
         }
     }
 
-    /// Install for the harnesses `harnesses`, or for every harness found
+    /// Run Command: installs for the harnesses `harnesses`, or for every harness found
     /// without the skill when it's empty.
     func installSkill(for harnesses: [Harness]) {
         do throws(AppRefusal) {

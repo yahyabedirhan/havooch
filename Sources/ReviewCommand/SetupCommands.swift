@@ -4,7 +4,7 @@ import ReviewWire
 /// `havooch setup status | link | install | cancel`: what the Connect
 /// view's setup steps show and do. `status` is free: it changes nothing a
 /// person sees. `link`, `install` and `cancel` are the operator's, as Link,
-/// Install and Cancel are the person's. The app reads the disk and runs the
+/// Run Command and Cancel are the person's. The app reads the disk and runs the
 /// install, so each asks it.
 enum SetupCommands {
     static let commands: [Command] = [
@@ -25,7 +25,7 @@ enum SetupCommands {
         },
         Command(
             name: "setup install", synopsis: "setup install [--harness <name>]... [--dry-run]",
-            summary: "install the havooch-mate skill globally with npx skills add, for each --harness or for every harness found without it, as Install does; setup status follows its log; --dry-run only prints the command",
+            summary: "install the havooch-mate skill globally with npx skills add, for each --harness or for every harness found without it, as Run Command does; setup status follows its log; --dry-run only prints the command",
             valuedOptions: ["--harness"], flags: ["--dry-run"]
         ) { arguments, _ throws(UsageError) in
             try arguments.none()

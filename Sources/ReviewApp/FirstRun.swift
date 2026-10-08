@@ -16,7 +16,7 @@ protocol SetupSteering: AnyObject {
     func pastePrompt(for harness: Harness) -> String?
     /// Link.
     func linkCommandLine()
-    /// Install for `harnesses`.
+    /// Run Command, installing for `harnesses`.
     func installSkill(for harnesses: [Harness])
     /// Cancel under the running install.
     func cancelSkillInstall()

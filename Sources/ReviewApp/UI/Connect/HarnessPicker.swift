@@ -69,8 +69,9 @@ struct HarnessPicker: View {
 }
 
 /// What Havooch detects of the picked harness, and its prompt (G9): ready
-/// with the skill detected; else a neutral line, the install offered, and
-/// the prompt at full size all the same.
+/// with the skill detected; else a neutral line, the install offered (its
+/// command in a `RunBox` when the harness is found, to copy when it isn't),
+/// and the prompt at full size all the same.
 struct HarnessReadiness: View {
     let model: any SetupSteering
     let harness: Harness
@@ -86,12 +87,14 @@ struct HarnessReadiness: View {
         case .skillNotDetected:
             line("questionmark.circle", palette[.textSecondary], "Havooch couldn't detect the skill for \(harness.name).")
             StepDetail(text: "If it's installed another way, paste the prompt and your agent will take it from there. If not, install it first:")
-            let installing = model.setup.install?.state == .running
-            Button(installing ? "Installing…" : "Install for \(harness.name)") { model.installSkill(for: [harness]) }
-                .filledButton(palette)
-                .controlSize(.small)
-                .disabled(installing)
-                .pressedByKeys(in: model.keysWindow) { model.installSkill(for: [harness]) }
+            let install = model.setup.install
+            let running = install?.state == .running
+            // The box runs only while the install that runs is this harness's.
+            let mine = running && install?.install.harnesses.contains(harness) == true
+            RunBox(
+                text: SkillInstall(for: [harness]).commandLine, running: mine, log: install?.log.last ?? "",
+                canRun: !running, keysWindow: model.keysWindow, run: { model.installSkill(for: [harness]) }
+            )
             pastePrompt(prompt)
         case .harnessNotDetected:
             line("questionmark.circle", palette[.textSecondary], "Havooch couldn't detect \(harness.name) on this Mac.")
