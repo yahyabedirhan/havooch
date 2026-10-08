@@ -524,6 +524,40 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
+    /// The setup tour over the stage, and "Finish setup" in the header (H4,
+    /// P11).
+    struct Tour: Encodable, Equatable {
+        /// Whether the tour's panel shows.
+        var open: Bool
+        /// `tools`, `connect`, `write`, `send` or `reply`: the step it
+        /// shows, or the one it opens at.
+        var step: String
+        /// The step's place, from 1.
+        var stepNumber: Int
+        /// How many steps the tour has.
+        var steps: Int
+        /// The step's title on the panel.
+        var title: String
+        /// The parts of the window the tour rings now: `setupSteps`,
+        /// `agentStep`, `stage`, `composer`, `send` or `thread`.
+        var rings: [String]
+        /// Whether the agent answered the send made in the tour.
+        var replied: Bool
+        /// Whether "Finish setup" shows in the header.
+        var finishSetup: Bool
+        /// The count on "Finish setup": the setup items not detected yet.
+        var setupItemsLeft: Int
+
+        /// `the tour shows step 2 of 5: Connect your agent`.
+        var line: String {
+            open
+                ? "the tour shows step \(stepNumber) of \(steps): \(title)"
+                : step == TourStep.tools.rawValue
+                    ? "the tour is closed; Finish setup or havooch tour show starts it"
+                    : "the tour is closed at step \(stepNumber) of \(steps); havooch tour show opens it there"
+        }
+    }
+
     var app: App
     /// Who drives the app; `null` while nobody does. The control server,
     /// which owns the lease, fills it in.
@@ -549,6 +583,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     var popover: Popover?
     /// The sidebar; the app's model fills it in.
     var sidebar: Sidebar?
+    /// The setup tour; the app's model fills it in.
+    var tour: Tour?
     /// The open video's threads: General first, then in time order.
     var threads: [Thread]
     /// The ids of the messages waiting to be sent, in the threads' order.
@@ -586,7 +622,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, screen, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, config, sidebar, recents, setup, window, windows
+        case transcript, theme, config, sidebar, tour, recents, setup, window, windows
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -605,6 +641,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(transcript, forKey: .transcript)
         try container.encode(popover, forKey: .popover)
         try container.encode(sidebar, forKey: .sidebar)
+        try container.encode(tour, forKey: .tour)
         try container.encode(threads, forKey: .threads)
         try container.encode(queue, forKey: .queue)
         try container.encode(sends, forKey: .sends)

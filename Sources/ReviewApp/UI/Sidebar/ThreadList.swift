@@ -13,6 +13,7 @@ struct ThreadList: View {
     var body: some View {
         let sections = model.threadGroups
         let stageThread = model.stageThread
+        let ringedThread = model.tourRings(.thread) ? model.tourReplyThread : nil
         VStack(alignment: .leading, spacing: 0) {
             heading
             ScrollView {
@@ -20,13 +21,19 @@ struct ThreadList: View {
                     ForEach(sections) { section in
                         Section {
                             ForEach(Array(section.threads.enumerated()), id: \.element.id) { index, thread in
+                                let isRinged = ringedThread == thread.id
                                 ThreadRow(model: model, thread: thread, isOnStage: thread.id == stageThread)
                                     .overlay(alignment: .top) {
                                         if index > 0 { rowHairline }
                                     }
+                                    // The tour's reply step rings the answered thread (H4),
+                                    // closer than elsewhere: the list's margin is 8 points.
+                                    .coachRing(isRinged, radius: 10, padding: CoachRing.tightPadding)
                                     // A lazy stack draws a row it made once again only when its
                                     // identity changes: a row whose thread changed is a new one.
-                                    .id(RowIdentity(thread: thread, agent: model.agentName, isOnStage: thread.id == stageThread))
+                                    .id(RowIdentity(
+                                        thread: thread, agent: model.agentName, isOnStage: thread.id == stageThread, isRinged: isRinged
+                                    ))
                             }
                         } header: {
                             GroupHeader(section: section)
@@ -100,11 +107,14 @@ private struct RowIdentity: Hashable {
     var summary: ThreadSummary
     var regions: Int
     var isOnStage: Bool
+    /// Whether the tour's reply step rings the row.
+    var isRinged: Bool
 
-    init(thread: ReviewThread, agent: String, isOnStage: Bool) {
+    init(thread: ReviewThread, agent: String, isOnStage: Bool, isRinged: Bool) {
         summary = ThreadSummary(thread, agent: agent)
         regions = thread.messages.count { $0.region != nil }
         self.isOnStage = isOnStage
+        self.isRinged = isRinged
     }
 }
 

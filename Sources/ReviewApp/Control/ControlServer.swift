@@ -115,6 +115,14 @@ protocol WindowControlling: AnyObject {
     func disconnectAgent() throws(AppRefusal) -> String
     /// Stops waiting for the agent that reconnects, as Forget does; its name.
     func forgetAgent() throws(AppRefusal) -> String
+    /// Shows the setup tour, as "Finish setup" does.
+    func showTour() throws(AppRefusal) -> StateReport.Tour
+    /// The tour's next step, as Next does; after the last one it ends.
+    func nextTourStep() throws(AppRefusal) -> StateReport.Tour
+    /// Ends the tour, as Skip Tour does.
+    func skipTour() throws(AppRefusal) -> StateReport.Tour
+    /// Closes the tour's panel, as its close button does; it keeps its step.
+    func closeTour() throws(AppRefusal) -> StateReport.Tour
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -466,6 +474,18 @@ final class ControlServer {
                 let shown = try inWindow()
                 let agent = try shown.forgetAgent()
                 return done("\(agent) forgotten: no agent is waited for", Output(sidebar: shown.state().sidebar), json)
+            case .tourShow:
+                let tour = try inWindow().showTour()
+                return done(tour.line, Output(tour: tour), json)
+            case .tourNext:
+                let tour = try inWindow().nextTourStep()
+                return done(tour.open ? tour.line : "the tour is finished", Output(tour: tour), json)
+            case .tourSkip:
+                let tour = try inWindow().skipTour()
+                return done("the tour is skipped; Finish setup or havooch tour show starts it again", Output(tour: tour), json)
+            case .tourClose:
+                let tour = try inWindow().closeTour()
+                return done(tour.line, Output(tour: tour), json)
             case .configDismiss:
                 let closed = app.dismissConfigNotice()
                 return done(closed ? "the settings notice is closed" : "no settings notice was up", Output(dismissed: closed), json)
@@ -496,6 +516,7 @@ final class ControlServer {
         var theme: StateReport.Theme?
         var popover: StateReport.Popover?
         var sidebar: StateReport.Sidebar?
+        var tour: StateReport.Tour?
         var composer: StateReport.Sidebar.Composer?
         var setup: StateReport.Setup?
         var install: StateReport.Setup.Install?

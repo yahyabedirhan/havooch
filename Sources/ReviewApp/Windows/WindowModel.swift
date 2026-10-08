@@ -88,6 +88,8 @@ final class WindowModel: WindowControlling {
     /// The harness the person picked in the Connect view; nil follows the
     /// setup (`connectHarness`).
     var pickedHarness: Harness?
+    /// The setup tour over the stage (H4): whether it shows, and its step.
+    var tour = TourState()
     /// The controls that have the keyboard focus under keyboard navigation
     /// (`focusControl(_:press:)`), the last to take it at the end: Space
     /// and Return press that one. A control in a popover takes the focus
@@ -553,6 +555,7 @@ final class WindowModel: WindowControlling {
         // With nobody there, the send waits in the outbox and the Connect
         // view says so (G8).
         if listener.presence(at: Date()) == .absent { sentWithNoAgent(ref) }
+        tourNoticedSend(ref)
         return StateReport.Send(send, in: review)
     }
 
@@ -605,6 +608,7 @@ final class WindowModel: WindowControlling {
         report.setup = app.setupReport(for: self)
         report.config = app.config.report
         report.sidebar = sidebarReport
+        report.tour = tourReport
         report.recents = recents
         report.screen = screen
         report.window = id
@@ -701,7 +705,10 @@ final class WindowModel: WindowControlling {
             }
         }
         // A pin is picked out only while its video is still the open one.
-        if self.video == video { selection = written.thread.id }
+        if self.video == video {
+            selection = written.thread.id
+            tourNoticedQueued()
+        }
         return written
     }
 

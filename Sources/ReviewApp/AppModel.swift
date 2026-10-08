@@ -133,13 +133,15 @@ final class AppModel: AppControlling {
     private func listenToAgent() {
         listeners.announce = { [weak self] key, notice in self?.windows.holding(key)?.raise(notice) }
         listeners.keyVideo = { [weak self] in self?.windows.key?.video?.contentHash }
-        listeners.connected = { [weak self] in self?.agentConnected() }
+        listeners.connected = { [weak self] key in self?.agentConnected(to: key) }
     }
 
-    /// An agent's `wait` opened: setup works, so the connect button's dot
-    /// goes for good. An agent on the in-app demo counts too: it runs in
-    /// the person's own harness.
-    private func agentConnected() {
+    /// An agent's `wait` opened on the review `key`: setup works, so the
+    /// connect button's dot goes for good. An agent on the in-app demo
+    /// counts too: it runs in the person's own harness. The tour of the
+    /// window that holds the review moves on from its connect step.
+    private func agentConnected(to key: ReviewKey) {
+        windows.holding(key)?.tourNoticedAgent()
         guard !agentConnectedOnce else { return }
         agentConnectedOnce = true
         saveSettings()

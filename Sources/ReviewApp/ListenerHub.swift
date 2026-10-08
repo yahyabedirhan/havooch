@@ -25,8 +25,8 @@ final class ListenerHub {
     /// The content hash of the video a bare thread number (`reply 3`) is
     /// on: the key window's. The app sets it; nil with no video.
     @ObservationIgnored var keyVideo: @MainActor () -> String? = { nil }
-    /// Told each time an agent's `wait` opens on any review.
-    @ObservationIgnored var connected: (@MainActor () -> Void)?
+    /// Told each time an agent's `wait` opens on any review, with the review.
+    @ObservationIgnored var connected: (@MainActor (ReviewKey) -> Void)?
     /// When this data opened: a listener the last run left reconnects for
     /// a while after it.
     let startedAt: Date
@@ -51,7 +51,7 @@ final class ListenerHub {
         if let queue = queues[key] { return queue }
         let queue = ListenerQueue(key: key, desk: desk, layout: layout, startedAt: startedAt, now: now)
         queue.announce = { [weak self] notice in self?.announce?(key, notice) }
-        queue.connected = { [weak self] in self?.connected?() }
+        queue.connected = { [weak self] in self?.connected?(key) }
         queues[key] = queue
         return queue
     }

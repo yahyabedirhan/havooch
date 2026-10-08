@@ -66,19 +66,24 @@ struct ConnectView: View {
                 }
                 VStack(alignment: .leading, spacing: 0) {
                     if !listening || setupOpen {
-                        CommandLineStep(model: model, open: commandLineOpen, toggle: { commandLinePinned = !commandLineOpen })
-                        SkillStep(
-                            model: model, open: skillOpen, isLast: listening, toggle: { skillPinned = !skillOpen }
-                        )
+                        VStack(alignment: .leading, spacing: 0) {
+                            CommandLineStep(model: model, open: commandLineOpen, toggle: { commandLinePinned = !commandLineOpen })
+                            SkillStep(
+                                model: model, open: skillOpen, isLast: listening, toggle: { skillPinned = !skillOpen }
+                            )
+                        }
+                        // The tour's tools step rings the two setup steps (H4).
+                        .coachRing(model.tourRings(.setupSteps), radius: 6)
                     }
                     if !listening {
                         // The line runs on between the setup steps and the
-                        // agent step.
+                        // agent step, leaving room for the tour's rings.
                         Rectangle()
                             .fill(setup.isSkillDetected ? palette[.stateDone].opacity(0.5) : palette[.track])
                             .frame(width: 1.5, height: 30)
                             .frame(width: 20)
                         AgentStep(model: model, isActive: activeStep == 3)
+                            .coachRing(model.tourRings(.agentStep), radius: 6)
                     }
                 }
             }

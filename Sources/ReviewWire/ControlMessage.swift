@@ -88,6 +88,10 @@ public struct ControlMessage: Equatable, Sendable {
         case .connectPick(let harness): wire = Wire(command: "connect.pick", name: harness)
         case .connectDisconnect: wire = Wire(command: "connect.disconnect")
         case .connectForget: wire = Wire(command: "connect.forget")
+        case .tourShow: wire = Wire(command: "tour.show")
+        case .tourNext: wire = Wire(command: "tour.next")
+        case .tourSkip: wire = Wire(command: "tour.skip")
+        case .tourClose: wire = Wire(command: "tour.close")
         case .configDismiss: wire = Wire(command: "config.dismiss")
         case .windowList: wire = Wire(command: "window.list")
         case .windowNew: wire = Wire(command: "window.new")
@@ -232,6 +236,10 @@ public struct ControlMessage: Equatable, Sendable {
         case "connect.pick": return .connectPick(harness: try field(wire.name, "name", of: wire))
         case "connect.disconnect": return .connectDisconnect
         case "connect.forget": return .connectForget
+        case "tour.show": return .tourShow
+        case "tour.next": return .tourNext
+        case "tour.skip": return .tourSkip
+        case "tour.close": return .tourClose
         case "config.dismiss": return .configDismiss
         case "window.list": return .windowList
         case "window.new": return .windowNew

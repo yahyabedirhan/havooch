@@ -9,7 +9,9 @@
 # its own window's sends, and a third agent takes one window over. Step 14
 # adds the Connect view (#89): a send with no agent opens it with the outbox
 # banner, an agent's wait delivers it, a harness is picked, and Disconnect
-# lets the agent go.
+# lets the agent go. Step 15 adds the setup tour (#91): it shows, moves on,
+# closes at its step and is skipped, and "Finish setup" is gone once an
+# agent has connected.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -50,7 +52,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 14 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 15 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -887,11 +889,49 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 15 -------------------------------------------------------------------
+
+begin 15 "Take the setup tour. Check that it shows its steps with their rings, that close keeps the step and skip starts over, and that Finish setup is gone after step 14's agent"
+take
+run operator tour show --json
+exits 0 "tour show"
+holds "the tour shows step 1 of 5 and rings the setup steps" "$stdout" \
+    '.tour.open == true and .tour.step == "tools" and .tour.stepNumber == 1 and .tour.steps == 5 and .tour.rings == ["setupSteps"]'
+holds "Finish setup shows while the tour does, and counts no first connection: step 14's agent connected" "$stdout" \
+    '.tour.finishSetup == true and .tour.setupItemsLeft <= 2'
+state
+holds "the tools step shows the Connect view" "$stdout" '.sidebar.mode == "connect"'
+run operator tour next --json
+exits 0 "tour next"
+holds "the connect step rings the agent step" "$stdout" '.tour.step == "connect" and .tour.rings == ["agentStep"]'
+run operator tour next --json
+exits 0 "tour next"
+holds "the write step rings the stage and the composer" "$stdout" '.tour.step == "write" and .tour.rings == ["stage", "composer"]'
+run operator tour close --json
+exits 0 "tour close"
+holds "close keeps the step" "$stdout" '.tour.open == false and .tour.step == "write" and .tour.rings == []'
+state
+holds "with the tour closed and an agent connected once, Finish setup is gone" "$stdout" '.tour.finishSetup == false'
+run operator tour show --json
+exits 0 "tour show (again)"
+holds "the tour opens at the step it was left on" "$stdout" '.tour.open == true and .tour.step == "write"'
+run operator tour skip --json
+exits 0 "tour skip"
+holds "skip starts the next tour from the first step" "$stdout" '.tour.open == false and .tour.step == "tools"'
+run operator tour next
+exits 1 "tour next (the tour isn't showing)"
+run operator thread list
+exits 0 "thread list"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 14 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 15 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 14 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 15 steps. Screenshots: %s\n' "$shots"
 exit 0

@@ -19,6 +19,8 @@ struct Composer: View {
             VStack(alignment: .leading, spacing: 6) {
                 targetLine(target)
                 field(target)
+                    // The tour's write step rings the field (H4).
+                    .coachRing(model.tourRings(.composer), radius: 8)
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)

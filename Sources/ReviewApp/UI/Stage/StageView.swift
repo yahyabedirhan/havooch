@@ -41,6 +41,8 @@ struct StageView: View {
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.2), value: model.draft == nil)
         }
         .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
+        // The tour's write step rings the frame (H4); the ring stands in the gutter.
+        .coachRing(model.tourRings(.stage), radius: Metrics.stageCorner)
         // Where a click is on the stage, which closes the popover by its own
         // gestures; a click anywhere else is outside it (`OutsideClicks`).
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.stageArea = $0 }

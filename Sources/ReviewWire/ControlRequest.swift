@@ -160,6 +160,18 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch connect forget`: the agent the last run had is no longer
     /// waited for, as Forget does while it reconnects.
     case connectForget
+    /// `havooch tour show`: the setup tour over the stage, as "Finish
+    /// setup" opens it, at the step it was left on.
+    case tourShow
+    /// `havooch tour next`: the tour's next step, as Next or Later on its
+    /// panel; after the last step the tour ends, as Finish does.
+    case tourNext
+    /// `havooch tour skip`: the tour ends, as Skip Tour does; it starts
+    /// from the first step next time.
+    case tourSkip
+    /// `havooch tour close`: the tour's panel goes, as its close button
+    /// does; the tour keeps its step.
+    case tourClose
     /// `havooch config dismiss`: the settings notice in the window goes,
     /// as its close button does.
     case configDismiss
@@ -242,6 +254,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .setupStatus: .free
         case .setupLink, .setupInstall, .setupCancel: .operator
         case .connectShow, .connectPick, .connectDisconnect, .connectForget: .operator
+        case .tourShow, .tourNext, .tourSkip, .tourClose: .operator
         }
     }
 

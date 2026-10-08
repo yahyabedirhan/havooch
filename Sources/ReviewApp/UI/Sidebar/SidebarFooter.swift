@@ -56,6 +56,7 @@ struct SidebarFooter: View {
                 .pressedByKeys(in: model) { model.send() }
                 .fixedSize()
                 .disabled(!model.canSend)
+                .coachRing(model.tourRings(.send), radius: 6)
                 .help(model.canSend ? "Send the queue to your agent at once (⌘↩)" : "Nothing is queued")
         }
         .padding(.horizontal, Metrics.sidebarPadding)

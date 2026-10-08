@@ -23,6 +23,23 @@ struct RootView: View {
                 case .player:
                     VStack(spacing: 0) {
                         StageView(model: model)
+                            // The setup tour's panel over the foot of the stage (H4).
+                            .overlay(alignment: .bottomLeading) {
+                                if model.tour.isOpen {
+                                    TourPanel(model: model)
+                                        .padding(.leading, 24)
+                                        .padding(.bottom, 12)
+                                        .transition(
+                                            reduceMotion
+                                                ? .opacity
+                                                : .scale(scale: 0.96, anchor: .bottomLeading).combined(with: .opacity)
+                                        )
+                                }
+                            }
+                            .animation(
+                                reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.86),
+                                value: model.tour.isOpen
+                            )
                         PlayerBar(model: model)
                     }
                 case .home:

@@ -217,6 +217,47 @@ struct ControlServerTests {
             return "Codex"
         }
 
+        /// The fake's tour: open on its step, or closed.
+        var tour = StateReport.Tour(
+            open: false, step: "tools", stepNumber: 1, steps: 5, title: "Give your agent two tools", rings: [],
+            replied: false, finishSetup: true, setupItemsLeft: 3
+        )
+
+        func showTour() throws(AppRefusal) -> StateReport.Tour {
+            try record("tour show")
+            tour.open = true
+            tour.rings = ["setupSteps"]
+            return tour
+        }
+
+        func nextTourStep() throws(AppRefusal) -> StateReport.Tour {
+            try record("tour next")
+            if tour.step == "reply" {
+                tour.open = false
+                tour.step = "tools"
+                tour.stepNumber = 1
+            } else {
+                tour.step = "connect"
+                tour.stepNumber = 2
+                tour.title = "Connect your agent"
+            }
+            return tour
+        }
+
+        func skipTour() throws(AppRefusal) -> StateReport.Tour {
+            try record("tour skip")
+            tour.open = false
+            tour.step = "tools"
+            tour.stepNumber = 1
+            return tour
+        }
+
+        func closeTour() throws(AppRefusal) -> StateReport.Tour {
+            try record("tour close")
+            tour.open = false
+            return tour
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }
@@ -581,6 +622,28 @@ struct ControlServerTests {
         app.refusal = AppRefusal("no agent is connected to this window")
         let refused = await answer(.connectDisconnect)
         #expect(refused.reply == .refused("no agent is connected to this window"))
+    }
+
+    @Test("`tour show`, `next`, `close` and `skip` move the tour and answer with its step; `--json` has the tour")
+    func tourCommands() async throws {
+        #expect(await answer(.tourShow).reply == .done("the tour shows step 1 of 5: Give your agent two tools\n"))
+        #expect(await answer(.tourNext).reply == .done("the tour shows step 2 of 5: Connect your agent\n"))
+        #expect(await answer(.tourClose).reply == .done(
+            "the tour is closed at step 2 of 5; havooch tour show opens it there\n"
+        ))
+        let shown = try object(await answer(.tourShow, json: true).reply.output)
+        let tour = try #require(shown["tour"] as? [String: Any])
+        #expect(tour["open"] as? Bool == true)
+        #expect(tour["step"] as? String == "connect")
+        #expect(tour["finishSetup"] as? Bool == true)
+        #expect(tour["setupItemsLeft"] as? Int == 3)
+        #expect(await answer(.tourSkip).reply == .done(
+            "the tour is skipped; Finish setup or havooch tour show starts it again\n"
+        ))
+        #expect(app.calls == ["tour show", "tour next", "tour close", "tour show", "tour skip"])
+
+        app.refusal = AppRefusal("the tour isn't showing; havooch tour show opens it")
+        #expect(await answer(.tourNext).reply == .refused("the tour isn't showing; havooch tour show opens it"))
     }
 
     @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")

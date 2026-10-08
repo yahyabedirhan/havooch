@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The floating group at the top right of the window, from left to
+/// "Finish setup" on its own while setup isn't finished (H4, P11), then
+/// the floating group at the top right of the window, from left to
 /// right: the agent-control icon (only while an agent holds the lease),
 /// Connect an Agent, "Open a Video…", Context, and the sidebar toggle;
 /// the last four in the player only, since home has its own "Open a
@@ -18,6 +19,13 @@ struct FloatingControls: ToolbarContent {
         // Pushes the group to the trailing edge: beside the header's title,
         // primary actions would otherwise sit at the leading end.
         ToolbarSpacer(.flexible)
+        // Separate from the connect button, in a capsule of its own.
+        if model.showsFinishSetup {
+            ToolbarItem(placement: .primaryAction) {
+                FinishSetupButton(model: model)
+            }
+            ToolbarSpacer(.fixed)
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             if isControlled {
                 AgentControlButton(model: model, indicator: lease, stop: stopLease)
@@ -64,6 +72,45 @@ private struct ConnectButton: View {
         .pressedByKeys(in: model) { model.toggleConnect(.header) }
         .help(isOpen ? "Back to the threads" : dot ? "Connect an agent: setup isn't finished" : "Connect an agent")
         .accessibilityValue(dot ? "Setup isn't finished" : "")
+    }
+}
+
+/// "Finish setup" with the count of setup items left: opens the setup
+/// tour over the stage, and closes it while it shows (H4). From
+/// connect-flow V6's tour button.
+private struct FinishSetupButton: View {
+    let model: WindowModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let left = model.setupItemsLeft
+        let isOpen = model.tour.isOpen
+        Button {
+            model.toggleTour()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Finish setup")
+                    .font(.callout.weight(.medium))
+                    .fixedSize()
+                if left > 0 {
+                    Text("\(left)")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(palette[.textOnAccent])
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(palette[.stateWorking], in: Circle())
+                }
+            }
+            .foregroundStyle(isOpen ? palette[.accent] : palette[.textPrimary])
+            .padding(.horizontal, 4)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .pressedByKeys(in: model) { model.toggleTour() }
+        .help(isOpen ? "Close the setup tour" : "Take the setup tour")
+        .accessibilityLabel("Finish setup")
+        .accessibilityValue(left == 1 ? "1 item left" : "\(left) items left")
     }
 }
 
