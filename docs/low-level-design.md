@@ -314,6 +314,7 @@ Sources/
     ControlSocket.swift            where control.sock is; follows the demo pointer
     DemoPointer.swift              demo.json in the normal support folder
     SupportFolder.swift            the support folder; HAVOOCH_SUPPORT_DIR moves it; HAVOOCH_DEMO_RUN marks the demo run (L27)
+    MutedRun.swift                 HAVOOCH_MUTED=1 starts a run muted for an agent's check; app open --demo passes it on (L71)
   ReviewConfig/                    config.toml (ADR 0002, L53)
     ConfigLocation.swift           the folder: <support>/config/ with HAVOOCH_SUPPORT_DIR, else $XDG_CONFIG_HOME/havooch/, else ~/.config/havooch/;
                                    config.toml and themes/ in it; ~ expansion; createIfMissing
@@ -333,7 +334,7 @@ Sources/
     WindowCommands.swift           window list | new | close [<id>] (L54)
     AppCommands.swift              app status | open [--demo <folder>] | home | demo | quit, state (L49)
     ControlCommands.swift          control take [--wait <seconds>] | release
-    PlayerCommands.swift           player open | play | pause | seek
+    PlayerCommands.swift           player open | play | pause | seek | mute | unmute | volume | sound (L71)
     CommentCommands.swift          comment add | open | compose | edit | delete, send, context set; thread answer | choose | open | show | list,
                                    thread versions [--search] [--close], thread version <n> [--remove] (L61)
     CompareCommands.swift          version show <n> | pick [<query>] | close (L62); compare open | pick | set | swap | start | exit (L63)
@@ -384,7 +385,8 @@ Sources/
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
-    Settings.swift                 settings.json, app state: the sidebar width, an agent connected once, the first run done; Former, an older
+    Settings.swift                 settings.json, app state: the sidebar width, an agent connected once, the first run done, the
+                                   volume and the unmute volume (L71); Former, an older
                                    build's theme and overrides, read once (L53)
   ReviewSetup/                     (L52)
     HarnessCatalog.swift           per harness: user skills folders, presence hints, the -a name, the prompt and the demo prompt; PromptTarget
@@ -430,12 +432,14 @@ Sources/
     Notice.swift                   one notice: its thread, kind, the agent's name, the text, when it fades
     Player/
       PlayerEngine.swift           AVPlayer: open, play, pause, exact seek, time, frameTime(of:), speed; play at a host time, retire (L63)
+      Sound.swift                  the app's one sound level, 0 to 1, 0 muted; mute and unmute; every PlayerEngine follows it;
+                                   silent in a run muted for a check (HAVOOCH_MUTED=1), which keeps the person's level (L71)
       PlayerPair.swift             two PlayerEngines on one clock: play on one host time, pause, seek, speed, drift corrected on the lead's
                                    ticks, only the lead heard (L63)
       PlayerSurface.swift          AVPlayerView without controls
       FrameGrabber.swift           keyframe and crop PNGs from the asset, at the exact time
       Shortcuts.swift              the player's keys, on the window they're pressed in, off while a text field has the focus; Space and Return
-                                   press a control with the keyboard focus (L45); backslash flips Compare's Flip (L63)
+                                   press a control with the keyboard focus (L45); backslash flips Compare's Flip (L63); M mutes (L71)
     Control/
       SocketListener.swift         the listening socket off the main actor; one task per connection; the 2 s heartbeat
       ControlServer.swift          decode, the lease gate, dispatch, held takes; the written/undelivered outcome; AppControlling, WindowControlling
@@ -503,7 +507,9 @@ Sources/
         CompareStage.swift         side by side, Flip with its bar, Slider with its handle, over the `PlayerPair`; each side labelled, the active
                                    one filled (L63)
       PlayerBar/
-        PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button
+        PlayerBar.swift            play and pause, time / duration, speed, the timeline, the Comment button, the speaker
+        SoundControl.swift         the speaker, the sound panel over the stage (the level capsule, or why a muted run is silent),
+                                   its outside clicks and Escape (L71)
         Timeline.swift             the track, ticks and time labels, the pins
         ThreadPin.swift            one pin: circle or rounded square, the state's colour or the question's, the hover line (pure words)
       Sidebar/
@@ -850,7 +856,7 @@ The `Transcriber` protocol (`transcript(of:)`, `prepare`, `lines(for:in:)`), `Tr
   outboxes/project-<slug>.json           a project's review's Outbox (L59)
   recents.json                           the 10 recent videos, the newest first (path, content hash, opened time, last position),
                                          and when each project was last opened
-  settings.json                          app state: the sidebar width, an agent connected once, the first run done
+  settings.json                          app state: the sidebar width, an agent connected once, the first run done, the volume
   config-status.json                     the verdict on config.toml after the app's last reload (L53)
   config/                                with HAVOOCH_SUPPORT_DIR only: config.toml and themes/ (L53)
   videos/<contentHash>/
@@ -887,7 +893,7 @@ public struct SupportLayout: Equatable, Sendable {
 - Every save is atomic, pretty-printed, sorted keys, ISO 8601 with milliseconds, with `schemaVersion` (1, L9).
 - A file from a newer schema, or one that does not read, is never written over.
 - `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); the person's are read from `themes/` beside `config.toml` (`ConfigLocation.themesFolder`). A file that does not read is skipped with its reason.
-- `Settings` is `{ sidebarWidth: Double?, agentConnectedOnce: Bool?, firstRunDone: Bool? }`, app state, with its own `load(layout)` and `save(layout)`. A missing file is the defaults. A file that does not read is never written over. `Settings.former(layout)` reads the `theme` and `overrides` an older build left in it, for the one-time move into `config.toml` (L53); the next save leaves them out.
+- `Settings` is `{ sidebarWidth: Double?, agentConnectedOnce: Bool?, firstRunDone: Bool?, volume: Double?, unmuteVolume: Double? }`, app state, with its own `load(layout)` and `save(layout)`. A missing file is the defaults. A file that does not read is never written over. `Settings.former(layout)` reads the `theme` and `overrides` an older build left in it, for the one-time move into `config.toml` (L53); the next save leaves them out.
 - `ContentHash` streams SHA-256 over the file; `ContentHashCache` keeps each hash for the run by path, size and modification time, so opening a file again skips reading it whole (L51).
 
 ### ReviewSetup
@@ -931,6 +937,7 @@ What Havooch can say of the person's setup, and the two actions that change it (
 | `openDemo(in:)` | "Try the Demo" and `app demo` (L49): `enterDemo` on the bundled video (`DemoRun.video()`) in that window | no bundled video; as `enterDemo` |
 | `recents`, `refreshRecents()`, `removeRecent`, `savePositions()` | the recent videos of the data, the same in every window (L48); every window's position on quit | |
 | `keepSidebarWidth(width)` | the sidebar's width, one for every window, in `settings.json` on the folder the run started on | |
+| `setVolume(level, keep:)`, `mute()`, `unmute()`, `toggleMute()`, `toggleMuteForPerson()`, `changeSound(_:)` | the volume capsule, M, Playback › Mute and `player volume`, `player mute`, `player unmute` (L71): the `Sound` of every window, kept in `settings.json` unless the run is muted for a check; the person's paths do nothing in that run | |
 | `setTheme(name)`, `themeList()` | through `ThemeDesk`; `system` unpins | an unknown theme |
 | `dismissConfigNotice()` | `config dismiss` and the banner's close button, in every window | |
 | `setupReport`, `setupStatus`, `linkCommand`, `installSkill`, `cancelInstall` | through `SetupDesk` (L52) | as `SetupDesk` |
@@ -1517,3 +1524,4 @@ Each decision this design takes, with its reason. Spec and ticket numbers say wh
 | L67 | A click on the frame points: `clickFrame()` never plays or pauses (ticket #143). It closes an open popover as a click outside, as before; a click on a thread's mark, a drag that draws a region and a click that picks a Compare side keep their rules. `clickFrame()`, `clickFrame(on:)` and `beginRegion()` first take the keys from a text field (`takeKeysFromText`): when the window's first responder is an `NSText`, such as the composer's field, the window becomes the first responder, so `Shortcuts` sees no typing and Space and C are the player's. The composer's words are the model's (`composerText`), so the field keeps them. A click elsewhere in the window keeps its own focus rules. | The maintainer points at the frame to comment and does not want a click to start the video. A click left the cursor in the composer, so Space and C typed into it (0.4.1). |
 | L68 | The sidebar's foot is one dock (Swift Lab project `havooch`, session `sidebar`, component `full-sidebar`, V7 "Footer Send, one switch: at the playhead or General", after component `composer` V2 "Card with toolbar"); it changes L41's look, L42's focus ring for the composer and D 4.9's footer. One card holds the writing: the field, three lines tall at rest (`ComposerEditor.lineHeight` × 3, from the font), and the region chip under the words. Its foot is a band on `well` with the presence pill and the newest activity, and the one Send, the shared `SplitButton` (L69): its title counts what a send would deliver (`Composer.sendTitle`, from `sendCount`), its main part is Cmd+Return's `send`, its menu holds Queue (Return's `submitComposer`) and Send. An answer has "Answer" on the same split button, which answers at once as Return does, with Discard in its menu and the queued count before it. The old `SidebarFooter` row and its Send are gone, so the window has one Send; the tour's send step rings it, and its write step rings the card. Above the card, in the thread list, one switch "At 0:12 \| General" (`ComposerTarget.atMoment`) replaces the target line and the General toggle; a thread view shows its thread alone (`ComposerTarget.toolbarLabel`), and an answer "Answer #3, goes at once". The focus look is the card's border, only while the field has the focus in the key window; no focus ring. While the Connect view shows, the card holds the band alone, so the pill can close it and Send still sends. `state` still reports the full target (`ComposerTarget.line`). | The maintainer did not like the composer at the sidebar's foot, then found two Send buttons when the card had its own; they picked V7 in the lab, where the footer and the composer are one dock. The lab never drew the Connect view or a window with no video: the band alone keeps the pill and Send there. |
 | L69 | A primary action with secondary choices is the one `SplitButton` (`UI/SplitButton.swift`), from the stage session's comment-popover V8 and thread-popover V5 ("Toolbar band footer"). It is one 22 pt control with 6 pt corners on `accentFill`: the main part with its title in `palette.textOnFill` at the small size, a 1 pt divider in `textOnFill` at 35%, and a `Menu` arrow (`chevron.down`, 9 pt) holding the choices. Hover darkens a part by 8% (`palette.shade`), a press by 14%, and off is 45% opacity. Its interface is `SplitButton(title, help:, isEnabled:, action:, menu:)`, with `pressedByKeys(in:)` for the player's keys; its main part is labelled with the title and its arrow "More". No view builds a split button inline: a test refuses a `Menu` with a primary action outside it. The comment popover uses it in a toolbar band, and the sidebar dock next. | A `Menu` with a primary action ignores the prominent fill and draws grey, even in the key window. White on `accentFill` is the pair `filledButton` uses, so it keeps ADR 0006's contrast. One control keeps every split action the same. |
+| L71 | The sound (issue #106) is one app-wide `Sound`, from the Swift Lab session `player-bar`, component `player-bar`, V6 "Panel: thick capsule like Control Center". Its level runs from 0 to 1 and level 0 is muted: there is no separate mute flag. Mute and unmute go between 0 and the last level above it (`unmuteLevel`). Each `PlayerEngine` is made with the app's `Sound` and follows it through `AVPlayer.volume`, so every window and both sides of Compare play at one level; `PlayerPair` still mutes the follower with `isMuted`. `AppModel` keeps `volume` and `unmuteVolume` in `settings.json`, as app state, and a capsule drag keeps the level only when it ends. A run started with `HAVOOCH_MUTED=1` (`MutedRun`) plays at volume 0 in every window. Its speaker has a badge, and its panel shows "Muted for an agent check" and no capsule. `player volume`, `player mute` and `player unmute` change that run's level only. `Sound.kept` stays the level the run started with, so no save writes the run's level. The panel's open state is the window's (`isSoundPanelOpen`, `player sound [--close]`). Escape closes it first. It is drawn over the stage and the bar together (`SoundPanel.space`), at the speaker's frame, so its clicks land inside the views that take them. The capsule maps the pointer from its own frame (`LevelCapsule.level(at:height:)`): the top is 1, the bottom 0, and the bottom 2% is 0. | The issue asks for sound for people and silence for agent checks. One level with 0 as muted is the maintainer's pick in the lab: one control, and nothing to get out of step. An agent check must never play sound on the maintainer's Mac and must never change the maintainer's level. The commands still work in a muted run, so an agent can check them without sound. |
