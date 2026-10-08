@@ -139,7 +139,7 @@ private struct OpenVideoButton: View {
         Button {
             model.openFromPanel()
         } label: {
-            Label("Open a Video…", systemImage: "folder")
+            Label("Open a Video…", systemImage: "film")
         }
         .pressedByKeys(in: model) { model.openFromPanel() }
         .help("Open a Video…")
