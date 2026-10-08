@@ -113,12 +113,6 @@ Havooch supports these agents. The prompt names the window's video, or its proje
 
 For a project, the prompt ends with `project <slug>`, for example `project launch-video`. When nobody listens, **Send** keeps your messages in the outbox and delivers them when an agent connects. Once an agent listens, the Connect view shows it, where it runs and since when, with **Disconnect** and the prompt to listen again later.
 
-To install the skill on its own:
-
-```sh
-npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
-```
-
 ## Projects, versions and Compare
 
 When you ask your agent for a change to the video itself, it makes a **project**: the video you're reviewing becomes v1, and your threads move into the project with it. Each new render the agent makes opens as the next version, with a short label of what changed. A video that only gets questions stays a plain video.
@@ -156,20 +150,47 @@ versions = [
 
 Recent videos, playheads and your threads are app state, kept out of this file.
 
-## The command and the mate skill
+## The `havooch` command
 
-The app carries the `havooch` command in `Havooch.app/Contents/Helpers/`; both installs link it onto your `PATH`. The **havooch-mate** skill teaches a coding agent to listen with it. The commands, by group:
+**What it is.** A command line tool that ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Homebrew and the install script put it on your `PATH`, and **Link** in the Connect view does the same.
+
+**Why you need it.** Your agent can't click around in Havooch. The command is how it talks to the app: it picks up the comments you send and puts its answers on their threads, in the player.
+
+**How it works.** Most commands talk to the Havooch app running on your Mac. An agent that listens uses only a few of them. The rest are for opening videos, projects and settings, and for driving the app in checks and screenshots:
 
 | Group | Commands | What they do |
 |---|---|---|
-| Open | `open` | Open a video, in its project when one lists it. Needs no lease. |
+| Open | `open` | Open a video, in its project when one lists it. |
 | Listen | `wait`, `ack`, `status`, `reply`, `ask` | The listener's loop: take a send, acknowledge it, report progress, answer on a thread, ask a question. `wait --video <path>` or `wait --project <slug>` picks the window. |
 | Projects | `project`, `version`, `compare` | Make a project and add versions, show a version, drive Compare. |
 | Settings | `config`, `theme` | Find and check `config.toml`, list and pin themes. |
 | Setup | `setup`, `connect`, `first-run`, `tour` | Link the command, install the skill, and drive the Connect view, the first-run window and the tour. |
-| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots, under a lease the agent takes with `control take` and gives back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data. |
+| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data. |
 
 `havooch --help` lists every command, and `havooch --version` prints the version.
+
+## The `/havooch-mate` skill
+
+**What it is.** An agent skill: a short set of instructions your coding agent loads when you call it. It works with Claude Code, Codex, Cursor, Pi and OpenCode.
+
+**Why you need it.** The `havooch` command gives your agent the tools. The skill teaches it how to use them: when to wait, how to take your comments, how to work through them in your repository, and when to answer or ask.
+
+**How it works.** Paste your agent's prompt from the Connect view into a session in your project, for example `/havooch-mate listen for my feedback on launch.mp4`. The agent then repeats this loop:
+
+1. Waits for your next send from that window.
+2. Acknowledges it, so the player shows the agent has it.
+3. Does what each comment asks, in your repository, and reports its progress.
+4. Answers on each comment's thread, or asks you there when something isn't clear.
+
+Only what you send from Havooch drives the loop. Whatever you type in the agent's chat stays a normal conversation.
+
+**Install it** from the Connect view with **Run Command**, or yourself:
+
+```sh
+npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
+```
+
+To update it, run the same command again.
 
 ## Build from source
 
