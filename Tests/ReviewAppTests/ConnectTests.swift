@@ -199,7 +199,7 @@ struct ConnectTests {
 
         let answer = await wait.value
         #expect(answer.reply == .refused(
-            "the person disconnected you from this video in Havooch: stop listening and tell the person"
+            "the person disconnected you from this video or project in Havooch: stop listening and tell the person"
         ))
         #expect(window.listenerPhase(at: Date()) == .none)
         #expect(window.listeners().outbox.session == nil)
@@ -221,7 +221,7 @@ struct ConnectTests {
         #expect(window.listeners().outbox.pending.count == 1)
         let next = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.claude))
         #expect(next.reply == .refused(
-            "the person disconnected you from this video in Havooch: stop listening and tell the person"
+            "the person disconnected you from this video or project in Havooch: stop listening and tell the person"
         ))
         // Only once: the person may connect it again.
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.claude))

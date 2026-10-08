@@ -157,7 +157,7 @@ Exit `1` prints why. Read the line; the same command sent again gets the same an
 
 - **A newer `wait` took this one's place.** You had two open. The newer one is the listener; nothing to do.
 - **Another agent took over listening to this review.** The person connected another agent to it. Do not run `wait` again: finish or fail the messages you have, then tell the person in the chat that you stopped listening.
-- **The person disconnected you from this video.** They pressed Disconnect in the player. Do not run `wait` again. Tell the person in the chat that you stopped listening. The sends you had and did not finish wait for the next agent.
+- **The person disconnected you from this video or project.** They pressed Disconnect in the player. Do not run `wait` again. Tell the person in the chat that you stopped listening. The sends you had and did not finish wait for the next agent.
 - **No window holds a video to listen to**, **no video file** at the path, or **no project** with the slug. Ask the person which video or project to listen to.
 - **The app is quitting**, on `wait` or `ask`: a new `wait` reconnects once the app is back; treat an `ask` as in [Ask](#ask).
 - **The app isn't running**, on any other command: the person quit the player. Finish and commit the work, keep each result, and check `havooch app status` before the next command. When the app runs again, send the replies and statuses you kept. Tell the person in the chat when the session ends first.

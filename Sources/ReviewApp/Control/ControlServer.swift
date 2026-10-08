@@ -434,7 +434,7 @@ final class ControlServer {
                     ))
                 case .disconnected:
                     return Answer(reply: .refused(
-                        "the person disconnected you from this video in \(AppIdentity.appName): stop listening and tell the person"
+                        "the person disconnected you from this video or project in \(AppIdentity.appName): stop listening and tell the person"
                     ))
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
