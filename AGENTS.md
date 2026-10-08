@@ -49,7 +49,13 @@ Never emphasise a box with a one-sided coloured edge: no left stripe, and no rig
 
 A `v<version>` tag publishes the GitHub Release, the cask in `yahyabedirhan/homebrew-tap` and the skill in `yahyabedirhan/havooch-mate`. The cask and the skill are maintained here. Never edit their copies in those repositories. Read `docs/decisions/release-publishing.md` before changing the release workflow, the cask, the skill's install source or the scripts that publish them.
 
-Keep maintainer notes, such as where a file is maintained and how it is published, out of user-facing text: the README, the cask caveat, the site and the repository descriptions. Put them in `docs/decisions/` and in this file.
+## Docs
+
+Each document has one reader:
+
+- `README.md` is the welcome, for someone who just found the project: what Havooch is, how the loop works, how to install and connect an agent. Plain words, short paragraphs, no shortcuts or option lists. Change it only when that first impression changes.
+- `docs/guide.md` is the reference, for someone using Havooch: every option, command, setting, agent prompt and shortcut. A change to what a person can do updates the guide in the same pull request.
+- `docs/decisions/` and this file hold the maintainer notes: why something is built a certain way, where a file is maintained, how it is published. User-facing text (the README, the guide, the cask caveat, the site, repository descriptions) says what to do, and leaves the maintainer notes here.
 
 ## Testing
 
