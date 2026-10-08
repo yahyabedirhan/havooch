@@ -180,8 +180,41 @@ struct ThemeDeskTests {
             }
         }
         #expect(found.isEmpty, "prominent buttons that skip filledButton:\n\(found.joined(separator: "\n"))")
-        // Send, Open a Video… twice, Queue or Answer, and the two Saves.
+        // Send, Open a Video… twice, the two Saves and the rest.
         #expect(filled >= 6)
+    }
+
+    @Test("a split action is the one SplitButton, on accentFill with white text: no view builds a menu with a primary action of its own")
+    func splitActionsAreTheSplitButton() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/ReviewApp", isDirectory: true)
+        let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+        var inline: [String] = []
+        var uses = 0
+        var control = ""
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            if file.lastPathComponent == "SplitButton.swift" {
+                control = text
+                continue
+            }
+            for (number, line) in text.components(separatedBy: "\n").enumerated() {
+                let code = line.components(separatedBy: "//").first ?? ""
+                if code.contains("primaryAction:") || code.contains("primaryAction {") {
+                    inline.append("\(file.lastPathComponent):\(number + 1): \(line.trimmingCharacters(in: .whitespaces))")
+                }
+                if code.contains("SplitButton(") { uses += 1 }
+            }
+        }
+        #expect(inline.isEmpty, "split buttons built inline:\n\(inline.joined(separator: "\n"))")
+        // White text on the fill filledButton uses, which reads at 4.5:1 or more (ADR 0006).
+        #expect(control.contains(".background(palette[.accentFill])"))
+        #expect(control.contains(".foregroundStyle(palette.textOnFill)"))
+        // The comment popover's Queue or Answer.
+        #expect(uses >= 1)
     }
 
     @Test("a theme file written while the app runs is read at once, and so is a pin saved in config.toml")
