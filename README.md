@@ -65,8 +65,6 @@ The **havooch-mate** skill teaches a coding agent the listener's loop. Install i
 npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
 ```
 
-The skill is maintained here, in `.agents/skills/havooch-mate`. Each release writes it into [yahyabedirhan/havooch-mate](https://github.com/yahyabedirhan/havooch-mate), a small repository the skills CLI clones in seconds.
-
 Then ask your agent, for example Claude Code, to listen for Havooch feedback.
 
 ## Build from source

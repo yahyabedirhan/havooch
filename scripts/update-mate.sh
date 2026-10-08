@@ -9,7 +9,8 @@
 # installers install the skill from a repository of the skill alone. This
 # script makes that repository's files the same as the skill here: SKILL.md,
 # references/ and anything else in the skill's folder. A file the skill no
-# longer has is removed. The repository's own README.md and LICENSE stay. The
+# longer has is removed. The repository's own files stay: README.md, LICENSE,
+# AGENTS.md, CLAUDE.md and docs/. The
 # commit is "havooch-mate <version>", on main, with no tag.
 #
 # Environment: TAP_TOKEN, a token that can push to the skill's repository (the
@@ -31,8 +32,9 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 skill_name="havooch-mate"
 source_dir="$root/.agents/skills/$skill_name"
 mate_repo="${MATE_REPO:-yahyabedirhan/havooch-mate}"
-# The files of the skill's repository that are its own, not the skill's.
-own_files=("README.md" "LICENSE")
+# The files of the skill's repository that are its own, not the skill's. A
+# path that ends in / keeps everything under it.
+own_files=("README.md" "LICENSE" "AGENTS.md" "CLAUDE.md" "docs/")
 
 printf '%s' "$version" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || fail "'$version' isn't a version like 0.2.0"
 [ -f "$source_dir/SKILL.md" ] || fail "no skill at .agents/skills/$skill_name/SKILL.md"
@@ -57,6 +59,7 @@ is_own() {
     local file
     for file in "${own_files[@]}"; do
         [ "$1" = "$file" ] && return 0
+        case "$file" in */) [[ "$1" == "$file"* ]] && return 0 ;; esac
     done
     return 1
 }
