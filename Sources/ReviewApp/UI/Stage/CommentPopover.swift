@@ -162,6 +162,9 @@ struct CommentPopover: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            // The header's grab cursor covers the whole row; the close
+            // button shows that it is a button.
+            .pointerStyle(.link)
             .pressedByKeys(in: model) { model.closePopover(.discard) }
             .help("Discard (Esc)")
             .accessibilityLabel("Discard")
