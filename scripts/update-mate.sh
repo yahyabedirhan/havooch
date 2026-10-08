@@ -7,11 +7,11 @@
 # The skill is maintained here, in .agents/skills/havooch-mate. The skills CLI
 # clones a repository source, and this repository is large, so the app and the
 # installers install the skill from a repository of the skill alone. This
-# script makes that repository's files the same as the skill here: SKILL.md,
-# references/ and anything else in the skill's folder. A file the skill no
-# longer has is removed. The repository's own files stay: README.md, LICENSE,
-# AGENTS.md, CLAUDE.md and docs/. The
-# commit is "havooch-mate <version>", on main, with no tag.
+# script makes that repository's skills/havooch-mate/ the same as the skill
+# here: a file the skill no longer has is removed. The rest of that repository
+# (its README.md, AGENTS.md and docs/) is its own and stays. The skills CLI
+# installs only the skill's folder. The commit is "havooch-mate <version>", on
+# main, with no tag.
 #
 # Environment: TAP_TOKEN, a token that can push to the skill's repository (the
 # release workflow's token for the Homebrew tap, with this repository added to
@@ -32,9 +32,8 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 skill_name="havooch-mate"
 source_dir="$root/.agents/skills/$skill_name"
 mate_repo="${MATE_REPO:-yahyabedirhan/havooch-mate}"
-# The files of the skill's repository that are its own, not the skill's. A
-# path that ends in / keeps everything under it.
-own_files=("README.md" "LICENSE" "AGENTS.md" "CLAUDE.md" "docs/")
+# Where the skill sits in its repository.
+target_dir="skills/$skill_name"
 
 printf '%s' "$version" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || fail "'$version' isn't a version like 0.2.0"
 [ -f "$source_dir/SKILL.md" ] || fail "no skill at .agents/skills/$skill_name/SKILL.md"
@@ -55,26 +54,11 @@ trap 'rm -rf "$work"' EXIT
 git ${git_auth[@]+"${git_auth[@]}"} clone --quiet --depth 1 --branch main "https://github.com/$mate_repo.git" "$work/mate"
 
 cd "$work/mate"
-is_own() {
-    local file
-    for file in "${own_files[@]}"; do
-        [ "$1" = "$file" ] && return 0
-        case "$file" in */) [[ "$1" == "$file"* ]] && return 0 ;; esac
-    done
-    return 1
-}
-
-# Every tracked file that isn't the repository's own goes, then the skill's
-# files come in: what the skill no longer has is removed.
-git ls-files -z | while IFS= read -r -d '' path; do
-    is_own "$path" || git rm --quiet -- "$path"
-done
-(cd "$source_dir" && find . -type f -print0) | while IFS= read -r -d '' path; do
-    path="${path#./}"
-    is_own "$path" && continue
-    mkdir -p "$(dirname "$path")"
-    cp "$source_dir/$path" "$path"
-done
+# The skill's folder there is replaced as a whole: what the skill no longer has
+# is removed, and nothing outside the folder is touched.
+git rm -r --quiet --ignore-unmatch -- "$target_dir"
+mkdir -p "$target_dir"
+cp -R "$source_dir/." "$target_dir/"
 git add --all
 
 if git diff --cached --quiet; then
