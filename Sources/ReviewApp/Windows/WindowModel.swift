@@ -1996,7 +1996,7 @@ final class WindowModel: WindowControlling {
     private(set) var pickedVersions: [Int] = []
     /// The search of "All versions" while the menu shows; nil while it is
     /// closed.
-    var versionMenu: String?
+    private(set) var versionMenu: String?
     /// The section the thread list scrolls to next; its `serial` changes
     /// with each pick, so a pick of the same version scrolls again.
     private(set) var versionJump: VersionJump?
@@ -2037,6 +2037,14 @@ final class WindowModel: WindowControlling {
         connect = nil
         versionMenu = search ?? versionMenu ?? ""
         return sidebarReport
+    }
+
+    /// The person typed in the search of "All versions". Nothing while
+    /// the menu is closed: the search field, torn down as the menu closes,
+    /// writes back the words it shows, and that would open it again.
+    func typeVersionSearch(_ text: String) {
+        guard versionMenu != nil else { return }
+        versionMenu = text
     }
 
     /// A click outside "All versions", or `thread versions --close`.

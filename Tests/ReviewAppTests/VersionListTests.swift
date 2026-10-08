@@ -109,6 +109,21 @@ struct VersionListTests {
         window.app.listeners.stop()
     }
 
+    @Test("the search field's last words, written as the field goes away, don't open a closed menu again")
+    func searchAfterClose() async throws {
+        defer { cleanUp() }
+        let (window, server) = try await project()
+        #expect(await ask(.threadVersionsOpen(search: "v1"), server).ok)
+        window.typeVersionSearch("v")
+        #expect(window.versionMenu == "v")
+        #expect(await ask(.threadVersion(number: 1, remove: false), server).ok)
+        // The field, torn down with the menu, writes back what it shows.
+        window.typeVersionSearch("")
+        #expect(window.versionMenu == nil)
+        #expect(try await versions(server)["menu"] is NSNull)
+        window.app.listeners.stop()
+    }
+
     @Test("picking an older version adds its section, closes the menu and scrolls to it; --remove takes it out")
     func pick() async throws {
         defer { cleanUp() }

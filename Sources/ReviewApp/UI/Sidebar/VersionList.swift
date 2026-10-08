@@ -151,7 +151,7 @@ private struct AllVersionsMenuView: View {
                 Image(systemName: "magnifyingglass").imageScale(.small).foregroundStyle(palette[.textTertiary])
                 TextField("Jump to v12 or a label", text: Binding(
                     get: { model.versionMenu ?? "" },
-                    set: { model.versionMenu = $0 }
+                    set: { model.typeVersionSearch($0) }
                 ))
                 .textFieldStyle(.plain)
                 .font(.callout)
