@@ -8,9 +8,11 @@ import SwiftUI
 /// playhead, with a notch that points at the moment. For a message on a
 /// region it sits beside the rectangle, with no notch. Its header names the
 /// thread it writes to and the frame's time as the bar shows it; the
-/// thread's conversation shows above the field. On a thread, the header
-/// drags it and the corner grip resizes it, and the thread keeps where it
-/// was left (D 2.8, D 2.10; `ThreadPopover`).
+/// thread's conversation shows above the field. Each edge and each corner
+/// resizes it, as a window's do (L70): on a thread the conversation takes
+/// the height, on a new message the field does, and a notch stays on the
+/// bottom edge. On a thread the header drags it, and the thread keeps
+/// where it was left (D 2.8, D 2.10; `ThreadPopover`).
 ///
 /// Return and Queue queue the words, or answer an open question at once
 /// (L14), and the popover stays on its thread; the × and Escape drop them.
@@ -25,20 +27,43 @@ struct CommentPopover: View {
     /// The thread it writes to, whose conversation shows above the field
     /// (D 2.7, D 2.9); nil for a popover that starts a thread.
     var thread: ReviewThread? = nil
-    /// The size the person gave it (D 2.8); nil for its own size.
+    /// The size the person gave the box, without its notch (D 2.8); nil
+    /// for its own size.
     var size: CGSize? = nil
     /// A drag on the header: its translation, and whether it ended. Nil
     /// for a popover that can't move: one with no thread to keep it.
     var move: ((CGSize, Bool) -> Void)? = nil
-    /// A drag on the corner grip, as `move`.
-    var resize: ((CGSize, Bool) -> Void)? = nil
+    /// A drag on an edge or a corner: which one, then as `move`. Nil for a
+    /// popover that can't be resized.
+    var resize: ((FrameResizePosition, CGSize, Bool) -> Void)? = nil
 
-    static let width: CGFloat = 320
+    static let width: CGFloat = 340
     static let notchHeight: CGFloat = 7
     /// The space inside the box's edge, kept small around a small field
     /// (D 1.8).
     static let padding: CGFloat = 8
+    /// A new message's field: its height at the popover's own size, which
+    /// opens the popover at its minimum size, and the least it takes in a
+    /// popover the person sized.
+    static let fieldHeight: CGFloat = 94
+    static let minimumFieldHeight: CGFloat = 34
+    /// A thread's field, whatever the popover's size: the conversation
+    /// takes the height.
+    static let threadFieldHeight: CGFloat = 58
+    /// The size rules of a popover for a new message (L70): the header, a
+    /// roomy field and the band with its split button always show.
+    static let rules = ResizeRules(minimum: CGSize(width: 340, height: 170), maximum: CGSize(width: 560, height: 320))
+    /// The closest the notch comes to a side: past the rounded corner.
+    static let notchInset: CGFloat = 22
     @Environment(\.palette) private var palette
+
+    /// How tall the field is, least and most: on a thread, always its own
+    /// height; on a new message, its own height, or the height the
+    /// popover has once the person sized it.
+    private var fieldRange: (min: CGFloat, max: CGFloat) {
+        if thread != nil { return (Self.threadFieldHeight, Self.threadFieldHeight) }
+        return size == nil ? (Self.fieldHeight, Self.fieldHeight) : (Self.minimumFieldHeight, .infinity)
+    }
 
     /// Whether the field answers the agent's open question (L14).
     private var answers: Bool { thread?.openQuestion != nil }
@@ -54,7 +79,7 @@ struct CommentPopover: View {
                     text: text, placeholder: placeholder, wellFocus: answers ? .question : .accent,
                     commit: { model.commitDraft() }, cancel: { model.escape() }
                 )
-                .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
+                .frame(maxWidth: .infinity, minHeight: fieldRange.min, maxHeight: fieldRange.max)
             }
             .padding([.horizontal, .top], Self.padding)
             // 10 pt from the field to the band.
@@ -66,14 +91,14 @@ struct CommentPopover: View {
                 .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
                 .background { FooterBand() }
         }
-        .frame(width: size?.width ?? Self.width, height: size?.height)
+        .frame(width: size?.width ?? Self.width, height: size.map { $0.height + (notch == nil ? 0 : Self.notchHeight) })
         // The band's lower corners and the notch follow the box's outline.
         .clipShape(Bubble(notch: notch, notchHeight: Self.notchHeight))
-        .overlay(alignment: .bottomTrailing) {
+        .overlay {
             if let resize {
-                ResizeGrip()
-                    .padding(2)
-                    .gesture(Self.drag(resize))
+                ResizeEdges(rules: thread == nil ? Self.rules : ThreadPopover.rules, resize: resize)
+                    // On the box's outline, above the notch.
+                    .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
             }
         }
         .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), surface: palette.surface(.popover), border: palette[.popoverBorder])
@@ -106,10 +131,6 @@ struct CommentPopover: View {
                 Button("Discard") { model.closePopover(.discard) }
             }
             .pressedByKeys(in: model)
-            if resize != nil {
-                // Room for the grip in the corner.
-                Spacer().frame(width: 8)
-            }
         }
     }
 
@@ -159,7 +180,7 @@ struct CommentPopover: View {
 
     /// A drag in the window's coordinates, so the popover moving under the
     /// pointer doesn't change the translation.
-    private static func drag(_ report: @escaping (CGSize, Bool) -> Void) -> some Gesture {
+    fileprivate static func drag(_ report: @escaping (CGSize, Bool) -> Void) -> some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .global)
             .onChanged { report($0.translation, false) }
             .onEnded { report($0.translation, true) }
@@ -189,8 +210,7 @@ struct CommentPopover: View {
     static func placement(playhead: CGFloat, stageWidth: CGFloat) -> (leading: CGFloat, notch: CGFloat) {
         let margin: CGFloat = 10
         let leading = min(max(playhead - width / 2, margin), max(stageWidth - width - margin, margin))
-        let corner: CGFloat = 22
-        return (leading, min(max(playhead - leading, corner), width - corner))
+        return (leading, min(max(playhead - leading, notchInset), width - notchInset))
     }
 
     /// The space between the box and the rectangle it's beside, and
@@ -261,6 +281,56 @@ private struct FooterBand: View {
             palette[.well]
         }
         .overlay(alignment: .top) { Hairline(axis: .horizontal) }
+    }
+}
+
+/// The popover's edges and corners: eight bands on its outline, centred
+/// on it, that resize it as a window's do (L70). Each shows the resize
+/// pointer of its edge or corner, with the ways `rules` lets it still go;
+/// a drag on an edge moves that edge, and a drag on a corner its two
+/// edges. They lie clear of the header, the field and the band.
+private struct ResizeEdges: View {
+    let rules: ResizeRules
+    let resize: (FrameResizePosition, CGSize, Bool) -> Void
+
+    /// How thick an edge's band is, across the outline.
+    static let edge: CGFloat = 6
+    /// The side of a corner's square.
+    static let corner: CGFloat = 12
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                // The corners come last, so they lie above the edges' ends.
+                ForEach(FrameResizePosition.allCases, id: \.self) { handle in
+                    let rect = Self.rect(of: handle, in: proxy.size)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .pointerStyle(.frameResize(position: handle, directions: rules.directions(handle, size: proxy.size)))
+                        .gesture(CommentPopover.drag { translation, ended in resize(handle, translation, ended) })
+                        .frame(width: rect.width, height: rect.height)
+                        .offset(x: rect.minX, y: rect.minY)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The band of `handle` on a box `size` in size, centred on its outline.
+    static func rect(of handle: FrameResizePosition, in size: CGSize) -> CGRect {
+        let (w, h) = (size.width, size.height)
+        let along = CGSize(width: max(w - corner, 0), height: max(h - corner, 0))
+        switch handle {
+        case .top: return CGRect(x: corner / 2, y: -edge / 2, width: along.width, height: edge)
+        case .bottom: return CGRect(x: corner / 2, y: h - edge / 2, width: along.width, height: edge)
+        case .leading: return CGRect(x: -edge / 2, y: corner / 2, width: edge, height: along.height)
+        case .trailing: return CGRect(x: w - edge / 2, y: corner / 2, width: edge, height: along.height)
+        case .topLeading: return CGRect(x: -corner / 2, y: -corner / 2, width: corner, height: corner)
+        case .topTrailing: return CGRect(x: w - corner / 2, y: -corner / 2, width: corner, height: corner)
+        case .bottomLeading: return CGRect(x: -corner / 2, y: h - corner / 2, width: corner, height: corner)
+        case .bottomTrailing: return CGRect(x: w - corner / 2, y: h - corner / 2, width: corner, height: corner)
+        }
     }
 }
 
