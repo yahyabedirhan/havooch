@@ -33,11 +33,25 @@ The cask installs `Havooch.app` and links the `havooch` command onto your `PATH`
 curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash
 ```
 
-The script downloads the latest release, checks its SHA-256, installs `Havooch.app` in `/Applications`, links the `havooch` command into `/usr/local/bin` (or `~/.local/bin` when that isn't writable) and installs the `havooch-mate` skill with `npx skills add` when `npx` is there. Options: `--app-dir <dir>`, `--bin-dir <dir>`, `--no-skill`. To remove the app, the command's link and the skill:
+The script:
+
+1. Downloads the latest release and checks its SHA-256.
+2. Puts `Havooch.app` in `/Applications`.
+3. Links the `havooch` command into `/usr/local/bin`, or into `~/.local/bin` when it can't write there.
+4. Installs the `havooch-mate` skill for your agents, when Node.js is installed.
+
+To pass an option, add `-s --` after `bash`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash -s -- --no-skill
 ```
+
+| Option | What it does |
+|---|---|
+| `--no-skill` | Skips the skill. Install it later from Havooch's Connect view. |
+| `--app-dir <folder>` | Puts the app in another folder. |
+| `--bin-dir <folder>` | Links the command into another folder. |
+| `--uninstall` | Removes the app, the command's link and the skill. |
 
 ## First launch
 
