@@ -1101,7 +1101,7 @@ final class WindowModel: WindowControlling {
 
     // MARK: - The person's gestures
 
-    /// Space, K, a click on the frame, the play button. Play is a change
+    /// Space, K, the play button. Play is a change
     /// of the moment: the popover closes by its rules first.
     func togglePlay() {
         guard video != nil else { return }
@@ -1181,6 +1181,13 @@ final class WindowModel: WindowControlling {
         drawnRegion = nil
     }
 
+    /// The window's keys go back to the player when a text field has them.
+    /// The field keeps its words: they are the model's, not the field's.
+    private func takeKeysFromText() {
+        guard let window = nsWindow, window.firstResponder is NSText else { return }
+        window.makeFirstResponder(nil)
+    }
+
     /// The popover's words go on their thread: an answer at once while the
     /// thread has an open question (L14), else into the queue.
     private func deliver(_ draft: Draft) {
@@ -1196,18 +1203,21 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// A click on the frame: plays or pauses. While the popover is open it
-    /// is a click outside the popover, which closes it and leaves the
-    /// video still.
+    /// A click on the frame: it points, and leaves the playback as it is
+    /// (L67). It takes the keys from a text field, such as the composer,
+    /// so Space and C are the player's again. While the popover is open
+    /// it is a click outside the popover, which closes it.
     func clickFrame() {
-        if draft == nil { togglePlay() } else { closePopover(.clickOutside) }
+        takeKeysFromText()
+        if draft != nil { closePopover(.clickOutside) }
     }
 
     /// The pointer starts to drag on the frame: the video pauses, so the
     /// rectangle is drawn on a still frame. An open popover closes, as a
-    /// click outside it does.
+    /// click outside it does, and a text field gives up the keys.
     func beginRegion() {
         guard video != nil else { return }
+        takeKeysFromText()
         closePopover(.clickOutside)
         pausePlayers()
         isDrawingRegion = true
@@ -1708,10 +1718,12 @@ final class WindowModel: WindowControlling {
     }
 
     /// A click on a side's picture while comparing: the side becomes the
-    /// active one, the click goes no further. On the active side, or with
-    /// no comparison, it plays or pauses as ever.
+    /// active one, the click goes no further than taking the keys from a
+    /// text field. On the active side, or with no comparison, it is a
+    /// click on the frame.
     func clickFrame(on side: CompareSide?) {
         if let side, isComparing, side != activeSide {
+            takeKeysFromText()
             activate(side)
             return
         }
