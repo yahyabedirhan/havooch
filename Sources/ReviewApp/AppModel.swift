@@ -41,8 +41,10 @@ final class AppModel: AppControlling {
     /// `settings.json`: setup then counts as working, whatever was
     /// detected (P11, ADR 0005).
     private(set) var agentConnectedOnce = false
-    /// Whether the first-run window has shown on the person's data, kept
-    /// in `settings.json`: it shows by itself on the first launch only (H1).
+    /// Whether the person used the app on their data, kept in
+    /// `settings.json`: Get Started or a later step, Skip Setup, a video
+    /// opened, or an agent connected. Until then the first-run window shows
+    /// by itself at each launch (H1).
     private(set) var firstRunDone = false
     /// The first-run window: Welcome, Tools, Connect, Try it (H1).
     let firstRun: FirstRun
@@ -126,6 +128,7 @@ final class AppModel: AppControlling {
             settingsRead = false
         }
         listenToAgent()
+        firstRun.used = { [weak self] in self?.markFirstRunDone() }
     }
 
     /// The settings notice's close button, in any window, and `config dismiss`.
@@ -150,6 +153,7 @@ final class AppModel: AppControlling {
     /// window that holds the review moves on from its connect step.
     private func agentConnected(to key: ReviewKey) {
         windows.holding(key)?.tourNoticedAgent()
+        markFirstRunDone()
         guard !agentConnectedOnce else { return }
         agentConnectedOnce = true
         saveSettings()
@@ -702,7 +706,7 @@ final class AppModel: AppControlling {
         .save(SupportLayout(root: launchSupport))
     }
 
-    /// The first-run window showed: it never shows by itself again.
+    /// The person used the app: the first-run window never shows by itself again.
     func markFirstRunDone() {
         guard !firstRunDone else { return }
         firstRunDone = true

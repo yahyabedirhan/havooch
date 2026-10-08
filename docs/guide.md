@@ -56,7 +56,7 @@ xattr -dr com.apple.quarantine /Applications/Havooch.app
 
 The install script downloads with `curl`, which sets no quarantine flag, so macOS doesn't usually ask.
 
-On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
+On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. If you close the window without using it, it shows again at the next launch. It stops once you click **Get Started** or **Skip Setup**, open a video, or connect an agent. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
 
 ![The first-run window's Connect step: pick your agent and copy the prompt that opens the demo video](../assets/screenshots/0.4.0/first-run/connect-light.png)
 
