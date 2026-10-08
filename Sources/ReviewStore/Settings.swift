@@ -14,8 +14,9 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether an agent's `wait` ever opened on this data: the connect
     /// button's dot leaves for good once one has (P11).
     public var agentConnectedOnce: Bool?
-    /// Whether the first-run window showed on this data: it shows by
-    /// itself on the first launch only (H1).
+    /// Whether the person used the app on this data: Get Started or a
+    /// later step, Skip Setup, a video opened or an agent connected. Until
+    /// then the first-run window shows by itself at each launch (H1).
     public var firstRunDone: Bool?
 
     public init(sidebarWidth: Double? = nil, agentConnectedOnce: Bool? = nil, firstRunDone: Bool? = nil) {

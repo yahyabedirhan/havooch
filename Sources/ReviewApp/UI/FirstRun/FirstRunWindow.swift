@@ -3,8 +3,9 @@ import SwiftUI
 
 /// The first-run window on screen (H1): an AppKit window of its own, beside
 /// the player windows, made the first time it shows and kept for the run.
-/// `AppModel.firstRun.present` shows and closes it; its close button closes
-/// it as Skip Setup does.
+/// `AppModel.firstRun.present` shows and closes it. Its close button only
+/// closes it: unlike Skip Setup, it doesn't make the first run done, so the
+/// next launch shows it again.
 final class FirstRunWindow: NSObject, NSWindowDelegate {
     private let app: AppModel
     private var made: NSWindow?

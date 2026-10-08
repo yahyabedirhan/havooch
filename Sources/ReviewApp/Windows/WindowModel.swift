@@ -361,6 +361,8 @@ final class WindowModel: WindowControlling {
             desk.library.recordOpened(url, contentHash: contentHash, at: Date())
         }
         app.refreshRecents()
+        // A video opened: the person used the app.
+        app.markFirstRunDone()
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
     }
 

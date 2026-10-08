@@ -227,13 +227,14 @@ struct PersistenceTests {
 
         let video = try copy(to: "videos")
         try await empty.open(video)
-        // A video with no message yet has no review file.
-        #expect(try dataFiles() == ["recents.json"])
+        // A video with no message yet has no review file. Opening it
+        // makes the first run done, in the settings file.
+        #expect(try dataFiles() == ["recents.json", "settings.json"])
 
         let (again, _) = await run()
         #expect(again.video == nil)
         #expect(again.problem == nil)
-        #expect(try dataFiles() == ["recents.json"])
+        #expect(try dataFiles() == ["recents.json", "settings.json"])
     }
 
     // MARK: - Recent videos

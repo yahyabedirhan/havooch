@@ -17,8 +17,8 @@ extension ControlServerTests.FakeApp {
     }
 }
 
-/// The first-run window (H1 to H3): it shows on the first launch only,
-/// every step can be passed or skipped, Tools and Connect act on the
+/// The first-run window (H1 to H3): it shows at launch until the person
+/// uses the app, every step can be passed or skipped, Tools and Connect act on the
 /// Connect view's setup, the demo prompt takes the picked harness's form,
 /// and Open the Demo opens the bundled video for the person, whose sends
 /// are marked as the demo's. The app model and its control server, with
@@ -68,8 +68,8 @@ struct FirstRunTests {
         await server.reply(to: request.sent(by: Self.agent, json: json)).reply
     }
 
-    @Test("the first launch shows the first-run window on Welcome, and no launch after it does")
-    func firstLaunchOnly() {
+    @Test("the first launch shows the first-run window on Welcome, and showing it doesn't make the first run done")
+    func firstLaunch() {
         defer { cleanUp() }
         let first = app()
         var shown = 0
@@ -78,13 +78,112 @@ struct FirstRunTests {
         #expect(shown == 1)
         #expect(first.firstRun.isShowing)
         #expect(first.firstRun.step == .welcome)
-        #expect(first.firstRunReport.done)
+        #expect(!first.firstRunReport.done)
+    }
 
-        // Skipped at once, or not: it showed, so it never shows by itself again.
-        let second = app()
-        #expect(second.firstRunDone)
-        #expect(!second.showFirstRunOnFirstLaunch())
-        #expect(!second.firstRun.isShowing)
+    @Test("closed with its close button, or quit at once, the first-run window shows again at the next launch")
+    func closedOrQuitShowsAgain() {
+        defer { cleanUp() }
+        let closed = app()
+        #expect(closed.showFirstRunOnFirstLaunch())
+        closed.firstRun.closedByPerson()
+        #expect(!closed.firstRunDone)
+        let next = app()
+        #expect(next.showFirstRunOnFirstLaunch())
+
+        // Quit as the app quits: the positions are saved, nothing else.
+        next.savePositions()
+        #expect(!next.firstRunDone)
+        #expect(app().showFirstRunOnFirstLaunch())
+    }
+
+    /// The first run is done on `app`, and the next launch doesn't show it.
+    private func expectDone(_ app: AppModel, sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(app.firstRunDone, sourceLocation: sourceLocation)
+        #expect(app.firstRunReport.done, sourceLocation: sourceLocation)
+        let next = self.app()
+        #expect(next.firstRunDone, sourceLocation: sourceLocation)
+        #expect(!next.showFirstRunOnFirstLaunch(), sourceLocation: sourceLocation)
+    }
+
+    @Test("Get Started makes the first run done, and the next launch doesn't show it")
+    func getStartedIsDone() {
+        defer { cleanUp() }
+        let app = app()
+        app.showFirstRunOnFirstLaunch()
+        app.firstRun.back()
+        #expect(!app.firstRunDone)
+        app.firstRun.next()
+        #expect(app.firstRun.step == .tools)
+        expectDone(app)
+    }
+
+    @Test("a click on a later step on the progress bar makes the first run done; a click on Welcome doesn't")
+    func laterStepIsDone() {
+        defer { cleanUp() }
+        let app = app()
+        app.showFirstRunOnFirstLaunch()
+        app.firstRun.go(to: .welcome)
+        #expect(!app.firstRunDone)
+        app.firstRun.go(to: .connect)
+        expectDone(app)
+    }
+
+    @Test("first-run next and first-run pick make the first run done, as the person's clicks do")
+    func commandsAreDone() async {
+        defer { cleanUp() }
+        let next = app()
+        let server = server(next)
+        _ = await reply(server, .firstRunShow())
+        #expect(!next.firstRunDone)
+        _ = await reply(server, .firstRunNext)
+        expectDone(next)
+        cleanUp()
+
+        let picked = app()
+        let pickServer = self.server(picked)
+        _ = await reply(pickServer, .firstRunShow())
+        _ = await reply(pickServer, .firstRunPick(harness: "codex"))
+        expectDone(picked)
+    }
+
+    @Test("Skip Setup makes the first run done, from the window and from first-run skip")
+    func skipIsDone() async {
+        defer { cleanUp() }
+        let clicked = app()
+        clicked.showFirstRunOnFirstLaunch()
+        clicked.firstRun.skip()
+        #expect(!clicked.firstRun.isShowing)
+        expectDone(clicked)
+        cleanUp()
+
+        let commanded = app()
+        let server = server(commanded)
+        _ = await reply(server, .firstRunShow())
+        _ = await reply(server, .firstRunSkip)
+        expectDone(commanded)
+    }
+
+    @Test("opening a video makes the first run done, with the first-run window open or not")
+    func openingAVideoIsDone() async throws {
+        defer { cleanUp() }
+        let app = app()
+        app.showFirstRunOnFirstLaunch()
+        let window = app.makeWindow()
+        try await window.open(MessageTests.fixture)
+        expectDone(app)
+    }
+
+    @Test("an agent connecting makes the first run done")
+    func agentConnectingIsDone() async {
+        defer { cleanUp() }
+        let app = app()
+        let server = server(app)
+        app.showFirstRunOnFirstLaunch()
+        let wait = Task { await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 1, video: WindowTests.launch.path).sent(by: Self.agent)) }
+        _ = await wait.value
+        #expect(app.agentConnectedOnce)
+        expectDone(app)
     }
 
     @Test("a person who already opened a video, or connected an agent, isn't new; demo data never shows it")
@@ -163,7 +262,7 @@ struct FirstRunTests {
         #expect(await reply(server, .firstRunSkip) == .refused("the first-run window isn't open; havooch first-run show opens it"))
         _ = await reply(server, .firstRunShow(step: "connect"))
         let state = try #require(try app.state(window: nil).firstRun)
-        #expect(state.showing && state.step == "connect" && state.done)
+        #expect(state.showing && state.step == "connect" && !state.done)
         #expect(await reply(server, .firstRunSkip) == .done("the first-run window is closed\n"))
         #expect(!app.firstRun.isShowing)
         let json = await reply(server, .state, json: true).output

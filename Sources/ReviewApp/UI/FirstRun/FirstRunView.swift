@@ -101,7 +101,7 @@ private struct FirstRunFooter: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Button("Skip Setup") { firstRun.close() }
+            Button("Skip Setup") { firstRun.skip() }
                 .buttonStyle(.borderless)
                 .foregroundStyle(palette[.textSecondary])
                 .help("Close this window. Finish setup stays in the header.")

@@ -60,10 +60,10 @@ nonisolated enum FirstRunAction: Equatable {
 /// it, with Back, Continue and Skip Setup on every step. Tools shows the
 /// Connect view's command line and skill steps; Connect its harness picker,
 /// with the demo prompt in the picked harness's form (H2), so the person's
-/// own agent opens the demo and listens (H3). It shows by itself on the
-/// first launch only (`AppModel.showFirstRunOnFirstLaunch`), and again
-/// only through `first-run show`. Nothing in it blocks: every step can be
-/// passed with nothing done.
+/// own agent opens the demo and listens (H3). It shows by itself at each
+/// launch until the person uses the app (`AppModel.showFirstRunOnFirstLaunch`),
+/// and at any time through `first-run show`. Nothing in it blocks: every
+/// step can be passed with nothing done.
 @Observable
 final class FirstRun: SetupSteering {
     /// The step it shows.
@@ -81,6 +81,9 @@ final class FirstRun: SetupSteering {
     /// Puts the window on screen, or takes it off; the app sets it. A run
     /// with no scene (the tests) has nothing to show.
     @ObservationIgnored var present: (Bool) -> Void = { _ in }
+    /// The person used the window: Get Started, a later step, or Skip
+    /// Setup. The app sets it, to mark the first run done.
+    @ObservationIgnored var used: () -> Void = {}
 
     init(setup: SetupDesk) {
         self.setup = setup
@@ -103,14 +106,23 @@ final class FirstRun: SetupSteering {
         present(false)
     }
 
-    /// The person closed the window with its close button.
+    /// The person closed the window with its close button. It isn't a
+    /// use: the next launch shows it again.
     func closedByPerson() {
         isShowing = false
     }
 
-    /// Get Started, Continue, Continue Anyway and Later.
+    /// Skip Setup: the person used the window, and it closes.
+    func skip() {
+        used()
+        close()
+    }
+
+    /// Get Started, Continue, Continue Anyway and Later: each one a use.
     func next() {
-        if let next = step.next { step = next }
+        guard let next = step.next else { return }
+        step = next
+        used()
     }
 
     /// Back.
@@ -118,9 +130,10 @@ final class FirstRun: SetupSteering {
         if let previous = step.previous { step = previous }
     }
 
-    /// A click on a step on the progress bar.
+    /// A click on a step on the progress bar; one after Welcome is a use.
     func go(to step: FirstRunStep) {
         self.step = step
+        if step != .welcome { used() }
     }
 
     // MARK: - The setup steps
@@ -164,11 +177,12 @@ final class FirstRun: SetupSteering {
 // MARK: - The app's first-run actions
 
 extension AppModel {
-    /// The first launch shows the first-run window, in front of the empty
-    /// window (H1). Only once: on a person's data whose `settings.json`
-    /// reads, where it never showed, and where no video was opened and no
-    /// agent connected yet (a person who used a build before it isn't
-    /// new). Never on demo data. Returns whether it showed.
+    /// A launch shows the first-run window, in front of the empty window
+    /// (H1), until the person uses the app: on a person's data whose
+    /// `settings.json` reads, where the first run isn't done, and where no
+    /// video was opened and no agent connected yet (a person who used a
+    /// build before it isn't new). Closing it, or quitting, isn't a use.
+    /// Never on demo data. Returns whether it showed.
     @discardableResult
     func showFirstRunOnFirstLaunch() -> Bool {
         guard !isDemoRun, keepsSettings, !firstRunDone, !agentConnectedOnce, desk.library.recents().isEmpty else { return false }
@@ -176,10 +190,10 @@ extension AppModel {
         return true
     }
 
-    /// Shows the first-run window; from then on it never shows by itself.
+    /// Shows the first-run window. Showing it doesn't make the first run
+    /// done; the person's use of the app does (`markFirstRunDone`).
     func showFirstRun(on step: FirstRunStep?) {
         firstRun.show(on: step)
-        markFirstRunDone()
     }
 
     /// `first-run …`: the person's clicks in the first-run window.
@@ -221,7 +235,7 @@ extension AppModel {
             return ("opened \(title) in \(window.id), playing; the first-run window is closed", firstRunReport)
         case .skip:
             try needFirstRun()
-            firstRun.close()
+            firstRun.skip()
             return ("the first-run window is closed", firstRunReport)
         }
     }
@@ -266,7 +280,8 @@ extension StateReport {
         var showing: Bool
         /// `welcome`, `tools`, `connect` or `try-it`.
         var step: String
-        /// Whether it has shown on this data: it never shows by itself again.
+        /// Whether the person used the app on this data: it never shows by
+        /// itself again.
         var done: Bool
         /// The harness picked on Connect, by its install name.
         var harness: String
