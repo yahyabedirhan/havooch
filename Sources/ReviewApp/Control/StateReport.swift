@@ -365,6 +365,111 @@ nonisolated struct StateReport: Encodable, Equatable {
         var width: Double
         /// The composer at the sidebar's foot (L41); `null` with no video.
         var composer: Composer? = nil
+        /// What the sidebar shows: `threads` (the thread list), `thread`
+        /// (a thread's view) or `connect` (the Connect view, G1).
+        var mode = "threads"
+        /// The Connect view; `null` while it doesn't show.
+        var connect: Connect? = nil
+
+        /// The Connect view: what opened it, the outbox banner, the picked
+        /// harness with its readiness and prompt, and the listener card.
+        struct Connect: Encodable, Equatable {
+            /// `pill`, `header` (the connect button and `connect show`) or
+            /// `send` (Send with no agent there).
+            var reason: String
+            /// `none`, `connected` or `reconnecting` (G6).
+            var phase: String
+            /// The picked harness's install name: `claude-code`.
+            var harness: String
+            /// `ready`, `skillNotDetected` or `harnessNotDetected` (ADR 0005).
+            var readiness: String
+            /// The prompt to paste in the picked harness.
+            var prompt: String?
+            /// The outbox banner; `null` when Send didn't open the view.
+            var banner: Banner? = nil
+            /// The listener card; `null` while nobody listens or reconnects.
+            var listener: Card? = nil
+
+            /// "3 messages wait for an agent…" or "Delivered 3 messages to Claude Code".
+            struct Banner: Encodable, Equatable {
+                /// `waiting` or `delivered`.
+                var kind: String
+                var messages: Int
+                /// The agent that took them; `null` while they wait.
+                var agent: String?
+                var text: String
+
+                init(_ banner: OutboxBanner) {
+                    text = banner.text
+                    switch banner {
+                    case .waiting(let messages): (kind, self.messages, agent) = ("waiting", messages, nil)
+                    case .delivered(let messages, let to): (kind, self.messages, agent) = ("delivered", messages, to)
+                    }
+                }
+
+                func encode(to encoder: any Encoder) throws {
+                    var container = encoder.container(keyedBy: CodingKeys.self)
+                    try container.encode(kind, forKey: .kind)
+                    try container.encode(messages, forKey: .messages)
+                    try container.encode(agent, forKey: .agent)
+                    try container.encode(text, forKey: .text)
+                }
+
+                private enum CodingKeys: String, CodingKey {
+                    case kind, messages, agent, text
+                }
+            }
+
+            /// The listener card: the agent, where it runs, since when, and
+            /// the prompt to listen again later (G7).
+            struct Card: Encodable, Equatable {
+                var agent: String
+                /// A Herdr pane, else its working folder: what Copy Path copies.
+                var place: String
+                /// When its session's first `wait` opened; `null` when unknown.
+                var since: Date?
+                /// Until when it counts as reconnecting; `null` while connected.
+                var reconnectingUntil: Date? = nil
+                /// "To listen again later, paste this in <harness>:"; `null`
+                /// for an agent Havooch doesn't set up.
+                var prompt: String?
+
+                init(_ session: ListenerSession, prompt: String?) {
+                    agent = session.name
+                    place = session.place
+                    since = session.since
+                    self.prompt = prompt
+                }
+
+                func encode(to encoder: any Encoder) throws {
+                    var container = encoder.container(keyedBy: CodingKeys.self)
+                    try container.encode(agent, forKey: .agent)
+                    try container.encode(place, forKey: .place)
+                    try container.encode(since, forKey: .since)
+                    try container.encode(reconnectingUntil, forKey: .reconnectingUntil)
+                    try container.encode(prompt, forKey: .prompt)
+                }
+
+                private enum CodingKeys: String, CodingKey {
+                    case agent, place, since, reconnectingUntil, prompt
+                }
+            }
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(reason, forKey: .reason)
+                try container.encode(phase, forKey: .phase)
+                try container.encode(harness, forKey: .harness)
+                try container.encode(readiness, forKey: .readiness)
+                try container.encode(prompt, forKey: .prompt)
+                try container.encode(banner, forKey: .banner)
+                try container.encode(listener, forKey: .listener)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case reason, phase, harness, readiness, prompt, banner, listener
+            }
+        }
 
         /// Where the composer's words go, and what it holds.
         struct Composer: Encodable, Equatable {
@@ -407,13 +512,15 @@ nonisolated struct StateReport: Encodable, Equatable {
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(mode, forKey: .mode)
             try container.encode(thread, forKey: .thread)
             try container.encode(width, forKey: .width)
             try container.encode(composer, forKey: .composer)
+            try container.encode(connect, forKey: .connect)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case thread, width, composer
+            case mode, thread, width, composer, connect
         }
     }
 

@@ -261,7 +261,8 @@ struct LibraryTests {
         let read = Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.otherKey)
         #expect(read.pending == [waiting])
         #expect(read.taken == [taken])
-        #expect(read.session == Self.mate)
+        #expect(read.session == outbox.session)
+        #expect(read.session?.since == at(0))
         #expect(read.contextSent == outbox.contextSent)
         #expect(!read.isContextDue(for: Self.other, text: "The topic"))
         // What belongs to one run isn't kept.
@@ -348,7 +349,8 @@ struct LibraryTests {
         let first = Library(layout: layout).loadOutbox(Self.key)
         #expect(first.taken == [SendRef(sendID: try item("s", 1), contentHash: Self.hash)])
         #expect(first.pending.isEmpty)
-        #expect(first.session == Self.mate)
+        #expect(first.session?.key == Self.mate.key)
+        #expect(first.session?.since == at(0))
         #expect(!first.isContextDue(for: Self.hash, text: "First"))
         #expect(first.contextSent.keys.sorted() == [Self.hash])
         let second = Library(layout: layout).loadOutbox(Self.otherKey)
@@ -358,7 +360,7 @@ struct LibraryTests {
             SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other),
         ])
         #expect(second.taken.isEmpty)
-        #expect(second.session == Self.mate)
+        #expect(second.session?.key == Self.mate.key)
         #expect(!second.isContextDue(for: Self.other, text: "Second"))
 
         // Once: a second run finds nothing to split, and a review's own outbox stays.

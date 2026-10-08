@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import ReviewCore
 import ReviewLease
+import ReviewSetup
 import ReviewStore
 import ReviewTranscript
 import ReviewWire
@@ -74,8 +75,19 @@ final class WindowModel: WindowControlling {
     /// shows the thread list (L38). Showing a thread's view marks its
     /// agent messages read (L46).
     private(set) var shown: ThreadID? {
-        didSet { if let shown { markSeen(shown) } }
+        didSet {
+            guard let shown else { return }
+            markSeen(shown)
+            // A thread's view takes the sidebar's place from the Connect view.
+            connect = nil
+        }
     }
+    /// The Connect view in the sidebar, over the threads, and what opened
+    /// it; nil while the sidebar shows the threads (G1).
+    var connect: ConnectEntry?
+    /// The harness the person picked in the Connect view; nil follows the
+    /// setup (`connectHarness`).
+    var pickedHarness: Harness?
     /// The controls that have the keyboard focus under keyboard navigation
     /// (`focusControl(_:press:)`), the last to take it at the end: Space
     /// and Return press that one. A control in a popover takes the focus
@@ -272,6 +284,7 @@ final class WindowModel: WindowControlling {
         draft = nil
         selection = nil
         shown = nil
+        connect = nil
         isDrawingRegion = false
         composerDrafts = [:]
         isComposerGeneral = false
@@ -534,7 +547,12 @@ final class WindowModel: WindowControlling {
             try review.send(at: Date()) { thread in thread.time.map { transcripts.lines(around: $0, of: info) } ?? [] }
         }
         guard let video, let review = review else { throw Self.noVideo }
-        data.listeners.queue(ofVideo: video.contentHash).enqueue(SendRef(sendID: send.id, contentHash: video.contentHash))
+        let ref = SendRef(sendID: send.id, contentHash: video.contentHash)
+        let listener = data.listeners.queue(ofVideo: video.contentHash)
+        listener.enqueue(ref)
+        // With nobody there, the send waits in the outbox and the Connect
+        // view says so (G8).
+        if listener.presence(at: Date()) == .absent { sentWithNoAgent(ref) }
         return StateReport.Send(send, in: review)
     }
 
@@ -730,7 +748,7 @@ final class WindowModel: WindowControlling {
 
     private static let noVideo = AppRefusal("no video is open in the window; open one with `havooch player open <path>`")
 
-    private func needVideo() throws(AppRefusal) {
+    func needVideo() throws(AppRefusal) {
         guard video != nil else { throw Self.noVideo }
     }
 
@@ -881,8 +899,8 @@ final class WindowModel: WindowControlling {
     }
 
     /// Escape: drops the rectangle being drawn, else the popover's words
-    /// with its region, else goes back from a thread view to the thread
-    /// list. False when there was none of them.
+    /// with its region, else goes back from a thread view or the Connect
+    /// view to the thread list. False when there was none of them.
     @discardableResult
     func escape() -> Bool {
         if isDrawingRegion {
@@ -893,7 +911,12 @@ final class WindowModel: WindowControlling {
             closePopover(.discard)
             return true
         }
-        guard shown != nil, isSidebarVisible else { return false }
+        guard shown != nil || connect != nil, isSidebarVisible else { return false }
+        if connect != nil {
+            // Back from the Connect view goes where it came from.
+            closeConnect()
+            return true
+        }
         _ = showThreadList()
         return true
     }
@@ -1127,6 +1150,7 @@ final class WindowModel: WindowControlling {
     /// The player stays where it is.
     func showThreadList() -> StateReport.Sidebar {
         shown = nil
+        connect = nil
         return sidebarReport
     }
 
@@ -1166,7 +1190,10 @@ final class WindowModel: WindowControlling {
     /// The sidebar as `state` reports it: the thread it shows, its width
     /// and the composer.
     var sidebarReport: StateReport.Sidebar {
-        StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth), composer: composerReport)
+        var report = StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth), composer: composerReport)
+        report.mode = connect != nil ? "connect" : shown != nil ? "thread" : "threads"
+        report.connect = connectReport
+        return report
     }
 
     // MARK: - The composer at the sidebar's foot (L41)

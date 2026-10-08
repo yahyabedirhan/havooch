@@ -6,7 +6,10 @@
 # run by the listener with no lease. Step 12 adds the windows (#86): any
 # number of windows, each with one video, and `--window`. Step 13 adds a
 # listener per window: two agents wait on two videos, each gets only
-# its own window's sends, and a third agent takes one window over.
+# its own window's sends, and a third agent takes one window over. Step 14
+# adds the Connect view (#89): a send with no agent opens it with the outbox
+# banner, an agent's wait delivers it, a harness is picked, and Disconnect
+# lets the agent go.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -47,7 +50,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 13 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 14 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -845,11 +848,50 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 14 -------------------------------------------------------------------
+
+begin 14 "Send with no agent. Check that the Connect view opens with the outbox banner, that an agent's wait delivers the send, that a harness shows its prompt, and that Disconnect lets the agent go"
+take
+# w1's listener of step 13 went: let its grace run out, so nobody is there.
+sleep 6
+run operator comment add "Connect check." --at 3
+exits 0 "comment add (no agent listens)"
+run operator send
+exits 0 "send with no agent"
+state
+holds "the sidebar shows the Connect view, opened by the send" "$stdout" '.sidebar.mode == "connect" and .sidebar.connect.reason == "send"'
+holds "the banner says 1 message waits for an agent" "$stdout" \
+    '.sidebar.connect.banner.kind == "waiting" and .sidebar.connect.banner.messages == 1'
+run listener wait --timeout 0
+exits 0 "wait (an agent connects)"
+state
+holds "the banner says the message was delivered to the agent" "$stdout" \
+    '.sidebar.connect.banner.kind == "delivered" and .sidebar.connect.banner.messages == 1'
+holds "the listener card shows the agent" "$stdout" '.sidebar.connect.phase == "connected" and .sidebar.connect.listener.agent != null'
+holds "an agent connected once: setup needs nothing more" "$stdout" '.setup.agentConnectedOnce == true and .setup.needsFinishing == false'
+run operator connect pick codex --json
+exits 0 "connect pick codex"
+holds "Codex's prompt is in its own form" "$stdout" '.sidebar.connect.harness == "codex" and (.sidebar.connect.prompt | startswith("$havooch-mate listen for my feedback on "))'
+run operator connect disconnect
+exits 0 "connect disconnect"
+state
+holds "nobody listens after Disconnect" "$stdout" '.sidebar.connect.phase == "none" and .sidebar.connect.listener == null'
+run operator connect disconnect
+exits 1 "connect disconnect again (nobody is connected)"
+run operator thread list
+exits 0 "thread list (Back)"
+state
+holds "the sidebar shows the threads again" "$stdout" '.sidebar.mode == "threads" and .sidebar.connect == null'
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 13 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 14 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 13 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 14 steps. Screenshots: %s\n' "$shots"
 exit 0

@@ -132,8 +132,11 @@ struct SidebarColumn: View {
         VStack(spacing: 0) {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
-            // One composer for the list and the thread view alike (L41).
-            Composer(model: model)
+            // One composer for the list and the thread view alike (L41);
+            // the Connect view writes nothing.
+            if model.connect == nil {
+                Composer(model: model)
+            }
             SidebarFooter(model: model)
         }
         .frame(width: width)

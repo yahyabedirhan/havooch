@@ -1,11 +1,12 @@
 import ReviewCore
 import SwiftUI
 
-/// The sidebar's two views (L38), above the footer (`SidebarFooter`): the
-/// thread list (`ThreadList`), or the view of one thread (`ThreadView`)
-/// while `WindowModel.shown` names one. A thread view slides in from the
-/// trailing edge over the list and back out, with the sidebar's own
-/// spring; with Reduce Motion the two fade.
+/// The sidebar's views (L38), above the footer (`SidebarFooter`): the
+/// thread list (`ThreadList`), the view of one thread (`ThreadView`)
+/// while `WindowModel.shown` names one, or the Connect view
+/// (`ConnectView`, G1) while `WindowModel.connect` is set. A thread view
+/// or the Connect view slides in from the trailing edge over the list and
+/// back out, with the sidebar's own spring; with Reduce Motion they fade.
 ///
 /// The sidebar is on the window's one surface: a row under the pointer
 /// takes `controlHover`, the row of the thread on the stage sits in a
@@ -19,7 +20,11 @@ struct SidebarView: View {
     var body: some View {
         let shown = model.shown.flatMap { id in model.threads.first { $0.id == id } }
         ZStack {
-            if let shown {
+            if model.connect != nil {
+                ConnectView(model: model)
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                    .zIndex(2)
+            } else if let shown {
                 ThreadView(model: model, thread: shown)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                     .zIndex(1)
@@ -32,5 +37,6 @@ struct SidebarView: View {
         // The view sliding out never draws over the stage.
         .clipped()
         .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: shown == nil)
+        .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: model.connect == nil)
     }
 }

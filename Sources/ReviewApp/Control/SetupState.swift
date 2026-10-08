@@ -11,6 +11,12 @@ extension StateReport {
         var harnesses: [HarnessEntry]
         /// The running install or the last one; `null` before the first.
         var install: Install?
+        /// Whether an agent's `wait` ever opened on this Mac's data.
+        var agentConnectedOnce = false
+        /// Whether setup still needs the person: the command line or the
+        /// skill isn't detected, and no agent has ever connected. The
+        /// connect button shows its dot while it does (P11).
+        var needsFinishing = false
 
         /// The `havooch` command's link in `~/.local/bin`.
         struct CommandLine: Encodable, Equatable {
@@ -129,10 +135,12 @@ extension StateReport {
             try container.encode(commandLine, forKey: .commandLine)
             try container.encode(harnesses, forKey: .harnesses)
             try container.encode(install, forKey: .install)
+            try container.encode(agentConnectedOnce, forKey: .agentConnectedOnce)
+            try container.encode(needsFinishing, forKey: .needsFinishing)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case commandLine, harnesses, install
+            case commandLine, harnesses, install, agentConnectedOnce, needsFinishing
         }
 
         init(commandLine: CommandLine, harnesses: [HarnessEntry], install: Install? = nil) {
@@ -142,7 +150,9 @@ extension StateReport {
         }
 
         /// `setup` as the desk has it now; prompts name `target`.
-        @MainActor init(_ desk: SetupDesk, target: PromptTarget?) {
+        @MainActor init(_ desk: SetupDesk, target: PromptTarget?, agentConnectedOnce: Bool = false) {
+            self.agentConnectedOnce = agentConnectedOnce
+            needsFinishing = !desk.isDetected && !agentConnectedOnce
             let report = desk.report
             commandLine = CommandLine(
                 detection: report.commandLine.detection.rawValue, path: report.commandLine.path,

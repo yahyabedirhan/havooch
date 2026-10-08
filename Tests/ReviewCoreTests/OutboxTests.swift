@@ -85,7 +85,7 @@ struct OutboxTests {
         #expect(requeued == [Self.first, Self.second])
         #expect(outbox.taken.isEmpty)
         #expect(outbox.pending == [Self.first, Self.second, Self.third])
-        #expect(outbox.session == Self.two)
+        #expect(outbox.session == ListenerSession(key: Self.two.key, name: Self.two.name, place: Self.two.place, since: at(30)))
         #expect(outbox.deliver(at: at(30)) == Self.first)
     }
 
@@ -100,7 +100,8 @@ struct OutboxTests {
         let again = ListenerSession(key: Self.one.key, name: "Claude Code", place: "Herdr pane w1-2")
         #expect(outbox.waitOpened(by: again, at: at(10)).isEmpty)
         #expect(outbox.taken == [Self.first])
-        #expect(outbox.session == again)
+        // It keeps the time it started.
+        #expect(outbox.session == ListenerSession(key: again.key, name: again.name, place: again.place, since: at(0)))
         // The first session of all has nothing to requeue either.
         var fresh = Outbox()
         #expect(fresh.waitOpened(by: Self.one, at: at(0)).isEmpty)
@@ -250,7 +251,7 @@ struct OutboxTests {
 
         #expect(read.pending == [Self.third])
         #expect(read.taken == [Self.first])
-        #expect(read.session == Self.one)
+        #expect(read.session == outbox.session)
         #expect(!read.isWaitOpen)
         #expect(read.presence(at: at(1)) == .absent)
     }
@@ -306,7 +307,7 @@ struct OutboxTests {
 
         outbox.reconcile(unfinished: [])
         #expect(outbox.pending.isEmpty)
-        #expect(outbox.session == Self.one)
+        #expect(outbox.session?.key == Self.one.key)
     }
 
     @Test("what's kept is the line, the taken sends, the session and the context sent; not the open wait or the last word")
@@ -323,5 +324,30 @@ struct OutboxTests {
         #expect(outbox.isKeptAs(listening))
         _ = outbox.context(for: "abc", text: "About")
         #expect(!outbox.isKeptAs(listening))
+    }
+
+    @Test("letting the listener go: nobody listens, what it took is first in line again, and the next wait is a new session that starts then")
+    func letGo() {
+        var outbox = Outbox()
+        outbox.enqueue(Self.first)
+        outbox.enqueue(Self.second)
+        outbox.waitOpened(by: Self.one, at: at(0))
+        _ = outbox.deliver(at: at(0))
+        _ = outbox.context(for: "abc", text: "About")
+        outbox.waitOpened(by: Self.one, at: at(5))
+
+        let requeued = outbox.letGo()
+
+        #expect(requeued == [Self.first])
+        #expect(outbox.session == nil)
+        #expect(!outbox.isWaitOpen)
+        #expect(outbox.presence(at: at(5)) == .absent)
+        #expect(outbox.pending == [Self.first, Self.second])
+        #expect(outbox.taken.isEmpty)
+        #expect(outbox.isContextDue(for: "abc", text: "About"))
+        // The same agent's next wait is a session of its own, from its own time.
+        #expect(outbox.waitOpened(by: Self.one, at: at(40)).isEmpty)
+        #expect(outbox.session?.since == at(40))
+        #expect(outbox.deliver(at: at(40)) == Self.first)
     }
 }

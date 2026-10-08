@@ -25,6 +25,8 @@ final class ListenerQueue {
         /// Another agent's `wait` on the review took its place: the agent
         /// called `by` listens to it now.
         case takenOver(by: String)
+        /// The person let this listener go in the Connect view (Disconnect).
+        case disconnected
         /// Nobody reads the answer: its client went away, or the app quits.
         case gone
     }
@@ -42,6 +44,9 @@ final class ListenerQueue {
 
     /// The review this listener listens to.
     let key: ReviewKey
+    /// When the data the listener is on opened: a session the last run
+    /// left reconnects for `reconnectSeconds` after it (G6).
+    let startedAt: Date
     /// The last time a new agent replaced one that was there; nil until one does.
     private(set) var takeover: Takeover?
 
@@ -98,12 +103,17 @@ final class ListenerQueue {
     private(set) var activities: [ThreadID: Activity] = [:]
 
     @ObservationIgnored private var open: OpenWait?
+    /// The holder key the person disconnected while it had no `wait` open
+    /// (it was working): its next `wait` is refused the same way, once.
+    @ObservationIgnored private var letGoKey: String?
     /// The open `ask`s, by the thread each one asks on: a thread has one
     /// open question at most.
     @ObservationIgnored private var asks: [ThreadID: OpenAsk] = [:]
     /// Told each thing the agent says, and each takeover, to show it as a
     /// notice.
     @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
+    /// Told each time a `wait` opens: an agent connected.
+    @ObservationIgnored var connected: (@MainActor () -> Void)?
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -111,11 +121,17 @@ final class ListenerQueue {
     /// The listener of the review `key`. It starts from the outbox the
     /// last run left for the review in the desk's library, and keeps it
     /// there.
-    init(key: ReviewKey, desk: ReviewDesk, layout: SupportLayout, now: @escaping @MainActor () -> Date = { Date() }) {
+    /// `startedAt` is when the data opened, the launch for the person's
+    /// own; it's now when not given.
+    init(
+        key: ReviewKey, desk: ReviewDesk, layout: SupportLayout, startedAt: Date? = nil,
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.key = key
         self.desk = desk
         self.layout = layout
         self.now = now
+        self.startedAt = startedAt ?? now()
         outbox = desk.library.loadOutbox(key)
     }
 
@@ -142,6 +158,51 @@ final class ListenerQueue {
     /// Whether an agent is there at `time`.
     func presence(at time: Date) -> Presence {
         outbox.presence(at: time)
+    }
+
+    /// How long a listener the last run left counts as reconnecting after
+    /// the launch, with no word from it yet (G6).
+    static let reconnectSeconds: TimeInterval = 30
+
+    /// The listener as the Connect view and the pill show it.
+    enum Phase: Equatable {
+        /// Nobody listens.
+        case none
+        /// The agent of `session` is there: listening or working.
+        case connected(ListenerSession)
+        /// The agent the last run had hasn't spoken yet in this one: it
+        /// comes back on its next `wait`, until `until`.
+        case reconnecting(ListenerSession, until: Date)
+    }
+
+    /// The phase at `time`. The only waiting state is a real connection
+    /// state: a session the last run left, not yet heard from in this one,
+    /// for `reconnectSeconds` after the data opened (G6).
+    func phase(at time: Date) -> Phase {
+        guard let session = outbox.session else { return .none }
+        if outbox.presence(at: time) != .absent { return .connected(session) }
+        let until = startedAt.addingTimeInterval(Self.reconnectSeconds)
+        if outbox.lastHeard == nil, time < until { return .reconnecting(session, until: until) }
+        return .none
+    }
+
+    /// Disconnect and Forget: the person lets the listener go. Its open
+    /// `wait` ends with a refusal that tells the agent to stop, its open
+    /// `ask`s end, and what it took and didn't finish is first in line
+    /// again, its messages `sent`, for the next agent. Nil, and nothing
+    /// changes, when no listener session is there to let go.
+    @discardableResult
+    func disconnect() -> ListenerSession? {
+        guard let session = outbox.session else { return nil }
+        letGoKey = open == nil ? session.key : nil
+        close(.disconnected) { _ in true }
+        for (id, ask) in asks { closeAsk(id, ask.ticket, .gone) }
+        for ref in outbox.letGo() {
+            _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
+        }
+        activities = [:]
+        takeover = nil
+        return session
     }
 
     /// The live lines at `time`, the newest first: none while no agent is
@@ -177,6 +238,11 @@ final class ListenerQueue {
     /// one was there, the new one took over from it, and the window says
     /// so. A `wait` that's still open is replaced: one listener per review.
     func wait(by holder: Holder, timeout: Int?, connection: UUID? = nil) async -> Outcome {
+        // An agent let go while it worked hears it on its next `wait`.
+        if let letGoKey {
+            self.letGoKey = nil
+            if letGoKey == holder.key { return .disconnected }
+        }
         let listener = ListenerSession(key: holder.key, name: holder.name, place: holder.place)
         let time = now()
         let last = outbox.session.flatMap { $0.key == listener.key ? nil : $0 }
@@ -188,6 +254,7 @@ final class ListenerQueue {
         // A new session starts its work over: what the last one did is past.
         if !requeued.isEmpty { activities = [:] }
         if let last, lastWasThere { tookOver(from: last.name, to: listener, at: time) }
+        connected?()
         if let older = open {
             open = nil
             older.timeout?.cancel()

@@ -147,6 +147,19 @@ public enum ControlRequest: Equatable, Sendable {
     case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
     /// `havooch setup cancel`: the running install stopped, as Cancel does.
     case setupCancel
+    /// `havooch connect show`: the Connect view in the sidebar, as the
+    /// header's connect button opens it.
+    case connectShow
+    /// `havooch connect pick <harness>`: the harness picked in the Connect
+    /// view, as a click on its logo picks it: its readiness and its prompt
+    /// show.
+    case connectPick(harness: String)
+    /// `havooch connect disconnect`: the window's agent let go, as
+    /// Disconnect on the listener card does. Its open `wait` is refused.
+    case connectDisconnect
+    /// `havooch connect forget`: the agent the last run had is no longer
+    /// waited for, as Forget does while it reconnects.
+    case connectForget
     /// `havooch config dismiss`: the settings notice in the window goes,
     /// as its close button does.
     case configDismiss
@@ -228,6 +241,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .wait, .ack, .status, .reply, .ask: .listener
         case .setupStatus: .free
         case .setupLink, .setupInstall, .setupCancel: .operator
+        case .connectShow, .connectPick, .connectDisconnect, .connectForget: .operator
         }
     }
 

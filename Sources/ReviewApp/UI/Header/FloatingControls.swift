@@ -2,9 +2,10 @@ import SwiftUI
 
 /// The floating group at the top right of the window, from left to
 /// right: the agent-control icon (only while an agent holds the lease),
-/// "Open a Video…", Context, and the sidebar toggle; the last three in
-/// the player only, since home has its own "Open a Video…". They are toolbar items, so the system
-/// draws them as one floating group.
+/// Connect an Agent, "Open a Video…", Context, and the sidebar toggle;
+/// the last four in the player only, since home has its own "Open a
+/// Video…" and the Connect view is in the sidebar. They are toolbar items,
+/// so the system draws them as one floating group.
 struct FloatingControls: ToolbarContent {
     let model: WindowModel
     let lease: AgentControlIcon
@@ -22,11 +23,47 @@ struct FloatingControls: ToolbarContent {
                 AgentControlButton(model: model, indicator: lease, stop: stopLease)
             }
             if model.video != nil {
+                ConnectButton(model: model)
                 OpenVideoButton(model: model)
                 ContextButton(model: model)
                 SidebarToggle(model: model)
             }
         }
+    }
+}
+
+/// Connect an Agent: opens the Connect view in the sidebar, and goes back
+/// to the threads when it shows (G1). A dot shows while setup isn't fully
+/// detected and no agent has ever connected (P11).
+private struct ConnectButton: View {
+    let model: WindowModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let isOpen = model.connect != nil && model.isSidebarVisible
+        let dot = model.showsConnectDot
+        Button {
+            model.toggleConnect(.header)
+        } label: {
+            Label {
+                Text("Connect an Agent")
+            } icon: {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(isOpen ? palette[.accent] : palette[.textPrimary])
+                    .overlay(alignment: .topTrailing) {
+                        if dot {
+                            Circle()
+                                .fill(palette[.stateWorking])
+                                .frame(width: 7, height: 7)
+                                .offset(x: 3, y: -2)
+                                .accessibilityHidden(true)
+                        }
+                    }
+            }
+        }
+        .pressedByKeys(in: model) { model.toggleConnect(.header) }
+        .help(isOpen ? "Back to the threads" : dot ? "Connect an agent: setup isn't finished" : "Connect an agent")
+        .accessibilityValue(dot ? "Setup isn't finished" : "")
     }
 }
 

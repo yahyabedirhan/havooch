@@ -107,6 +107,14 @@ protocol WindowControlling: AnyObject {
     /// Puts words, a region chip and the General toggle in the composer at
     /// the sidebar's foot, as the person types, draws and clicks.
     func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
+    /// Shows the Connect view in the sidebar, as the connect button does.
+    func showConnect() throws(AppRefusal) -> StateReport.Sidebar
+    /// Picks a harness in the Connect view, as a click on its logo does.
+    func pickHarness(named name: String) throws(AppRefusal) -> StateReport.Sidebar
+    /// Lets the connected agent go, as Disconnect does; its name.
+    func disconnectAgent() throws(AppRefusal) -> String
+    /// Stops waiting for the agent that reconnects, as Forget does; its name.
+    func forgetAgent() throws(AppRefusal) -> String
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -372,6 +380,10 @@ final class ControlServer {
                     return Answer(reply: .refused(
                         "\(agent) took over listening to this video: one listener per video; stop listening and tell the person"
                     ))
+                case .disconnected:
+                    return Answer(reply: .refused(
+                        "the person disconnected you from this video in \(AppIdentity.appName): stop listening and tell the person"
+                    ))
                 case .gone:
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
@@ -437,6 +449,23 @@ final class ControlServer {
             case .setupCancel:
                 let install = try await app.cancelInstall()
                 return done(install.line, Output(install: install), json)
+            case .connectShow:
+                let sidebar = try inWindow().showConnect()
+                return done("the sidebar shows the Connect view", Output(sidebar: sidebar), json)
+            case .connectPick(let harness):
+                let sidebar = try inWindow().pickHarness(named: harness)
+                let line = sidebar.connect.map { connect in
+                    "picked \(connect.harness): \(Self.words(readiness: connect.readiness))" + (connect.prompt.map { "\nprompt: \($0)" } ?? "")
+                } ?? "picked \(harness)"
+                return done(line, Output(sidebar: sidebar), json)
+            case .connectDisconnect:
+                let shown = try inWindow()
+                let agent = try shown.disconnectAgent()
+                return done("\(agent) disconnected", Output(sidebar: shown.state().sidebar), json)
+            case .connectForget:
+                let shown = try inWindow()
+                let agent = try shown.forgetAgent()
+                return done("\(agent) forgotten: no agent is waited for", Output(sidebar: shown.state().sidebar), json)
             case .configDismiss:
                 let closed = app.dismissConfigNotice()
                 return done(closed ? "the settings notice is closed" : "no settings notice was up", Output(dismissed: closed), json)
@@ -485,6 +514,16 @@ final class ControlServer {
         case .number(let number): "#\(number)"
         case .id(let id): "#\(id.number)"
         case nil: nil
+        }
+    }
+
+    /// What the Connect view says of a harness's readiness, as words.
+    private static func words(readiness: String) -> String {
+        switch Readiness(rawValue: readiness) {
+        case .ready: "ready, the skill is detected"
+        case .skillNotDetected: "the skill isn't detected; paste the prompt if it's installed another way"
+        case .harnessNotDetected: "the harness isn't detected; paste the prompt if it's installed another way"
+        case nil: readiness
         }
     }
 

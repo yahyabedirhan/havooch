@@ -3,7 +3,7 @@ import Foundation
 /// App state the window keeps between runs, in `settings.json` in the
 /// support folder:
 ///
-///     { "sidebarWidth": 360 }
+///     { "agentConnectedOnce": true, "sidebarWidth": 360 }
 ///
 /// Not settings a person sets on purpose: those are in `config.toml`
 /// (ADR 0002). Builds before it kept the pinned theme and token overrides
@@ -11,9 +11,13 @@ import Foundation
 /// the next save leaves them out.
 public struct Settings: Codable, Equatable, Sendable {
     public var sidebarWidth: Double?
+    /// Whether an agent's `wait` ever opened on this data: the connect
+    /// button's dot leaves for good once one has (P11).
+    public var agentConnectedOnce: Bool?
 
-    public init(sidebarWidth: Double? = nil) {
+    public init(sidebarWidth: Double? = nil, agentConnectedOnce: Bool? = nil) {
         self.sidebarWidth = sidebarWidth
+        self.agentConnectedOnce = agentConnectedOnce
     }
 
     /// What builds before `config.toml` kept in `settings.json`: the pinned

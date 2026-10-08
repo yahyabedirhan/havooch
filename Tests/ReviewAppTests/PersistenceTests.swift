@@ -377,8 +377,8 @@ struct PersistenceTests {
         #expect(real.listeners().outbox == Outbox())
         #expect(await listen(.status(messageID: ids.first, state: .done), realServer).error.contains("no message"))
         #expect(await listen(.wait(timeoutSeconds: 0), realServer).timedOut == true)
-        // The real folder holds nothing of the demo's.
-        #expect(try dataFiles() == ["outboxes", "outboxes/\(try #require(real.reviewKey).fileName).json", "recents.json"])
+        // The real folder holds nothing of the demo's: its own wait kept that an agent connected.
+        #expect(try dataFiles() == ["outboxes", "outboxes/\(try #require(real.reviewKey).fileName).json", "recents.json", "settings.json"])
 
         let (again, _) = await run(on: demo, reopening: true)
         #expect(states(again).count == 3)

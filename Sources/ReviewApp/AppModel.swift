@@ -37,6 +37,10 @@ final class AppModel: AppControlling {
     /// folder the run started on: app state, not a setting, the same in
     /// every window.
     private(set) var keptSidebarWidth: Double?
+    /// Whether an agent ever connected on the person's data, kept in
+    /// `settings.json`: setup then counts as working, whatever was
+    /// detected (P11, ADR 0005).
+    private(set) var agentConnectedOnce = false
     /// Whether `settings.json` read at launch: one that doesn't is never
     /// written over.
     @ObservationIgnored private let settingsRead: Bool
@@ -107,7 +111,9 @@ final class AppModel: AppControlling {
         themes = ThemeDesk(config: config)
         self.setup = setup ?? SetupDesk(environment: environment)
         do throws(Library.Failure) {
-            keptSidebarWidth = try Settings.load(launchLayout).sidebarWidth
+            let settings = try Settings.load(launchLayout)
+            keptSidebarWidth = settings.sidebarWidth
+            agentConnectedOnce = settings.agentConnectedOnce ?? false
             settingsRead = true
         } catch {
             settingsRead = false
@@ -127,6 +133,16 @@ final class AppModel: AppControlling {
     private func listenToAgent() {
         listeners.announce = { [weak self] key, notice in self?.windows.holding(key)?.raise(notice) }
         listeners.keyVideo = { [weak self] in self?.windows.key?.video?.contentHash }
+        listeners.connected = { [weak self] in self?.agentConnected() }
+    }
+
+    /// An agent's `wait` opened: setup works, so the connect button's dot
+    /// goes for good. An agent on the in-app demo counts too: it runs in
+    /// the person's own harness.
+    private func agentConnected() {
+        guard !agentConnectedOnce else { return }
+        agentConnectedOnce = true
+        saveSettings()
     }
 
     // MARK: - Listeners
@@ -509,9 +525,15 @@ final class AppModel: AppControlling {
         let width = WindowModel.sidebarWidth(kept: Double(width.rounded()))
         guard width != sidebarWidth else { return }
         keptSidebarWidth = Double(width)
-        // A settings file that doesn't read is left as it is: a width is a
-        // comfort, not the person's work, so it's only lost.
+        saveSettings()
+    }
+
+    /// Writes the app state `settings.json` keeps. A settings file that
+    /// doesn't read is left as it is: a width and a dot are comforts, not
+    /// the person's work, so they're only lost.
+    private func saveSettings() {
         guard settingsRead else { return }
-        try? Settings(sidebarWidth: Double(width)).save(SupportLayout(root: launchSupport))
+        try? Settings(sidebarWidth: keptSidebarWidth, agentConnectedOnce: agentConnectedOnce ? true : nil)
+            .save(SupportLayout(root: launchSupport))
     }
 }

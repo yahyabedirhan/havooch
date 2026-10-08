@@ -84,6 +84,10 @@ public struct ControlMessage: Equatable, Sendable {
             wire.harnesses = harnesses.isEmpty ? nil : harnesses
             wire.dryRun = dryRun ? true : nil
         case .setupCancel: wire = Wire(command: "setup.cancel")
+        case .connectShow: wire = Wire(command: "connect.show")
+        case .connectPick(let harness): wire = Wire(command: "connect.pick", name: harness)
+        case .connectDisconnect: wire = Wire(command: "connect.disconnect")
+        case .connectForget: wire = Wire(command: "connect.forget")
         case .configDismiss: wire = Wire(command: "config.dismiss")
         case .windowList: wire = Wire(command: "window.list")
         case .windowNew: wire = Wire(command: "window.new")
@@ -224,6 +228,10 @@ public struct ControlMessage: Equatable, Sendable {
         case "setup.link": return .setupLink(dryRun: wire.dryRun ?? false)
         case "setup.install": return .setupInstall(harnesses: wire.harnesses ?? [], dryRun: wire.dryRun ?? false)
         case "setup.cancel": return .setupCancel
+        case "connect.show": return .connectShow
+        case "connect.pick": return .connectPick(harness: try field(wire.name, "name", of: wire))
+        case "connect.disconnect": return .connectDisconnect
+        case "connect.forget": return .connectForget
         case "config.dismiss": return .configDismiss
         case "window.list": return .windowList
         case "window.new": return .windowNew

@@ -4,7 +4,8 @@ import SwiftUI
 /// The foot of the sidebar, one line: whether an agent listens and what it
 /// does now (its newest activity), how many messages are queued, and Send.
 /// Sending is safe either way: with no agent the send waits for the next
-/// one.
+/// one, and the Connect view opens to say so (G8). A click on the presence
+/// pill opens the Connect view, and goes back when it shows (G1).
 ///
 /// As tall as the player bar under the stage, on the window's one
 /// surface, so the two meet on one line across the window (D 4.9). A
@@ -21,11 +22,15 @@ struct SidebarFooter: View {
                 // The window's own listener; a window with no video has none.
                 let outbox = model.listener?.outbox ?? Outbox()
                 let presence = outbox.presence(at: context.date)
+                let pill = PresencePill.of(model.listenerPhase(at: context.date), presence: presence, pendingSends: outbox.pending.count)
                 HStack(spacing: 8) {
-                    PresenceChip(
-                        presence: presence,
-                        pill: PresencePill(presence: presence, session: outbox.session?.name, pendingSends: outbox.pending.count)
-                    )
+                    Button {
+                        model.toggleConnect(.pill)
+                    } label: {
+                        PresenceChip(presence: presence, pill: pill, isOpen: model.connect != nil)
+                    }
+                    .buttonStyle(.plain)
+                    .pressedByKeys(in: model) { model.toggleConnect(.pill) }
                     // The newest activity of any thread, with no glyph: the chip pulses beside it.
                     if let activity = model.listener?.activities(at: context.date).first {
                         Text(activity.text)

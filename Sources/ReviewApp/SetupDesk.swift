@@ -67,6 +67,18 @@ final class SetupDesk {
         probes = 1
     }
 
+    /// Whether the command line step is done: the link is detected.
+    var isLinked: Bool { report.commandLine.detection == .detected }
+
+    /// Whether the skill step is done: the skill is detected for one
+    /// harness at least, and for every harness found.
+    var isSkillDetected: Bool {
+        report.harnessesLackingSkill.isEmpty && report.harnesses.contains { $0.skill == .detected }
+    }
+
+    /// Whether both setup steps are detected.
+    var isDetected: Bool { isLinked && isSkillDetected }
+
     /// Reads the disk again.
     func probe() {
         report = SetupProbe(fileSystem: fileSystem, home: home).probe()
@@ -206,7 +218,9 @@ extension AppModel {
 
     /// Setup as `state` reports it for `window`, prompts naming its video.
     func setupReport(for window: WindowModel?) -> StateReport.Setup {
-        StateReport.Setup(setup, target: window?.video.map { .video(fileName: $0.url.lastPathComponent) })
+        StateReport.Setup(
+            setup, target: window?.video.map { .video(fileName: $0.url.lastPathComponent) }, agentConnectedOnce: agentConnectedOnce
+        )
     }
 
     /// `setup status`: the disk read again, then the report.

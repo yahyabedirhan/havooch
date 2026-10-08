@@ -25,6 +25,11 @@ final class ListenerHub {
     /// The content hash of the video a bare thread number (`reply 3`) is
     /// on: the key window's. The app sets it; nil with no video.
     @ObservationIgnored var keyVideo: @MainActor () -> String? = { nil }
+    /// Told each time an agent's `wait` opens on any review.
+    @ObservationIgnored var connected: (@MainActor () -> Void)?
+    /// When this data opened: a listener the last run left reconnects for
+    /// a while after it.
+    let startedAt: Date
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -36,6 +41,7 @@ final class ListenerHub {
         self.desk = desk
         self.layout = layout
         self.now = now
+        startedAt = now()
         desk.library.migrateFormerOutbox()
     }
 
@@ -43,8 +49,9 @@ final class ListenerHub {
     /// for, from the outbox the last run left for it.
     func queue(for key: ReviewKey) -> ListenerQueue {
         if let queue = queues[key] { return queue }
-        let queue = ListenerQueue(key: key, desk: desk, layout: layout, now: now)
+        let queue = ListenerQueue(key: key, desk: desk, layout: layout, startedAt: startedAt, now: now)
         queue.announce = { [weak self] notice in self?.announce?(key, notice) }
+        queue.connected = { [weak self] in self?.connected?() }
         queues[key] = queue
         return queue
     }

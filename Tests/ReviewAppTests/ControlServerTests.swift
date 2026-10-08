@@ -168,7 +168,9 @@ struct ControlServerTests {
             let threadID = try id(thread)
             guard review.thread(threadID) != nil else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
             shown = threadID.text
-            return (StateReport.Sidebar(thread: shown, width: 340), threadID.number)
+            var sidebar = StateReport.Sidebar(thread: shown, width: 340)
+            sidebar.mode = "thread"
+            return (sidebar, threadID.number)
         }
 
         func showThreadList() -> StateReport.Sidebar {
@@ -183,6 +185,36 @@ struct ControlServerTests {
                 target: general ? "Reply on General" : "New thread at 0:12", kind: general ? "reply" : "new", thread: nil, number: general ? 0 : 2, time: general ? nil : 12.5,
                 general: general, text: text, region: region
             )
+        }
+
+        func showConnect() throws(AppRefusal) -> StateReport.Sidebar {
+            try record("connect show")
+            var sidebar = StateReport.Sidebar(thread: nil, width: 340)
+            sidebar.mode = "connect"
+            sidebar.connect = StateReport.Sidebar.Connect(
+                reason: "header", phase: "none", harness: "claude-code", readiness: "ready",
+                prompt: "/havooch-mate listen for my feedback on sample.mp4"
+            )
+            return sidebar
+        }
+
+        func pickHarness(named name: String) throws(AppRefusal) -> StateReport.Sidebar {
+            try record("connect pick \(name)")
+            var sidebar = try showConnect()
+            sidebar.connect?.harness = name
+            sidebar.connect?.readiness = "skillNotDetected"
+            sidebar.connect?.prompt = "$havooch-mate listen for my feedback on sample.mp4"
+            return sidebar
+        }
+
+        func disconnectAgent() throws(AppRefusal) -> String {
+            try record("connect disconnect")
+            return "Claude Code"
+        }
+
+        func forgetAgent() throws(AppRefusal) -> String {
+            try record("connect forget")
+            return "Codex"
         }
 
         private func record(_ call: String) throws(AppRefusal) {
@@ -512,7 +544,9 @@ struct ControlServerTests {
         sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
         #expect(sidebar["thread"] as? String == "t-abcdef01-1")
         let shown = try object(await answer(.threadShow(thread: "t-abcdef01-0"), json: true).reply.output)
-        #expect(shown["sidebar"] as? [String: AnyHashable] == ["thread": "t-abcdef01-0", "width": 340, "composer": NSNull()])
+        #expect(shown["sidebar"] as? [String: AnyHashable] == [
+            "mode": "thread", "thread": "t-abcdef01-0", "width": 340, "composer": NSNull(), "connect": NSNull(),
+        ])
         #expect(shown.count == 1)
         #expect(await answer(.threadShow(thread: "t-abcdef01-9")).reply.ok == false)
 
@@ -524,6 +558,29 @@ struct ControlServerTests {
         #expect(app.calls.dropFirst() == [
             "thread show t-abcdef01-1", "thread show t-abcdef01-0", "thread show t-abcdef01-9", "thread list", "thread list",
         ])
+    }
+
+    @Test("`connect show` and `connect pick` show the Connect view and answer with the picked harness's readiness and prompt; disconnect and forget name the agent")
+    func connectCommands() async throws {
+        #expect(await answer(.connectShow).reply == .done("the sidebar shows the Connect view\n"))
+        let shown = try object(await answer(.connectShow, json: true).reply.output)
+        let sidebar = try #require(shown["sidebar"] as? [String: Any])
+        #expect(sidebar["mode"] as? String == "connect")
+        #expect((sidebar["connect"] as? [String: Any])?["reason"] as? String == "header")
+
+        #expect(await answer(.connectPick(harness: "codex")).reply == .done(
+            "picked codex: the skill isn't detected; paste the prompt if it's installed another way\n"
+                + "prompt: $havooch-mate listen for my feedback on sample.mp4\n"
+        ))
+        #expect(await answer(.connectDisconnect).reply == .done("Claude Code disconnected\n"))
+        #expect(await answer(.connectForget).reply == .done("Codex forgotten: no agent is waited for\n"))
+        #expect(app.calls == [
+            "connect show", "connect show", "connect pick codex", "connect show", "connect disconnect", "connect forget",
+        ])
+
+        app.refusal = AppRefusal("no agent is connected to this window")
+        let refused = await answer(.connectDisconnect)
+        #expect(refused.reply == .refused("no agent is connected to this window"))
     }
 
     @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")

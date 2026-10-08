@@ -8,11 +8,15 @@ public struct ListenerSession: Codable, Equatable, Sendable {
     public var name: String
     /// Where it runs: a Herdr pane, else its working folder.
     public var place: String
+    /// When its first `wait` opened: the listener card's "Since". Nil for
+    /// a session kept by a build before it.
+    public var since: Date?
 
-    public init(key: String, name: String, place: String) {
+    public init(key: String, name: String, place: String, since: Date? = nil) {
         self.key = key
         self.name = name
         self.place = place
+        self.since = since
     }
 }
 
@@ -139,9 +143,30 @@ public struct Outbox: Codable, Equatable, Sendable {
             // The new session has read no video's context yet.
             contextSent = [:]
         }
+        var listener = listener
+        // The same session keeps the time it started; a new one starts now.
+        listener.since = (session?.key == listener.key ? session?.since : nil) ?? listener.since ?? now
         session = listener
         isWaitOpen = true
         lastHeard = now
+        return requeued
+    }
+
+    /// The person let the listener go: Disconnect while it listens, or
+    /// Forget while it reconnects. Nobody listens from now on, and the next
+    /// `wait` starts a new session. What it took and didn't finish goes
+    /// back to the front of the line, as for a new session; its context is
+    /// forgotten. Returns those sends, whose unfinished messages the caller
+    /// returns to `sent`.
+    @discardableResult
+    public mutating func letGo() -> [SendRef] {
+        let requeued = taken
+        pending.insert(contentsOf: taken, at: 0)
+        taken = []
+        contextSent = [:]
+        session = nil
+        isWaitOpen = false
+        lastHeard = nil
         return requeued
     }
 

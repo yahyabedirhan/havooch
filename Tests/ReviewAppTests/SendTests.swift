@@ -454,7 +454,7 @@ struct SendDeliveryTests {
 
 @Suite("The sidebar's words")
 struct SidebarWordsTests {
-    @Test("the presence pill says Listening, Working or No listener, and its hover names the agent")
+    @Test("the presence pill says Listening, Working, Reconnecting or No agent, and its hover names the agent")
     func pill() {
         let listening = PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0)
         #expect(listening.title == "Listening")
@@ -466,8 +466,13 @@ struct SidebarWordsTests {
         #expect(working.help.hasSuffix("2 sends wait for it."))
 
         let absent = PresencePill(presence: .absent, session: nil, pendingSends: 0)
-        #expect(absent.title == "No listener")
-        #expect(absent.help == "No agent runs `havooch wait`. What you send waits for the next one.")
+        #expect(absent.title == "No agent")
+        #expect(absent.help == "No agent is listening. What you send waits for the next one. Click to connect an agent.")
+        let reconnecting = PresencePill.reconnecting("Codex", pendingSends: 0)
+        #expect(reconnecting.title == "Reconnecting")
+        #expect(reconnecting.isReconnecting)
+        #expect(reconnecting.logo == .codex)
+        #expect(reconnecting.help == "Havooch relaunched. Codex picks up again on its next `havooch wait`.")
         #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).help.hasSuffix("1 send waits for it."))
         // Before anyone listened, the hover still says who: an agent.
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))
