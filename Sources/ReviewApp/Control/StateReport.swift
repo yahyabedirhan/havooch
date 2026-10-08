@@ -361,6 +361,9 @@ nonisolated struct StateReport: Encodable, Equatable {
     var listener = Listener.absent
     /// The active theme; the app's model fills it in.
     var theme: Theme?
+    /// What Havooch detects of the setup, and the skill install; the app's
+    /// model fills it in.
+    var setup: Setup?
     /// The open video; `null` with none.
     var video: Video?
     var player: Player
@@ -404,7 +407,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, screen, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, sidebar, recents
+        case transcript, theme, sidebar, recents, setup
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -414,6 +417,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(lease, forKey: .lease)
         try container.encode(listener, forKey: .listener)
         try container.encode(theme, forKey: .theme)
+        try container.encode(setup, forKey: .setup)
         try container.encode(video, forKey: .video)
         try container.encode(player, forKey: .player)
         try container.encode(transcript, forKey: .transcript)
@@ -440,7 +444,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
-        \(theme.map { $0.line + "\n" } ?? "")threads: \(threadLines)
+        \(theme.map { $0.line + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")threads: \(threadLines)
         recents: \(recentLines)
 
         """

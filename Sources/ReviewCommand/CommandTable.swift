@@ -115,6 +115,7 @@ struct Command: Sendable {
 public enum CommandTable {
     static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
         + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
+        + SetupCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

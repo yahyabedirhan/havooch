@@ -71,6 +71,15 @@ public struct ControlMessage: Equatable, Sendable {
         case .threadList: wire = Wire(command: "thread.list")
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
+        case .setupStatus: wire = Wire(command: "setup.status")
+        case .setupLink(let dryRun):
+            wire = Wire(command: "setup.link")
+            wire.dryRun = dryRun ? true : nil
+        case .setupInstall(let harnesses, let dryRun):
+            wire = Wire(command: "setup.install")
+            wire.harnesses = harnesses.isEmpty ? nil : harnesses
+            wire.dryRun = dryRun ? true : nil
+        case .setupCancel: wire = Wire(command: "setup.cancel")
         }
         wire.holder = holder
         wire.json = json
@@ -201,6 +210,10 @@ public struct ControlMessage: Equatable, Sendable {
         case "thread.list": return .threadList
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
+        case "setup.status": return .setupStatus
+        case "setup.link": return .setupLink(dryRun: wire.dryRun ?? false)
+        case "setup.install": return .setupInstall(harnesses: wire.harnesses ?? [], dryRun: wire.dryRun ?? false)
+        case "setup.cancel": return .setupCancel
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -258,5 +271,10 @@ public struct ControlMessage: Equatable, Sendable {
         var choices: [String]?
         /// `thread choose`: the number (from 1) of the choice pressed.
         var choice: Int?
+        /// `setup link` and `setup install --dry-run`: say what it would
+        /// do, and do nothing.
+        var dryRun: Bool?
+        /// `setup install --harness`: the harnesses named; left out with none.
+        var harnesses: [String]?
     }
 }

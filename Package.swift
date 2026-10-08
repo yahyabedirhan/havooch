@@ -32,11 +32,16 @@ let package = Package(
         .target(name: "ReviewTranscript", path: "Sources/ReviewTranscript"),
         // What's kept on disk, by the content hash of the video.
         .target(name: "ReviewStore", dependencies: ["ReviewCore", "ReviewTranscript"], path: "Sources/ReviewStore"),
+        // What Havooch can detect of the person's setup (the command link,
+        // the skill per harness, the harnesses), the skill install and the
+        // prompt per harness. The file system and the processes are seams.
+        .target(name: "ReviewSetup", dependencies: ["ReviewCore"], path: "Sources/ReviewSetup"),
         .testTarget(name: "ReviewTranscriptTests", dependencies: ["ReviewTranscript"], path: "Tests/ReviewTranscriptTests"),
         .testTarget(name: "ReviewCoreTests", dependencies: ["ReviewCore"], path: "Tests/ReviewCoreTests"),
         .testTarget(
             name: "ReviewStoreTests", dependencies: ["ReviewCore", "ReviewTranscript", "ReviewStore"], path: "Tests/ReviewStoreTests"
         ),
+        .testTarget(name: "ReviewSetupTests", dependencies: ["ReviewCore", "ReviewSetup"], path: "Tests/ReviewSetupTests"),
         .testTarget(name: "ReviewWireTests", dependencies: ["ReviewWire", "ReviewLease"], path: "Tests/ReviewWireTests"),
         .testTarget(name: "ReviewLeaseTests", dependencies: ["ReviewLease"], path: "Tests/ReviewLeaseTests"),
         .testTarget(
@@ -54,13 +59,13 @@ package.products.append(.executable(name: "HavoochApp", targets: ["ReviewApp"]))
 package.targets += [
     .executableTarget(
         name: "ReviewApp",
-        dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
+        dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup"],
         path: "Sources/ReviewApp",
         swiftSettings: [.defaultIsolation(MainActor.self)]
     ),
     .testTarget(
         name: "ReviewAppTests",
-        dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore"],
+        dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup"],
         path: "Tests/ReviewAppTests",
         swiftSettings: [.defaultIsolation(MainActor.self)]
     ),

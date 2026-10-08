@@ -156,6 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// meanwhile: the home screen reads the list again.
     func applicationDidBecomeActive(_ notification: Notification) {
         model.refreshRecents()
+        // The person may have linked the command or installed the skill in
+        // a terminal meanwhile: setup reads the disk again, never polling (P10).
+        model.setup.probe()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

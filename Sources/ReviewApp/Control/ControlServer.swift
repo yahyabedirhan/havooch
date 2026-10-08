@@ -66,6 +66,17 @@ protocol AppControlling: AnyObject {
     func themeList() -> StateReport.ThemeList
     /// Pins the theme called `name`, or follows the system for `system`.
     func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme
+    /// What Havooch detects of the setup, read from disk again.
+    func setupStatus() -> StateReport.Setup
+    /// Links the `havooch` command in `~/.local/bin`, as Link does, or
+    /// with `dryRun` says what it would do; the line says which.
+    func linkCommand(dryRun: Bool) throws(AppRefusal) -> (line: String, setup: StateReport.Setup)
+    /// Starts installing the skill for the harnesses `harnesses` name, or
+    /// every harness found without it, as Install does; with `dryRun` only
+    /// plans it.
+    func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
+    /// Stops the running install, as Cancel does, once it has stopped.
+    func cancelInstall() async throws(AppRefusal) -> StateReport.Setup.Install
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -348,6 +359,21 @@ final class ControlServer {
             case .themeSet(let name):
                 let theme = try app.setTheme(name)
                 return done(theme.setLine, Output(theme: theme), json)
+            case .setupStatus:
+                let setup = app.setupStatus()
+                return done(json ? StateReport.json(setup) : setup.lines)
+            case .setupLink(let dryRun):
+                let linked = try app.linkCommand(dryRun: dryRun)
+                return done(linked.line, Output(setup: linked.setup), json)
+            case .setupInstall(let harnesses, let dryRun):
+                let install = try app.installSkill(harnesses: harnesses, dryRun: dryRun)
+                let line = dryRun
+                    ? "would run: \(install.command)"
+                    : "\(install.line)\nhavooch setup status follows its log; havooch setup cancel stops it"
+                return done(line, Output(install: install), json)
+            case .setupCancel:
+                let install = try await app.cancelInstall()
+                return done(install.line, Output(install: install), json)
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -373,6 +399,8 @@ final class ControlServer {
         var popover: StateReport.Popover?
         var sidebar: StateReport.Sidebar?
         var composer: StateReport.Sidebar.Composer?
+        var setup: StateReport.Setup?
+        var install: StateReport.Setup.Install?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {

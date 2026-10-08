@@ -42,6 +42,9 @@ final class AppModel: AppControlling {
     /// The active theme, the pin and the overrides: on the folder the run
     /// started on, also during an in-app demo.
     let themes: ThemeDesk
+    /// What Havooch detects of the person's setup, Link and the skill
+    /// install: app-wide, whatever data the run is on.
+    let setup: SetupDesk
     /// Where the run keeps its data now: the person's own, or a demo's.
     var support: URL { data.support }
     /// The folder the run started on: the person's, or the one
@@ -142,10 +145,11 @@ final class AppModel: AppControlling {
     /// `app open --demo` launched it (`SupportFolder.isDemoRun`). `speech`
     /// turns a video's sound into lines when it has no sidecar, and
     /// `demoFolder` is where "Try the Demo" keeps its data and
-    /// `demoVideo` the video it opens; tests give their own.
+    /// `demoVideo` the video it opens; tests give their own, and their own
+    /// `setup` on a fake file system.
     init(
         environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer(),
-        demoFolder: URL = DemoRun.folder(), demoVideo: URL? = DemoRun.video()
+        demoFolder: URL = DemoRun.folder(), demoVideo: URL? = DemoRun.video(), setup: SetupDesk? = nil
     ) {
         launchSupport = SupportFolder.app(environment: environment)
         isDemoRun = SupportFolder.isDemoRun(environment: environment)
@@ -154,6 +158,7 @@ final class AppModel: AppControlling {
         self.speech = speech
         data = DataFolder(support: launchSupport, speech: speech)
         themes = ThemeDesk(layout: SupportLayout(root: launchSupport))
+        self.setup = setup ?? SetupDesk(environment: environment)
         listenToAgent()
     }
 
@@ -665,6 +670,7 @@ final class AppModel: AppControlling {
         )
         report.transcript = transcript
         report.theme = themes.report
+        report.setup = setupReport
         report.sidebar = sidebarReport
         report.recents = recents
         report.screen = StageContent(hasVideo: video != nil, hasRecents: !report.recents.isEmpty).screen

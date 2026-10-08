@@ -129,6 +129,21 @@ public enum ControlRequest: Equatable, Sendable {
     /// the pin cleared for `system`, so the theme follows the system
     /// appearance again.
     case themeSet(name: String)
+    /// `havooch setup status`: what Havooch detects of the setup, read
+    /// from disk again: the command link, each harness and its skill, and
+    /// the install.
+    case setupStatus
+    /// `havooch setup link [--dry-run]`: the `havooch` command linked in
+    /// `~/.local/bin`, as Link does. With `dryRun`, only what it would do.
+    case setupLink(dryRun: Bool = false)
+    /// `havooch setup install [--harness <name>]... [--dry-run]`: the
+    /// `havooch-mate` skill installed globally with `npx skills add`, for
+    /// the `harnesses` named, or for every harness found without it when
+    /// none is, as Install does. It starts the install and answers; `setup
+    /// status` follows its log. With `dryRun`, only the command it would run.
+    case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
+    /// `havooch setup cancel`: the running install stopped, as Cancel does.
+    case setupCancel
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -194,6 +209,8 @@ public enum ControlRequest: Equatable, Sendable {
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
+        case .setupStatus: .free
+        case .setupLink, .setupInstall, .setupCancel: .operator
         }
     }
 
