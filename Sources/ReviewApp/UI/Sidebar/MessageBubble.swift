@@ -269,27 +269,22 @@ struct MessageBubble: View {
         .padding(.top, run.startsRun ? Self.gap : Self.gap / 2)
     }
 
-    /// The agent's question: a card headed "<agent> asks", in
-    /// `bubbleQuestion` with a border in `question`. One already answered
-    /// is quieter.
+    /// The agent's question: its words alone, in `bubbleQuestion` with a
+    /// border in `question`. The writer's name above the bubble and the
+    /// question colour say who asks, so the card carries no header; the
+    /// words "<agent> asks" stay for VoiceOver. One already answered is
+    /// quieter.
     private func question(_ writer: MessageWriter) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: 14, bottomLeadingRadius: Self.tail, bottomTrailingRadius: 14, topTrailingRadius: 14, style: .continuous
         )
-        return VStack(alignment: .leading, spacing: 4) {
-            Label("\(writer.name) asks", systemImage: "questionmark.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(palette[.question])
-                .labelStyle(.titleAndIcon)
-                .lineLimit(1)
-            Text(message.text)
-                .font(.body)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 9)
-        .padding(.bottom, 10)
+        return Text(message.text)
+            .font(.body)
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .accessibilityLabel("\(writer.name) asks: \(message.text)")
         .background(palette[.bubbleQuestion], in: shape)
         .overlay { shape.strokeBorder(palette[.question].opacity(0.32), lineWidth: 1) }
         .opacity(isOpenQuestion ? 1 : 0.8)
