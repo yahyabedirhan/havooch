@@ -1,7 +1,8 @@
 import Foundation
 import ReviewWire
 
-/// `havooch player open | play | pause | seek`.
+/// `havooch player open | play | pause | seek | mute | unmute | volume |
+/// sound`.
 enum PlayerCommands {
     static let commands: [Command] = [
         Command(name: "player open", synopsis: "player open <path>", summary: "open a video file, paused at its start") {
@@ -27,6 +28,32 @@ enum PlayerCommands {
                 throw UsageError("`\(time)` isn't a time; write seconds (`90`, `12.5`) or `mm:ss` (`1:30`)")
             }
             return .send(.playerSeek(seconds: seconds))
+        },
+        Command(name: "player mute", synopsis: "player mute", summary: "mute the sound in every window") {
+            arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.playerMute)
+        },
+        Command(name: "player unmute", synopsis: "player unmute", summary: "bring back the last volume") {
+            arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.playerUnmute)
+        },
+        Command(name: "player volume", synopsis: "player volume <0 to 100>", summary: "set the volume in every window; 0 mutes") {
+            arguments, _ throws(UsageError) in
+            let level = try arguments.one("<0 to 100>")
+            guard let percent = Int(level), (0...100).contains(percent) else {
+                throw UsageError("`\(level)` isn't a volume; write a whole number from 0 to 100")
+            }
+            return .send(.playerVolume(percent: percent))
+        },
+        Command(
+            name: "player sound", synopsis: "player sound [--close]",
+            summary: "open the sound panel over the stage, as a click on the speaker does; --close closes it",
+            flags: ["--close"]
+        ) { arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.playerSound(open: !arguments.flags.contains("--close")))
         },
     ]
 }

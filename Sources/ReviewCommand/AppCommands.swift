@@ -56,6 +56,9 @@ enum AppCommands {
         var client: ControlClient
         var launcher: any AppLaunching
         var pause: @Sendable (TimeInterval) -> Void
+        /// Whether the command runs with `HAVOOCH_MUTED=1`: an agent's
+        /// check, whose demo starts muted.
+        var muted = false
 
         /// The same client, asking at the socket in `support`.
         func client(in support: URL) -> ControlClient {
@@ -140,6 +143,8 @@ enum AppCommands {
         }
         var outcome: CommandResult?
         var environment = [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]
+        // An agent's check started muted runs the demo muted too.
+        if context.muted { environment[MutedRun.variable] = "1" }
         for other in [context.support, previous].compactMap(\.self) where outcome == nil {
             switch quitIfRunning(context.client(in: other), context) {
             case .stayed(let refused): outcome = refused

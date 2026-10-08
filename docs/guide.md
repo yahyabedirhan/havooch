@@ -75,6 +75,16 @@ You can open a video from anywhere:
 
 ![The home screen: a project with three versions, and three recent videos](../assets/screenshots/0.4.0/home/projects-and-recent-videos-light.png)
 
+## Sound
+
+The speaker in the player bar sets the volume. Click it to open the volume panel over the video, and drag the level up or down. Drag it to the bottom to mute; the speaker then shows a slash. Drag it up again to unmute. Click the speaker again, click anywhere else or press Escape to close the panel. **M**, or **Playback › Mute**, mutes and brings back the last volume.
+
+The volume is the same in every window and on both sides of Compare, and Havooch keeps it for the next launch.
+
+An agent changes it with `havooch player volume <0 to 100>`, `player mute` and `player unmute`; `havooch state --json` reports `sound.volume` and `sound.muted`. An agent that checks a build starts the app with `HAVOOCH_MUTED=1`: that run plays no sound in any window, whatever your volume is, and leaves your volume as it was. Its speaker has a small badge, and its panel says "Muted for an agent check".
+
+![The volume panel at 70%](../assets/screenshots/volume-control/capsule-70-light.png)
+
 ## Comments, threads and sending
 
 Pause anywhere and write a comment, or drag a region on the frame first to point at something. Comments on one frame form a thread. Comments queue up until you send them: **Send**, or **Cmd+Enter**, sends the whole queue as one batch to the agent that listens, with each comment's timestamp, the keyframe, the region and the transcript around that moment.
@@ -178,7 +188,7 @@ The command ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Hom
 | Projects | `project`, `version`, `compare` | Make a project and add versions, show a version, drive Compare. |
 | Settings | `config`, `theme` | Find and check `config.toml`, list and pin themes. |
 | Setup | `setup`, `connect`, `first-run`, `tour` | Link the command, install the skill, and drive the Connect view, the first-run window and the tour. |
-| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data. |
+| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data, and with `HAVOOCH_MUTED=1` set, muted. `player volume`, `player mute`, `player unmute` and `player sound [--close]` drive the sound and its panel. |
 
 `havooch --help` lists every command, and `havooch --version` prints the version.
 

@@ -39,7 +39,7 @@ final class WindowModel: WindowControlling {
     let id: String
     /// The player of the version on screen; while comparing, the active
     /// side's, one of `pair`'s two.
-    private(set) var engine = PlayerEngine()
+    private(set) var engine: PlayerEngine
     /// The AppKit window that shows this one; nil before its scene shows,
     /// and in tests.
     @ObservationIgnored weak var nsWindow: NSWindow?
@@ -231,6 +231,7 @@ final class WindowModel: WindowControlling {
     init(app: AppModel, id: String) {
         self.app = app
         self.id = id
+        engine = PlayerEngine(sound: app.sound)
     }
 
     /// The open video's transcript as `state` and the Context popover show
@@ -904,6 +905,7 @@ final class WindowModel: WindowControlling {
         report.config = app.config.report
         report.sidebar = sidebarReport
         report.tour = tourReport
+        report.sound = soundReport
         report.recents = recents
         report.screen = screen
         report.window = id
@@ -1124,6 +1126,36 @@ final class WindowModel: WindowControlling {
         move(to: engine.time + Double(frames) * engine.frameDuration)
     }
 
+    // MARK: - Sound
+
+    /// Whether the player bar's sound panel is open over the stage: the
+    /// level capsule, or in a run muted for a check, why it plays no sound.
+    private(set) var isSoundPanelOpen = false
+    /// Where the player bar's speaker is, in the coordinate space of the
+    /// stage and the bar together, for the sound panel to point at it.
+    var speakerArea: CGRect = .zero
+    /// The clicks outside the sound panel, watched while it is open.
+    @ObservationIgnored let soundClicks = SoundPanelClicks()
+
+    /// A click on the speaker: the sound panel opens, or closes when it
+    /// was open. A click never mutes.
+    func toggleSoundPanel() {
+        isSoundPanelOpen.toggle()
+    }
+
+    /// `player sound` and `player sound --close`, and a click outside
+    /// the panel: the panel opens or closes. Refused with no video, which
+    /// has no player bar.
+    func setSoundPanel(open: Bool) throws(AppRefusal) {
+        if open, video == nil { throw Self.noVideo }
+        isSoundPanelOpen = open
+    }
+
+    /// The sound as `state` reports it, with this window's panel.
+    var soundReport: StateReport.Sound {
+        StateReport.Sound(app.sound, panelOpen: isSoundPanelOpen && video != nil)
+    }
+
     /// The player bar's speed menu.
     func setSpeed(_ speed: Double) {
         if let pair { pair.setSpeed(speed) } else { engine.speed = speed }
@@ -1240,6 +1272,10 @@ final class WindowModel: WindowControlling {
     /// there was none of them.
     @discardableResult
     func escape() -> Bool {
+        if isSoundPanelOpen {
+            isSoundPanelOpen = false
+            return true
+        }
         if closeVersionPicker() { return true }
         if closeComparePicker() { return true }
         if compare?.phase == .choosing {
@@ -1806,7 +1842,7 @@ final class WindowModel: WindowControlling {
         guard let contentHash = await Self.contentHash(of: url, in: app.hashes) else {
             throw AppRefusal("can't read \(url.path)")
         }
-        let loaded = PlayerEngine()
+        let loaded = PlayerEngine(sound: app.sound)
         do {
             try await loaded.load(url)
         } catch {

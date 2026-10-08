@@ -15,7 +15,7 @@ struct SidebarTests {
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> WindowModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -311,7 +311,7 @@ struct SidebarTests {
         #expect(try Settings.load(layout).sidebarWidth == 390)
 
         // The next run opens at that width.
-        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         #expect(again.sidebarWidth == 390)
 
         // A drag past a limit is kept at the limit.

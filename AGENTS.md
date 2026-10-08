@@ -59,7 +59,7 @@ Each document has one reader:
 
 ## Testing
 
-Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `havooch` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Set `HAVOOCH_SUPPORT_DIR` to a scratch folder for `make install` and every command, so a check never opens the maintainer's data. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
+Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `havooch` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Set `HAVOOCH_SUPPORT_DIR` to a scratch folder for `make install` and every command, so a check never opens the maintainer's data. Set `HAVOOCH_MUTED=1` for `make install` and every command as well, so a check never plays sound: the app then plays nothing in any window, and `app open --demo` passes it on. `state --json` reports `sound.mutedForCheck`; check it before playing. `scripts/acceptance.sh`, `scripts/screenshots.sh` and `scripts/showcase.sh` set it themselves. Brief every delegate that runs the app to do the same. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
 
 ## Agent skills
 

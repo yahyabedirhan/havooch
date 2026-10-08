@@ -55,7 +55,7 @@ private struct FileCommands: Commands {
 /// carry no key equivalents: the player's keys (`Shortcuts`) have no
 /// modifier, and a menu would take them from a text field. Send Messages
 /// shows Cmd+Return, the key `Shortcuts` acts on first; both go through
-/// `WindowModel.send`.
+/// `WindowModel.send`. Mute and Unmute is the M key's.
 private struct PlaybackCommands: Commands {
     @FocusedValue(\.playerWindow) private var model
 
@@ -75,6 +75,10 @@ private struct PlaybackCommands: Commands {
                 Button("Add Message") { model?.startDraft() }
             }
             .disabled(model?.video == nil)
+            // The app's sound, which M mutes and unmutes too; a run muted
+            // for an agent's check can't change it.
+            Button(model?.app.sound.isMuted == true ? "Unmute" : "Mute") { model?.app.toggleMuteForPerson() }
+                .disabled(model == nil || model?.app.sound.isMutedForCheck == true)
             // The one item with a key: Cmd+Return is no key a text field takes.
             Button("Send Messages") { model?.send() }
                 .keyboardShortcut(.return, modifiers: .command)

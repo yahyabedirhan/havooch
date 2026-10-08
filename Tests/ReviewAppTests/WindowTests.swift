@@ -27,7 +27,7 @@ struct WindowTests {
     /// it, and the server in front of it. `fronts` counts the times the app
     /// came to the front.
     private func run() -> (app: AppModel, first: WindowModel, server: ControlServer, fronts: Fronts) {
-        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
+        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"], speech: SlowRecognizer())
         let fronts = Fronts()
         app.bringToFront = { _ in fronts.count += 1 }
         let first = app.makeWindow()

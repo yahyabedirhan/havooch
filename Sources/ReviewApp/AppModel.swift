@@ -48,6 +48,10 @@ final class AppModel: AppControlling {
     private(set) var firstRunDone = false
     /// The first-run window: Welcome, Tools, Connect, Try it (H1).
     let firstRun: FirstRun
+    /// The sound: one level for every window and both players of a
+    /// comparison, kept in `settings.json` on the folder the run started
+    /// on. Silent in a run muted for an agent's check (`HAVOOCH_MUTED=1`).
+    let sound: Sound
     /// Whether `settings.json` read at launch: one that doesn't is never
     /// written over.
     @ObservationIgnored private let settingsRead: Bool
@@ -118,13 +122,16 @@ final class AppModel: AppControlling {
         themes = ThemeDesk(config: config)
         self.setup = setup ?? SetupDesk(environment: environment)
         firstRun = FirstRun(setup: self.setup)
+        let mutedForCheck = MutedRun.isMuted(environment: environment)
         do throws(Library.Failure) {
             let settings = try Settings.load(launchLayout)
             keptSidebarWidth = settings.sidebarWidth
             agentConnectedOnce = settings.agentConnectedOnce ?? false
             firstRunDone = settings.firstRunDone ?? false
+            sound = Sound(level: settings.volume, unmuteLevel: settings.unmuteVolume, mutedForCheck: mutedForCheck)
             settingsRead = true
         } catch {
+            sound = Sound(mutedForCheck: mutedForCheck)
             settingsRead = false
         }
         listenToAgent()
@@ -318,6 +325,7 @@ final class AppModel: AppControlling {
             report.config = config.report
             report.recents = recents
             report.projects = homeProjects
+            report.sound = StateReport.Sound(sound, panelOpen: false)
             report.screen = .none
             return report
         }
@@ -701,9 +709,64 @@ final class AppModel: AppControlling {
     private func saveSettings() {
         guard settingsRead else { return }
         try? Settings(
-            sidebarWidth: keptSidebarWidth, agentConnectedOnce: agentConnectedOnce ? true : nil, firstRunDone: firstRunDone ? true : nil
+            sidebarWidth: keptSidebarWidth, agentConnectedOnce: agentConnectedOnce ? true : nil, firstRunDone: firstRunDone ? true : nil,
+            volume: sound.kept.level, unmuteVolume: sound.kept.unmuteLevel
         )
         .save(SupportLayout(root: launchSupport))
+    }
+
+    // MARK: - The sound, the same in every window
+
+    /// The volume capsule and `player volume`: the level, 0 to 1, in every
+    /// window; 0 mutes. A drag changes it at once and keeps it in the
+    /// settings as it ends (`keep`). A run muted for a check plays
+    /// nothing and keeps nothing of it.
+    func setVolume(_ level: Double, keep: Bool = true) {
+        sound.set(level)
+        if keep { keepSound() }
+    }
+
+    /// `player mute`: level 0.
+    func mute() {
+        sound.mute()
+        keepSound()
+    }
+
+    /// `player unmute`: the last level above 0.
+    func unmute() {
+        sound.unmute()
+        keepSound()
+    }
+
+    /// Mutes, or unmutes when muted.
+    func toggleMute() {
+        sound.toggleMute()
+        keepSound()
+    }
+
+    /// The mute key and the Playback menu: `toggleMute`, except in a run
+    /// muted for a check, where the person can't change the sound.
+    func toggleMuteForPerson() {
+        guard !sound.isMutedForCheck else { return }
+        toggleMute()
+    }
+
+    /// `player mute`, `player unmute` and `player volume`: the sound in
+    /// every window, kept as the person's would be; in a run muted for a
+    /// check, the run's level only, which plays nothing.
+    func changeSound(_ change: SoundChange) -> StateReport.Sound {
+        switch change {
+        case .mute: mute()
+        case .unmute: unmute()
+        case .volume(let percent): setVolume(Double(percent) / 100)
+        }
+        return windows.key?.soundReport ?? StateReport.Sound(sound, panelOpen: false)
+    }
+
+    /// The sound's level is kept, unless the run is muted for a check.
+    private func keepSound() {
+        guard !sound.isMutedForCheck else { return }
+        saveSettings()
     }
 
     /// The person used the app: the first-run window never shows by itself again.

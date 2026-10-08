@@ -2,8 +2,8 @@ import ReviewWire
 import SwiftUI
 
 /// The fixed bar under the stage: play or pause, the time
-/// and the duration, the timeline with a pin per thread, the Comment button
-/// and the speed. It never floats over the video, and it is as tall as the
+/// and the duration, the timeline with a pin per thread, the Comment button,
+/// the speaker that opens the sound panel (`SoundPanel`) and the speed. It never floats over the video, and it is as tall as the
 /// sidebar's footer beside it, so the two meet on one line.
 struct PlayerBar: View {
     let model: WindowModel
@@ -52,6 +52,8 @@ struct PlayerBar: View {
             .disabled(model.draft != nil)
             .help("Comment at this frame (C)")
             .accessibilityLabel("Comment")
+
+            SpeakerButton(model: model)
 
             Menu {
                 ForEach(PlayerEngine.speeds, id: \.self) { speed in

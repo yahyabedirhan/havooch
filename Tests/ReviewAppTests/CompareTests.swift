@@ -197,6 +197,13 @@ struct CompareTests {
         // Only the active side is heard.
         #expect(!pair.right.player.isMuted)
         #expect(pair.left.player.isMuted)
+        // The app's level is both sides'; muted, neither plays a sound.
+        app.setVolume(0.3)
+        #expect(pair.left.player.volume == 0.3)
+        #expect(pair.right.player.volume == 0.3)
+        app.mute()
+        #expect(pair.left.player.volume == 0)
+        #expect(pair.right.player.volume == 0)
 
         // One playhead: a seek moves both, play plays both, pause pauses both.
         try await window.seek(to: 0.5)

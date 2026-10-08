@@ -77,6 +77,11 @@ set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
+# An agent's check plays no sound on the person's Mac: `app open --demo`
+# passes HAVOOCH_MUTED=1 on, and the app it launches plays nothing in any
+# window. Step 1 checks it.
+export HAVOOCH_MUTED=1
+
 # The one place that names the command: HAVOOCH_CLI, else the installed
 # app's.
 cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
@@ -424,6 +429,8 @@ holds "the video is the fixture, of $duration s" "$stdout" \
     '.video.path == $path and ((.video.duration - $duration) | fabs) < 0.1' --arg path "$video" --argjson duration "$duration"
 holds "no thread but General, and an empty queue" "$stdout" \
     '[.threads[] | select(.number != 0)] == [] and .queue == []'
+holds "the app runs muted for an agent check (quit a demo started without HAVOOCH_MUTED=1)" "$stdout" \
+    '.sound.muted == true and .sound.mutedForCheck == true'
 on_list "$stdout"
 grouped "the thread list holds General alone, in Done" "$stdout" '[["done", [0]]]'
 finish
