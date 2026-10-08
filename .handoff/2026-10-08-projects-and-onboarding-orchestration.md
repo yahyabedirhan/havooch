@@ -29,7 +29,7 @@ Five build tickets start at once: #81 (accent fill), #82 (`havooch open`), #84 (
 ## What this session knows that the repository doesn't
 
 - **Live QA:** the maintainer wants the agent to prepare the app and then only look and play. For each QA ticket: install, set up the state on a scratch data folder (`HAVOOCH_SUPPORT_DIR`), assign the ticket to the maintainer with a comment on what to look at. Ping the maintainer through `shipyard ping` when a QA ticket is ready.
-- **Blocking or not:** the maintainer did not say whether QA blocks the PR. Default: the harness QA tickets (#97 to #104) and #96 do not block the merge; they are prepared once the PR is ready and stay open after it (`Refs`, not `Closes`). #105 (projects and compare) is prepared before asking to merge.
+- **Blocking or not (decided by the maintainer, 2026-10-08):** the harness QA tickets (#97 to #104) and #96 do not block the merge. Reference them with `Refs`, prepare them once the PR is ready, and leave them open after the merge. #105 (projects and compare) is prepared before asking to merge.
 - **Cursor's prompt form** (`/havooch-mate …`) is unverified; #101 and #102 confirm it.
 - An older Havooch run may still use the scratch data folder `.scratch/qa-live` in the main checkout, with idle listener sessions from the earlier live QA. Leave them alone; the maintainer ends them.
 - Swift Lab issue `Lab: Mark the variants that changed since the maintainer last looked` (yahyabedirhan/swift-lab#103) came out of this session; it is not part of this effort.
