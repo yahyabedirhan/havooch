@@ -15,7 +15,7 @@ struct RegionOverlay: View {
     /// The player of the picture under it, for the size of a rectangle.
     let engine: PlayerEngine
     /// While comparing, the side it is on: a click or a drag on it makes
-    /// the side active first (P9), and it shows regions only while active.
+    /// the side active first (L63), and it shows regions only while active.
     var side: CompareSide?
     /// How much of its width, from its leading edge, takes the mouse;
     /// nil for all of it.

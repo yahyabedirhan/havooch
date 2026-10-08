@@ -37,7 +37,7 @@ public struct SendPayload: Codable, Equatable, Sendable {
         /// The file's name with its extension.
         public var title: String
         /// Whether the video is the demo bundled in the app, by its content
-        /// (`DemoVideo`): the skill then guides a beginner (H3, P12).
+        /// (`DemoVideo`): the skill then guides a beginner (H3, L60).
         public var demo: Bool
 
         public init(from decoder: any Decoder) throws {

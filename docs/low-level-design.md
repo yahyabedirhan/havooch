@@ -1453,8 +1453,6 @@ Refused for now: undo, an Allow button, system notifications, a plug-in registry
 
 Each decision this design takes, with its reason. Spec and ticket numbers say where a decision came from.
 
-Some code comments still cite P1 to P13, the numbers of the projects-and-onboarding design this document absorbed. Each is part of an L decision here: P1 → L52, L53; P2, P3, P4 → L59; P5 → L56; P6 → L51; P7 → L53; P8, P9 → L63; P10 → L52; P11 → L57, L58; P12 → L60; P13 → L54.
-
 | # | Decision | Reason |
 |---|---|---|
 | L2 | A thread's key is the frame's start time from the nominal frame rate, raised to the next millisecond (`PlayerEngine.frameTime`). | "The exact frame" (D 3.8) must be one number for two moments inside one frame, from the UI and from `--at`. |

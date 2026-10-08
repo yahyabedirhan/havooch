@@ -179,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         model.refreshRecents()
         // The person may have linked the command or installed the skill in
-        // a terminal meanwhile: setup reads the disk again, never polling (P10).
+        // a terminal meanwhile: setup reads the disk again, never polling (L52).
         model.setup.probe()
     }
 

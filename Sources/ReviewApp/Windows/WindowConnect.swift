@@ -218,7 +218,7 @@ extension WindowModel {
     }
 
     /// Whether the connect button shows its dot: setup isn't fully
-    /// detected, and no agent has ever connected (P11).
+    /// detected, and no agent has ever connected (L57).
     var showsConnectDot: Bool {
         app.showsConnectDot
     }
@@ -261,7 +261,7 @@ extension WindowModel: SetupSteering {
 
 extension AppModel {
     /// Whether the connect button shows its dot: setup isn't fully
-    /// detected, and no agent has ever connected (P11, ADR 0005).
+    /// detected, and no agent has ever connected (L57, ADR 0005).
     var showsConnectDot: Bool {
         !setup.isDetected && !agentConnectedOnce
     }

@@ -1406,7 +1406,7 @@ final class WindowModel: WindowControlling {
 
     /// Whether the window compares two versions.
     var isComparing: Bool { pair != nil }
-    /// The side new messages go to while comparing (P9): the one the
+    /// The side new messages go to while comparing (L63): the one the
     /// person last clicked or drew on, the right one at first, in Flip the
     /// one showing; nil while not comparing.
     var activeSide: CompareSide? { pair?.side(of: engine) }
@@ -1614,7 +1614,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The flip key (\) and the flip bar in Flip: the other side shows,
-    /// and new messages go to it (P9). False outside Flip.
+    /// and new messages go to it (L63). False outside Flip.
     @discardableResult
     func flipCompare() -> Bool {
         guard isComparing, compare?.layout == .flip, let side = activeSide else { return false }
@@ -1725,7 +1725,7 @@ final class WindowModel: WindowControlling {
         beginRegion()
     }
 
-    /// `side` becomes the active side (P9): its version is the one on
+    /// `side` becomes the active side (L63): its version is the one on
     /// screen, new messages and the composer go to it, and the player bar
     /// shows its player. Words in the popover are queued first, on the
     /// version they were written on. In Flip, it shows.
