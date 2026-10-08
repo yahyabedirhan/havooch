@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Install the app from its latest GitHub release: the app, a link to its
-# command on PATH, and the mate skill for coding agents.
+# Install the app from its latest GitHub release: the app and a link to its
+# command on PATH. The mate skill for coding agents only with --with-skill:
+# people manage their skills their own way, and the app's Connect view
+# installs it for the agent they pick.
 #
 #   curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash
 #   bash install.sh [--app-dir <dir>] [--bin-dir <dir>] [--repo <owner/repo>]
-#                   [--from <zip>] [--no-skill] [--uninstall]
+#                   [--from <zip>] [--with-skill] [--uninstall]
 #
 #   --app-dir <dir>   where the app goes (default /Applications)
 #   --bin-dir <dir>   where the command's link goes (default /usr/local/bin
@@ -14,8 +16,9 @@
 #                     comes from <o/r>-mate, a repository of the skill alone
 #   --from <zip>      install this release zip instead of downloading one; a
 #                     <zip>.sha256 beside it is checked
-#   --no-skill        don't install (or remove) the mate skill
-#   --uninstall       remove the app, the command's link and the mate skill
+#   --with-skill      also install the mate skill for Claude Code, Codex,
+#                     Cursor, Pi and OpenCode (or, with --uninstall, remove it)
+#   --uninstall       remove the app and the command's link
 #
 # The app and command names come from the zip: the one .app at its top, and
 # the one command in that app's Contents/Helpers. The mate skill is
@@ -28,8 +31,10 @@ repo="${HAVOOCH_REPO:-yahyabedirhan/havooch}"
 app_dir="/Applications"
 bin_dir=""
 from_zip=""
-skill=1
+skill=0
 uninstall=0
+# The agents Havooch supports, by their names for `npx skills add -a`.
+skill_agents=(claude-code codex cursor pi opencode)
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -38,9 +43,9 @@ usage() {
     # Run from a file, the header above is the help; piped into bash, $0 is
     # bash itself.
     if [ -f "$0" ] && [ "$(head -c 2 "$0")" = "#!" ] && [ "$(basename "$0")" = "install.sh" ]; then
-        sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
     else
-        say "usage: install.sh [--app-dir <dir>] [--bin-dir <dir>] [--repo <owner/repo>] [--from <zip>] [--no-skill] [--uninstall]"
+        say "usage: install.sh [--app-dir <dir>] [--bin-dir <dir>] [--repo <owner/repo>] [--from <zip>] [--with-skill] [--uninstall]"
     fi
 }
 
@@ -50,7 +55,8 @@ while [ $# -gt 0 ]; do
         --bin-dir) [ $# -ge 2 ] || fail "--bin-dir needs a folder"; bin_dir="$2"; shift 2 ;;
         --repo) [ $# -ge 2 ] || fail "--repo needs <owner/repo>"; repo="$2"; shift 2 ;;
         --from) [ $# -ge 2 ] || fail "--from needs a zip"; from_zip="$2"; shift 2 ;;
-        --no-skill) skill=0; shift ;;
+        --with-skill) skill=1; shift ;;
+        --no-skill) skill=0; shift ;;  # the default; kept so older commands still run
         --uninstall) uninstall=1; shift ;;
         -h | --help) usage; exit 0 ;;
         *) fail "unknown option '$1' (see --help)" ;;
@@ -117,7 +123,9 @@ npx_skills() {
     if ! command -v npx >/dev/null 2>&1; then
         return 127
     fi
-    npx --yes skills "$@"
+    # Standard input is this script under `curl | bash`: npx would read the
+    # rest of it as its own input, and the script would end early.
+    npx --yes skills "$@" </dev/null
 }
 
 # --- uninstall --------------------------------------------------------------
@@ -251,7 +259,7 @@ if [ "$skill" -eq 1 ]; then
     skill_repo="$repo-mate"
     if ! command -v npx >/dev/null 2>&1; then
         say "skipped the $skill_name skill: npx isn't installed (install Node.js, then: npx skills add $skill_repo --skill $skill_name --global)"
-    elif npx_skills add "$skill_repo" --skill "$skill_name" --global --yes; then
+    elif npx_skills add "$skill_repo" --skill "$skill_name" --global --yes ${skill_agents[@]/#/-a }; then
         say "installed the $skill_name skill"
     else
         say "couldn't install the $skill_name skill; try: npx skills add $skill_repo --skill $skill_name --global"
@@ -260,7 +268,11 @@ fi
 
 first_launch_note "$target_app"
 say ""
-say "Next: open ${app_name%.app}, then ask your coding agent to use the $command_name-mate skill to listen."
+if [ "$skill" -eq 1 ]; then
+    say "Next: open ${app_name%.app}, then paste the prompt from its Connect view into your coding agent."
+else
+    say "Next: open ${app_name%.app}. Its Connect view installs the $command_name-mate skill for your agent and gives you the prompt."
+fi
 uninstall_hint="curl -fsSL https://raw.githubusercontent.com/$repo/main/scripts/install.sh | bash -s -- --uninstall"
 [ "$app_dir" = "/Applications" ] || uninstall_hint="$uninstall_hint --app-dir \"$app_dir\""
 uninstall_hint="$uninstall_hint --bin-dir \"$bin_dir\""
