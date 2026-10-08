@@ -49,7 +49,7 @@ struct ContextButton: View {
         Button {
             model.isContextShown.toggle()
         } label: {
-            Label("Context", systemImage: model.contextText == nil ? "doc.text" : "doc.text.fill")
+            Label("Context", systemImage: model.contextText == nil ? "info.circle" : "info.circle.fill")
                 .symbolEffect(.pulse, isActive: isTranscribing && !reduceMotion)
         }
         .pressedByKeys(in: model) { model.isContextShown.toggle() }
