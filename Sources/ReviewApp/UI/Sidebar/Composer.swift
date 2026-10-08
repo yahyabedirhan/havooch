@@ -9,7 +9,7 @@ import SwiftUI
 /// "At 0:12 | General" (`PlaceSwitch`); in a thread view the thread alone
 /// ("#3"); while answering "Answer #3, goes at once" in the question
 /// colour. The card holds the writing: the field that grows with the
-/// words, two lines tall at rest, and the region chip under them. Its foot
+/// words, three lines tall at rest, and the region chip under them. Its foot
 /// is a band on `well`: the presence pill, which opens the Connect view,
 /// and the agent's newest activity on the left, and on the right the one
 /// `SplitButton`, "Send 3" with Queue and Send in its menu, or "Answer"
@@ -30,7 +30,7 @@ struct Composer: View {
     private static let corner: CGFloat = 10
     private static let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
     /// The field's height at rest, in lines.
-    private static let minLines: CGFloat = 2
+    private static let minLines: CGFloat = 3
 
     /// The Send button's title for `count` messages a send would deliver:
     /// "Send" for one or none, else "Send 3".
@@ -107,7 +107,7 @@ struct Composer: View {
     }
 
     private func editor(_ target: ComposerTarget) -> some View {
-        let rest = ComposerEditor.lineHeight * Self.minLines
+        let rest = ComposerEditor.lineHeight * Self.minLines + ComposerEditor.inset.height * 2
         return ComposerEditor(
             text: Binding(get: { model.composerText }, set: { model.composerText = $0 }),
             height: $height, focusRequests: model.composerFocusRequests,
@@ -363,8 +363,12 @@ private struct ComposerEditor: NSViewRepresentable {
     /// Escape: true when it was taken; else the field gives the keys back.
     let cancel: () -> Bool
 
-    /// One line of the system font.
-    static let lineHeight: CGFloat = 17
+    /// The field's font, the system font at its regular size.
+    static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    /// One line of `font`, as the text view lays it out.
+    static let lineHeight: CGFloat = ceil(NSLayoutManager().defaultLineHeight(for: font))
+    /// The space between the text view's edge and its words, above and below.
+    static let inset = NSSize(width: 0, height: 0)
     /// About six lines; the field scrolls past them.
     static let maxHeight: CGFloat = 104
 
@@ -390,8 +394,8 @@ private struct ComposerEditor: NSViewRepresentable {
         view.autoresizingMask = [.width]
         view.textContainer?.widthTracksTextView = true
         view.textContainer?.lineFragmentPadding = 0
-        view.textContainerInset = .zero
-        view.font = .systemFont(ofSize: NSFont.systemFontSize)
+        view.textContainerInset = Self.inset
+        view.font = Self.font
         view.textColor = context.environment.palette.nsColor(.textPrimary)
         view.insertionPointColor = context.environment.palette.nsColor(.textPrimary)
         view.string = text
