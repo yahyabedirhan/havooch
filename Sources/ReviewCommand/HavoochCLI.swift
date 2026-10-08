@@ -133,7 +133,10 @@ public enum HavoochCLI {
             json: json,
             transport: environment.transport
         )
-        let app = AppCommands.Context(support: support, client: client, launcher: environment.launcher, pause: environment.pause)
+        let app = AppCommands.Context(
+            support: support, client: client, launcher: environment.launcher, pause: environment.pause,
+            muted: MutedRun.isMuted(environment: environment.variables)
+        )
         switch invocation {
         case .send(let request, let window): return result(of: client.send(request, window: window))
         case .appStatus: return AppCommands.status(app)

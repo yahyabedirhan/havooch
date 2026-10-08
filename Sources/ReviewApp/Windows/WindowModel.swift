@@ -1143,7 +1143,7 @@ final class WindowModel: WindowControlling {
         isSoundPanelOpen.toggle()
     }
 
-    /// `player sound show` and `player sound close`, and a click outside
+    /// `player sound` and `player sound --close`, and a click outside
     /// the panel: the panel opens or closes. Refused with no video, which
     /// has no player bar.
     func setSoundPanel(open: Bool) throws(AppRefusal) {

@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReviewApp
+import ReviewLease
 import ReviewStore
 import ReviewWire
 import Testing
@@ -184,5 +185,85 @@ struct SoundTests {
         #expect(window.escape())
         #expect(!window.isSoundPanelOpen)
         #expect(!window.escape())
+    }
+
+    // MARK: - The commands
+
+    static let operatorHolder = Holder(key: "codex-1", name: "Codex", place: "/Users/me/shop")
+
+    /// The control server in front of `app`, with the lease held.
+    private func server(_ app: AppModel) async -> ControlServer {
+        let server = ControlServer(
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: app, listeners: { app.listeners },
+            screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+        )
+        #expect(await ask(.controlTake(waitSeconds: nil), server).ok)
+        return server
+    }
+
+    private func ask(_ request: ControlRequest, _ server: ControlServer, json: Bool = false) async -> ControlReply {
+        await server.replyWritten(to: request.sent(by: Self.operatorHolder, json: json)).reply
+    }
+
+    /// `sound` in `state --json`.
+    private func sound(_ server: ControlServer) async throws -> [String: AnyHashable] {
+        let state = try #require(try JSONSerialization.jsonObject(with: Data(await ask(.state, server, json: true).output.utf8)) as? [String: Any])
+        return try #require(state["sound"] as? [String: AnyHashable])
+    }
+
+    @Test("player volume, mute and unmute change the sound of every window, and state reports volume and muted")
+    func commands() async throws {
+        defer { cleanUp() }
+        let app = launch()
+        let window = app.makeWindow()
+        let server = await server(app)
+        #expect(try await sound(server) == ["volume": 100, "muted": false, "mutedForCheck": false, "panelOpen": false])
+
+        #expect(await ask(.playerVolume(percent: 40), server).output == "volume 40%\n")
+        #expect(window.engine.player.volume == 0.4)
+        #expect(await ask(.playerMute, server).output == "muted\n")
+        #expect(try await sound(server) == ["volume": 0, "muted": true, "mutedForCheck": false, "panelOpen": false])
+        #expect(window.engine.player.volume == 0)
+        #expect(await ask(.playerUnmute, server).output == "volume 40%\n")
+        #expect(await ask(.playerVolume(percent: 0), server).output == "muted\n")
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(await ask(.playerUnmute, server, json: true).output.utf8)) as? [String: Any])
+        #expect(json["sound"] as? [String: AnyHashable] == ["volume": 40, "muted": false, "mutedForCheck": false, "panelOpen": false])
+        #expect(await ask(.state, server).output.contains("\nsound: 40%\n"))
+        // Kept for the next launch.
+        #expect(launch().sound.level == 0.4)
+        app.listeners.stop()
+    }
+
+    @Test("in a run muted for a check the commands change the run's level only: it plays nothing and keeps the person's level")
+    func commandsInAMutedRun() async throws {
+        defer { cleanUp() }
+        launch().setVolume(0.8)
+        let app = launch(muted: true)
+        let window = app.makeWindow()
+        let server = await server(app)
+        #expect(try await sound(server) == ["volume": 80, "muted": true, "mutedForCheck": true, "panelOpen": false])
+        #expect(await ask(.playerVolume(percent: 30), server).output
+            == "volume 30% for this run, which plays no sound: it started muted for an agent check (HAVOOCH_MUTED=1)\n")
+        #expect(window.engine.player.volume == 0)
+        #expect(await ask(.state, server).output.contains("\nsound: muted for an agent check (HAVOOCH_MUTED=1), level 30%\n"))
+        #expect(launch().sound.level == 0.8)
+        app.listeners.stop()
+    }
+
+    @Test("player sound and player sound --close open and close the window's panel, and need a video")
+    func panelCommands() async throws {
+        defer { cleanUp() }
+        let app = launch(muted: true)
+        let window = app.makeWindow()
+        let server = await server(app)
+        #expect(await ask(.playerSound(open: true), server).error
+            == "no video is open in the window; open one with `havooch player open <path>`")
+        try await window.open(MessageTests.fixture)
+        #expect(await ask(.playerSound(open: true), server).output == "sound panel open: muted for an agent check\n")
+        #expect(window.isSoundPanelOpen)
+        #expect(try await sound(server)["panelOpen"] == AnyHashable(true))
+        #expect(await ask(.playerSound(open: false), server).output == "sound panel closed\n")
+        #expect(!window.isSoundPanelOpen)
+        app.listeners.stop()
     }
 }

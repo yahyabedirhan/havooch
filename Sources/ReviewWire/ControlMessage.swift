@@ -45,6 +45,12 @@ public struct ControlMessage: Equatable, Sendable {
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
         case .playerSeek(let seconds): wire = Wire(command: "player.seek", seconds: seconds)
+        case .playerMute: wire = Wire(command: "player.mute")
+        case .playerUnmute: wire = Wire(command: "player.unmute")
+        case .playerVolume(let percent):
+            wire = Wire(command: "player.volume")
+            wire.volume = percent
+        case .playerSound(let open): wire = Wire(command: open ? "player.sound.show" : "player.sound.close")
         case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
             wire = Wire(
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
@@ -200,6 +206,18 @@ public struct ControlMessage: Equatable, Sendable {
                 throw .unreadable("the control command `player.seek` needs its `seconds`, 0 or more")
             }
             return .playerSeek(seconds: seconds)
+        case "player.mute": return .playerMute
+        case "player.unmute": return .playerUnmute
+        case "player.volume":
+            guard let volume = wire.volume else {
+                throw .unreadable("the control command `player.volume` needs a `volume` from 0 to 100")
+            }
+            guard (0...100).contains(volume) else {
+                throw .unreadable("the control command `player.volume` needs a `volume` from 0 to 100, not \(volume)")
+            }
+            return .playerVolume(percent: volume)
+        case "player.sound.show": return .playerSound(open: true)
+        case "player.sound.close": return .playerSound(open: false)
         case "screenshot":
             let path = try absolute(wire)
             var appearance: ControlRequest.Appearance?
@@ -386,6 +404,8 @@ public struct ControlMessage: Equatable, Sendable {
         var seconds: Double?
         var appearance: String?
         var waitSeconds: Int?
+        /// `player volume`: the level, 0 to 100.
+        var volume: Int?
         var hideAgentIndicator: Bool?
         /// `--window`: the player window a request acts on, by its id; for
         /// `screenshot`, also `settings` or `about`.

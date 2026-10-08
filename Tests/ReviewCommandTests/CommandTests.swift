@@ -21,6 +21,13 @@ struct CommandTests {
         (["player", "pause"], .playerPause),
         (["player", "seek", "0:10"], .playerSeek(seconds: 10)),
         (["player", "seek", "12.5"], .playerSeek(seconds: 12.5)),
+        (["player", "mute"], .playerMute),
+        (["player", "unmute"], .playerUnmute),
+        (["player", "volume", "40"], .playerVolume(percent: 40)),
+        (["player", "volume", "0"], .playerVolume(percent: 0)),
+        (["player", "volume", "100"], .playerVolume(percent: 100)),
+        (["player", "sound"], .playerSound(open: true)),
+        (["player", "sound", "--close"], .playerSound(open: false)),
         (["screenshot", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
         (["screenshot", "/tmp/shot.png", "--appearance", "dark"], .screenshot(path: "/tmp/shot.png", appearance: .dark)),
         (["screenshot", "--appearance", "light", "/tmp/shot.png"], .screenshot(path: "/tmp/shot.png", appearance: .light)),
@@ -254,6 +261,8 @@ struct CommandTests {
         ["thread", "open"], ["thread", "open", "1", "2"], ["thread", "open", "1", "--frame"], ["thread", "open", "1", "--frame", "1,2"],
         ["thread", "versions", "12"], ["thread", "versions", "--search"], ["thread", "versions", "--close", "--search", "v1"],
         ["thread", "version"], ["thread", "version", "0"], ["thread", "version", "twelve"], ["thread", "version", "1", "2"],
+        ["player", "mute", "now"], ["player", "volume"], ["player", "volume", "101"], ["player", "volume", "-1"],
+        ["player", "volume", "loud"], ["player", "volume", "40.5"], ["player", "volume", "40", "50"], ["player", "sound", "show"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -516,6 +525,18 @@ struct AppCommandTests {
         #expect(run("app", "open") == CommandResult(output: Self.status))
         #expect(run.launcher.launches.isEmpty)
         #expect(run.transport.requests == [.appOpen])
+    }
+
+    @Test("app open --demo passes HAVOOCH_MUTED=1 on, so an agent's check starts muted")
+    func opensDemoMuted() {
+        let (run, _) = makeRun { [$0.support] }
+        defer { run.cleanUp() }
+        let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
+        var environment = run.environment
+        environment.variables[MutedRun.variable] = "1"
+        #expect(HavoochCLI.run(["app", "open", "--demo", demo.path], environment: environment).exitCode == 0)
+        #expect(run.launcher.launches
+            == [[SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1", MutedRun.variable: "1"]])
     }
 
     @Test("app open --demo quits the normal app and runs the app on the demo folder, which it makes")

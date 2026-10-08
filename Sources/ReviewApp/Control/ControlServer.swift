@@ -66,6 +66,17 @@ protocol AppControlling: AnyObject {
     /// Acts in the first-run window as the person's click does; the line
     /// the command prints, and the window as `state` reports it.
     func firstRun(_ action: FirstRunAction) async throws(AppRefusal) -> (line: String, firstRun: StateReport.FirstRun)
+    /// Mutes, unmutes or sets the volume in every window, as the person
+    /// does in the player bar; the sound after it, with the key window's
+    /// panel.
+    func changeSound(_ change: SoundChange) -> StateReport.Sound
+}
+
+/// What `player mute`, `player unmute` and `player volume` change.
+enum SoundChange: Equatable {
+    case mute, unmute
+    /// The level from 0 to 100; 0 mutes.
+    case volume(percent: Int)
 }
 
 /// One window as the control server drives it: the actions an operator
@@ -85,6 +96,11 @@ protocol WindowControlling: AnyObject {
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
+    /// Opens or closes the sound panel over the stage, as a click on the
+    /// speaker does. Opening it needs a video.
+    func setSoundPanel(open: Bool) throws(AppRefusal)
+    /// The sound as `state` reports it, with this window's panel.
+    var soundReport: StateReport.Sound { get }
     /// Queues a message on the thread of the frame at `at`, or at the
     /// player's time, or on `thread`, on `region` of the frame when it has
     /// one, once the keyframe and the crop are on disk.
@@ -362,6 +378,22 @@ final class ControlServer {
                 try await shown.seek(to: seconds)
                 let player = shown.state().player
                 return done(TimeCode.text(player.time), Output(player: player), json)
+            case .playerMute, .playerUnmute, .playerVolume:
+                let change: SoundChange = switch message.request {
+                case .playerMute: .mute
+                case .playerVolume(let percent): .volume(percent: percent)
+                default: .unmute
+                }
+                let sound = app.changeSound(change)
+                return done(Self.soundLine(sound), Output(sound: sound), json)
+            case .playerSound(let open):
+                let shown = try inWindow()
+                try shown.setSoundPanel(open: open)
+                let sound = shown.soundReport
+                let line = open
+                    ? "sound panel open: " + (sound.mutedForCheck ? "muted for an agent check" : sound.muted ? "muted" : "volume \(sound.volume)%")
+                    : "sound panel closed"
+                return done(line, Output(sound: sound), json)
             case .screenshot(let path, let appearance, let hideAgentIndicator, let which):
                 // A player window is the one `--window` names, else the key one.
                 let player = which == .main ? try inWindow() : nil
@@ -642,6 +674,7 @@ final class ControlServer {
         var screen: StateReport.Screen?
         var video: StateReport.Video?
         var player: StateReport.Player?
+        var sound: StateReport.Sound?
         var project: StateReport.Project?
         var path: String?
         var quit: Bool?
@@ -667,6 +700,14 @@ final class ControlServer {
             var id: String
             var number: Int
         }
+    }
+
+    /// `volume 40%` or `muted`; in a run muted for a check, that it is
+    /// the run's level, which plays no sound.
+    private static func soundLine(_ sound: StateReport.Sound) -> String {
+        let level = sound.volume == 0 ? "muted" : "volume \(sound.volume)%"
+        guard sound.mutedForCheck else { return level }
+        return "\(level) for this run, which plays no sound: it started muted for an agent check (\(MutedRun.variable)=1)"
     }
 
     /// `#3` for a thread a command named, or nil when it isn't one.

@@ -751,6 +751,18 @@ final class AppModel: AppControlling {
         toggleMute()
     }
 
+    /// `player mute`, `player unmute` and `player volume`: the sound in
+    /// every window, kept as the person's would be; in a run muted for a
+    /// check, the run's level only, which plays nothing.
+    func changeSound(_ change: SoundChange) -> StateReport.Sound {
+        switch change {
+        case .mute: mute()
+        case .unmute: unmute()
+        case .volume(let percent): setVolume(Double(percent) / 100)
+        }
+        return windows.key?.soundReport ?? StateReport.Sound(sound, panelOpen: false)
+    }
+
     /// The sound's level is kept, unless the run is muted for a check.
     private func keepSound() {
         guard !sound.isMutedForCheck else { return }

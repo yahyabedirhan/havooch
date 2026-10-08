@@ -42,6 +42,18 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch player seek <time>`: the player moved to exactly
     /// `seconds`, still playing or still paused.
     case playerSeek(seconds: Double)
+    /// `havooch player mute`: the app's sound at level 0, in every window.
+    case playerMute
+    /// `havooch player unmute`: the last level above 0 again.
+    case playerUnmute
+    /// `havooch player volume <0 to 100>`: the app's sound at `percent`
+    /// in every window; 0 mutes.
+    case playerVolume(percent: Int)
+    /// `havooch player sound [--close]`: the window's sound panel opened
+    /// over the stage, or closed, as a click on the
+    /// speaker does. An addition to the spec's contract: the panel can be
+    /// shown, checked and screenshotted without a click.
+    case playerSound(open: Bool)
     /// `havooch comment add <text> [--at <time>] [--region x,y,w,h]
     /// [--thread <thread>]`: a message queued at `at` seconds, or at the
     /// player's time when it's nil, on `region` of the frame when it has
@@ -321,6 +333,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .open, .projectNew, .projectAdd: .person
         case .themeSet, .configDismiss, .windowNew, .windowClose: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
+        case .playerMute, .playerUnmute, .playerVolume, .playerSound: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator

@@ -58,6 +58,17 @@ struct ControlServerTests {
             return self
         }
 
+        var soundReport: StateReport.Sound { StateReport.Sound(volume: 100, muted: false) }
+
+        func setSoundPanel(open: Bool) throws(AppRefusal) {
+            try record(open ? "sound panel open" : "sound panel closed")
+        }
+
+        func changeSound(_ change: SoundChange) -> StateReport.Sound {
+            calls.append("sound \(change)")
+            return soundReport
+        }
+
         func windowList() -> [StateReport.Window] {
             [StateReport.Window(
                 id: id, key: true, onScreen: true, screen: hasVideo ? .player : .home,

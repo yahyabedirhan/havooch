@@ -32,6 +32,7 @@ struct ControlMessageTests {
         .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings), .screenshot(path: "/tmp/about.png", appearance: nil, window: .about),
         .open(path: "/videos/sample.mp4"),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
+        .playerMute, .playerUnmute, .playerVolume(percent: 0), .playerVolume(percent: 40), .playerSound(open: true), .playerSound(open: false),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
         .commentAdd(text: "This box", at: 12.5, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25)),
@@ -173,6 +174,10 @@ struct ControlMessageTests {
             == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)
         #expect(refusal(fields("player.seek", [:])) != nil)
+        #expect(refusal(fields("player.volume", [:]))
+            == .unreadable("the control command `player.volume` needs a `volume` from 0 to 100"))
+        #expect(refusal(fields("player.volume", ["volume": 101]))
+            == .unreadable("the control command `player.volume` needs a `volume` from 0 to 100, not 101"))
         #expect(refusal(fields("player.seek", ["seconds": -1])) != nil)
         #expect(refusal(fields("comment.add", [:])) == .unreadable("the control command `comment.add` needs its `text`"))
         #expect(refusal(fields("comment.add", ["text": "Too fast", "at": -1])) != nil)
@@ -253,6 +258,7 @@ struct ControlMessageTests {
     @Test("only operator requests take the lease", arguments: [
         ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .configDismiss, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
+        .playerMute, .playerUnmute, .playerVolume(percent: 40), .playerSound(open: true),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
         .commentOpen(text: "a"), .commentCompose(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),
     ])
