@@ -71,7 +71,7 @@ struct CompareSessionTests {
     }
 }
 
-/// Compare in a window (E11, P8, P9), through the app model and its
+/// Compare in a window (E11, L63), through the app model and its
 /// control server with no scene and no socket: the popover's choice, two
 /// players on one playhead, messages on the side the person picks, and
 /// back to one version.

@@ -15,7 +15,7 @@ extension StateReport {
         var agentConnectedOnce = false
         /// Whether setup still needs the person: the command line or the
         /// skill isn't detected, and no agent has ever connected. The
-        /// connect button shows its dot while it does (P11).
+        /// connect button shows its dot while it does (L57).
         var needsFinishing = false
 
         /// The `havooch` command's link in `~/.local/bin`.

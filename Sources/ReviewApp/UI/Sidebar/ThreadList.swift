@@ -63,7 +63,7 @@ struct ThreadList: View {
     }
 
     /// Under General while no frame has a thread: how one starts. The
-    /// compact form of the native empty state (L42): a symbol, a headline
+    /// compact form of the native empty state (L43): a symbol, a headline
     /// and a callout, since `ContentUnavailableView`'s large title is too
     /// heavy for a narrow sidebar under a row.
     private var empty: some View {

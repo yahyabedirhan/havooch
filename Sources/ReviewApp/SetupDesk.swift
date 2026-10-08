@@ -6,7 +6,7 @@ import ReviewWire
 /// The person's setup as Havooch sees it: the latest probe, the link
 /// action and its failure, and the skill install with its live log. It
 /// probes when the app launches, when the app comes forward, and after Link
-/// or an install ends; it never polls (P10). Only what is detected counts
+/// or an install ends; it never polls (L52). Only what is detected counts
 /// as done (ADR 0005).
 @Observable
 final class SetupDesk {

@@ -39,12 +39,12 @@ final class AppModel: AppControlling {
     private(set) var keptSidebarWidth: Double?
     /// Whether an agent ever connected on the person's data, kept in
     /// `settings.json`: setup then counts as working, whatever was
-    /// detected (P11, ADR 0005).
+    /// detected (L57, ADR 0005).
     private(set) var agentConnectedOnce = false
     /// Whether the person used the app on their data, kept in
     /// `settings.json`: Get Started or a later step, Skip Setup, a video
     /// opened, or an agent connected. Until then the first-run window shows
-    /// by itself at each launch (H1).
+    /// by itself at each launch (L65).
     private(set) var firstRunDone = false
     /// The first-run window: Welcome, Tools, Connect, Try it (H1).
     let firstRun: FirstRun
@@ -76,7 +76,7 @@ final class AppModel: AppControlling {
     /// open` does; the app sets it.
     @ObservationIgnored var bringToFront: (WindowModel) -> Void = { _ in }
     /// The content hashes of the files opened in this run, so opening one
-    /// again skips reading it whole (P6).
+    /// again skips reading it whole (L51).
     @ObservationIgnored let hashes = ContentHashCache()
     /// Turns a video's sound into lines, on every data folder of the run.
     @ObservationIgnored let speech: any SpeechRecognizing
@@ -164,7 +164,7 @@ final class AppModel: AppControlling {
     /// The review a `wait` listens to: the review the video at `path`
     /// (`--video`) opens in, as `open` resolves it (its project, else the
     /// plain video), open in a window or not; the project `project`
-    /// (`--project`); with neither, the key window's (P5). Refused for a
+    /// (`--project`); with neither, the key window's (L56). Refused for a
     /// path with no file, a project `config.toml` doesn't have, and with
     /// neither when the key window holds no video.
     func listenedReview(video path: String?, project: String? = nil) async throws(AppRefusal) -> ReviewKey {
@@ -517,7 +517,7 @@ final class AppModel: AppControlling {
     /// the project with every thread anchored to v1, its ids unchanged;
     /// its listener keeps listening, now to the project, and a window that
     /// holds the video holds the project. When another project lists it,
-    /// the new project starts with fresh threads (E4). Refused for a slug
+    /// the new project starts with fresh threads (E7). Refused for a slug
     /// in use, a path with no file, a file that doesn't play, and a
     /// `config.toml` with a problem; nothing changes then.
     func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project {

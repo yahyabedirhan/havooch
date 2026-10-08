@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// A project's review (ADR 0004, decisions E6 to E8, P3): a plain video's
+/// A project's review (ADR 0004, decisions E6 to E8, L59): a plain video's
 /// review moves into a project with its ids, every thread anchored to v1;
 /// threads are anchored to the version they were raised on and found by
 /// frame per version; a path that left the list is a removed version; the

@@ -4,7 +4,7 @@ import ReviewWire
 import Testing
 
 /// `project new`, `project add` and `project list` (ADR 0004, decision E3,
-/// P4). `new` and `add` go through the app with no lease, the paths made
+/// L59). `new` and `add` go through the app with no lease, the paths made
 /// absolute; `add` brings the app's process to the front, as `open` does.
 /// `list` reads `config.toml` itself and needs no app.
 @Suite("The project commands")

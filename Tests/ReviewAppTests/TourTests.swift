@@ -6,7 +6,7 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The setup tour (H4) and "Finish setup" (P11): when the button shows and
+/// The setup tour (H4) and "Finish setup" (L58): when the button shows and
 /// what it counts, the five steps and the part each one rings, the sidebar
 /// each step shows, what moves a step on by itself, and Skip, Close and
 /// Finish. The app model and its control server on the fixture video, with

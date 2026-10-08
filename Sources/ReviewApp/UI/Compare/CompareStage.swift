@@ -6,7 +6,7 @@ import SwiftUI
 /// pictures; Flip, one picture and the bar that flips it; Slider, the
 /// right side under the left one, wiped at the handle. Each picture is
 /// labelled with its side and version; the active side's label is
-/// filled, since new messages go to it (P9). A click or a drag on the
+/// filled, since new messages go to it (L63). A click or a drag on the
 /// other side makes it active.
 struct CompareStage: View {
     let model: WindowModel

@@ -221,7 +221,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         var showing: String?
         /// How much of the picture's width shows the left side in Slider.
         var slider: Double
-        /// While comparing, the side new messages go to (P9); `null` in the
+        /// While comparing, the side new messages go to (L63); `null` in the
         /// popover.
         var active: String?
         /// A side's version picker open in the popover; `null` while none is.
@@ -862,7 +862,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     /// The setup tour over the stage, and "Finish setup" in the header (H4,
-    /// P11).
+    /// L58).
     struct Tour: Encodable, Equatable {
         /// Whether the tour's panel shows.
         var open: Bool
