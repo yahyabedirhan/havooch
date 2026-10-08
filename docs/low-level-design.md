@@ -274,7 +274,7 @@ Sources/
     SendPayload.swift              the JSON `wait` prints, grouped by thread, and how it is assembled
     Theme/
       ThemeToken.swift             every semantic colour token, by name
-      ThemeColor.swift             a colour as "#rrggbb" or "#rrggbbaa": parse and print
+      ThemeColor.swift             a colour as "#rrggbb" or "#rrggbbaa": parse and print; WCAG contrast; `filled()`, the fill white text reads on (L50)
       ThemeFile.swift              a theme file as decoded: name, kind, extends, tokens
       ThemeCatalog.swift           the known themes; resolve(name, overrides) → every token; the active theme for an appearance
   ReviewTranscript/                unchanged from proto-2
@@ -318,7 +318,7 @@ Sources/
       RootView.swift               stage, player bar, sidebar, header, all on the `window` surface; with no video the home screen or the empty state (`StageContent`); injects the Palette; a pinned theme's kind as the window's colour
                                    scheme; `SidebarColumn`: the threads, the composer and the footer, resizable, the width kept in settings, proto-1's spring in and out, a
                                    hairline on its leading edge; `Hairline`, one pixel of `separator`
-      Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour
+      Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour; `filledButton`, every prominent button on `accentFill` (L50)
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
       SettingsView.swift           the Settings window (⌘,) with the cat mark, the name and version, and the theme picker View › Theme shares; `SettingsWindow` opens and finds it for app control (L42)
       MessageEditor.swift          the one text view messages are written in, its keys, and `MessageField`'s look with the system focus ring (L42)
@@ -552,6 +552,11 @@ The context is given once per listener session per video. `contextSent` is keyed
 ```swift
 public enum ThemeToken: String, CaseIterable, Codable { … }        // the semantic tokens below
 public struct ThemeColor: Codable, Equatable { r, g, b, a }        // reads and writes "#rrggbb" and "#rrggbbaa"
+extension ThemeColor {
+    public static let filledTextContrast = 4.5                     // white text on a filled control (ADR 0006)
+    public func contrast(with other: ThemeColor) -> Double         // the WCAG ratio, 1 to 21
+    public func filled() -> ThemeColor                             // itself, or darkened in 1% steps until white reads at 4.5:1
+}
 public struct ThemeFile: Codable, Equatable {
     public let name: String; public let kind: ThemeKind; public let extends: String?   // ThemeKind: light | dark
     public let tokens: [String: String]                            // token name → colour text, as written
@@ -565,7 +570,7 @@ public struct ThemeCatalog: Equatable {
 public struct ResolvedTheme: Equatable { public let name: String; public let kind: ThemeKind; public let colors: [ThemeToken: ThemeColor] }
 ```
 
-`resolve` walks the `extends` chain first, then the default theme of the theme's kind, then applies the overrides (D 5.2, D 5.5). A token name the catalog does not know is ignored, and a colour text that does not parse counts as missing. A chain that loops, or names a theme that does not exist, leaves that theme out of the catalog, with its reason in `problems`; resolving a name the catalog does not have is `ThemeRefusal.unknown`. Names match without regard to case. A user theme named `Default Dark` replaces the built-in one, but the built-in defaults stay the last fallback, so a partial replacement still resolves every token. The two default themes must define every token; a test proves it.
+`resolve` walks the `extends` chain first, then the default theme of the theme's kind, then applies the overrides (D 5.2, D 5.5). A token name the catalog does not know is ignored, and a colour text that does not parse counts as missing. A chain that loops, or names a theme that does not exist, leaves that theme out of the catalog, with its reason in `problems`; resolving a name the catalog does not have is `ThemeRefusal.unknown`. Names match without regard to case. A user theme named `Default Dark` replaces the built-in one, but the built-in defaults stay the last fallback, so a partial replacement still resolves every token. The two default themes must define every token; a test proves it. One exception to the order: when a theme sets `accent` nearer than `accentFill` (in itself, a theme it extends, or an override), `accentFill` is that accent's `filled()`, so a person's brown theme gets a brown fill that white text reads on, not the default's blue (L50).
 
 The tokens (each addition is one case and one value in each default theme). 0.2.0 put the whole window on one surface (L36) and removed `stage`, `bar`, `sidebar`, `sidebarSection`, `sidebarRowHover`, `sidebarRowSelected` and `header`, and the native buttons left `controlPressed` with no view (L43); a user theme that still sets one loads, since an unknown token is ignored. A token may carry an alpha (`#rrggbbaa`): the hover fill, the region's dim and the shadow do. A surface token (`window`, `popover`, `notice`, `field`, `separator`) may be `system`, the native macOS part; the default themes set all five so (L37).
 
@@ -573,7 +578,7 @@ The tokens (each addition is one case and one value in each default theme). 0.2.
 |---|---|
 | surfaces | `window`, `letterbox`, `popover`, `popoverBorder`, `field`, `well`, `track`, `knob`, `shadow`, `controlHover` |
 | text | `textPrimary`, `textSecondary`, `textTertiary`, `textOnAccent` |
-| accent | `accent`, `control` (the agent-control icon), `separator` |
+| accent | `accent` (lines, selections, rings, pins; no text on it), `accentFill` (the fill of filled controls, white text on it at 4.5:1 or more, L50), `control` (the agent-control icon), `separator` |
 | messages | `person`, `agent`, `question`, `bubblePerson`, `bubbleAgent`, `bubbleQuestion` |
 | frame | `regionOutline`, `regionDim`, `badge`, `badgeText`, `sizeLabel` |
 | states | `stateQueued`, `stateSent`, `stateAcknowledged`, `stateWorking`, `stateDone`, `stateFailed` |
@@ -676,7 +681,7 @@ public struct SupportLayout: Sendable {
   "screen":   "player",
   "lease":    { "holder": {…}, "taken": "…", "ends": "…", "secondsLeft": 48, "waiting": 0 },
   "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingSends": 0, "takenSends": 0, "activity": [] },
-  "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "overrides": 0 },
+  "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "overrides": 0, "accentFill": "#48689d" },
   "video":    { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4", "contextNote": "" },
   "player":   { "time": 10.017, "playing": false },
   "transcript": { "source": "voiceover", "complete": true, "lines": 3, "problem": null },
@@ -925,7 +930,7 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 | the lease rules, the holder key order | `ReviewLeaseTests` |
 | CLI parsing, output, exit codes | `ReviewCommandTests` |
 | joining, thread numbers, states, thread state, send, transcript kept, requeue, payload shape, outbox, context once per session | `ReviewCoreTests` |
-| theme resolution: extends, fallback, overrides, loops, the defaults define every token | `ReviewCoreTests`, `ReviewStoreTests` (the shipped files) |
+| theme resolution: extends, fallback, overrides, loops, the defaults define every token; `accentFill` made from a nearer `accent`; white on every shipped theme's `accentFill` at 4.5:1 | `ReviewCoreTests`, `ReviewStoreTests` (the shipped files) |
 | the window cut, the source order | `ReviewTranscriptTests` |
 | paths, round trips, the hash-prefix index | `ReviewStoreTests` |
 | popover close rules, frame time, the send through `AppModel` | `ReviewAppTests` on the fixture |
@@ -1006,3 +1011,4 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L47 | The window and launch (spec 0.3.0, ticket #66). `applicationShouldTerminateAfterLastWindowClosed` is false: Cmd+W closes the window, the app stays in the Dock with its `AppModel`, and Cmd+Q quits. `PlayerWindow` finds the player's window (titled, not a panel, not Settings; `Screenshotter` uses it too), watches `NSWindow.willCloseNotification` for it, which calls `AppModel.windowClosed()` to pause and save the position, and shows it again through SwiftUI's `openWindow`, captured when the window first appears. A click on the Dock icon with no window on screen shows it (`applicationShouldHandleReopen`); so does `open(url)`, through `AppModel.showWindow`, so a control command's open is seen, and `goHome()` (L49). `ControlServer.ready` is gone, since a launch opens nothing to wait for. Showing the window does not activate the app. A launch opens no video: the launch-time `openRecent()` and `openAtLaunch` are gone (`openRecent(_:)` is now a card's click, L48), and so is `HAVOOCH_OPEN_VIDEO`, since the demo runs in the same window (L27). | Spec 0.3.0, "The window and quitting": the window comes and goes, the app and its video stay. A control command must not take the person's focus from another app. |
 | L48 | The home screen (spec 0.3.0, ticket #70). `StageContent` decides what the stage shows: the player with a video, the home screen with none and one or more recent videos, else the empty state; the sidebar shows beside the player only. A card's click calls `AppModel.openRecent`, which does nothing for an entry whose file is gone; the trash button and "Remove from Recents" call `removeRecent`, which leaves the review on disk; "Show in Finder" selects the file in Finder. A thumbnail is the frame at the entry's position, or at 1 second when the position is 0 (`RecentCard.thumbnailTime`), inside the video's duration, at most 640 × 360 pixels, made when the card first shows by `Thumbnails` on `AppModel` and kept in memory for the run, keyed by content hash and position; nothing is written to disk. The relative time is `RelativeDateTimeFormatter`'s, "Just now" under a minute, and moves on each minute. Cards show no thread counts or unread dots. | Spec 0.3.0, "The home screen". The frame where the person stopped costs no more than the first frame. In memory only, so the support folder holds no cache to clean. |
 | L49 | Going home from the player (spec 0.3.0, ticket #69). `AppModel.goHome()` leaves an in-app demo (`leaveDemo`), or else queues the popover's words on their video, saves the position and closes the video; then it shows a closed window (`showWindow`). Words in the composer go and the queue stays on the video's review, as when another video opens. Closing a video also closes `ReviewDesk`'s open review, so `state` reports no threads with no video. Its callers: the cat mark at the header's leading edge (`TitleView`, a plain button, help tag "Home"), File > Close Video with Shift+Cmd+W (disabled with no video), and `havooch app home`. The header's floating group has "Open a Video…" with the `folder` symbol beside a video, which calls `openFromPanel()` and leaves an in-app demo as the Open panel does. `havooch app demo` runs `openDemo()`, what "Try the Demo" does, and its open shows a closed window. `app home` and `app demo` are operator requests (`app.home`, `app.demo`); the protocol version stays 3, since an older app refuses an unknown command in words. `state` reports `screen` (`StateReport.Screen`): `player` with a video, else `home`, the empty state included. | Spec 0.3.0, "Going home from the player". Cmd+W is the window's Close (L47), so Close Video takes Shift+Cmd+W. `app demo` lets the visual checks run "Try the Demo" without a click. One `screen` word for every screen with no video keeps `state` simple; `recents` tells the home screen from the empty state. |
+| L50 | Filled controls (ADR 0006, ticket #81). `ThemeToken.accentFill` is the fill of every prominent button; `accent` stays for lines, selections, rings and pins, and is still the window's tint. Views make a prominent button only through `View.filledButton(palette)` in `Palette.swift` (`.borderedProminent` tinted `accentFill`); a source test in `ReviewAppTests` (`ThemeDeskTests`) fails on `.borderedProminent` anywhere else. Its callers: Send, both "Open a Video…", the comment popover's Queue and Answer, the message editor's Save and the context note's Save. Answer was tinted `question`, which white text does not read on, so it is on `accentFill` too; the field's `question` border and the "Answer" key hint still mark an answer. Every shipped theme with its own `accent` sets `accentFill`: Default Light and Default Dark `#48689d` (Dimmed inherits it), the VS Code themes a deeper shade of their own accent. A theme that sets `accent` nearer than `accentFill` gets `accent.filled()`, so a theme written before this token keeps its hue and passes. `state` reports the active fill as `theme.accentFill`. | ADR 0006, decision I4: white text read at about 1.9:1 on Default Dark's light accent. A test in `ReviewStoreTests` checks white on every shipped theme's `accentFill` for 4.5:1, so a new theme cannot break it. |

@@ -132,6 +132,44 @@ struct ThemeDeskTests {
         #expect(model.themes.theme.name == "Dimmed")
         #expect(model.themes.theme[.accent] == ThemeColor("#123456"))
         #expect(model.themes.report.overrides == 2)
+        // The fill follows the overridden accent, so white text still reads on it.
+        #expect(model.themes.theme[.accentFill] == ThemeColor("#123456"))
+        #expect(model.themes.report.accentFill == "#123456")
+    }
+
+    @Test("state reports the fill of filled controls: the theme's accentFill, which white text reads on")
+    func reportsTheFill() throws {
+        defer { cleanUp() }
+        try Settings(theme: "Default Dark").save(layout)
+        let (model, _) = model()
+        #expect(model.themes.report.accentFill == "#48689d")
+        let data = try JSONEncoder().encode(model.themes.report)
+        #expect(try object(String(decoding: data, as: UTF8.self))["accentFill"] as? String == "#48689d")
+    }
+
+    @Test("every prominent button is a filled button on accentFill: no view uses the prominent style but through filledButton")
+    func prominentButtonsAreFilled() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/ReviewApp", isDirectory: true)
+        let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "Palette.swift" }
+        var found: [String] = []
+        var filled = 0
+        for file in files {
+            let lines = try String(contentsOf: file, encoding: .utf8).components(separatedBy: "\n")
+            for (number, line) in lines.enumerated() {
+                let code = line.components(separatedBy: "//").first ?? ""
+                if code.contains("borderedProminent") || code.contains(".prominent") {
+                    found.append("\(file.lastPathComponent):\(number + 1): \(line.trimmingCharacters(in: .whitespaces))")
+                }
+                if code.contains(".filledButton(palette)") { filled += 1 }
+            }
+        }
+        #expect(found.isEmpty, "prominent buttons that skip filledButton:\n\(found.joined(separator: "\n"))")
+        // Send, Open a Video… twice, Queue or Answer, and the two Saves.
+        #expect(filled >= 6)
     }
 
     @Test("a theme file written while the app runs is read at once, and so is a change to settings.json")

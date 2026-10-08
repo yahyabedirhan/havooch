@@ -241,7 +241,7 @@ final class ThemeDesk {
     var report: StateReport.Theme {
         StateReport.Theme(
             active: theme.name, kind: theme.kind.rawValue, pinned: pinned, appearance: appearance.rawValue,
-            overrides: settings.overrides.count
+            overrides: settings.overrides.count, accentFill: theme[.accentFill]?.text
         )
     }
 

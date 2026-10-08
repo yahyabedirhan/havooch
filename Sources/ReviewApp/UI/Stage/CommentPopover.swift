@@ -57,9 +57,8 @@ struct CommentPopover: View {
                 KeyHint(key: "esc", does: "discard")
                 Spacer(minLength: 4)
                 Button(answers ? "Answer" : "Queue") { model.commitDraft() }
-                    .buttonStyle(.borderedProminent)
+                    .filledButton(palette)
                     .pressedByKeys(in: model) { model.commitDraft() }
-                    .tint(answers ? palette[.question] : palette[.accent])
                     .controlSize(.mini)
                     .disabled(!AppModel.hasWords(draft.text))
                 if resize != nil {

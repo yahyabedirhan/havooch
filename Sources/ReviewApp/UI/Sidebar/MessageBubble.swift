@@ -349,7 +349,7 @@ struct MessageBubble: View {
                 Button("Cancel") { edited = nil }
                     .pressedByKeys(in: model) { edited = nil }
                 Button("Save", action: save)
-                    .buttonStyle(.borderedProminent)
+                    .filledButton(palette)
                     .pressedByKeys(in: model, action: save)
                     .disabled(!AppModel.hasWords(text))
             }

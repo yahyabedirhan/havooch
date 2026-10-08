@@ -46,7 +46,7 @@ struct SidebarFooter: View {
                 .lineLimit(1)
                 .fixedSize()
             Button("Send") { model.send() }
-                .buttonStyle(.borderedProminent)
+                .filledButton(palette)
                 .pressedByKeys(in: model) { model.send() }
                 .fixedSize()
                 .disabled(!model.canSend)

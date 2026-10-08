@@ -14,6 +14,9 @@ extension StateReport {
         var appearance: String
         /// How many token overrides `settings.json` has.
         var overrides: Int
+        /// The fill of filled controls as `#rrggbb`, which white text reads
+        /// on (ADR 0006); `null` only without the built-in themes.
+        var accentFill: String? = nil
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -22,10 +25,11 @@ extension StateReport {
             try container.encode(pinned, forKey: .pinned)
             try container.encode(appearance, forKey: .appearance)
             try container.encode(overrides, forKey: .overrides)
+            try container.encode(accentFill, forKey: .accentFill)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case active, kind, pinned, appearance, overrides
+            case active, kind, pinned, appearance, overrides, accentFill
         }
 
         /// `theme: Dimmed (dark), pinned, 2 overrides`, or `theme: Default

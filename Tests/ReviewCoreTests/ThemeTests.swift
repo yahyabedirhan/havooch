@@ -193,4 +193,60 @@ struct ThemeTests {
         #expect(native[.field] == nil)
         #expect(native.isComplete)
     }
+
+    // MARK: - The fill of filled controls
+
+    @Test("the contrast of two colours is the WCAG ratio: white on black is 21:1, white on #48689d about 5.6:1")
+    func contrast() {
+        #expect(ThemeColor.white.contrast(with: Self.colour("#000000")) == 21)
+        #expect(abs(ThemeColor.white.contrast(with: Self.colour("#48689d")) - 5.61) < 0.01)
+        #expect(Self.colour("#48689d").contrast(with: .white) == ThemeColor.white.contrast(with: Self.colour("#48689d")))
+    }
+
+    @Test("a colour white text already reads on fills as itself, opaque; a light one is darkened, its hue kept, until white text reads at 4.5:1")
+    func filled() {
+        #expect(Self.colour("#48689d80").filled() == Self.colour("#48689d"))
+        for light in ["#9db6dd", "#cba6f7", "#ffffff", "#fff176"] {
+            let fill = Self.colour(light).filled()
+            #expect(fill.contrast(with: .white) >= ThemeColor.filledTextContrast, "\(light) fills as \(fill.text)")
+            #expect(fill.contrast(with: .white) < ThemeColor.filledTextContrast + 0.3, "\(light) fills as \(fill.text), darker than it needs")
+        }
+        let fill = Self.colour("#9db6dd").filled()
+        #expect(fill.blue > fill.green && fill.green > fill.red, "the fill of a blue stays blue: \(fill.text)")
+    }
+
+    @Test("a theme without accentFill takes it from the theme it extends, or the default of its kind, while it doesn't set its own accent")
+    func fillFallsBack() throws {
+        let base = ThemeFile(name: "Base", kind: .dark, tokens: ["accent": "#9db6dd", "accentFill": "#48689d"])
+        let child = ThemeFile(name: "Child", kind: .dark, extends: "Base", tokens: ["letterbox": "#111111"])
+        let plain = ThemeFile(name: "Plain", kind: .dark, tokens: [:])
+        let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [base, child, plain])
+
+        #expect(try catalog.resolve("Child")[.accentFill] == Self.colour("#48689d"))
+        #expect(try catalog.resolve("Plain")[.accentFill] == Self.colour("#000000"))
+    }
+
+    @Test("a theme that sets its own accent and no accentFill gets a fill made from that accent, not the fallback's fill in another hue")
+    func fillFollowsTheAccent() throws {
+        let brown = ThemeFile(name: "Brown", kind: .dark, extends: ThemeCatalog.defaultDark, tokens: ["accent": "#d2a07a"])
+        let both = ThemeFile(name: "Both", kind: .dark, tokens: ["accent": "#d2a07a", "accentFill": "#5a3b22"])
+        let child = ThemeFile(name: "Child", kind: .dark, extends: "Both", tokens: ["accent": "#9db6dd"])
+        let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [brown, both, child])
+
+        let fill = try #require(try catalog.resolve("Brown")[.accentFill])
+        #expect(fill == Self.colour("#d2a07a").filled())
+        #expect(fill.contrast(with: .white) >= ThemeColor.filledTextContrast)
+        #expect(try catalog.resolve("Both")[.accentFill] == Self.colour("#5a3b22"))
+        #expect(try catalog.resolve("Child")[.accentFill] == Self.colour("#9db6dd").filled())
+    }
+
+    @Test("an accent override makes the fill from it; an accentFill override wins over both")
+    func fillAndOverrides() throws {
+        let both = ThemeFile(name: "Both", kind: .dark, tokens: ["accent": "#d2a07a", "accentFill": "#5a3b22"])
+        let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [both])
+
+        #expect(try catalog.resolve("Both", overrides: ["accent": "#9db6dd"])[.accentFill] == Self.colour("#9db6dd").filled())
+        #expect(try catalog.resolve("Both", overrides: ["accent": "#9db6dd", "accentFill": "#123456"])[.accentFill] == Self.colour("#123456"))
+        #expect(try catalog.resolve("Both", overrides: ["letterbox": "#101010"])[.accentFill] == Self.colour("#5a3b22"))
+    }
 }

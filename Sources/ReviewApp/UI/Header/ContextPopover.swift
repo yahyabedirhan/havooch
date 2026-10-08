@@ -120,7 +120,7 @@ struct ContextPopover: View {
                 Button("Cancel") { model.isContextShown = false }
                     .controlSize(.small)
                 Button("Save") { model.saveContextNote(note) }
-                    .buttonStyle(.borderedProminent)
+                    .filledButton(palette)
                     .controlSize(.small)
                     .disabled(!isChanged)
             }

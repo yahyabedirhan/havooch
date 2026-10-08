@@ -622,6 +622,7 @@ exits 0 "theme set \"Default Dark\""
 state
 holds "Default Dark is active and pinned, a dark theme" "$stdout" \
     '.theme.active == "Default Dark" and .theme.pinned == "Default Dark" and .theme.kind == "dark"'
+holds "filled buttons use Default Dark's accentFill, which white text reads on" "$stdout" '.theme.accentFill == "#48689d"'
 finish
 
 # --- step 9 --------------------------------------------------------------------

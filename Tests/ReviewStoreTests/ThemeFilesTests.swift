@@ -86,6 +86,23 @@ struct ThemeFilesTests {
         }
     }
 
+    @Test("white text reads on every shipped theme's accentFill at 4.5:1 or more; every theme file with its own accent sets its own fill, and the defaults use #48689d")
+    func filledControlsRead() throws {
+        let files = ThemeFiles.read(Self.shipped).files
+        let catalog = ThemeCatalog(builtIn: files, user: [])
+        for name in catalog.names {
+            let fill = try #require(try catalog.resolve(name)[.accentFill], "\(name) has no accentFill")
+            let ratio = ThemeColor.white.contrast(with: fill)
+            #expect(ratio >= ThemeColor.filledTextContrast, "\(name): white on accentFill \(fill.text) is \(ratio):1")
+        }
+        for file in files where file.tokens["accent"] != nil {
+            #expect(file.tokens["accentFill"] != nil, "\(file.name) sets accent but no accentFill")
+        }
+        for name in [ThemeCatalog.defaultLight, ThemeCatalog.defaultDark] {
+            #expect(try catalog.resolve(name)[.accentFill] == ThemeColor("#48689d"))
+        }
+    }
+
     /// A saturated hue between magenta and rose.
     private static func isPink(_ color: ThemeColor) -> Bool {
         let (r, g, b) = (Double(color.red) / 255, Double(color.green) / 255, Double(color.blue) / 255)

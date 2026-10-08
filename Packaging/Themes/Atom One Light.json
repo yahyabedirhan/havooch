@@ -11,6 +11,7 @@
     "textTertiary": "#a0a1a7",
     "textOnAccent": "#ffffff",
     "accent": "#526fff",
+    "accentFill": "#4060e0",
     "control": "#c18401",
     "separator": "#dbdbdc",
     "person": "#696c77",

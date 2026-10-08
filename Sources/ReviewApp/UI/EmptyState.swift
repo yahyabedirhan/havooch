@@ -7,6 +7,7 @@ import SwiftUI
 /// build with no bundled demo leaves the button out.
 struct EmptyState: View {
     let model: AppModel
+    @Environment(\.palette) private var palette
 
     var body: some View {
         ContentUnavailableView {
@@ -21,7 +22,7 @@ struct EmptyState: View {
         } actions: {
             HStack(spacing: 10) {
                 Button("Open a Video…") { model.openFromPanel() }
-                    .buttonStyle(.borderedProminent)
+                    .filledButton(palette)
                     .keyboardShortcut(.defaultAction)
                 if DemoRun.video() != nil {
                     Button("Try the Demo") { model.tryDemo() }
