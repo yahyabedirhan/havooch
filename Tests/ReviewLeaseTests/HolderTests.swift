@@ -30,6 +30,45 @@ struct HolderTests {
         #expect(holder == Holder(key: "CLAUDE_CODE_SESSION_ID=abc", name: "Claude Code", place: "/Users/me/shop"))
     }
 
+    @Test("a Codex or Pi session is the holder, named for its harness", arguments: [
+        ("CODEX_THREAD_ID", "019a-thread", "Codex"), ("PI_SESSION_ID", "pi-1", "Pi"),
+    ])
+    func harnessSession(variable: String, session: String, name: String) {
+        let holder = Holder.find(variables: [variable: session], workingDirectory: Self.folder, processes: Self.processes)
+        #expect(holder == Holder(key: "\(variable)=\(session)", name: name, place: "/Users/me/shop"))
+    }
+
+    @Test("an empty session variable counts as unset")
+    func emptySession() {
+        let holder = Holder.find(
+            variables: ["CODEX_THREAD_ID": "", "PI_SESSION_ID": "pi-1"], workingDirectory: Self.folder, processes: Self.processes
+        )
+        #expect(holder.key == "PI_SESSION_ID=pi-1")
+    }
+
+    @Test("with two sessions set, the harness that runs the command is the holder: its process is the nearer ancestor")
+    func nestedHarness() {
+        let both = ["CLAUDE_CODE_SESSION_ID": "abc", "CODEX_THREAD_ID": "019a-thread"]
+        // Codex run inside Claude Code: Codex's shell inherits Claude Code's session.
+        let codexInClaude = FakeProcesses(currentPID: 300, records: [
+            ProcessRecord(pid: 300, parent: 200, started: Self.started, name: "havooch"),
+            ProcessRecord(pid: 200, parent: 100, started: Self.started, name: "zsh"),
+            ProcessRecord(pid: 100, parent: 50, started: Self.started, name: "codex"),
+            ProcessRecord(pid: 50, parent: 1, started: Self.started, name: "claude"),
+        ])
+        #expect(Holder.find(variables: both, workingDirectory: Self.folder, processes: codexInClaude).name == "Codex")
+        let claudeInCodex = FakeProcesses(currentPID: 300, records: [
+            ProcessRecord(pid: 300, parent: 200, started: Self.started, name: "havooch"),
+            ProcessRecord(pid: 200, parent: 100, started: Self.started, name: "zsh"),
+            ProcessRecord(pid: 100, parent: 50, started: Self.started, name: "claude"),
+            ProcessRecord(pid: 50, parent: 1, started: Self.started, name: "codex"),
+        ])
+        #expect(Holder.find(variables: both, workingDirectory: Self.folder, processes: claudeInCodex).name == "Claude Code")
+        // Neither harness among the ancestors: the first in the table.
+        let neither = FakeProcesses(currentPID: 300, records: [])
+        #expect(Holder.find(variables: both, workingDirectory: Self.folder, processes: neither).key == "CLAUDE_CODE_SESSION_ID=abc")
+    }
+
     @Test("without a session, the nearest ancestor that isn't a shell is the holder")
     func ancestor() {
         let holder = Holder.find(variables: [:], workingDirectory: Self.folder, processes: Self.processes)
@@ -48,6 +87,16 @@ struct HolderTests {
             workingDirectory: Self.folder, processes: Self.processes
         )
         #expect(blank.key == "CLAUDE_CODE_SESSION_ID=abc")
+    }
+
+    @Test("HAVOOCH_CONTROL_KEY replaces a Codex or Pi session's key too, and keeps its name", arguments: [
+        ("CODEX_THREAD_ID", "Codex"), ("PI_SESSION_ID", "Pi"),
+    ])
+    func keyOverridesHarness(variable: String, name: String) {
+        let holder = Holder.find(
+            variables: [variable: "s-1", "HAVOOCH_CONTROL_KEY": "listener-1"], workingDirectory: Self.folder, processes: Self.processes
+        )
+        #expect(holder == Holder(key: "listener-1", name: name, place: "/Users/me/shop"))
     }
 
     @Test("a Herdr pane is the place when there is one")

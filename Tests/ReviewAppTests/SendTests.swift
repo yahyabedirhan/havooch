@@ -483,4 +483,10 @@ struct SidebarWordsTests {
         #expect(PresencePill(presence: .listening, session: "pipeline", pendingSends: 0).logo == nil)
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).logo == nil)
     }
+
+    @Test("each harness whose session the holder knows gets its own logo from the holder's name")
+    func holderSessionLogos() {
+        let logos = Holder.sessionVariables.map { PresencePill(presence: .listening, session: $0.agent, pendingSends: 0).logo }
+        #expect(logos == [.claude, .codex, .pi])
+    }
 }

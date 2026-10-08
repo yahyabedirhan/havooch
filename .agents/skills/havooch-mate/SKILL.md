@@ -21,7 +21,7 @@ Every text argument is one quoted argument, and it must not start with `--`: the
 
 You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, and the free `state --json` and `app status`. Every other command drives the player and takes control of the app from the person.
 
-The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else `$CLAUDE_CODE_SESSION_ID`. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
+The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else your harness's session: `$CLAUDE_CODE_SESSION_ID` (Claude Code), `$CODEX_THREAD_ID` (Codex) or `$PI_SESSION_ID` (Pi). Any other harness is known by its process. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
 ## The loop
 

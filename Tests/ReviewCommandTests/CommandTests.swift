@@ -120,11 +120,18 @@ struct CommandTests {
             + "`havooch control take --wait <seconds>` to queue\n")
     }
 
-    @Test("the holder key is HAVOOCH_CONTROL_KEY when set, else the Claude Code session, else the ancestor process", arguments: zip(
-        [["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:]],
-        ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"]
-    ))
-    func holderKey(variables: [String: String], key: String) {
+    @Test(
+        "the holder key is HAVOOCH_CONTROL_KEY when set, else the Claude Code, Codex or Pi session, else the ancestor process",
+        arguments: [
+            (["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "holder-a"], "holder-a", "Claude Code"),
+            (["CLAUDE_CODE_SESSION_ID": "abc"], "CLAUDE_CODE_SESSION_ID=abc", "Claude Code"),
+            (["CODEX_THREAD_ID": "019a-thread"], "CODEX_THREAD_ID=019a-thread", "Codex"),
+            (["CODEX_THREAD_ID": "019a-thread", "HAVOOCH_CONTROL_KEY": "holder-b"], "holder-b", "Codex"),
+            (["PI_SESSION_ID": "pi-1"], "PI_SESSION_ID=pi-1", "Pi"),
+            ([:], "process:100@1700000000000000", "codex"),
+        ] as [([String: String], String, String)]
+    )
+    func holderKey(variables: [String: String], key: String, name: String) {
         struct Processes: ProcessTable {
             var currentPID: Int32 { 300 }
             func process(_ pid: Int32) -> ProcessRecord? {
@@ -143,6 +150,7 @@ struct CommandTests {
         environment.processes = Processes()
         _ = HavoochCLI.run(["control", "take"], environment: environment)
         #expect(run.transport.sent.map(\.message.holder.key) == [key])
+        #expect(run.transport.sent.map(\.message.holder.name) == [name])
     }
 
     @Test("a take that waits in line gets its wait on top of the usual time to answer")

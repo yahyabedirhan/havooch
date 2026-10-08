@@ -228,7 +228,7 @@ fixtures/launch/                   the launch explainer and its sidecars, the bu
 
 Sources/
   ReviewLease/
-    Holder.swift                   who sends a request: key, name, place; Holder.find (HAVOOCH_CONTROL_KEY, CLAUDE_CODE_SESSION_ID, ancestor)
+    Holder.swift                   who sends a request: key, name, place; Holder.find (HAVOOCH_CONTROL_KEY, the Claude Code, Codex or Pi session, ancestor)
     ProcessTable.swift             the process table Holder.find walks (sysctl on macOS, /proc on Linux), and its protocol
     LeaseTerm.swift                a lease held: holder, taken, ends
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
@@ -399,7 +399,7 @@ A module and a type never share a name. `ReviewThread` is not called `Thread`, w
 
 proto-1's split (D A.7): `Holder`, `ProcessTable` and `LeaseTerm` move here from proto-2's `ReviewWire`, so the lease module depends on nothing and `ReviewWire` imports it. The rules are proto-2's `ControlLease`, unchanged: `renewal` 60 s, `cap` 5 min, `bar` 5 min, the time passed into every call; `use`, `take`, `release`, `stop`, `settle`, `giveUp`, `status`, `nextEnd`; `Decision` with its transitions; `Refusal` with its line; `handover` across a relaunch in `HAVOOCH_CONTROL_LEASE`.
 
-`Holder.find(variables, workingDirectory, processes)`: `HAVOOCH_CONTROL_KEY`, else `CLAUDE_CODE_SESSION_ID`, else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`.
+`Holder.find(variables, workingDirectory, processes)`: `HAVOOCH_CONTROL_KEY`, else a harness's session from `Holder.sessionVariables` (`CLAUDE_CODE_SESSION_ID` named "Claude Code", `CODEX_THREAD_ID` named "Codex", `PI_SESSION_ID` named "Pi"), else the nearest ancestor process that is not a shell, as `process:<pid>@<start>`, named for its process (`cursor-agent`, `opencode`). `HAVOOCH_CONTROL_KEY` replaces the key only, so the name still says the harness. When one harness runs inside another, both session variables are set; the session whose harness process (`claude`, `codex`, `pi`) is the nearer ancestor wins, else the table's order. The name is what the app's `KnownAgent` reads for the harness logo (decision G12).
 
 ### ReviewWire
 
