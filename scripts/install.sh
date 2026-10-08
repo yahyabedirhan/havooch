@@ -268,11 +268,7 @@ fi
 
 first_launch_note "$target_app"
 say ""
-if [ "$skill" -eq 1 ]; then
-    say "Next: open ${app_name%.app}, then paste the prompt from its Connect view into your coding agent."
-else
-    say "Next: open ${app_name%.app}. Its Connect view installs the $command_name-mate skill for your agent and gives you the prompt."
-fi
+say "Next: open ${app_name%.app}. It walks you through connecting your coding agent, step by step."
 uninstall_hint="curl -fsSL https://raw.githubusercontent.com/$repo/main/scripts/install.sh | bash -s -- --uninstall"
 [ "$app_dir" = "/Applications" ] || uninstall_hint="$uninstall_hint --app-dir \"$app_dir\""
 uninstall_hint="$uninstall_hint --bin-dir \"$bin_dir\""
