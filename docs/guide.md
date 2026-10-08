@@ -185,7 +185,7 @@ Pick the way that matches how you installed Havooch.
 
 To remove everything Havooch left on your Mac in one go, an app uninstaller such as [Mole](https://github.com/tw93/mole) does it: run `mo uninstall` and pick Havooch. Run `mo uninstall --dry-run` first to see what it removes.
 
-Your reviews live in `~/Library/Application Support/Havooch`, and your settings in `~/.config/havooch`, which no uninstall removes. Keep them if you might install Havooch again.
+Your reviews live in `~/Library/Application Support/Havooch`, and your settings in `~/.config/havooch`, which Homebrew and the install script leave in place. Keep them if you might install Havooch again.
 
 The skill is separate. To remove it, run `npx skills remove havooch-mate --global`.
 
