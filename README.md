@@ -2,13 +2,11 @@
 
 <h1 align="center">Havooch</h1>
 
-<p align="center">Give feedback to your coding agent on a video, the way you'd give it to a person.</p>
-
 ![Havooch with a project open: the agent answered thread #2 with the version it made, and a follow-up waits in the queue](assets/screenshots/0.4.0/player/thread-answered-and-queued-light.png)
 
 ## What is Havooch
 
-Havooch is a video player for your Mac, made for working with coding agents.
+Havooch is a video player for your Mac that lets you give feedback to a coding agent the way you'd give it to a person.
 
 When your agent builds something you can watch, like an app, an animation or a video, it's often easier to show what's wrong than to describe it. With Havooch you pause the video, point at the spot, and say what you want changed. Your agent gets each comment with the moment and the frame it's about, does the work, and answers you right beside the video.
 
