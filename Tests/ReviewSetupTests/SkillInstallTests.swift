@@ -27,10 +27,26 @@ struct SkillInstallTests {
         #expect(outcome == .finished(status: 0))
         #expect(runner.calls == [
             .init(executable: "/bin/zsh", arguments: ["-l", "-c", "command -v npx"]),
-            .init(executable: "/bin/zsh", arguments: ["-l", "-c", "exec npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex"]),
+            .init(executable: "/bin/zsh", arguments: ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex"]),
         ])
         // The search for npx isn't the install's log.
         #expect(lines.withLock { $0 } == ["Installing havooch-mate", "Done"])
+    }
+
+    @Test("the CLI's spinner frames and escape codes reach the log as plain lines, the bare guide bars left out")
+    func readableLines() async {
+        let runner = FakeRunner { call in
+            call.arguments.last == "command -v npx" ? ([], 0) : ([
+                "\u{1B}[?25l\u{1B}[90m│\u{1B}[39m",
+                "\u{1B}[?25h\u{1B}[?25l",
+                "◒  Cloning repository...",
+                "\u{1B}[1G\u{1B}[J◇  Repository cloned  ",
+                "",
+            ], 0)
+        }
+        let lines = Mutex<[String]>([])
+        _ = await SkillInstall(for: [Self.codex]).run(with: runner) { line in lines.withLock { $0.append(line) } }
+        #expect(lines.withLock { $0 } == ["◒  Cloning repository...", "◇  Repository cloned"])
     }
 
     @Test("a failed install ends with its exit status")
