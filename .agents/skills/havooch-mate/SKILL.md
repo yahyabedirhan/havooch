@@ -55,9 +55,10 @@ Pass your target on every `wait`. Another agent can listen to another window at 
    4. `havooch reply <thread id> "<the result>"`, then `havooch status <message id> done`.
 
    When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `done` and `failed` carry no text, so the reply is the reason.
+
 A send is finished when every message in it is `done` or `failed` and has a reply on its thread. `done` and `failed` are final. The player shows each message's state, so post no summary of the send.
 
-The reply is the person's only view of what you did, read in a narrow column beside the video. Write one to three plain sentences: what changed and where, or the answer, or the issue's link. Give the commit's short SHA whenever you committed. When a thread has several messages in the send, open each reply with the start of the message it answers, so the person can pair them.
+The reply is the person's only view of what you did, read in a narrow column beside the video. Write plain sentences the person can read at a glance in that column: what changed and where, or the answer, or the issue's link. Give the commit's short SHA whenever you committed. When a thread has several messages in the send, open each reply with the start of the message it answers, so the person can pair them.
 
 ## Activity
 
