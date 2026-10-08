@@ -51,21 +51,7 @@ struct CommentPopover: View {
             }
             MessageField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
                 .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
-            HStack(spacing: 8) {
-                KeyHint(key: "↩", does: answers ? "answer" : "queue")
-                KeyHint(key: "⌘↩", does: "send")
-                KeyHint(key: "esc", does: "discard")
-                Spacer(minLength: 4)
-                Button(answers ? "Answer" : "Queue") { model.commitDraft() }
-                    .filledButton(palette)
-                    .pressedByKeys(in: model) { model.commitDraft() }
-                    .controlSize(.mini)
-                    .disabled(!WindowModel.hasWords(draft.text))
-                if resize != nil {
-                    // Room for the grip in the corner.
-                    Spacer().frame(width: 6)
-                }
-            }
+            footer
         }
         .padding(Self.padding)
         .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
@@ -80,6 +66,50 @@ struct CommentPopover: View {
         .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), surface: palette.surface(.popover), border: palette[.popoverBorder])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
+    }
+
+    /// The key hints on the left; on the right one split button: Queue
+    /// (or Answer), and an arrow with Send Now and Discard. Each runs what
+    /// its key runs: Return through the field, Cmd+Return and Escape
+    /// through the player's keys.
+    private var footer: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 10) {
+                KeyHint(key: "↩", does: answers ? "answer" : "queue")
+                KeyHint(key: "⌘↩", does: "send")
+                KeyHint(key: "esc", does: "discard")
+            }
+            Spacer(minLength: 4)
+            // One split button, built as the composer's "Send N" is: the
+            // main part queues, the arrow holds Send Now and Discard.
+            Menu {
+                Button("Send Now") { model.send() }
+                    // Shown in the menu; the player's keys take Cmd+Return first.
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(!model.canSend)
+                Divider()
+                // Escape is the field's and the player's: a key on this item
+                // could take it from a text input method mid-word.
+                Button("Discard") { model.closePopover(.discard) }
+            } label: {
+                Text(answers ? "Answer" : "Queue")
+            } primaryAction: {
+                model.commitDraft()
+            }
+            .menuStyle(.button)
+            // The prominent style on `accentFill` (ADR 0006).
+            .filledButton(palette)
+            .controlSize(.small)
+            .fixedSize()
+            .pressedByKeys(in: model) { model.commitDraft() }
+            .disabled(!WindowModel.hasWords(draft.text))
+            .help(answers ? "Answer (Return). The arrow sends now or discards." : "Queue (Return). The arrow sends now or discards.")
+            if resize != nil {
+                // Room for the grip in the corner.
+                Spacer().frame(width: 6)
+            }
+        }
+        .padding(.top, 2)
     }
 
     /// `#3 · 0:12`, the kind of message before it and the × after it.
@@ -196,8 +226,8 @@ private struct KeyHint: View {
             Text(does)
                 .font(.caption2)
         }
-        // Quiet: the hints are there to be found, not read (D 1.7).
-        .foregroundStyle(palette[.textTertiary])
+        // Small, so the hints are there to be found, not read (D 1.7).
+        .foregroundStyle(palette[.textSecondary])
         .fixedSize()
     }
 }
