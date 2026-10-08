@@ -48,3 +48,16 @@ The thinking session runs in Herdr pane `w3M:p1` and can take a message there, b
 - `low-level-design`: when a ticket updates `docs/low-level-design.md`.
 - `to-pr`: the pull request. `shipyard`: pings for QA.
 - `settle-effort`: after the maintainer approves the merge.
+
+## Progress (paused 2026-10-08 by the maintainer)
+
+The maintainer paused all agent work because video sound reached their meeting. Resume only when they say so.
+
+- **Landed and pushed** on `effort/projects-and-onboarding` (tip `01596af`): #81, #82, #83, #84, #85, #86, #88. Closed: #81, #84, #85, #86, #88. Open with one unticked criterion each: #82 (cold start needs the installed app), #83 (real Finder, Dock and `open -a`, confirmed by QA #96).
+- **Stopped mid-build:** #87. Its uncommitted work is in the worktree `/Users/yahyabedirhanpak/Developer/yahyabedirhan/havooch/.claude/worktrees/agent-a626acca04fa77664` (branch `worktree-agent-a626acca04fa77664`, base `e86cff8`). It had reached the CLI and wire tests. A resumed delegate continues from that worktree.
+- **Next after #87:** #89 and #92 in parallel, then #90, #91, #93, #94, then #95.
+- **Delegate brief:** `.scratch/orchestration/delegate-brief.md` in this worktree. Running PR notes (decisions, surprises, times per ticket): `.scratch/orchestration/pr-notes.md`. Both are ignored files; read them before delegating.
+- **Silence rules (maintainer):** no agent launches, opens or plays a Havooch. Delegates verify with tests only. Treat `make test` as possibly audible, because app-model tests play the fixture videos: run it only when the maintainer allows sound. #106 tracks a muted mode; do not build it in this effort.
+- **Installs (maintainer, decision D1):** no `make install` during the build. After every build ticket lands, run one final check: install, `scripts/acceptance.sh` end to end, and #82's cold start. That install quits the maintainer's running Havooch, which is accepted then.
+- **Integration lessons:** delegate worktrees start from `main`, so each delegate first runs `git reset --keep origin/effort/projects-and-onboarding`. Design rows in `docs/low-level-design.md` are taken up to L55; renumber clashes at integration. `havooch app open` quits every running copy of the app, so no check uses it.
+- A worktree from #81 (`agent-aa841231a4fdf5004`) is kept because a sourcekit-lsp process held it; `/settle-effort` releases it.
