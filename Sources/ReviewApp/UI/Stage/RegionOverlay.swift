@@ -2,8 +2,9 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The layer above the picture that takes the mouse. A click plays or
-/// pauses, or closes an open popover as a click outside it. A drag draws a
+/// The layer above the picture that takes the mouse. A click points: it
+/// never plays or pauses (L67), it takes the keys from a text field, and it
+/// closes an open popover as a click outside it. A drag draws a
 /// rectangle, as Cmd+Shift+4 does, with no drawing mode: the video pauses,
 /// the rectangle shows its size in the frame's pixels while it's drawn
 /// (D 2.4), and letting go opens the popover beside it. The layer
