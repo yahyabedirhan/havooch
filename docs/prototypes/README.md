@@ -20,4 +20,4 @@ In October 2026 the grilling of `Mate: Make opening a video and connecting any a
 |---|---|
 | [2026-10-08-feedback-verbatim.md](2026-10-08-feedback-verbatim.md) | The maintainer's words, by topic. |
 | [2026-10-08-decisions.md](2026-10-08-decisions.md) | Every decision, itemized and numbered (A to I). |
-| [2026-10-08-lab/](2026-10-08-lab/) | The winning Swift Lab variants' code, copied from `yahyabedirhan/swift-lab` at `ccb82cb`. |
+| [2026-10-08-lab/](2026-10-08-lab/) | The final Swift Lab variants to build from, with a README that names each final and what not to build from. |

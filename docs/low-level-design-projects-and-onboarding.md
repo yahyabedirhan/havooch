@@ -1,6 +1,6 @@
 # Projects, windows and agent onboarding: target low-level design
 
-Written 2026-10-08, before the first build ticket of `effort:projects-and-onboarding`, from `Spec: Projects, windows and agent onboarding` (#79), the decisions in `docs/prototypes/2026-10-08-decisions.md` (cited as A1 to I6), ADRs 0002 to 0006 and `GLOSSARY.md`.
+Written 2026-10-08, before the first build ticket of `effort:projects-and-onboarding`, from `Spec: Projects, windows and agent onboarding` (#79), the decisions in `docs/prototypes/2026-10-08-decisions.md` (cited as A1 to I6), ADRs 0002 to 0006 and `GLOSSARY.md`. The UI comes from the final prototypes listed in `docs/prototypes/2026-10-08-lab/README.md`: copy their code and build on it.
 
 This is the **target**: the design the effort builds toward. `docs/low-level-design.md` stays the design of the code as it is (0.2.0 and later, cited there as L1 to L49). Each ticket moves code from that design to this one. When a ticket lands, update `docs/low-level-design.md` for what it built; when the effort ends, this file folds into it. When the build departs from this file, change this file in the same change.
 
