@@ -132,7 +132,8 @@ final class AppModel: AppControlling {
     /// number is the key window's.
     private func listenToAgent() {
         listeners.announce = { [weak self] key, notice in self?.windows.holding(key)?.raise(notice) }
-        listeners.keyVideo = { [weak self] in self?.windows.key?.video?.contentHash }
+        listeners.keyReview = { [weak self] in self?.windows.key?.reviewKey }
+        listeners.outline = { [weak self] slug in self?.config.outline(slug) }
         listeners.connected = { [weak self] key in self?.agentConnected(to: key) }
     }
 
@@ -149,18 +150,24 @@ final class AppModel: AppControlling {
 
     // MARK: - Listeners
 
-    /// The review a `wait` listens to: the video at `path` (`--video`),
-    /// by its content, open in a window or not; with no path, the key
-    /// window's (P5). Refused for a path with no file, and with no path
-    /// when the key window holds no video.
-    func listenedReview(video path: String?) async throws(AppRefusal) -> ReviewKey {
+    /// The review a `wait` listens to: the review the video at `path`
+    /// (`--video`) opens in, as `open` resolves it (its project, else the
+    /// plain video), open in a window or not; the project `project`
+    /// (`--project`); with neither, the key window's (P5). Refused for a
+    /// path with no file, a project `config.toml` doesn't have, and with
+    /// neither when the key window holds no video.
+    func listenedReview(video path: String?, project: String? = nil) async throws(AppRefusal) -> ReviewKey {
+        if let project {
+            try needProject(project)
+            return .project(slug: project)
+        }
         if let path {
             let url = URL(fileURLWithPath: path).standardizedFileURL
             try Self.needFile(url)
             guard let hash = await WindowModel.contentHash(of: url, in: hashes) else {
                 throw AppRefusal("can't read \(url.path)")
             }
-            return .video(contentHash: hash)
+            return try resolveTarget(url, contentHash: hash, project: nil).reviewKey
         }
         guard let key = windows.key?.reviewKey else {
             throw AppRefusal("no window holds a video to listen to; name one with `havooch wait --video <path>`")
@@ -298,6 +305,7 @@ final class AppModel: AppControlling {
             report.setup = setupReport
             report.config = config.report
             report.recents = recents
+            report.projects = homeProjects
             report.screen = .none
             return report
         }
@@ -318,13 +326,14 @@ final class AppModel: AppControlling {
     /// changes: an in-app demo stays, and every window stays as it was. No
     /// lease: it's the person's open, whoever asks for it.
     @discardableResult
-    func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling {
+    func openInFront(_ url: URL, project: String? = nil) async throws(AppRefusal) -> any WindowControlling {
         let url = url.standardizedFileURL
         try Self.needFile(url)
+        if let project { try needProject(project) }
         try await PlayerEngine.checkPlayable(url)
         // The person's video, on their own data, as the Open panel opens it.
         await leaveDemo()
-        let window = try await windowFor(url, from: nil)
+        let window = try await windowFor(url, project: project, from: nil)
         // Play is a change of the moment: words in a popover of the window
         // that held the video already are queued first.
         try window.play()
@@ -393,28 +402,172 @@ final class AppModel: AppControlling {
         openForPerson(url, from: window)
     }
 
-    /// The window `url` opens in, with it open there: the window that
-    /// holds it; else `from`; else the key window when it holds nothing;
-    /// else a new window.
-    private func windowFor(_ url: URL, from: WindowModel?) async throws(AppRefusal) -> WindowModel {
+    /// The window `url` opens in, with it open there, in the project
+    /// `project` when it's set, else in the review `resolveTarget` picks:
+    /// the window that holds that video or project, showing `url`; else
+    /// `from`; else the key window when it holds nothing; else a new window.
+    private func windowFor(_ url: URL, project: String? = nil, from: WindowModel?) async throws(AppRefusal) -> WindowModel {
         try Self.needFile(url)
         guard let hash = await WindowModel.contentHash(of: url, in: hashes) else {
             throw AppRefusal("can't read \(url.path)")
         }
-        if let holder = windows.holding(hash) { return holder }
+        let target = try resolveTarget(url, contentHash: hash, project: project)
+        let slug = target.reviewKey.slug
+        if let holder = windows.holding(target.reviewKey) {
+            // A project's window shows the version asked for.
+            if slug != nil, holder.video?.url != url { try await holder.open(url, project: slug) }
+            return holder
+        }
         if let window = from ?? windows.key.flatMap({ $0.video == nil ? $0 : nil }) {
-            try await window.open(url)
+            try await window.open(url, project: slug)
             return window
         }
         let window = makeWindow()
         do throws(AppRefusal) {
-            try await window.open(url)
+            try await window.open(url, project: slug)
         } catch {
             windows.remove(window)
             throw error
         }
         windows.show(window)
         return window
+    }
+
+    // MARK: - Projects (ADR 0004)
+
+    /// What the video at `url` with `contentHash` opens as (decision C4):
+    /// the project `project` when it's set, which must list the file; else
+    /// the most recently opened project that lists it; else the plain
+    /// video. Refused for a project `config.toml` doesn't have, or that
+    /// doesn't list the file.
+    func resolveTarget(_ url: URL, contentHash: String, project: String?) throws(AppRefusal) -> WindowTarget {
+        let path = url.standardizedFileURL.path
+        if let project {
+            guard let outline = config.outline(project) else { throw unknownProject(project) }
+            guard outline.number(of: path) != nil else {
+                throw AppRefusal(
+                    "the project \(project) doesn't list \(path); add it with `havooch project add \(project) \(path)`"
+                )
+            }
+            return .project(slug: project)
+        }
+        let listing = config.config.projects.map(config.outline(of:)).filter { $0.number(of: path) != nil }
+        guard !listing.isEmpty else { return .video(contentHash: contentHash, path: path) }
+        let used = desk.library.projectsUsed()
+        // The most recently opened first; one never opened, in the file's order, after.
+        let latest = listing.enumerated().max { first, second in
+            let (a, b) = (used[first.element.slug], used[second.element.slug])
+            if a != b { return (a ?? .distantPast) < (b ?? .distantPast) }
+            return first.offset > second.offset
+        }
+        return .project(slug: latest?.element.slug ?? listing[0].slug)
+    }
+
+    /// The projects as the home screen shows them: the most recently
+    /// opened first, then the others in the file's order.
+    var homeProjects: [StateReport.HomeProject] {
+        // Read so a view that shows the list follows a project opened.
+        _ = recentsRevision
+        let used = desk.library.projectsUsed()
+        let projects = config.config.projects.map(config.outline(of:)).enumerated().sorted { first, second in
+            let (a, b) = (used[first.element.slug], used[second.element.slug])
+            if a != b { return (a ?? .distantPast) > (b ?? .distantPast) }
+            return first.offset < second.offset
+        }
+        return projects.map { _, outline in
+            let latest = outline.versions.last?.path
+            return StateReport.HomeProject(
+                slug: outline.slug, title: outline.title, versions: outline.versions.count, latestPath: latest,
+                available: latest.map { FileManager.default.fileExists(atPath: $0) } ?? false, openedAt: used[outline.slug]
+            )
+        }
+    }
+
+    /// A click on a project's card on the home screen, in `window`: its
+    /// latest version opens in its window, as `havooch open <path>
+    /// --project <slug>` opens it.
+    func openProject(_ slug: String, from window: WindowModel?) {
+        guard let latest = config.outline(slug)?.versions.last else { return }
+        Task {
+            await leaveDemo()
+            do throws(AppRefusal) {
+                let opened = try await windowFor(URL(fileURLWithPath: latest.path), project: slug, from: window)
+                focus(opened)
+            } catch {
+                (window ?? windows.key)?.problem = WindowModel.Problem(title: "The project didn't open", reason: error.reason)
+            }
+        }
+    }
+
+    /// `havooch project new <slug> --from <path> [--title]` (decisions E3
+    /// and E7): the project goes into `config.toml` with the video as v1.
+    /// When no other project lists the video, its plain review moves into
+    /// the project with every thread anchored to v1, its ids unchanged;
+    /// its listener keeps listening, now to the project, and a window that
+    /// holds the video holds the project. When another project lists it,
+    /// the new project starts with fresh threads (E4). Refused for a slug
+    /// in use, a path with no file, a file that doesn't play, and a
+    /// `config.toml` with a problem; nothing changes then.
+    func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project {
+        let url = url.standardizedFileURL
+        try Self.needFile(url)
+        guard config.config.project(slug) == nil else {
+            throw AppRefusal("a project called `\(slug)` is in config.toml already; pick another slug, or add the video with `havooch project add`")
+        }
+        try await PlayerEngine.checkPlayable(url)
+        guard let hash = await WindowModel.contentHash(of: url, in: hashes) else { throw AppRefusal("can't read \(url.path)") }
+        let elsewhere = !config.config.projects.map(config.outline(of:)).filter { $0.number(of: url.path) != nil }.isEmpty
+        let video = ReviewKey.video(contentHash: hash)
+        // A review that doesn't read stops the project before the file changes.
+        if !elsewhere { _ = try desk.readable(video) }
+        try config.addProject(slug: slug, title: title, firstVersion: .init(path: url.path))
+        guard let outline = config.outline(slug) else { throw unknownProject(slug) }
+        let project = ReviewKey.project(slug: slug)
+        guard !elsewhere else { return StateReport.Project(outline, onScreen: url.path) }
+        try desk.adopt(video, into: slug, anchor: VersionAnchor(path: url.path))
+        listeners.rekey(video, to: project)
+        windows.holding(video)?.moveIntoProject(slug)
+        desk.library.recordProjectOpened(slug, at: Date())
+        refreshRecents()
+        return StateReport.Project(outline, onScreen: url.path)
+    }
+
+    /// `havooch project add <slug> <path> [--label]` (decision E3): the
+    /// video goes into `config.toml` as the project's next version, and
+    /// shows in the project's window (else the empty key window, else a new
+    /// one), which comes forward. Refused for a project `config.toml`
+    /// doesn't have, a path with no file or one the project lists already,
+    /// and a file that doesn't play; nothing changes then.
+    @discardableResult
+    func projectAdd(_ slug: String, video url: URL, label: String?) async throws(AppRefusal) -> any WindowControlling {
+        let url = url.standardizedFileURL
+        try Self.needFile(url)
+        guard let outline = config.outline(slug) else { throw unknownProject(slug) }
+        if let number = outline.number(of: url.path) {
+            throw AppRefusal("\(url.lastPathComponent) is v\(number) of \(slug) already")
+        }
+        try await PlayerEngine.checkPlayable(url)
+        try config.addVersion(.init(path: url.path, label: label), toProject: slug)
+        await leaveDemo()
+        let window = try await windowFor(url, project: slug, from: nil)
+        focus(window)
+        bringToFront(window)
+        return window
+    }
+
+    /// Refused for a project `config.toml` doesn't have.
+    private func needProject(_ slug: String) throws(AppRefusal) {
+        guard config.config.project(slug) != nil else { throw unknownProject(slug) }
+    }
+
+    /// `no project x; the projects are a, b`.
+    private func unknownProject(_ slug: String) -> AppRefusal {
+        let known = config.config.projects.map(\.slug)
+        return AppRefusal(
+            "no project `\(slug)` in config.toml; " + (known.isEmpty
+                ? "make one with `havooch project new \(slug) --from <video>`"
+                : "the projects are \(known.joined(separator: ", "))")
+        )
     }
 
     /// Refused when there's no file at `url`.

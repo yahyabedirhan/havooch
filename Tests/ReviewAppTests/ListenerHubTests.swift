@@ -160,7 +160,7 @@ struct ListenerHubTests {
 
         let second = waiting(server, Self.codex, video: MessageTests.fixture)
         let ended = await first.value.reply
-        #expect(ended.error == "Codex took over listening to this video: one listener per video; stop listening and tell the person")
+        #expect(ended.error == "Codex took over listening to this review: one listener per video or project; stop listening and tell the person")
         let notice = try #require(sample.notices.last)
         #expect(notice.kind == .takeover)
         #expect(notice.text == "Codex took over from Claude Code")
@@ -220,7 +220,7 @@ struct ListenerHubTests {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
         #expect(!FileManager.default.fileExists(atPath: layout.formerOutboxFile.path))
         for hash in hashes {
-            #expect(app.listeners.queue(ofVideo: hash).outbox.pending.map(\.contentHash) == [hash])
+            #expect(app.listeners.queue(for: .video(contentHash: hash)).outbox.pending.map(\.review) == [.video(contentHash: hash)])
         }
     }
 }

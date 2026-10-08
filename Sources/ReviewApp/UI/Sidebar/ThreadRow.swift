@@ -10,6 +10,9 @@ struct ThreadSummary: Hashable {
     var title: String
     /// The frame's time as the player bar shows it (`0:12`); nil for General.
     var time: String?
+    /// In a project, the version the thread was raised on: `v2`, or
+    /// `Removed version` (decision E6); nil on a plain video and for General.
+    var version: String?
     var state: MessageState?
     /// Who wrote the last message: `You`, `Asks` for the agent's question,
     /// or the agent's name. Nil with no message.
@@ -34,9 +37,10 @@ struct ThreadSummary: Hashable {
     private var agent: String
 
     /// `agent` names a message of the agent's kept with no session name.
-    init(_ thread: ReviewThread, agent: String) {
+    init(_ thread: ReviewThread, agent: String, version: VersionTag? = nil) {
         self.agent = agent
         title = thread.isGeneral ? "General" : "#\(thread.number)"
+        self.version = version?.label
         time = thread.time.map { TimeCode.text($0.rounded(.down)) }
         state = thread.state
         waitsForAnswer = thread.openQuestion != nil
@@ -69,7 +73,7 @@ struct ThreadSummary: Hashable {
     var text: String {
         let state = waitsForAnswer ? "waiting for your answer" : self.state.map(StateLook.name)
         let preview = writer == "Asks" ? "\(agent) asks: \(words)" : self.preview
-        return [isUnread ? "Unread" : nil, title, time, state, preview].compactMap(\.self).joined(separator: ", ")
+        return [isUnread ? "Unread" : nil, title, version, time, state, preview].compactMap(\.self).joined(separator: ", ")
     }
 }
 
@@ -145,7 +149,7 @@ struct ThreadRow: View {
     static let unreadDot: CGFloat = 8
 
     var body: some View {
-        let summary = ThreadSummary(thread, agent: model.agentName)
+        let summary = ThreadSummary(thread, agent: model.agentName, version: model.versionTag(of: thread))
         // A button, so keyboard navigation reaches the row and the system
         // draws its focus ring; the style keeps the row's own look.
         Button { model.perform(.open, on: thread.id) } label: {
@@ -202,6 +206,17 @@ struct ThreadRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(summary.title)
                 .font(.body.weight(summary.isUnread ? .bold : .semibold).monospacedDigit())
+            if let version = summary.version {
+                // The version's tag: a soft fill, no edge (look rules).
+                Text(version)
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(palette[.textSecondary])
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(palette[.well], in: Capsule())
+                    .lineLimit(1)
+                    .fixedSize()
+            }
             if let time = summary.time {
                 Text(time)
                     .font(.callout.monospacedDigit())

@@ -35,7 +35,7 @@ person ──keys, mouse──▶ a window's UI ──────────�
                                                                    │
 operator ──▶ havooch ──▶ SocketListener ──▶ ControlServer ── --window ──┤   (one per window)
              (lease)          (control.sock)    (decode, lease,    or key  │
-                                                 dispatch)         window  └──▶ AppModel ─▶ ReviewDesk ──▶ VideoReview (Core) ──▶ Library (Store)
+                                                 dispatch)         window  └──▶ AppModel ─▶ ReviewDesk ──▶ Review (Core) ──▶ Library (Store)
 person/agent ──▶ havooch open ──▶ ControlServer ──▶ AppModel ──▶ WindowRegistry   ├─▶ ListenerHub ──▶ ListenerQueue* ──▶ Outbox (Core)
                  (no lease)                         (the window that holds it)    ├─▶ ThemeDesk ──▶ ThemeCatalog (Core), ThemeFiles (Store)
                                                                                   ├─▶ ConfigDesk ──▶ ConfigLocation, ConfigFile (ReviewConfig)
@@ -52,12 +52,13 @@ The person and the operator reach the same `WindowModel` methods, so a UI action
 | change how an open finds its window | `AppModel.openInFront`, `AppModel.openFromFinder`, `AppModel.windowFor`, `Windows/WindowRegistry.swift` |
 | see where the CLI starts | `Sources/ReviewCLI/main.swift`, then `Sources/ReviewCommand/CommandTable.swift` |
 | add a CLI command | [Extensibility](#5-extensibility), first row |
-| change a thread or message rule, or a state | `Sources/ReviewCore/VideoReview.swift`, `MessageState.swift` |
+| change a thread or message rule, or a state | `Sources/ReviewCore/Review.swift`, `MessageState.swift` |
 | change what `wait` prints | `Sources/ReviewCore/SendPayload.swift` |
 | change when a send is delivered again | `Sources/ReviewCore/Outbox.swift` |
 | change which listener a send or a `wait` goes to | `Sources/ReviewApp/ListenerHub.swift` |
 | change the lease | `Sources/ReviewLease/ControlLease.swift` |
 | change where a file is kept | `Sources/ReviewStore/SupportLayout.swift` |
+| change a project rule (versions, thread anchors, moving a video's threads in) | `Sources/ReviewCore/Review.swift`, `VersionAnchor.swift`; `ReviewApp/AppModel.swift` (`projectNew`, `projectAdd`, `resolveTarget`) (L59) |
 | add a colour token or a built-in theme | `Sources/ReviewCore/Theme/ThemeToken.swift`, `Packaging/Themes/` |
 | change what setup detects, or a harness's prompt | `Sources/ReviewSetup/SetupProbe.swift`, `HarnessCatalog.swift` |
 | add or change a `config.toml` key | `Sources/ReviewConfig/ConfigFile.swift`, `ConfigReader.swift`, `schema/config.schema.json`, the skill's Settings table (L53) |
@@ -122,9 +123,9 @@ In: all of the above. Out, as the spec says: a redesign of the comment popover, 
 |---|---|---|
 | 1, 14, 15 port, player, CLI, lease, version | ReviewLease, ReviewWire, ReviewCommand, ReviewApp `Player/`, `Control/` | #22 |
 | 11 themes | ReviewCore `Theme/`, ReviewStore `ThemeFiles`, ReviewApp `ThemeDesk`, `UI/Palette` | #23 |
-| 2, 4, 12 threads and messages | ReviewCore `VideoReview`, `ReviewThread`, `Message`, `ItemID`, ReviewStore `SupportLayout`, `Library` | #24 |
+| 2, 4, 12 threads and messages | ReviewCore `Review`, `ReviewThread`, `Message`, `ItemID`, ReviewStore `SupportLayout`, `Library` | #24 |
 | 5, 9, 13 the send, `wait`, the outbox | ReviewCore `Send`, `SendPayload`, `Outbox`, ReviewApp `ListenerQueue`, `TranscriptDesk` | #25 |
-| 9 `ack`, `status`, `reply`, `ask`, `thread answer`, `thread choose` | ReviewCore `VideoReview`, ReviewApp `ListenerQueue`, `Notice` | #26 |
+| 9 `ack`, `status`, `reply`, `ask`, `thread answer`, `thread choose` | ReviewCore `Review`, ReviewApp `ListenerQueue`, `Notice` | #26 |
 | 9 the listener skill | `.agents/skills/havooch-mate/` | #27 |
 | 6 pins | ReviewApp `UI/PlayerBar/` | #28 |
 | 2, 3 comment popover, region | ReviewApp `UI/Stage/` | #29 |
@@ -143,8 +144,8 @@ Entities (hold changing state or enforce rules):
 | `WindowRegistry` | which window holds which video, which one is key, the windows waiting for their scene, ids `w1`, `w2`… | ReviewApp |
 | `WindowModel` (per window, the orchestrator of one window) | its open video, its player, the open popover and its draft, the thread the sidebar shows (none for the thread list), the composer, the notices; every action a person or an operator takes in it | ReviewApp |
 | `PlayerEngine` | the AVPlayer, the time, playing or paused, the frame time of a moment | ReviewApp |
-| `VideoReview` | one video's threads, messages and sends, and every rule about them | ReviewCore |
-| `ReviewDesk` | the one path for changing a `VideoReview`: change, save, publish | ReviewApp |
+| `Review` | one video's threads, messages and sends, and every rule about them | ReviewCore |
+| `ReviewDesk` | the one path for changing a `Review`: change, save, publish | ReviewApp |
 | `Outbox` | pending and taken sends, the listener session, the context already sent, presence | ReviewCore |
 | `ListenerHub` | one `ListenerQueue` per review (L56); which review a `wait` binds to; routes the listener's commands by the id prefix | ReviewApp |
 | `ListenerQueue` | one review's open `wait` and `ask`s, payload assembly, takeover | ReviewApp |
@@ -164,7 +165,7 @@ Fields, not entities: `Region`, `Message`, `MessageState`, `Send`, `SendRef`, `P
 AppModel ──owns──▶ WindowRegistry ──holds──▶ WindowModel* ──holds──▶ WindowTarget? (a video's content hash, or nothing)
 WindowModel ──owns──▶ PlayerEngine;  ──reads──▶ its review in ReviewDesk, by its video's content hash
 AppModel ──owns──▶ DataFolder (support folder, SupportLayout; replaced on entering and leaving the demo, L27; every window is on it)
-DataFolder ──holds──▶ ReviewDesk ──holds──▶ VideoReview ──contains──▶ ReviewThread ──contains──▶ Message
+DataFolder ──holds──▶ ReviewDesk ──holds──▶ Review ──contains──▶ ReviewThread ──contains──▶ Message
                         │                     └──contains──▶ Send ──refers to──▶ Message (by id); keeps the transcript per thread
                         └──saves through──▶ Library ──paths from──▶ SupportLayout
 DataFolder ──holds──▶ ListenerHub ──holds──▶ ListenerQueue* (one per review) ──holds──▶ Outbox ──refers to──▶ Send (SendRef: id + content hash)
@@ -179,7 +180,7 @@ UI views ──read──▶ their WindowModel, ReviewDesk, their window's Liste
 
 Where each rule lives:
 
-- "Which thread does a message at this frame join? Can this message be edited, change state, be answered?" lives in `VideoReview`.
+- "Which thread does a message at this frame join? Can this message be edited, change state, be answered?" lives in `Review`.
 - "What is the state of this thread?" lives in `ReviewThread.state`.
 - "Which send does this `wait` get, is this a new listener, is the context due?" lives in `Outbox`.
 - "Which colour does this token have now?" lives in `ThemeCatalog.resolve`.
@@ -268,7 +269,8 @@ Sources/
   ReviewCommand/
     CommandTable.swift             the commands by name, usage text, global --json
     HavoochCLI.swift               run(arguments, environment) → output, error, exit code
-    OpenCommand.swift              open <path>: the person's open, no lease; launches the app in front when it doesn't run (L51)
+    OpenCommand.swift              open <path> [--project]: the person's open, no lease; launches the app in front when it doesn't run (L51, L59)
+    ProjectCommands.swift          project new | add (through the app, no lease) | list (reads config.toml, no app) (L59)
     WindowCommands.swift           window list | new | close [<id>] (L54); `--window <id>` on the commands that act on one window
     AppCommands.swift              app status | open [--demo] | home | demo | quit, state, --version (L49)
     ControlCommands.swift          control take [--wait] | release
@@ -280,7 +282,7 @@ Sources/
     TourCommands.swift             tour show | next | skip | close (L58)
     ConfigCommands.swift           config path | check: read config.toml with no app and no lease; config dismiss closes the settings notice (L53)
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42)
-    ListenerCommands.swift         wait, ack, status, reply, ask
+    ListenerCommands.swift         wait [--video | --project], ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services, in the background or in front, and brings a process to the front; the AppLaunching seam
   ReviewCLI/
     main.swift                     exit(HavoochCLI.run(...))
@@ -294,6 +296,7 @@ Sources/
     ProjectEntry.swift             one [[projects]] table: slug, title, versions [{path, label}]; versionNumber(of:)
     ConfigVerdict.swift            {accepted, checked, config, configModified, problems, warnings}; config-status.json; read and check
     ConfigWriter.swift             the targeted writes: the header for a missing file, the theme line (set, replace, remove)
+    ConfigWriter+Projects.swift    append a [[projects]] table; append a version to one project's versions (L59)
   ReviewCore/
     ItemID.swift                   t-<hash8>-<n>, m-<hash8>-<n>, s-<hash8>-<n>: parse, make, the hash prefix;
                                    ThreadID, MessageID, SendID; ThreadRef (a full id or a bare number, L5)
@@ -302,10 +305,12 @@ Sources/
     MessageState.swift             the six states, the legal moves, editable, open
     ReviewThread.swift             id, number, time (nil for General), messages, popoverFrame, lastSeen; state; openQuestion; isUnread
     Send.swift                     id, sentAt, message ids, the transcript lines cut per thread; SendRef
-    VideoReview.swift              one video's review: every rule about threads, messages and sends; the counters
+    Review.swift                   one review, a plain video's or a project's: its key, its stored id prefix, every rule about
+                                   threads, messages and sends; the counters; adoption into a project (L59)
+    VersionAnchor.swift            a thread's version by path; ProjectOutline (a project as the rules read it); VersionTag (L59)
     ReviewRefusal.swift            why a change is refused, as the line the CLI prints
     Outbox.swift                   the listener outbox: pending, in flight, taken, session, context sent, presence
-    ReviewKey.swift                which review a thing belongs to (`.video(contentHash)`); its outbox file name (L56)
+    ReviewKey.swift                which review a thing belongs to (`.video(contentHash)` or `.project(slug)`); its outbox file name (L56, L59)
     KnownAgent.swift               the nine agent harnesses a session's name says ("Claude Code" → claude), each one's
                                    AgentLogo (colour, light and dark, template); ListenerSession.agent (from Shipyard)
     SendPayload.swift              the JSON `wait` prints, grouped by thread, and how it is assembled
@@ -343,12 +348,12 @@ Sources/
       WindowConnect.swift          the Connect view's entry, banner, picked harness, readiness and Disconnect (L57)
       WindowTour.swift             the setup tour: `TourState`, its steps and rings, what moves it on, Finish setup's count (L58)
       WindowRegistry.swift         the windows, by id (`w1`…), the key window, the window that holds a video, the ones waiting for a scene
-      WindowTarget.swift           what a window holds, as its scene's value: a video by content hash
+      WindowTarget.swift           what a window holds, as its scene's value: a video by content hash, or a project by slug (L59)
       WindowScene.swift            a window's scene: takes its `WindowModel`, follows its target, hands `openWindow` to the registry,
                                    tells the app its `NSWindow`; `FocusedValues.playerWindow` for the menus
     Draft.swift                    `WindowModel.Draft`: the open popover's time, text and region (view state, never
                                    saved; its thread number is `WindowModel.draftThreadNumber`); `PopoverClose`; `FrameMark`
-    ReviewDesk.swift               change a review, save it, publish it
+    ReviewDesk.swift               change a review by its key, save it, publish it; move a video's review into a project (L59)
     ListenerHub.swift              review key → ListenerQueue, made lazily; binds a wait; routes ack/status/reply/ask by id prefix (L56)
     ListenerQueue.swift            one review's open waits and asks; delivery; payload assembly; presence; takeover; the listener's answers
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
@@ -386,6 +391,7 @@ Sources/
       Home/
         HomeScreen.swift           `StageContent` (player, home or empty, and whether the sidebar shows); `HomeScreen`: the cat mark, the name,
                                    "Open a Video…", "Try the Demo" and the "Recent Videos" grid of adaptive columns (L48)
+        ProjectCard.swift          one project on home: its latest version's thumbnail with vN, title, versions and when opened (L59)
         RecentCard.swift           one recent video: thumbnail at 16:9, name without extension, relative time, the path on hover; the context
                                    menu; dimmed with the "unavailable" symbol and a trash button when its file is gone (L48)
         Thumbnails.swift           the cards' thumbnails, made with `AVAssetImageGenerator` and kept in memory only, by content hash and position (L48)
@@ -534,7 +540,7 @@ As proto-2, with the spec's names and outputs:
 ### ReviewCore: the thread model
 
 ```swift
-public struct VideoReview: Codable, Equatable {          // one video's review
+public struct Review: Codable, Equatable {          // one video's review
     public var video: VideoInfo                           // contentHash, title, duration, path, frameRate (as last opened)
     public var note: String                               // the in-app context note
     public private(set) var threads: [ReviewThread]       // General first, then in time order
@@ -590,7 +596,7 @@ public struct Send: Codable, Equatable {
 public struct SendRef: Codable, Hashable { public let id: SendID; public let contentHash: String }
 ```
 
-`AppModel.send()` queues the open popover's text first (as proto-2 did with a draft), then calls `VideoReview.send` with a closure that reads `TranscriptDesk.lines(around: thread.time)` for each thread in the send with a frame, and hands the `SendRef` to `ListenerQueue`. The lines are the ones the source has at that moment; every delivery, the first included, uses the kept lines and needs no transcriber (D A.4). `ReviewCore` keeps a line as its own small value, `SendPayload.Line` (`start`, `end`, `text`), so it still does not import `ReviewTranscript`; `ItemID` is `CodingKeyRepresentable`, so the map by thread is a JSON object.
+`AppModel.send()` queues the open popover's text first (as proto-2 did with a draft), then calls `Review.send` with a closure that reads `TranscriptDesk.lines(around: thread.time)` for each thread in the send with a frame, and hands the `SendRef` to `ListenerQueue`. The lines are the ones the source has at that moment; every delivery, the first included, uses the kept lines and needs no transcriber (D A.4). `ReviewCore` keeps a line as its own small value, `SendPayload.Line` (`start`, `end`, `text`), so it still does not import `ReviewTranscript`; `ItemID` is `CodingKeyRepresentable`, so the map by thread is a JSON object.
 
 ### ReviewCore: the outbox
 
@@ -690,7 +696,7 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
   config-status.json                     the verdict on config.toml after the app's last reload (L53)
   config/                                with HAVOOCH_SUPPORT_DIR only: config.toml and themes/ (L53)
   videos/<contentHash>/
-    review.json                          one VideoReview: video, note, threads, sends, counters, schemaVersion
+    review.json                          one Review: video, note, threads, sends, counters, schemaVersion
     transcript.json                      the finished speech transcript
     frames/<thread-id>.png               a thread's keyframe, at the video's own size
     crops/<message-id>.png               a region message's crop
@@ -970,11 +976,11 @@ ReviewLease/ControlLease.swift           use(by: holder, at: 12:00:00) → start
 ReviewCore/Region.swift                  Region(0.47,0.27,0.29,0.15): inside 0..1 → valid
 ReviewApp/AppModel.swift                 addMessage: video open; no seek; pause
 ReviewApp/Player/PlayerEngine.swift      frameTime(of: 10.0) → 10.017 (frame 300 at 29.97 fps, raised to the ms)
-ReviewCore/VideoReview.swift             thread(atFrame: 10.017) → #1 (t-f92cbb2a-1); its keyframe exists
+ReviewCore/Review.swift             thread(atFrame: 10.017) → #1 (t-f92cbb2a-1); its keyframe exists
 ReviewApp/Player/FrameGrabber.swift      crop → crops/m-f92cbb2a-2.png (557 × 162 of the 1920 × 1080 keyframe)
 ReviewStore/SupportLayout.swift          crop(m-f92cbb2a-2, of: f92cbb2a…) → <demo>/videos/f92cbb2a…/crops/m-f92cbb2a-2.png
 ReviewApp/ReviewDesk.swift               change { write(text, at: 10.017, region, to: nil, now) }
-ReviewCore/VideoReview.swift               appends m-f92cbb2a-2 (person, message, queued, region) to #1
+ReviewCore/Review.swift               appends m-f92cbb2a-2 (person, message, queued, region) to #1
 ReviewStore/Library.swift                  review.json written
                                          state: #1 has 2 queued messages; its pin turns a rounded square; queue = [m-1, m-2]
 ReviewApp/Control/ControlServer.swift    done("m-f92cbb2a-2 queued on #1 at 0:10 on the region 0.47,0.27,0.29,0.15")
@@ -1001,7 +1007,7 @@ ReviewApp/Player/Shortcuts.swift         Cmd+Return → AppModel.send()
 ReviewApp/AppModel.swift                 closePopover(.clickOutside): no draft
 ReviewApp/TranscriptDesk.swift           lines(around: 10.017) → 2 voiceover lines; lines(around: 15.015) → 2 lines
 ReviewApp/ReviewDesk.swift               change { send(at: 19:02:11Z, transcript:) }
-ReviewCore/VideoReview.swift               m-1, m-2, m-3 queued → sent, sendID s-f92cbb2a-1; transcripts kept for #1 and #2
+ReviewCore/Review.swift               m-1, m-2, m-3 queued → sent, sendID s-f92cbb2a-1; transcripts kept for #1 and #2
 ReviewStore/Library.swift                  review.json written
                                          state: queue = []; both pins the sent colour; footer "0 queued"
 ReviewApp/ListenerQueue.swift            enqueue(s-f92cbb2a-1): pending = [s-1]; outboxes/video-<hash>.json written; takeNext()
@@ -1021,9 +1027,9 @@ The follow-up:
 ```text
 operator: comment add "Now make it lighter still" --thread t-f92cbb2a-1
 ReviewApp/AppModel.swift                 addMessage: seek to #1's time 10.017 (a moment change; no popover open); pause
-ReviewCore/VideoReview.swift             write on #1: m-f92cbb2a-9 queued              state: #1 is queued again (D 2.12)
+ReviewCore/Review.swift             write on #1: m-f92cbb2a-9 queued              state: #1 is queued again (D 2.12)
 operator: send
-ReviewCore/VideoReview.swift             send s-f92cbb2a-2: [m-9]; transcript for #1 cut again now
+ReviewCore/Review.swift             send s-f92cbb2a-2: [m-9]; transcript for #1 cut again now
 ReviewApp/ListenerQueue.swift            the listener's next wait: deliver s-2
 ReviewCore/Outbox.swift                    context(for: hash, text): same digest for L1 → nil
 ReviewCore/SendPayload.swift               threads: #1 only; history = m-1, m-2, m-5, m-6, m-7 in order; messages = [m-9]; "context": null
@@ -1033,11 +1039,11 @@ The rejections:
 
 ```text
 comment edit m-f92cbb2a-1 "new text" after the send
-  VideoReview.edit → m-1 is sent → ReviewRefusal.notQueued → exit 1, nothing saved
+  Review.edit → m-1 is sent → ReviewRefusal.notQueued → exit 1, nothing saved
 
 the listener restarts as session L2 while s-2 is taken and m-9 is working
   Outbox.waitOpened(by: L2): a new key → s-2 to the front of pending; contextSent emptied
-  VideoReview.requeue(s-2): m-9 working → sent
+  Review.requeue(s-2): m-9 working → sent
   takeNext(): L2 gets s-2 with m-9, its kept transcript, the same history, and the context again
 ```
 
@@ -1136,7 +1142,7 @@ Refused for now: undo, an Allow button, system notifications, a plug-in registry
 | L43 | The 0.2.0 polish pass (ticket #44), after a review of the whole window against the macOS conventions, the Shipyard app and variant 02 of the prototype. `controlPressed` is gone from the token list and the two default themes, as L36 removed the others; a person's theme that still sets it loads. A notice is a native `.borderless` button, so it dims while pressed and takes the focus ring under keyboard navigation, in place of `.plain`. "No Threads Yet" is the compact form of the native empty state: a light symbol, a headline and a callout, centred, in place of `ContentUnavailableView`'s large title. The thread view's Previous and Next name their keys in their help (↑, ↓). The timeline's pins keep `.plain`: the player bar stays as it is (spec 0.2.0: "Keep the player bar"). A `ThreadRow` is a `Button` with `RowButtonStyle`, which draws the row as it is, so keyboard navigation reaches it and the system focus ring goes around its rounded shape; the focused row was `AppModel.focusedRow`, and Space, Return and Enter on it opened its thread through `Shortcuts`, since the player's key monitor takes those keys before SwiftUI (replaced by L45: the row reports its focus as every other control does). A click, those keys, the menu and VoiceOver go through `AppModel.perform(_:on:)`. | Spec 0.2.0 (#36): the app feels like a Mac app. The large title was heavier than the thread list's own heading in a sidebar 340 pt wide, and the prototype's empty list is one quiet line. |
 | L44 | The protocol version is 3 (4 since L54: a request names its `window`). | 0.2.0 changed the requests' shape: `thread.expand` became `thread.show`, `state` names `sidebar.thread` in place of `sidebar.expanded`, and `screenshot` takes a `window` that a 0.1.0 app would ignore and capture the player's window. A 0.1.0 CLI or app that meets this one is told to reinstall, not given a wrong answer (L1). |
 | L45 | Space and Return press the control with the keyboard focus (ticket #52). Under keyboard navigation every focusable control in the player's window reports its focus through `pressedByKeys(in:action:)`: a thread row, a notice card, the header's symbol buttons (agent control, Context, the sidebar toggle), the thread view's Back, Previous and Next, a queued message's Edit and Delete and its editor's Cancel and Save, the composer's region × and General toggle, the footer's Send, the comment popover's Discard and Answer or Queue, the player bar's Play and Comment, the timeline's pins, and Stop in the agent-control popover. `AppModel` keeps the focused controls of the key window as a stack (`focusControl`, `blurControl`, `pressFocusedControl`): the last to take the focus is pressed, and `blurControl` removes only its own entry, so when a popover's control (Stop) loses the focus or goes, a control still focused in the player's window gets the keys again. `Shortcuts` gives Space, Return and Enter with no modifier to it (`pressControl`) in place of play, a new message or the row's own rule; `AppModel.focusedRow` is gone. An AppKit control that is the first responder (a pop-up button) takes those keys itself, only while keyboard navigation is on (`Shortcuts.isControlFocused`, `NSApp.isFullKeyboardAccessEnabled`): with it off a clicked AppKit control can stay first responder, and Space still plays and pauses. A queued message's Edit and Delete, hidden until hover, also show while either has the keyboard focus (`pressedByKeys`' `isFocused`), so a key never presses a button the person can't see. With no control focused, Space plays and pauses as before. | The player's key monitor sees every key before SwiftUI, so a focused button never got Space; one general rule replaces the thread row's own. |
-| L46 | Unread threads (ticket #48). `ReviewThread.lastSeen` is when the person last opened the thread's view, kept in the review file (`null` until then); `isUnread` is whether an agent message (`reply`, `ask`, an `ack`'s words on General) is newer than it, or there is one and it's `null`. `AppModel.shown`'s `didSet` calls `VideoReview.markSeen` with the time now, so a row click, Previous and Next, `thread show`, a pin, a badge and a notice all clear it; an agent message on the thread the sidebar shows is read as it comes (`raise`). A review file from before has no `lastSeen` key, and its agent messages count as read, so an update marks nothing. `state --json` reports `unread` per thread, and `state` ends a thread's line with `unread`. | Spec 0.2.0 (#36), ticket #48. The thread view is the one place the conversation shows in full; the popover shows the thread view too. Replaces L15. |
+| L46 | Unread threads (ticket #48). `ReviewThread.lastSeen` is when the person last opened the thread's view, kept in the review file (`null` until then); `isUnread` is whether an agent message (`reply`, `ask`, an `ack`'s words on General) is newer than it, or there is one and it's `null`. `AppModel.shown`'s `didSet` calls `Review.markSeen` with the time now, so a row click, Previous and Next, `thread show`, a pin, a badge and a notice all clear it; an agent message on the thread the sidebar shows is read as it comes (`raise`). A review file from before has no `lastSeen` key, and its agent messages count as read, so an update marks nothing. `state --json` reports `unread` per thread, and `state` ends a thread's line with `unread`. | Spec 0.2.0 (#36), ticket #48. The thread view is the one place the conversation shows in full; the popover shows the thread view too. Replaces L15. |
 | L47 | (Replaced in part by L54: any number of windows; closing one drops its model.) The window and launch (spec 0.3.0, ticket #66). `applicationShouldTerminateAfterLastWindowClosed` is false: Cmd+W closes the window, the app stays in the Dock with its `AppModel`, and Cmd+Q quits. `PlayerWindow` finds the player's window (titled, not a panel, not Settings; `Screenshotter` uses it too), watches `NSWindow.willCloseNotification` for it, which calls `AppModel.windowClosed()` to pause and save the position, and shows it again through SwiftUI's `openWindow`, captured when the window first appears. A click on the Dock icon with no window on screen shows it (`applicationShouldHandleReopen`); so does `open(url)`, through `AppModel.showWindow`, so a control command's open is seen, and `goHome()` (L49). `ControlServer.ready` is gone, since a launch opens nothing to wait for. Showing the window does not activate the app. A launch opens no video: the launch-time `openRecent()` and `openAtLaunch` are gone (`openRecent(_:)` is now a card's click, L48), and so is `HAVOOCH_OPEN_VIDEO`, since the demo runs in the same window (L27). | Spec 0.3.0, "The window and quitting": the window comes and goes, the app and its video stay. A control command must not take the person's focus from another app. |
 | L48 | The home screen (spec 0.3.0, ticket #70). `StageContent` decides what the stage shows: the player with a video, the home screen with none and one or more recent videos, else the empty state; the sidebar shows beside the player only. A card's click calls `AppModel.openRecent`, which does nothing for an entry whose file is gone; the trash button and "Remove from Recents" call `removeRecent`, which leaves the review on disk; "Show in Finder" selects the file in Finder. A thumbnail is the frame at the entry's position, or at 1 second when the position is 0 (`RecentCard.thumbnailTime`), inside the video's duration, at most 640 × 360 pixels, made when the card first shows by `Thumbnails` on `AppModel` and kept in memory for the run, keyed by content hash and position; nothing is written to disk. The relative time is `RelativeDateTimeFormatter`'s, "Just now" under a minute, and moves on each minute. Cards show no thread counts or unread dots. | Spec 0.3.0, "The home screen". The frame where the person stopped costs no more than the first frame. In memory only, so the support folder holds no cache to clean. |
 | L49 | (With L54, home is one window's, and nothing shows a closed window.) Going home from the player (spec 0.3.0, ticket #69). `AppModel.goHome()` leaves an in-app demo (`leaveDemo`), or else queues the popover's words on their video, saves the position and closes the video; then it shows a closed window (`showWindow`). Words in the composer go and the queue stays on the video's review, as when another video opens. Closing a video also closes `ReviewDesk`'s open review, so `state` reports no threads with no video. Its callers: the cat mark at the header's leading edge (`TitleView`, a plain button, help tag "Home"), File > Close Video with Shift+Cmd+W (disabled with no video), and `havooch app home`. The header's floating group has "Open a Video…" with the `folder` symbol beside a video, which calls `openFromPanel()` and leaves an in-app demo as the Open panel does. `havooch app demo` runs `openDemo()`, what "Try the Demo" does, and its open shows a closed window. `app home` and `app demo` are operator requests (`app.home`, `app.demo`); the protocol version stays 3, since an older app refuses an unknown command in words. `state` reports `screen` (`StateReport.Screen`): `player` with a video, else `home`, the empty state included. | Spec 0.3.0, "Going home from the player". Cmd+W is the window's Close (L47), so Close Video takes Shift+Cmd+W. `app demo` lets the visual checks run "Try the Demo" without a click. One `screen` word for every screen with no video keeps `state` simple; `recents` tells the home screen from the empty state. |
@@ -1149,3 +1155,4 @@ Refused for now: undo, an Allow button, system notifications, a plug-in registry
 | L56 | A listener per review (ADR 0003, decisions F2 and F3, target design P3 and P5, ticket #87). `ListenerHub` on the `DataFolder` keeps one `ListenerQueue`, each with its own `Outbox`, per `ReviewKey` (a plain video's review, `.video(contentHash)`; a project's comes with #92). `havooch wait --video <path>` resolves the path as `open` would (a path with no file is refused) and binds to that video's review, open in a window or not; `wait` with no flag binds to the key window's review, and is refused when the key window holds no video. `ack`, `status`, `reply` and `ask` find their review by the id's `hash8`, with no flag; a bare thread number is the key window's video. Each window's footer, activity lines, agent name and context check read its own review's queue; `state` reports the key or `--window` window's `listener`, and `windows[]` (also `window list`) each window's `listener` (`presence`, `session`). A `wait` from a new holder key while the last listener was present is a takeover: the older `wait` ends with exit 1 ("<new> took over listening to this video"), the window that holds the review shows the notice "<new> took over from <old>" (title "New listener", a click shows General), and `state` reports `listener.tookOverFrom` while the new session lasts. A new holder after an absent listener is no takeover, as before. The outboxes live in `outboxes/video-<contentHash>.json`. On launch, `Library.migrateFormerOutbox()` splits an older build's one `outbox.json` into the outbox of each review its sends are on (`Outbox.part(for:)`: the review's sends, the session, that review's context digests), skips a review that already has its own, and deletes the old file once every part is written. The `havooch-mate` skill finds its video's absolute path once and passes `--video <path>` on every `wait`. The protocol version stays 3: `wait`'s `path` is optional on the wire. | ADR 0003: two agents work on two videos at the same time. Queues are made lazily and kept for the run, so a listener of a video no window holds is still heard, and a window that opens it later shows it. A takeover only from a present listener, so a restarted agent or one that came back after a while is not announced as a new one. A bare `wait` binding to the key window keeps the skill installed before this ticket working (P5). |
 | L57 | The Connect view (G1 to G11, ADR 0005, ticket #89), built from connect-flow V6 and connect-view V2 (`docs/prototypes/2026-10-08-lab/agent-onboarding/`, Swift Lab at `ccb82cb`). A window's sidebar shows the threads, a thread's view, or the Connect view (`WindowModel.connect`, a `ConnectEntry` with its reason: `pill`, `header` or `send`); `state` reports `sidebar.mode` and, while it shows, `sidebar.connect` (reason, phase, picked harness, readiness, prompt, banner, listener card). Three ways in: a click on the presence pill (now "No agent" when nobody listens), the header's Connect an Agent button, and a send made while nobody is there (`sendQueue` keeps it in the outbox and opens the view with the sends it waits for). The outbox banner counts those sends' messages while any is in line, then says "Delivered N messages to <agent>". The steps (`UI/Connect/`): the command line (Link, "Linked", a failure's `ln -sf` line in a `CopyBox`), the skill (a row per harness, Install for every harness found without it, the live log and Cancel, Node missing, the command for one repository) and your agent (the picker, `Readiness` of the picked harness: `ready`, `skillNotDetected` or `harnessNotDetected`, never an error, and its prompt always shown). The first step not done is open; a done step folds to one line. Copy boxes put the text on top and Copy in a footer bar (I5); copying is no state (G6). The listener phase (`ListenerQueue.phase(at:)`) is `connected`, `reconnecting` (a session the last run left, not heard from in this one, for 30 s after the data opened: `ListenerHub.startedAt`) or `none`; there is no other waiting state. Connected or reconnecting, the listener card (logo, agent, where, since, Copy Path, Disconnect or Forget, the prompt to listen again) leads and setup folds to one "Set up" line. A session keeps when its first `wait` opened (`ListenerSession.since`, kept on disk). Disconnect and Forget let the session go (`Outbox.letGo`): the open `wait` is refused with "the person disconnected you from this video" (an agent let go while it worked, with no `wait` open, gets the refusal on its next `wait`, once), and the taken sends go back in line with their messages `sent`. An agent's first `wait` ever is kept in `settings.json` (`agentConnectedOnce`); the connect button's dot shows while setup isn't fully detected and no agent has connected (P11), and `state` reports it as `setup.needsFinishing`. New operator commands, `--window` aware: `connect show`, `connect pick <harness>`, `connect disconnect`, `connect forget`; Back is `thread list`; Escape and Back in the view return to the thread list or the thread view the view covered, Link, Install and Cancel are the `setup` commands. Copy Prompt and Copy Path have no command: the text is in `state --json`. The protocol version stays 4: an older app refuses the new commands in words. | Spec #79, stories 66 to 86. One view for every way in, so the person always finds the next step. The listener card and the banner read the window's own `ListenerQueue`, so a window speaks only of its own agent (ADR 0003). Disconnect refuses the agent's `wait` in words, so an agent that loops on `wait` stops, as the skill's refusal list tells it. |
 | L58 | The setup tour and "Finish setup" (H4, H5, P11, ticket #91), built from first-run V3's coach panel as connect-flow V6 draws it (`docs/prototypes/2026-10-08-lab/agent-onboarding/`, Swift Lab at `ccb82cb`). Each window has a `TourState` (`WindowModel.tour`: open or not, the step, and the send made in it). "Finish setup" sits in the header in a capsule of its own, before the floating group, with the count of setup items left (the command line, the skill and a first connection, each until detected); it shows beside a video while setup isn't fully detected and no agent has ever connected (`AppModel.showsConnectDot`, the connect button's dot rule, P11), and while the tour shows, so the button that closes it stays. It opens the tour at the step it was left on, and closes it. The panel (`UI/Tour/TourPanel`) floats over the foot of the stage: five dots and "Step N of 5", the title, the words, and Skip Tour, Next or Later, Write an Example and Finish; its close button keeps the step, Skip Tour and Finish start the next tour from the first. Each step shows the sidebar it is about and rings parts of the window (`WindowModel.tourRings`): tools rings the Connect view's command line and skill steps, connect rings its agent step, write rings the stage and the composer, send rings Send, and reply rings the agent step while the tour's send waits in the outbox, then the first thread of the send once every message in it is done or failed. A ring (`CoachRing`) stands 9 points outside its part with its radius grown by as much, so it never touches the content; in the thread list, whose margin is 8 points, it stands 6 points out. Steps move on by themselves: both tools detected (0.8 s later, so the checks show), an agent's `wait` opening on the window's review (`ListenerHub.connected` now names the review), a message queued on the write step, a send on the write or send step. New operator commands, `--window` aware: `tour show` (allowed after setup is finished too), `tour next` (Next, Later and Finish; after the reply step it ends the tour), `tour skip` and `tour close`; the last three are refused while the tour doesn't show. Write an Example is `comment compose`. `state --json` reports `tour` (`open`, `step`, `stepNumber`, `steps`, `title`, `rings`, `replied`, `finishSetup`, `setupItemsLeft`). The protocol version stays 4. | Spec #79, stories 91 to 93. The tour is per window, as the sidebar it drives is. The connect button's rule decides Finish setup too, so the two never disagree, and both go once an agent connects, since a real connection proves setup works (ADR 0005). The 9 point ring is the maintainer's change to first-run V3, from connect-flow V6. |
+| L59 | Projects (ADR 0004, decisions C4 and E1 to E8, target design P2 to P4, ticket #92). `VideoReview` is `Review` (P2), with a `key` (`ReviewKey.video(contentHash)` or `.project(slug)`) and a stored `hash8` (P3): a review kept before it reads as a plain video's with its video's prefix. A project's review lives in `projects/<slug>/` (review, keyframes, crops) and its outbox in `outboxes/project-<slug>.json`; a video's transcript stays in `videos/<hash>/`. Each thread on a frame has an `anchor`, the absolute path of the version it was raised on (`VersionAnchor`); General has none and is the whole project's. Thread lookup by frame is per version, so v1 and v2 each have their own thread at 0:12; a follow-up joins its thread wherever it is anchored. The version's number comes from `config.toml` as it is now (`ConfigDesk.outline` gives a `ProjectOutline` with `~` expanded): a path that left the list is a removed version, and its thread stays and takes words on the whole frame. `Review.versions` keeps each version's video (content hash, duration, frame rate) as app state. `havooch project new <slug> --from <path> [--title]` and `project add <slug> <path> [--label]` are person requests (no lease, P4; protocol version 5): `ConfigWriter` appends a `[[projects]]` table or one project's `versions` array in place, read back before it is written. When no other project lists the video, `project new` moves its review (`Library.move`: the review file first, then frames and crops) with its ids, anchored to v1; the listener's queue is rekeyed with its open `wait` (`ListenerHub.rekey`, `Outbox.rekeyed`); the window holding the video holds the project. When another project lists it, the new project starts fresh with an id prefix of its own (`ReviewDesk` picks one no review has). `project add` refuses an unknown slug, a missing file, a file that doesn't play and a path the project lists already, then shows the version in the project's window (else the empty key window, else a new one) and brings it forward with the reply's `pid`, as `open` does. `project list` reads the file with no app. `open` and `wait --video` resolve a path through `AppModel.resolveTarget`: `--project`, else the most recently opened project that lists the path (`recents.json` keeps `projects` with their last open), else the plain video; `wait --project <slug>` binds to the project. A send keeps the version on screen (`Send.onScreen`); its payload carries `project {slug, title, onScreen, versions[]}` and each thread's `version {number, path, label}`, `null` on a plain video. Pins, the frame's marks and the composer's thread at the frame are the version on screen's; the thread list shows every thread with a `v1` or `Removed version` tag, and a click on a thread of another listed version opens that version first. The header's subtitle names the project and the version. The home screen shows a Projects row above the recent videos (`ProjectCard`: a click opens the latest version, as `open <path> --project <slug>`). `state` reports `project`, `projects[]`, each thread's `version` and each window's `video.project` and `video.version`. A project's version is not a recent video. | ADR 0004. Anchors by path keep the file hand-editable: a person who removes a version loses no thread. Rekeying the queue in place keeps the agent's `wait` open, so the skill's first change request needs no reconnect. One prefix per review keeps every id unambiguous when a plain video and a project share content. |

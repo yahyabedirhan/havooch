@@ -108,7 +108,7 @@ extension WindowModel {
     }
 
     private func messageCount(_ refs: [SendRef]) -> Int {
-        refs.reduce(0) { count, ref in count + (desk.review(of: ref.contentHash)?.send(ref.sendID)?.messageIDs.count ?? 0) }
+        refs.reduce(0) { count, ref in count + (desk.review(of: ref.review)?.send(ref.sendID)?.messageIDs.count ?? 0) }
     }
 
     /// The window's listener as the pill and the Connect view show it at
@@ -155,10 +155,17 @@ extension WindowModel {
         return setup.presence == .detected ? .skillNotDetected : .harnessNotDetected
     }
 
+    /// What the copied prompt names (ADR 0003): the window's project as
+    /// `project <slug>`, else its video's file name; nil with no video.
+    var promptTarget: PromptTarget? {
+        guard let video else { return nil }
+        return project.map { .project(slug: $0) } ?? .video(fileName: video.url.lastPathComponent)
+    }
+
     /// The prompt that makes `harness`'s agent listen to this window's
-    /// video; nil with no video.
+    /// video or project; nil with no video.
     func prompt(for harness: Harness) -> String? {
-        video.map { harness.prompt(for: .video(fileName: $0.url.lastPathComponent)) }
+        promptTarget.map { harness.prompt(for: $0) }
     }
 
     /// The harness of the listener session `session`, for its prompt to

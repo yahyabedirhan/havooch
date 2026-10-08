@@ -101,7 +101,7 @@ struct ImageFilesTests {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         let id = try #require(ItemID("t-f92cbb2a-1"))
-        let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
+        let file = SupportLayout(root: scratch.folder).keyframe(id, of: .video(contentHash: "abc"))
         try ImageFiles.write(try image(width: 320, height: 180), to: file)
 
         #expect(try Data(contentsOf: file).prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
@@ -127,7 +127,7 @@ struct ImageFilesTests {
         let blocker = scratch.folder.appendingPathComponent("videos")
         try Data().write(to: blocker)
         let id = try #require(ItemID("t-f92cbb2a-1"))
-        let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
+        let file = SupportLayout(root: scratch.folder).keyframe(id, of: .video(contentHash: "abc"))
         #expect(throws: ImageFiles.Failure.self) { try ImageFiles.write(try image(width: 4, height: 4), to: file) }
     }
 }

@@ -3,13 +3,20 @@ import Foundation
 /// What `havooch wait` prints: one send as the listener reads it,
 /// grouped by thread. Each thread carries its keyframe, its transcript
 /// window as the send cut it, the conversation so far (`history`) and the
-/// person's messages of this send. A key with no value is `null`, never
-/// left out.
+/// person's messages of this send. A send of a project's review carries
+/// the project (decision E8): the version on screen, which `video` is,
+/// and every version's path and label; each thread names its version,
+/// with a `null` number for a removed version. On a plain video `project`
+/// and each thread's `version` are `null`. A key with no value is `null`,
+/// never left out.
 ///
 ///     { "send":    { "id": "s-f92cbb2a-2", "sentAt": "2026-10-05T19:02:11Z" },
 ///       "video":   { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4" },
+///       "project": { "slug": "launch-video", "title": "Launch video", "onScreen": 2,
+///                    "versions": [ { "number": 1, "path": "/abs/cut1.mp4", "label": null }, … ] },
 ///       "context": null,
 ///       "threads": [ { "id": "t-f92cbb2a-1", "number": 1, "time": 10.017, "keyframePath": "/abs/….png",
+///                      "version": { "number": 1, "path": "/abs/cut1.mp4", "label": null },
 ///                      "transcript": [ { "start": 6.067, "end": 14.333, "text": "…" } ],
 ///                      "history":  [ { "id": "m-f92cbb2a-1", "author": "person", "kind": "message", "text": "…",
 ///                                      "region": null, "cropPath": null } ],
@@ -95,6 +102,41 @@ public struct SendPayload: Codable, Equatable, Sendable {
         }
     }
 
+    /// A version of the project, as the listener reads it.
+    public struct VersionPart: Codable, Equatable, Sendable {
+        /// Its number (from 1); `null` for a version whose path left the
+        /// project's list.
+        public var number: Int?
+        public var path: String
+        public var label: String?
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(number, forKey: .number)
+            try container.encode(path, forKey: .path)
+            try container.encode(label, forKey: .label)
+        }
+    }
+
+    /// The project a send of a project's review is on.
+    public struct ProjectPart: Codable, Equatable, Sendable {
+        public var slug: String
+        public var title: String
+        /// The number of the version on screen when the person sent;
+        /// `null` when its path has left the list.
+        public var onScreen: Int?
+        /// Every version, v1 first.
+        public var versions: [VersionPart]
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(slug, forKey: .slug)
+            try container.encode(title, forKey: .title)
+            try container.encode(onScreen, forKey: .onScreen)
+            try container.encode(versions, forKey: .versions)
+        }
+    }
+
     /// One thread of the send, with all the listener needs to work on it.
     public struct ThreadPart: Codable, Equatable, Sendable {
         public var id: ThreadID
@@ -103,6 +145,9 @@ public struct SendPayload: Codable, Equatable, Sendable {
         public var time: Double?
         /// The thread's keyframe PNG, as an absolute path; `null` on General.
         public var keyframePath: String?
+        /// The version the thread was raised on, in a project; `null` on a
+        /// plain video and on General.
+        public var version: VersionPart?
         /// The timed lines from 15 s before to 15 s after `time`, as the
         /// send cut them. Empty on General.
         public var transcript: [Line]
@@ -117,6 +162,7 @@ public struct SendPayload: Codable, Equatable, Sendable {
             try container.encode(number, forKey: .number)
             try container.encode(time, forKey: .time)
             try container.encode(keyframePath, forKey: .keyframePath)
+            try container.encode(version, forKey: .version)
             try container.encode(transcript, forKey: .transcript)
             try container.encode(history, forKey: .history)
             try container.encode(messages, forKey: .messages)
@@ -124,7 +170,10 @@ public struct SendPayload: Codable, Equatable, Sendable {
     }
 
     public var send: SendPart
+    /// The video on screen when the person sent.
     public var video: VideoPart
+    /// The project of a project's review; `null` on a plain video.
+    public var project: ProjectPart?
     /// The video's context text; `null` when this listener session already
     /// has it unchanged, or when there is none.
     public var context: String?
@@ -135,6 +184,7 @@ public struct SendPayload: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(send, forKey: .send)
         try container.encode(video, forKey: .video)
+        try container.encode(project, forKey: .project)
         try container.encode(context, forKey: .context)
         try container.encode(threads, forKey: .threads)
     }
@@ -146,7 +196,15 @@ public struct SendPayload: Codable, Equatable, Sendable {
     /// messages that isn't in the entry's `messages` and isn't queued, so a
     /// delivery again also carries the agent's replies so far. `images`
     /// gives the PNG paths, so this module doesn't read the store.
-    public static func assemble(review: VideoReview, send: Send, context: String?, images: Images) -> SendPayload {
+    /// `project` is the project's list as it is now, for a project's
+    /// review; the version on screen is the one the send kept.
+    public static func assemble(
+        review: Review, send: Send, context: String?, images: Images, project: ProjectOutline? = nil
+    ) -> SendPayload {
+        func version(_ anchor: VersionAnchor) -> VersionPart {
+            let number = project?.number(of: anchor.path)
+            return VersionPart(number: number, path: anchor.path, label: number.flatMap { project?.version($0)?.label })
+        }
         let threads = review.threads.compactMap { thread -> ThreadPart? in
             let work = thread.messages.filter { $0.sendID == send.id && $0.state?.isFinal == false }
             guard !work.isEmpty else { return nil }
@@ -154,6 +212,7 @@ public struct SendPayload: Codable, Equatable, Sendable {
             return ThreadPart(
                 id: thread.id, number: thread.number, time: thread.time,
                 keyframePath: thread.isGeneral ? nil : images.keyframe(thread),
+                version: thread.anchor.map(version),
                 transcript: thread.isGeneral ? [] : send.transcripts[thread.id] ?? [],
                 history: thread.messages.filter { !now.contains($0.id) && $0.state != .queued }.map {
                     HistoryPart(
@@ -166,12 +225,21 @@ public struct SendPayload: Codable, Equatable, Sendable {
                 }
             )
         }
+        let shown = send.onScreen.flatMap { review.video(at: $0.path) } ?? review.video
         return SendPayload(
             send: SendPart(id: send.id, sentAt: send.sentAt),
             video: VideoPart(
-                path: review.video.path, contentHash: review.video.contentHash,
-                duration: (review.video.duration * 1000).rounded() / 1000, title: review.video.title
+                path: shown.path, contentHash: shown.contentHash,
+                duration: (shown.duration * 1000).rounded() / 1000, title: shown.title
             ),
+            project: project.map { project in
+                ProjectPart(
+                    slug: project.slug, title: project.title, onScreen: send.onScreen.flatMap { project.number(of: $0.path) },
+                    versions: project.versions.enumerated().map {
+                        VersionPart(number: $0.offset + 1, path: $0.element.path, label: $0.element.label)
+                    }
+                )
+            },
             context: context,
             threads: threads
         )

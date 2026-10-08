@@ -190,13 +190,14 @@ extension WindowModel {
     /// Whether the tour's send still waits in the outbox for an agent.
     var isTourSendWaiting: Bool {
         guard let ref = tour.send, let listener else { return false }
-        return listener.outbox.pending.contains(ref)
+        // By id: a send moved into a project names the project now.
+        return listener.outbox.pending.contains { $0.sendID == ref.sendID }
     }
 
     /// Whether the agent answered the tour's send: every message in it is
     /// done or failed.
     var tourReplied: Bool {
-        guard let ref = tour.send, let review = desk.review(of: ref.contentHash) else { return false }
+        guard let ref = tour.send, let review = desk.review(of: desk.key(of: ref.sendID) ?? ref.review) else { return false }
         return !review.messages(of: ref.sendID).isEmpty && review.isFinished(ref.sendID)
     }
 
@@ -204,7 +205,7 @@ extension WindowModel {
     /// it is answered.
     var tourReplyThread: ThreadID? {
         guard tourReplied, let ref = tour.send else { return nil }
-        return desk.review(of: ref.contentHash)?.messages(of: ref.sendID).first?.thread
+        return desk.review(of: desk.key(of: ref.sendID) ?? ref.review)?.messages(of: ref.sendID).first?.thread
     }
 
     /// The name the panel gives the agent: the one connected, else "your

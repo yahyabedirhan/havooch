@@ -78,7 +78,7 @@ struct RootView: View {
         .toolbar(removing: .title)
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                TitleView(words: HeaderWords(video: model.video?.url, isDemo: model.isDemo), model: model)
+                TitleView(words: HeaderWords(video: model.video?.url, isDemo: model.isDemo, project: model.projectLine), model: model)
             }
             .sharedBackgroundVisibility(.hidden)
             FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)

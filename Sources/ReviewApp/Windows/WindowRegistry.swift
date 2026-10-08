@@ -60,13 +60,9 @@ final class WindowRegistry {
         windows.first { $0.id == id }
     }
 
-    /// The window that holds the video with `contentHash`; nil when none does.
-    func holding(_ contentHash: String) -> WindowModel? {
-        windows.first { $0.video?.contentHash == contentHash }
-    }
-
-    /// The window that holds the review `key`, whose listener's notices it
-    /// shows; nil when none does, and nobody sees them.
+    /// The window that holds the review `key`: a plain video, or a
+    /// project whichever version is on screen. Its listener's notices show
+    /// there; nil when none does, and nobody sees them.
     func holding(_ key: ReviewKey) -> WindowModel? {
         windows.first { $0.reviewKey == key }
     }

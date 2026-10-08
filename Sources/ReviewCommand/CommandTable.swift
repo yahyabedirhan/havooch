@@ -12,13 +12,22 @@ enum Invocation: Equatable, Sendable {
     case appOpen(demo: URL?)
     /// `app quit`: ask the app to quit, then wait until it's gone.
     case appQuit
-    /// `open <path>`: the video at the absolute `file` opened in front,
-    /// with the app launched first when it doesn't run.
-    case open(URL)
-    /// `wait`: hold a request until a send of the review of the video at
-    /// the absolute `video` path (else the key window's) is made, for `timeout` seconds
-    /// or with no limit, connecting again while the app isn't running.
-    case wait(timeout: Int?, video: URL? = nil)
+    /// `open <path> [--project <slug>]`: the video at the absolute `file`
+    /// opened in front, in the project `project` when it's set, with the
+    /// app launched first when it doesn't run.
+    case open(URL, project: String? = nil)
+    /// `wait`: hold a request until a send of the review the video at the
+    /// absolute `video` path opens in, or of the project `project`, else
+    /// of the key window's, is made, for `timeout` seconds or with no
+    /// limit, connecting again while the app isn't running.
+    case wait(timeout: Int?, video: URL? = nil, project: String? = nil)
+    /// `project new`: through the app, launched in the background when it
+    /// doesn't run.
+    case projectNew(slug: String, video: URL, title: String?)
+    /// `project add`: through the app, launched in front when it doesn't run.
+    case projectAdd(slug: String, video: URL, label: String?)
+    /// `project list`: answered without the app.
+    case projectList
     /// `config path`: answered without the app.
     case configPath
     /// `config check`: answered without the app.
@@ -135,7 +144,7 @@ public enum CommandTable {
         + PlayerCommands.commands.map { $0.onAWindow() } + CommentCommands.commands.map { $0.onAWindow() }
         + [ScreenshotCommand.command] + WindowCommands.commands + ListenerCommands.commands + ThemeCommands.commands
         + SetupCommands.commands + ConnectCommands.commands.map { $0.onAWindow() }
-        + TourCommands.commands.map { $0.onAWindow() } + ConfigCommands.commands
+        + TourCommands.commands.map { $0.onAWindow() } + ConfigCommands.commands + ProjectCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

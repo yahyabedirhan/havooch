@@ -64,9 +64,9 @@ struct SidebarTests {
         let failed = try await model.addMessage(text: "Failed one", at: 18)
         _ = try await model.sendQueue()
         let (doneID, failedID, askedID) = (try id(done.message.id), try id(failed.message.id), try id(asked.thread.id))
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.setState(doneID, .done) }
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.setState(failedID, .failed) }
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.ask(on: askedID, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(doneID, .done) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(failedID, .failed) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: askedID, question: "Which part?", now: Date()) }
         // Queued after the send: a new thread, a follow-up on a sent one, and General.
         _ = try await model.addMessage(text: "Queued one", at: 12)
         _ = try await model.addMessage(text: "And this", at: nil, thread: "4")
@@ -114,9 +114,9 @@ struct SidebarTests {
 
         _ = try await model.sendQueue()
         let id = try id(added.thread.id)
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.reply(on: id, text: "Slowed it", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.reply(on: id, text: "Slowed it", now: Date()) }
         #expect(ThreadSummary(try thread(1, model), agent: "Claude Code").preview == "Claude Code: Slowed it")
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
         summary = ThreadSummary(try thread(1, model), agent: "Claude Code")
         #expect(summary.state == .sent)
         #expect(summary.preview == "Asks: Which part?")
@@ -271,7 +271,7 @@ struct SidebarTests {
 
         // Questions on #1 and #3: Back in #3 counts #1 only.
         for thread in [first, third] {
-            _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.ask(on: thread, question: "Which?", now: Date()) }
+            _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: thread, question: "Which?", now: Date()) }
         }
         #expect(model.othersNeedingYou == 1)
         _ = model.showThreadList()

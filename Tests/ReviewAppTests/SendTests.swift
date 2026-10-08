@@ -84,7 +84,8 @@ struct SendDeliveryTests {
         #expect(answer.delivered == SendRef(sendID: send.id, contentHash: try #require(model.video?.contentHash)))
 
         let payload = try object(answer.reply.output)
-        #expect(Set(payload.keys) == ["send", "video", "context", "threads"])
+        #expect(Set(payload.keys) == ["send", "video", "project", "context", "threads"])
+        #expect(payload["project"] is NSNull)
         let sendPart = try #require(payload["send"] as? [String: String])
         #expect(sendPart["id"] == send.id.text)
         #expect(ItemID(send.id.text)?.kind == .send)
@@ -100,7 +101,7 @@ struct SendDeliveryTests {
         #expect(threads.map { $0["id"] as? String } == [first.thread.id, second.thread.id])
         #expect(threads[0].filter { !["transcript", "messages"].contains($0.key) } as? [String: AnyHashable] == [
             "id": first.thread.id, "number": 1, "time": 10, "keyframePath": try #require(first.thread.keyframePath),
-            "history": [] as [String],
+            "version": NSNull(), "history": [] as [String],
         ])
         #expect(threads[0]["messages"] as? [[String: AnyHashable]] == [
             ["id": first.message.id, "text": "Too fast here", "region": NSNull(), "cropPath": NSNull()],

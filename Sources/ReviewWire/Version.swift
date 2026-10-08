@@ -10,5 +10,7 @@ public enum Version {
     /// `thread.expand`, `state` names `sidebar.thread`, and `screenshot`
     /// takes a `window`. 4 since the windows: a request names its
     /// `window`, and `window.list`, `window.new` and `window.close` came.
-    public static let controlProtocol = 4
+    /// 5 since projects: `project.new` and `project.add` came, and `open`
+    /// and `wait` name a `project`, which an older app would not read.
+    public static let controlProtocol = 5
 }

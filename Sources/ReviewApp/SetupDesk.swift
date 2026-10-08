@@ -219,7 +219,7 @@ extension AppModel {
     /// Setup as `state` reports it for `window`, prompts naming its video.
     func setupReport(for window: WindowModel?) -> StateReport.Setup {
         StateReport.Setup(
-            setup, target: window?.video.map { .video(fileName: $0.url.lastPathComponent) }, agentConnectedOnce: agentConnectedOnce
+            setup, target: window?.promptTarget, agentConnectedOnce: agentConnectedOnce
         )
     }
 

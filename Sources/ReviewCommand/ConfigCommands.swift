@@ -62,7 +62,7 @@ enum ConfigCommands {
     }
 
     /// `value` as the app's JSON is printed: readable, keys sorted.
-    private static func encoded(_ value: some Encodable) -> CommandResult {
+    static func encoded(_ value: some Encodable) -> CommandResult {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else {

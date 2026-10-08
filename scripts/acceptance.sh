@@ -12,6 +12,9 @@
 # lets the agent go. Step 15 adds the setup tour (#91): it shows, moves on,
 # closes at its step and is skipped, and "Finish setup" is gone once an
 # agent has connected.
+# Step 16 adds projects (#92): an agent makes the first video a project, its
+# threads move in as v1, the second video becomes v2, and `wait --project`
+# gets the project's send with its project block.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -52,7 +55,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 15 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 16 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -927,11 +930,51 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 16 -------------------------------------------------------------------
+
+begin 16 "Make the first video a project, with its threads as v1. Add the second video as v2. Check that wait --project gets the project's send with its project block"
+slug="launch-video"
+run claude_listener project new "$slug" --from "$video" --title "Launch video"
+exits 0 "project new $slug --from the first video, with no lease"
+run operator state --window w1 --json
+holds "w1 holds the project, v1, and every thread on a frame is tagged v1" "$stdout" \
+    '.project.slug == $slug and .project.version == 1 and .windows[0].video.project == $slug
+     and ([.threads[] | select(.number > 0) | .version.number] | length > 0 and all(. == 1))' --arg slug "$slug"
+run settings project list --json
+holds "project list reads config.toml with no app: one project, v1 the first video" "$stdout" \
+    '.projects == [{slug: $slug, title: "Launch video", versions: [{number: 1, path: $path, label: null}]}]' \
+    --arg slug "$slug" --arg path "$video"
+run claude_listener project add "$slug" "$other_video" --label "second cut"
+exits 0 "project add $slug, the second video as v2"
+run operator state --window w1 --json
+holds "w1 shows v2, the second video, and v1's threads stay" "$stdout" \
+    '.project.version == 2 and .video.path == $path and ([.threads[] | select(.version.number == 1)] | length > 0)' \
+    --arg path "$other_video"
+take
+run operator comment add "The logo is too small in v2." --at 2 --window w1
+exits 0 "comment add on v2"
+run operator send --window w1
+exits 0 "send on v2"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+# A send an earlier step left unfinished may come first: wait once more for v2's.
+run claude_listener wait --project "$slug" --timeout 10
+if [ "$code" -eq 0 ] && ! jq -e '.project.onScreen == 2' "$stdout" >/dev/null 2>&1; then
+    run claude_listener wait --project "$slug" --timeout 10
+fi
+exits 0 "wait --project $slug"
+holds "the send carries the project, v2 on screen, and its thread's version" "$stdout" \
+    '.project.slug == $slug and .project.onScreen == 2 and (.project.versions | length) == 2
+     and .video.path == $path and ([.threads[] | select(.number > 0) | .version.number] | index(2) != null)' \
+    --arg slug "$slug" --arg path "$other_video"
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 15 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 16 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 15 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 16 steps. Screenshots: %s\n' "$shots"
 exit 0

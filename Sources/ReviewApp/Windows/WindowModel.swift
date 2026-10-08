@@ -8,7 +8,7 @@ import ReviewTranscript
 import ReviewWire
 import UniformTypeIdentifiers
 
-/// One window (ADR 0003): which video it holds, the message being written,
+/// One window (ADR 0003): which video or project it holds, the message being written,
 /// the selected thread, and every action a person or an operator can take
 /// in it. Each window has its own player, popover, sidebar, queue and
 /// notices; the data, the theme and the recent videos are the app's
@@ -44,9 +44,12 @@ final class WindowModel: WindowControlling {
     var data: DataFolder { app.data }
     /// The reviews, and the one path for changing them.
     var desk: ReviewDesk { data.desk }
-    /// The review the window's video is on; nil with no video. Its
-    /// listener is the window's.
-    var reviewKey: ReviewKey? { video.map { .video(contentHash: $0.contentHash) } }
+    /// The review the window's video is on: its project's, else the plain
+    /// video's; nil with no video. Its listener is the window's.
+    var reviewKey: ReviewKey? {
+        guard let video else { return nil }
+        return project.map { .project(slug: $0) } ?? .video(contentHash: video.contentHash)
+    }
     /// The window's listener (ADR 0003): its review's sends in line and
     /// whether an agent is there for them; nil with no video.
     var listener: ListenerQueue? { reviewKey.map(data.listeners.queue(for:)) }
@@ -62,11 +65,50 @@ final class WindowModel: WindowControlling {
     var isInAppDemo: Bool { app.isInAppDemo }
     /// Whether the run is on demo data. The header's demo words follow it.
     var isDemo: Bool { app.isDemo }
+    /// The video on screen: a plain video, or the project's version on
+    /// screen.
     private(set) var video: OpenVideo?
-    /// The open video's review; nil with no video.
-    var review: VideoReview? { video.flatMap { desk.opened($0.contentHash) } }
+    /// The slug of the project the window holds (ADR 0004); nil for a
+    /// plain video, and with none.
+    private(set) var project: String?
+    /// The open review; nil with no video.
+    var review: Review? { reviewKey.flatMap(desk.opened) }
     /// What the window holds, as its scene's value; nil for nothing.
-    var target: WindowTarget? { video.map { .video(contentHash: $0.contentHash, path: $0.url.path) } }
+    var target: WindowTarget? {
+        guard let video else { return nil }
+        return project.map { .project(slug: $0) } ?? .video(contentHash: video.contentHash, path: video.url.path)
+    }
+    /// The window's project as `config.toml` lists it now; nil for a plain
+    /// video, and for a project the file no longer has.
+    var projectOutline: ProjectOutline? { project.flatMap(app.config.outline) }
+    /// The version on screen, in a project: new threads are anchored to
+    /// it. Nil on a plain video.
+    var onScreen: VersionAnchor? {
+        guard project != nil, let video else { return nil }
+        return VersionAnchor(path: video.url.path)
+    }
+    /// The number of the version on screen, from 1; nil on a plain video,
+    /// and for a file the project's list no longer has.
+    var versionNumber: Int? {
+        guard let onScreen else { return nil }
+        return projectOutline?.number(of: onScreen.path)
+    }
+
+    /// The project and the version on screen as the header says them:
+    /// `Launch video, v2`, or `Launch video, a removed version`; nil on a
+    /// plain video.
+    var projectLine: String? {
+        guard let project else { return nil }
+        let title = projectOutline?.title ?? project
+        return "\(title), " + (versionNumber.map { "v\($0)" } ?? "a removed version")
+    }
+
+    /// The tag of `thread` in a project (`v1`, or a removed version); nil
+    /// on a plain video and for General.
+    func versionTag(of thread: ReviewThread) -> VersionTag? {
+        guard let anchor = thread.anchor else { return nil }
+        return projectOutline?.tag(anchor) ?? .removed
+    }
     /// The message being written; nil while the popover is closed.
     var draft: Draft?
     /// The thread whose pin is picked out.
@@ -158,8 +200,9 @@ final class WindowModel: WindowControlling {
     /// The open video's threads: General first, then in time order.
     var threads: [ReviewThread] { review?.threads ?? [] }
 
-    /// The open video's threads on a frame: every one but General.
-    var frameThreads: [ReviewThread] { threads.filter { !$0.isGeneral } }
+    /// The threads on a frame of the video on screen: every one but
+    /// General, and in a project only those of the version on screen.
+    var frameThreads: [ReviewThread] { threads.filter { !$0.isGeneral && $0.anchor == onScreen } }
 
     /// The open video's sends, in the order they were sent.
     var sends: [Send] { review?.sends ?? [] }
@@ -184,18 +227,34 @@ final class WindowModel: WindowControlling {
     // MARK: - Actions, for the person and the operator alike
 
     /// Opens `url` in this window, on the data the run is on when it's
-    /// asked. Refused when the run switches to other data (the demo, or
-    /// back) before it's open, so a video never lands on data it wasn't
-    /// opened for, and when another window holds the video: no two windows
-    /// hold one video (ADR 0003).
+    /// asked: as a version of the project `project` when it's set (ADR
+    /// 0004), else as a plain video. Refused when the run switches to other
+    /// data (the demo, or back) before it's open, so a video never lands on
+    /// data it wasn't opened for, and when another window holds the video
+    /// or the project: no two windows hold one (ADR 0003).
+    func open(_ url: URL, project: String?) async throws(AppRefusal) {
+        try await open(url, resolving: false, project: project)
+    }
+
+    /// Opens `url` in this window in the review it opens in (decision C4):
+    /// the most recently opened project that lists it, else the plain
+    /// video. `player open`, the demo and tests open this way.
     func open(_ url: URL) async throws(AppRefusal) {
+        try await open(url, resolving: true, project: nil)
+    }
+
+    /// `open(_:project:)`, with the project the file opens in found once
+    /// its content is known when `resolving`.
+    private func open(_ url: URL, resolving: Bool, project: String?) async throws(AppRefusal) {
         let data = app.data
         let url = url.standardizedFileURL
         try AppModel.needFile(url)
         guard let contentHash = await Self.contentHash(of: url, in: app.hashes) else {
             throw AppRefusal("can't read \(url.path)")
         }
-        try needOwn(contentHash, url)
+        let project = resolving ? try app.resolveTarget(url, contentHash: contentHash, project: nil).reviewKey.slug : project
+        let key: ReviewKey = project.map { .project(slug: $0) } ?? .video(contentHash: contentHash)
+        try needOwn(key, url)
         // Before the player changes: a history that doesn't read keeps the
         // video shut, and the one that was open stays open.
         // The file's name with its extension, the same in the header, the state and the payload.
@@ -205,7 +264,7 @@ final class WindowModel: WindowControlling {
         closePopover(.momentChanged)
         await committing?.value
         try needData(data, for: url)
-        let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path))
+        let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path), in: key)
         // Where the person left the video that goes, before the player takes the new one.
         savePosition()
         let closesBefore = closes
@@ -225,34 +284,83 @@ final class WindowModel: WindowControlling {
         }
         // Another window may have opened the same video meanwhile.
         do throws(AppRefusal) {
-            try needOwn(contentHash, url)
+            try needOwn(key, url)
         } catch {
             if video == nil { engine.close() }
             throw error
         }
         // The review as it is now, not as it was before the load: a
         // listener may have answered on one of its threads meanwhile.
-        var review = data.desk.review(of: contentHash) ?? found
+        var review = data.desk.review(of: key) ?? found
+        let sameReview = reviewKey == key
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
+        self.project = project
+        // Another version of the same project keeps what the agent said.
+        let kept = sameReview ? notices : []
         forgetVideoViews()
+        notices = kept
         sidecar = ContextReader.sidecar(beside: url)
         let frameRate = 1 / engine.frameDuration
         // The same content, where and as it is now: a renamed or moved copy
-        // has its history, and the review records the new path.
-        review.video = VideoInfo(
+        // has its history, and the review records the new path; a
+        // project's review keeps it as that version's.
+        review.show(VideoInfo(
             contentHash: contentHash, title: title, duration: engine.duration, path: url.path, frameRate: frameRate
-        )
+        ))
         desk.open(review)
-        desk.library.recordOpened(url, contentHash: contentHash, at: Date())
+        if let project {
+            desk.library.recordProjectOpened(project, at: Date())
+        } else {
+            desk.library.recordOpened(url, contentHash: contentHash, at: Date())
+        }
         app.refreshRecents()
         transcripts.opened(VideoFile(url: url, contentHash: contentHash, frameRate: frameRate, duration: engine.duration))
     }
 
-    /// Refused when a window other than this one holds the video with
-    /// `contentHash`, at `url`.
-    private func needOwn(_ contentHash: String, _ url: URL) throws(AppRefusal) {
-        guard let holder = app.windows.holding(contentHash), holder !== self else { return }
-        throw AppRefusal("\(url.lastPathComponent) is open in window \(holder.id); one video opens in one window")
+    /// Refused when a window other than this one holds the review `key`,
+    /// of the file at `url`.
+    private func needOwn(_ key: ReviewKey, _ url: URL) throws(AppRefusal) {
+        guard let holder = app.windows.holding(key), holder !== self else { return }
+        switch key {
+        case .video:
+            throw AppRefusal("\(url.lastPathComponent) is open in window \(holder.id); one video opens in one window")
+        case .project(let slug):
+            throw AppRefusal("the project \(slug) is open in window \(holder.id); one project opens in one window")
+        }
+    }
+
+    /// The video's review became the project `slug`'s (`project new
+    /// --from`): the window holds the project now, on the same video, v1.
+    func moveIntoProject(_ slug: String) {
+        guard video != nil, project == nil else { return }
+        project = slug
+    }
+
+    /// Shows the version of the project numbered `number` (from 1) in this
+    /// window, as `project add` shows a new render. Refused on a plain
+    /// video and outside the project's list.
+    func showVersion(_ number: Int, of slug: String) async throws(AppRefusal) {
+        guard let outline = app.config.outline(slug) else { throw AppRefusal("no project `\(slug)` in config.toml") }
+        guard let version = outline.version(number) else {
+            throw AppRefusal("the project \(slug) has no v\(number); it has v1 to v\(outline.versions.count)")
+        }
+        try await open(URL(fileURLWithPath: version.path), project: slug)
+    }
+
+    /// Puts the version `thread` was raised on on screen when another
+    /// version of the project is: true when the thread's frame is on
+    /// screen now. False for a removed version, which has no file to show:
+    /// its thread stays, with no frame.
+    private func showVersion(of thread: ReviewThread) async -> Bool {
+        guard let anchor = thread.anchor, anchor != onScreen else { return true }
+        guard let project, projectOutline?.number(of: anchor.path) != nil else { return false }
+        do throws(AppRefusal) {
+            try await open(URL(fileURLWithPath: anchor.path), project: project)
+            return true
+        } catch {
+            problem = Problem(title: "The version didn't open", reason: error.reason)
+            return false
+        }
     }
 
     /// The window closed: words in the popover are queued on their video,
@@ -381,8 +489,9 @@ final class WindowModel: WindowControlling {
     /// quitting and going home call it. Nothing with no video.
     func savePosition() {
         // While a load runs, the player already holds the next video's
-        // time; `open` saved this one's before the load.
-        guard let video, loads == 0 else { return }
+        // time; `open` saved this one's before the load. A project's
+        // version isn't a recent video.
+        guard let video, project == nil, loads == 0 else { return }
         desk.library.savePosition(engine.time, of: video.contentHash)
         app.refreshRecents()
     }
@@ -404,6 +513,16 @@ final class WindowModel: WindowControlling {
     func openRecent(_ recent: StateReport.Recent) {
         guard recent.available else { return }
         openForPerson(recent.url)
+    }
+
+    /// The projects in `config.toml`, the most recently opened first: the
+    /// home screen's project cards. The app's, the same in every window.
+    var homeProjects: [StateReport.HomeProject] { app.homeProjects }
+
+    /// A click on a project's card: its latest version opens in its
+    /// project, in this window unless another one holds the project.
+    func openProject(_ slug: String) {
+        app.openProject(slug, from: self)
     }
 
     /// The recent videos' thumbnails, the app's.
@@ -442,7 +561,7 @@ final class WindowModel: WindowControlling {
         try needVideo()
         try needWords(text)
         if let at { try needInside(at) }
-        guard let review = review else { throw Self.noVideo }
+        guard let review = review, let key = reviewKey else { throw Self.noVideo }
         var thread: ReviewThread?
         if let ref {
             guard let parsed = ThreadRef(ref) else {
@@ -458,22 +577,29 @@ final class WindowModel: WindowControlling {
         // A message the review refuses leaves the player where it is.
         var trial = review
         do throws(ReviewRefusal) {
-            _ = try trial.write(text: text, at: time, region: region, to: thread?.id, now: Date())
+            _ = try trial.write(text: text, at: time, region: region, to: thread?.id, on: onScreen, now: Date())
         } catch {
             throw AppRefusal(error.line)
         }
+        // A thread of another version: its version comes on screen first.
+        // One of a removed version takes words on the whole frame, with no
+        // frame to move to.
+        var onItsFrame = true
+        if let thread { onItsFrame = await showVersion(of: thread) }
+        if !onItsFrame, region != nil, let thread {
+            throw AppRefusal("#\(thread.number) is on a removed version, which has no frame to draw a region on")
+        }
         engine.pause()
-        if let time {
+        if let time, onItsFrame {
             // The words in the popover are queued at their own frame first.
             closePopover(.momentChanged)
             await committing?.value
             await engine.seek(to: time)
         }
         let written = try await queueMessage(text: text, time: time, region: region, thread: thread?.id)
-        guard let video else { throw Self.noVideo }
         return (
-            StateReport.Message(written.message, contentHash: video.contentHash, layout: layout),
-            StateReport.Thread(written.thread, contentHash: video.contentHash, layout: layout)
+            StateReport.Message(written.message, review: key, layout: layout),
+            StateReport.Thread(written.thread, review: key, layout: layout, project: projectOutline)
         )
     }
 
@@ -491,8 +617,8 @@ final class WindowModel: WindowControlling {
         let deleted = try change { review throws(ReviewRefusal) in try review.delete(id) }
         let report = report(deleted.message)
         if let crop = report.cropPath { ImageFiles.remove(URL(fileURLWithPath: crop)) }
-        if deleted.removedThread, let video {
-            ImageFiles.remove(layout.keyframe(deleted.thread, of: video.contentHash))
+        if deleted.removedThread, let key = reviewKey {
+            ImageFiles.remove(layout.keyframe(deleted.thread, of: key))
             if selection == deleted.thread { selection = nil }
             // A thread view of a thread that's gone goes back to the list.
             if shown == deleted.thread { shown = nil }
@@ -525,7 +651,7 @@ final class WindowModel: WindowControlling {
         try needVideo()
         // A message whose pictures are still being written joins the send.
         await committing?.value
-        if let draft, Self.hasWords(draft.text), review?.thread(atFrame: draft.time)?.openQuestion != nil {
+        if let draft, Self.hasWords(draft.text), review?.thread(atFrame: draft.time, on: onScreen)?.openQuestion != nil {
             // Words to an open question are an answer, never in the queue.
             closePopover(.clickOutside)
         } else if let draft, Self.hasWords(draft.text) {
@@ -543,14 +669,19 @@ final class WindowModel: WindowControlling {
         if Self.hasWords(composerText) {
             _ = try await writeComposer()
         }
-        guard let info = review?.video else { throw Self.noVideo }
-        // Each thread's transcript window is cut now and kept with the send.
-        let send = try change { [transcripts] review throws(ReviewRefusal) in
-            try review.send(at: Date()) { thread in thread.time.map { transcripts.lines(around: $0, of: info) } ?? [] }
+        guard let shown = review?.video else { throw Self.noVideo }
+        // Each thread's transcript window is cut now and kept with the send,
+        // from the video of the version it's on.
+        let send = try change { [transcripts, onScreen] review throws(ReviewRefusal) in
+            let videos = review
+            return try review.send(at: Date(), onScreen: onScreen) { thread in
+                let info = thread.anchor.flatMap { videos.video(at: $0.path) } ?? shown
+                return thread.time.map { transcripts.lines(around: $0, of: info) } ?? []
+            }
         }
-        guard let video, let review = review else { throw Self.noVideo }
-        let ref = SendRef(sendID: send.id, contentHash: video.contentHash)
-        let listener = data.listeners.queue(ofVideo: video.contentHash)
+        guard let key = reviewKey, let review = review else { throw Self.noVideo }
+        let ref = SendRef(sendID: send.id, review: key)
+        let listener = data.listeners.queue(for: key)
         listener.enqueue(ref)
         // With nobody there, the send waits in the outbox and the Connect
         // view says so (G8).
@@ -562,10 +693,10 @@ final class WindowModel: WindowControlling {
     /// The answer field and `thread answer`: the person's answer to the
     /// open question on a thread. The `ask` that waits for it exits with it.
     func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
-        let (id, hash) = try desk.threadID(thread, open: video?.contentHash)
-        let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.answer(id, text: text, now: Date()) }
-        let report = StateReport.Message(message, contentHash: hash, layout: layout)
-        data.listeners.queue(ofVideo: hash).answered(id, with: report)
+        let (id, key) = try desk.threadID(thread, open: reviewKey)
+        let message = try desk.change(key) { review throws(ReviewRefusal) in try review.answer(id, text: text, now: Date()) }
+        let report = StateReport.Message(message, review: key, layout: layout)
+        data.listeners.queue(for: key).answered(id, with: report)
         notices.removeAll { $0.thread == id && $0.kind == .question }
         return (report, id.number)
     }
@@ -573,8 +704,8 @@ final class WindowModel: WindowControlling {
     /// A quick-reply button and `thread choose`: the open question on a
     /// thread answered with its choice `number` (from 1), at once.
     func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
-        let (id, hash) = try desk.threadID(thread, open: video?.contentHash)
-        guard let review = desk.review(of: hash) else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
+        let (id, key) = try desk.threadID(thread, open: reviewKey)
+        guard let review = desk.review(of: key) else { throw AppRefusal(ReviewRefusal.unknownID(thread).line) }
         let words: String
         do throws(ReviewRefusal) {
             words = try review.choice(number, on: id)
@@ -586,8 +717,8 @@ final class WindowModel: WindowControlling {
 
     /// `state`: what this window shows, with every window.
     func state() -> StateReport {
-        let hash = video?.contentHash ?? ""
         let review = self.review
+        let outline = projectOutline
         var report = StateReport(
             app: app.appReport,
             video: video.map {
@@ -598,10 +729,12 @@ final class WindowModel: WindowControlling {
             },
             player: .init(time: engine.time, playing: engine.isPlaying),
             popover: draft.map { .init(thread: draftThreadNumber, time: $0.time, text: $0.text, region: $0.region) },
-            threads: threads.map { StateReport.Thread($0, contentHash: hash, layout: layout) },
+            threads: reviewKey.map { key in threads.map { StateReport.Thread($0, review: key, layout: layout, project: outline) } } ?? [],
             queue: review?.queue.map(\.id.text) ?? [],
             sends: review.map { review in sends.map { StateReport.Send($0, in: review) } } ?? []
         )
+        report.project = outline.map { StateReport.Project($0, onScreen: video?.url.path) }
+        report.projects = app.homeProjects
         report.transcript = transcript
         report.listener = listener?.report(at: Date()) ?? .absent
         report.theme = themes.report
@@ -625,7 +758,9 @@ final class WindowModel: WindowControlling {
     func report(isKey: Bool) -> StateReport.Window {
         StateReport.Window(
             id: id, key: isKey, onScreen: nsWindow?.isVisible ?? false, screen: screen,
-            video: video.map { StateReport.Window.Held(path: $0.url.path, title: $0.title, contentHash: $0.contentHash) },
+            video: video.map {
+                StateReport.Window.Held(path: $0.url.path, title: $0.title, contentHash: $0.contentHash, project: project, version: versionNumber)
+            },
             listener: listener.map { listener in
                 let heard = listener.report(at: Date())
                 return StateReport.Window.Heard(presence: heard.presence, session: heard.session)
@@ -635,9 +770,9 @@ final class WindowModel: WindowControlling {
 
     /// Runs `change` on the open video's review, saves and publishes the
     /// result. Refused with no video.
-    private func change<Result>(_ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
-        guard let video else { throw Self.noVideo }
-        return try desk.change(video.contentHash, change)
+    private func change<Result>(_ change: (inout Review) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
+        guard let key = reviewKey else { throw Self.noVideo }
+        return try desk.change(key, change)
     }
 
     // MARK: - Messages
@@ -650,19 +785,18 @@ final class WindowModel: WindowControlling {
     /// listener's reply) can't take their place.
     private func queueMessage(
         text: String, time: Double?, region: Region?, thread: ThreadID?
-    ) async throws(AppRefusal) -> VideoReview.Written {
+    ) async throws(AppRefusal) -> Review.Written {
         // The message and its pictures stay on the data its video is on,
         // also when the run switches to other data meanwhile.
-        let (desk, layout) = (self.desk, self.layout)
-        guard let video, let asset = engine.asset, var trial = review else { throw Self.noVideo }
+        let (desk, layout, onScreen) = (self.desk, self.layout, self.onScreen)
+        guard let video, let hash = reviewKey, let asset = engine.asset, var trial = review else { throw Self.noVideo }
         // What the write will do, refused before any picture is written.
-        let planned: VideoReview.Written
+        let planned: Review.Written
         do throws(ReviewRefusal) {
-            planned = try trial.write(text: text, at: time, region: region, to: thread, now: Date())
+            planned = try trial.write(text: text, at: time, region: region, to: thread, on: onScreen, now: Date())
         } catch {
             throw AppRefusal(error.line)
         }
-        let hash = video.contentHash
         let token = UUID().uuidString
         let pendingKeyframe = planned.startedThread ? layout.pendingImage("\(token)-keyframe", of: hash) : nil
         let pendingCrop = region == nil ? nil : layout.pendingImage("\(token)-crop", of: hash)
@@ -679,7 +813,7 @@ final class WindowModel: WindowControlling {
         }
         guard self.video == video else { throw AppRefusal("another video opened before the message was queued") }
         let written = try desk.change(hash) { review throws(ReviewRefusal) in
-            try review.write(text: text, at: time, region: region, to: thread, now: Date())
+            try review.write(text: text, at: time, region: region, to: thread, on: onScreen, now: Date())
         }
         let keyframe = layout.keyframe(written.thread.id, of: hash)
         if !written.thread.isGeneral, !FileManager.default.fileExists(atPath: keyframe.path) {
@@ -713,18 +847,18 @@ final class WindowModel: WindowControlling {
     }
 
     private func report(_ message: Message) -> StateReport.Message {
-        StateReport.Message(message, contentHash: video?.contentHash ?? "", layout: layout)
+        StateReport.Message(message, review: reviewKey ?? .video(contentHash: ""), layout: layout)
     }
 
-    /// The keyframe PNG of `thread` on the open video; nil for General.
+    /// The keyframe PNG of `thread` of the open review; nil for General.
     func keyframe(of thread: ReviewThread) -> URL? {
-        video.flatMap { layout.keyframe(of: thread, on: $0.contentHash) }
+        reviewKey.flatMap { layout.keyframe(of: thread, on: $0) }
     }
 
-    /// The PNG of `message`'s region on the open video; nil for a message
+    /// The PNG of `message`'s region of the open review; nil for a message
     /// on the whole frame.
     func crop(of message: Message) -> URL? {
-        video.flatMap { layout.crop(of: message, on: $0.contentHash) }
+        reviewKey.flatMap { layout.crop(of: message, on: $0) }
     }
 
     /// The threads on the frame on screen, paused or playing: each one's
@@ -748,7 +882,7 @@ final class WindowModel: WindowControlling {
     /// popover is closed.
     var draftThreadNumber: Int? {
         guard let draft, let review = review else { return nil }
-        return review.thread(atFrame: draft.time)?.number ?? review.nextThreadNumber
+        return review.thread(atFrame: draft.time, on: onScreen)?.number ?? review.nextThreadNumber
     }
 
     // MARK: - What an action needs
@@ -869,7 +1003,7 @@ final class WindowModel: WindowControlling {
     private func deliver(_ draft: Draft) {
         // The words take the region: it isn't the composer's any more.
         dropDrawnRegion(draft)
-        guard let thread = review?.thread(atFrame: draft.time), thread.openQuestion != nil else {
+        guard let thread = review?.thread(atFrame: draft.time, on: onScreen), thread.openQuestion != nil else {
             queue(draft)
             return
         }
@@ -945,7 +1079,7 @@ final class WindowModel: WindowControlling {
     /// it's closed.
     var draftThread: ReviewThread? {
         guard let draft else { return nil }
-        return review?.thread(atFrame: draft.time)
+        return review?.thread(atFrame: draft.time, on: onScreen)
     }
 
     /// A click on a thread's pin or its badge: the player pauses on the
@@ -954,6 +1088,14 @@ final class WindowModel: WindowControlling {
     /// change of the moment for a popover open on another frame; one open
     /// on this thread stays as it is. General has no frame to open on.
     func openThread(_ id: ThreadID) {
+        guard let thread = review?.thread(id), thread.anchor == onScreen else {
+            // A thread of another version opens once its version is on screen.
+            Task {
+                guard let thread = review?.thread(id), await showVersion(of: thread), let time = startThread(id) else { return }
+                await engine.seek(to: time)
+            }
+            return
+        }
         guard let time = startThread(id) else { return }
         Task { await engine.seek(to: time) }
     }
@@ -963,10 +1105,13 @@ final class WindowModel: WindowControlling {
     /// popover is first kept at that frame, as a drag and a resize leave it.
     func openThread(_ ref: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
         try needVideo()
-        let (id, hash) = try desk.threadID(ref, open: video?.contentHash)
-        guard hash == video?.contentHash else { throw AppRefusal(ReviewRefusal.otherVideo(id.text).line) }
-        guard review?.thread(id)?.isGeneral == false else {
+        let (id, key) = try desk.threadID(ref, open: reviewKey)
+        guard key == reviewKey else { throw AppRefusal(ReviewRefusal.otherVideo(id.text).line) }
+        guard let thread = review?.thread(id), !thread.isGeneral else {
             throw AppRefusal("General has no frame to open a popover on; its messages are in the sidebar")
+        }
+        guard await showVersion(of: thread) else {
+            throw AppRefusal("#\(thread.number) is on a removed version, which has no frame to open a popover on")
         }
         if let frame { try movePopover(id, to: frame) }
         guard let time = startThread(id) else { throw Self.noVideo }
@@ -1052,7 +1197,17 @@ final class WindowModel: WindowControlling {
     /// to. A move to the thread's frame is a change of the moment.
     func showThread(_ id: ThreadID) {
         guard let thread = show(id) else { return }
-        if let time = thread.time { move(to: time) }
+        guard let time = thread.time else { return }
+        guard thread.anchor == onScreen else {
+            // A thread of another version moves the window to its version
+            // first; one of a removed version shows with no frame.
+            Task {
+                guard await showVersion(of: thread), show(id) != nil else { return }
+                move(to: time)
+            }
+            return
+        }
+        move(to: time)
     }
 
     /// `thread show` (L39): the sidebar shows the thread's view, as a
@@ -1060,11 +1215,13 @@ final class WindowModel: WindowControlling {
     /// thread's frame, so `state` after it shows the frame.
     func showThread(_ ref: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
         try needVideo()
-        let (id, hash) = try desk.threadID(ref, open: video?.contentHash)
-        guard hash == video?.contentHash, let thread = show(id) else {
+        let (id, key) = try desk.threadID(ref, open: reviewKey)
+        guard key == reviewKey, let found = review?.thread(id) else {
             throw AppRefusal(ReviewRefusal.otherVideo(id.text).line)
         }
-        if let time = thread.time {
+        let onItsVersion = await showVersion(of: found)
+        guard let thread = show(id) else { throw AppRefusal(ReviewRefusal.otherVideo(id.text).line) }
+        if onItsVersion, let time = thread.time {
             closePopover(.momentChanged)
             await committing?.value
             await engine.seek(to: time)
@@ -1140,6 +1297,15 @@ final class WindowModel: WindowControlling {
     /// stays on the list. General has no frame.
     func showOnVideo(_ id: ThreadID) {
         guard let thread = review?.thread(id), let time = thread.time else { return }
+        guard thread.anchor == onScreen else {
+            Task {
+                guard await showVersion(of: thread) else { return }
+                selection = id
+                engine.pause()
+                move(to: time)
+            }
+            return
+        }
         selection = id
         engine.pause()
         move(to: time)
@@ -1213,7 +1379,7 @@ final class WindowModel: WindowControlling {
         return ComposerTarget.resolve(
             shown: shownThread,
             general: shownThread == nil && isComposerGeneral ? threads.first(where: \.isGeneral) : nil,
-            atFrame: review.thread(atFrame: frame),
+            atFrame: review.thread(atFrame: frame, on: onScreen),
             frame: frame,
             nextNumber: review.nextThreadNumber,
             // The region counts while the stage shows the frame it was drawn on.
@@ -1455,8 +1621,8 @@ final class WindowModel: WindowControlling {
     /// Whether the listener's next send of the open video carries the
     /// context: there is one, and this listener session hasn't had it.
     var isContextDue: Bool {
-        guard let video else { return false }
-        return listener?.outbox.isContextDue(for: video.contentHash, text: contextText) ?? false
+        guard let key = reviewKey else { return false }
+        return listener?.outbox.isContextDue(for: key.contextKey, text: contextText) ?? false
     }
 
     /// The context popover opens: the sidecar is read again, since nothing

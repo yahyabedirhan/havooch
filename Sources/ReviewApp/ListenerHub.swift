@@ -4,12 +4,13 @@ import ReviewCore
 import ReviewStore
 
 /// The listeners of one data folder (ADR 0003): one `ListenerQueue`, with
-/// its own outbox, per review, so two agents can listen to two videos at
-/// the same time. A `wait` binds to the review its caller names (the app
-/// resolves `--video`, or the key window's review); the listener's other
-/// commands name an id, whose prefix names its review, so they find their
-/// queue with no flag. A bare thread number in `reply` and `ask` is a
-/// thread of the key window's video.
+/// its own outbox, per review (a plain video's or a project's), so two
+/// agents can listen to two windows at the same time. A `wait` binds to
+/// the review its caller names (the app resolves `--video` and
+/// `--project`, or the key window's review); the listener's other commands
+/// name an id, whose prefix names its review, so they find their queue
+/// with no flag. A bare thread number in `reply` and `ask` is a thread of
+/// the key window's review.
 ///
 /// Queues are made the first time a review needs one and kept for the
 /// run, so a listener of a video no window holds is still heard, and a
@@ -22,9 +23,12 @@ final class ListenerHub {
     /// Told each thing an agent says, and each takeover, with the review
     /// it's on, to show it as a notice in the window that holds the review.
     @ObservationIgnored var announce: (@MainActor (ReviewKey, Notice) -> Void)?
-    /// The content hash of the video a bare thread number (`reply 3`) is
-    /// on: the key window's. The app sets it; nil with no video.
-    @ObservationIgnored var keyVideo: @MainActor () -> String? = { nil }
+    /// The review a bare thread number (`reply 3`) is on: the key
+    /// window's. The app sets it; nil with no video.
+    @ObservationIgnored var keyReview: @MainActor () -> ReviewKey? = { nil }
+    /// The project `slug` as `config.toml` lists it now, for each payload's
+    /// project block. The app sets it.
+    @ObservationIgnored var outline: @MainActor (String) -> ProjectOutline? = { _ in nil }
     /// Told each time an agent's `wait` opens on any review, with the review.
     @ObservationIgnored var connected: (@MainActor (ReviewKey) -> Void)?
     /// When this data opened: a listener the last run left reconnects for
@@ -50,8 +54,16 @@ final class ListenerHub {
     func queue(for key: ReviewKey) -> ListenerQueue {
         if let queue = queues[key] { return queue }
         let queue = ListenerQueue(key: key, desk: desk, layout: layout, startedAt: startedAt, now: now)
-        queue.announce = { [weak self] notice in self?.announce?(key, notice) }
-        queue.connected = { [weak self] in self?.connected?(key) }
+        // The queue's own key: it changes when its review moves into a project.
+        queue.announce = { [weak self, weak queue] notice in
+            guard let queue else { return }
+            self?.announce?(queue.key, notice)
+        }
+        queue.outline = { [weak self] slug in self?.outline(slug) }
+        queue.connected = { [weak self, weak queue] in
+            guard let queue else { return }
+            self?.connected?(queue.key)
+        }
         queues[key] = queue
         return queue
     }
@@ -59,12 +71,19 @@ final class ListenerHub {
     /// The listener of the review the thread, message or send `id` is on,
     /// by its prefix; nil when no review is that id's.
     func queue(of id: ItemID) -> ListenerQueue? {
-        desk.contentHash(of: id).map { queue(for: .video(contentHash: $0)) }
+        desk.key(of: id).map { queue(for: $0) }
     }
 
-    /// The listener of the video with `contentHash`.
-    func queue(ofVideo contentHash: String) -> ListenerQueue {
-        queue(for: .video(contentHash: contentHash))
+    /// The review `old` became the review `new` (`project new --from`):
+    /// its listener, made now when the run had none, listens to `new`
+    /// from now on, its `wait` still open (`ListenerQueue.rekey`).
+    func rekey(_ old: ReviewKey, to new: ReviewKey) {
+        let queue = queue(for: old)
+        queues[old] = nil
+        // A listener the run had for `new` already gives way: one per review.
+        queues[new]?.stop()
+        queue.rekey(to: new)
+        queues[new] = queue
     }
 
     // MARK: - The listener's commands
@@ -88,8 +107,8 @@ final class ListenerHub {
     /// `havooch reply`, on the review the thread's id names, or the key
     /// window's for a bare number.
     func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
-        let (id, hash) = try desk.threadID(thread, open: keyVideo())
-        return try queue(ofVideo: hash).reply(on: id, of: hash, text: text)
+        let (id, review) = try desk.threadID(thread, open: keyReview())
+        return try queue(for: review).reply(on: id, of: review, text: text)
     }
 
     /// `havooch ask`, on the review the thread's id names, or the key
@@ -97,9 +116,9 @@ final class ListenerHub {
     func ask(
         on thread: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
     ) async throws(AppRefusal) -> ListenerQueue.Asked {
-        let (id, hash) = try desk.threadID(thread, open: keyVideo())
-        return try await queue(ofVideo: hash).ask(
-            on: id, of: hash, question: question, choices: choices, waitSeconds: waitSeconds, connection: connection
+        let (id, review) = try desk.threadID(thread, open: keyReview())
+        return try await queue(for: review).ask(
+            on: id, of: review, question: question, choices: choices, waitSeconds: waitSeconds, connection: connection
         )
     }
 

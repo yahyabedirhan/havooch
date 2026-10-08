@@ -26,10 +26,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch app demo`: the app runs the demo in the same window, as
     /// "Try the Demo" does. A closed window shows.
     case appDemo
-    /// `havooch open <path>`: the video at the absolute `path` opened
-    /// for a person, playing, with the app brought to the front. No lease:
-    /// opening a file never takes control of the app from the person.
-    case open(path: String)
+    /// `havooch open <path> [--project <slug>]`: the video at the
+    /// absolute `path` opened for a person, playing, with the app brought
+    /// to the front: in the project `project` when it's set, else in the
+    /// most recently used project that lists it, else as a plain video. No
+    /// lease: opening a file never takes control of the app from the person.
+    case open(path: String, project: String? = nil)
     /// `havooch player open <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
@@ -71,13 +73,14 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch send`: every queued message of the open video sent as
     /// one send, which the listener's `wait` gets.
     case send
-    /// `havooch wait [--video <path>] [--timeout <seconds>]`: the next
-    /// send of one review as its JSON payload: the review of the video at
-    /// the absolute `video` path, else the key window's. The app holds the
+    /// `havooch wait [--video <path> | --project <slug>] [--timeout
+    /// <seconds>]`: the next send of one review as its JSON payload: the
+    /// review the video at the absolute `video` path opens in, or the
+    /// project `project`'s, else the key window's. The app holds the
     /// request until a send is made, up to `timeoutSeconds`, or with no
     /// limit when it's nil. The sender is that review's listener, present
     /// while its `wait` is open.
-    case wait(timeoutSeconds: Int?, video: String? = nil)
+    case wait(timeoutSeconds: Int?, video: String? = nil, project: String? = nil)
     /// `havooch ack <send-id> [<text>]`: the listener has the send.
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
@@ -185,6 +188,16 @@ public enum ControlRequest: Equatable, Sendable {
     /// button closes it. The window is the message's `window`, else the
     /// key window.
     case windowClose
+    /// `havooch project new <slug> --from <path> [--title <title>]`: a
+    /// project in `config.toml` whose v1 is the video at the absolute
+    /// `path`; the video's review moves into it, and its listener keeps
+    /// listening (ADR 0004). No lease: the agent makes it on the person's
+    /// behalf.
+    case projectNew(slug: String, path: String, title: String? = nil)
+    /// `havooch project add <slug> <path> [--label <label>]`: the video at
+    /// the absolute `path` appended to the project as its next version,
+    /// shown in the project's window, which comes forward. No lease.
+    case projectAdd(slug: String, path: String, label: String? = nil)
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -244,7 +257,7 @@ public enum ControlRequest: Equatable, Sendable {
     public var role: Role {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease, .themeList, .windowList: .free
-        case .open: .person
+        case .open, .projectNew, .projectAdd: .person
         case .themeSet, .configDismiss, .windowNew, .windowClose: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
@@ -265,7 +278,7 @@ public enum ControlRequest: Equatable, Sendable {
     public var holdSeconds: TimeInterval? {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
-        case .wait(let timeoutSeconds, _): timeoutSeconds.map(TimeInterval.init)
+        case .wait(let timeoutSeconds, _, _): timeoutSeconds.map(TimeInterval.init)
         case .ask(_, _, let waitSeconds, _): waitSeconds.map(TimeInterval.init)
         default: 0
         }

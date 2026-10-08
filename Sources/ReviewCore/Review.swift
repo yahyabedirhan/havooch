@@ -24,11 +24,25 @@ public struct VideoInfo: Codable, Equatable, Sendable {
     }
 }
 
-/// Everything kept about one video, and every rule about its threads,
-/// messages and sends. The review makes every id from its own counters,
-/// which never give a number twice, so a test knows its ids.
-public struct VideoReview: Codable, Equatable, Sendable {
+/// Everything kept about one review (ADR 0004): a plain video's, or a
+/// project's, whose threads belong to the project and are each anchored
+/// to the version they were raised on. Every rule about its threads,
+/// messages and sends is here. The review makes every id from its own
+/// counters, which never give a number twice, so a test knows its ids.
+public struct Review: Codable, Equatable, Sendable {
+    /// Whose review it is: a plain video's or a project's.
+    public private(set) var key: ReviewKey
+    /// The video on screen: a plain video's one video; in a project, the
+    /// version last opened.
     public var video: VideoInfo
+    /// In a project, each version's video as it was last opened, one per
+    /// path: the content hash of each version is app state, not
+    /// configuration. Empty on a plain video.
+    public private(set) var versions: [VideoInfo]
+    /// The id prefix every id of the review carries. Fixed when the review
+    /// is made and never changed, so ids stay valid when a plain video's
+    /// review becomes a project's (P3).
+    public let hash8: String
     /// The person's context note for the agent, added to the sidecar's
     /// text; empty for none.
     public var note = ""
@@ -46,17 +60,98 @@ public struct VideoReview: Codable, Equatable, Sendable {
         var send = 1
     }
 
-    /// A new review, with its General thread.
-    public init(video: VideoInfo) {
+    /// A new review of the plain video `video`, with its General thread.
+    /// Its ids take `hash8`, the first eight digits of the video's content
+    /// hash unless another review has them.
+    public init(video: VideoInfo, hash8: String? = nil) {
+        self.init(key: .video(contentHash: video.contentHash), video: video, hash8: hash8 ?? ItemID.hash8(of: video.contentHash))
+    }
+
+    /// A new review of the project `slug`, on screen at `video`, with its
+    /// General thread. Its ids take `hash8`.
+    public init(project slug: String, video: VideoInfo, hash8: String) {
+        self.init(key: .project(slug: slug), video: video, hash8: hash8)
+        versions = [video]
+    }
+
+    private init(key: ReviewKey, video: VideoInfo, hash8: String) {
+        self.key = key
         self.video = video
-        threads = [ReviewThread(id: ThreadID(.thread, hash8: ItemID.hash8(of: video.contentHash), number: 0), time: nil)]
+        self.hash8 = hash8
+        versions = []
+        threads = [ReviewThread(id: ThreadID(.thread, hash8: hash8, number: 0), time: nil)]
         sends = []
         counters = Counters()
     }
 
-    /// The first eight hex digits of the video's content hash, which every
-    /// id of the review carries.
-    public var hash8: String { ItemID.hash8(of: video.contentHash) }
+    private enum CodingKeys: String, CodingKey {
+        case video, note, threads, sends, counters, hash8, project, versions
+    }
+
+    /// A review kept before projects has no `hash8` and no `project`: a
+    /// plain video's, with its video's prefix.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        video = try container.decode(VideoInfo.self, forKey: .video)
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        threads = try container.decode([ReviewThread].self, forKey: .threads)
+        sends = try container.decode([Send].self, forKey: .sends)
+        counters = try container.decode(Counters.self, forKey: .counters)
+        hash8 = try container.decodeIfPresent(String.self, forKey: .hash8) ?? ItemID.hash8(of: video.contentHash)
+        if let slug = try container.decodeIfPresent(String.self, forKey: .project) {
+            key = .project(slug: slug)
+        } else {
+            key = .video(contentHash: video.contentHash)
+        }
+        versions = try container.decodeIfPresent([VideoInfo].self, forKey: .versions) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(video, forKey: .video)
+        try container.encode(note, forKey: .note)
+        try container.encode(threads, forKey: .threads)
+        try container.encode(sends, forKey: .sends)
+        try container.encode(counters, forKey: .counters)
+        try container.encode(hash8, forKey: .hash8)
+        try container.encodeIfPresent(key.slug, forKey: .project)
+        if case .project = key { try container.encode(versions, forKey: .versions) }
+    }
+
+    // MARK: - Projects
+
+    /// The review as the project `slug`'s (`project new --from`, decision
+    /// E7): the same threads, messages, sends and ids, each thread on a
+    /// frame anchored to `anchor`, the video's path, which is v1. General
+    /// stays the whole project's.
+    public func adoptedIntoProject(_ slug: String, anchor: VersionAnchor) -> Review {
+        var adopted = self
+        adopted.key = .project(slug: slug)
+        for index in adopted.threads.indices where !adopted.threads[index].isGeneral && adopted.threads[index].anchor == nil {
+            adopted.threads[index].anchor = anchor
+        }
+        adopted.video.path = anchor.path
+        adopted.versions = [adopted.video]
+        return adopted
+    }
+
+    /// The video kept for the version at `path`; nil for one never opened.
+    public func video(at path: String) -> VideoInfo? {
+        if video.path == path { return video }
+        return versions.first { $0.path == path }
+    }
+
+    /// `video` is on screen now. In a project it's kept as its version's
+    /// video too, by its path.
+    public mutating func show(_ video: VideoInfo) {
+        self.video = video
+        guard case .project = key else { return }
+        if let index = versions.firstIndex(where: { $0.path == video.path }) {
+            versions[index] = video
+        } else {
+            versions.append(video)
+        }
+    }
 
     /// The General thread: number 0, no keyframe.
     public var general: ReviewThread { threads[0] }
@@ -86,9 +181,11 @@ public struct VideoReview: Codable, Equatable, Sendable {
         threads.first { $0.id == id }
     }
 
-    /// The thread whose key is exactly the frame time `time`.
-    public func thread(atFrame time: Double) -> ReviewThread? {
-        threads.first { $0.time == time }
+    /// The thread whose key is exactly the frame time `time`, on the
+    /// version `anchor` in a project: two versions may each have a thread
+    /// at 0:12.
+    public func thread(atFrame time: Double, on anchor: VersionAnchor? = nil) -> ReviewThread? {
+        threads.first { $0.time == time && $0.anchor == anchor }
     }
 
     /// The message `id`, and the thread it's on.
@@ -139,13 +236,15 @@ public struct VideoReview: Codable, Equatable, Sendable {
 
     /// Queues the person's message. On `thread` it joins that thread; then
     /// a `time` must be the thread's own frame. Without `thread`, a `time`
-    /// joins the thread whose key is exactly that frame time, or starts a
-    /// new one with the next number; with neither, it goes on General. A
+    /// joins the thread whose key is exactly that frame time on the version
+    /// `anchor` (in a project), or starts a new one there with the next
+    /// number; with neither, it goes on General. A
     /// region needs a frame, so General refuses it. The text loses the
     /// space around it; one with no words is refused.
     @discardableResult
     public mutating func write(
-        text: String, at time: Double?, region: Region? = nil, to thread: ThreadID? = nil, now: Date
+        text: String, at time: Double?, region: Region? = nil, to thread: ThreadID? = nil, on anchor: VersionAnchor? = nil,
+        now: Date
     ) throws(ReviewRefusal) -> Written {
         let words = try Self.trimmed(text, or: .emptyText)
         var index: Int
@@ -160,11 +259,11 @@ public struct VideoReview: Codable, Equatable, Sendable {
                 throw .frameMismatch(thread, time: time)
             }
         } else if let time {
-            if let found = threads.firstIndex(where: { $0.time == time }) {
+            if let found = threads.firstIndex(where: { $0.time == time && $0.anchor == anchor }) {
                 index = found
             } else {
                 index = threads.firstIndex { ($0.time ?? -.infinity) > time } ?? threads.endIndex
-                threads.insert(ReviewThread(id: nextID(.thread), time: time), at: index)
+                threads.insert(ReviewThread(id: nextID(.thread), time: time, anchor: anchor), at: index)
                 started = true
             }
         } else {
@@ -214,10 +313,11 @@ public struct VideoReview: Codable, Equatable, Sendable {
     /// Sends every queued message as one send: each moves to `sent` and
     /// names the send. `transcript` gives each thread with a frame its
     /// window as it is now; the send keeps those lines, so a delivery again
-    /// gives the same ones. Refused when nothing is queued.
+    /// gives the same ones. In a project, `onScreen` is the version on
+    /// screen as the person sends. Refused when nothing is queued.
     @discardableResult
     public mutating func send(
-        at now: Date, transcript: (ReviewThread) -> [SendPayload.Line] = { _ in [] }
+        at now: Date, onScreen: VersionAnchor? = nil, transcript: (ReviewThread) -> [SendPayload.Line] = { _ in [] }
     ) throws(ReviewRefusal) -> Send {
         let queued = threads.indices.flatMap { thread in
             threads[thread].messages.indices
@@ -236,7 +336,7 @@ public struct VideoReview: Codable, Equatable, Sendable {
         }
         let send = Send(
             id: id, sentAt: Self.kept(now), messageIDs: queued.map { threads[$0.thread].messages[$0.index].id },
-            transcripts: transcripts
+            transcripts: transcripts, onScreen: onScreen
         )
         sends.append(send)
         return send

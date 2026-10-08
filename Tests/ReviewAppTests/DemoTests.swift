@@ -47,7 +47,7 @@ struct DemoTests {
 
     private func reviewFile(in support: URL) throws -> URL {
         let hash = try #require(ContentHash.of(MessageTests.fixture))
-        return SupportLayout(root: support).reviewFile(hash)
+        return SupportLayout(root: support).reviewFile(.video(contentHash: hash))
     }
 
     private func exists(_ url: URL) -> Bool {

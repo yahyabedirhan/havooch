@@ -21,16 +21,24 @@ protocol AppControlling: AnyObject {
     /// The window an operator command acts on: the one `id` names, else
     /// the key window. With `making`, a new window when there is none.
     func controlledWindow(_ id: String?, making: Bool) throws(AppRefusal) -> any WindowControlling
-    /// `havooch open`: opens the video for the person, plays it and
-    /// brings its window and the app to the front: the window that holds
-    /// it, else an empty key window, else a new one. A file that doesn't
-    /// play changes nothing.
+    /// `havooch open`: opens the video for the person, in the project
+    /// `project` or the one that lists it, plays it and brings its window
+    /// and the app to the front: the window that holds it, else an empty
+    /// key window, else a new one. A file that doesn't play changes nothing.
     @discardableResult
-    func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling
-    /// The review a `wait` listens to: the video at `video` (`--video`),
-    /// else the key window's. Refused for a path with no file, and with
-    /// none when the key window holds no video.
-    func listenedReview(video: String?) async throws(AppRefusal) -> ReviewKey
+    func openInFront(_ url: URL, project: String?) async throws(AppRefusal) -> any WindowControlling
+    /// The review a `wait` listens to: the one the video at `video`
+    /// (`--video`) opens in, or the project `project`, else the key
+    /// window's. Refused for a path with no file, an unknown project, and
+    /// with neither when the key window holds no video.
+    func listenedReview(video: String?, project: String?) async throws(AppRefusal) -> ReviewKey
+    /// `havooch project new`: the project in `config.toml`, v1 the video,
+    /// with the video's review moved into it.
+    func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project
+    /// `havooch project add`: the next version, shown in the project's
+    /// window, in front.
+    @discardableResult
+    func projectAdd(_ slug: String, video url: URL, label: String?) async throws(AppRefusal) -> any WindowControlling
     /// Every window, in the order they were made.
     func windowList() -> [StateReport.Window]
     /// A new empty window, as File › New Window makes one.
@@ -286,12 +294,15 @@ final class ControlServer {
                 return done(
                     line, Output(app: state.app, window: shown.id, screen: state.screen, video: state.video, player: state.player), json
                 )
-            case .open(let path):
-                let shown = try await app.openInFront(URL(fileURLWithPath: path))
+            case .open(let path, let project):
+                let shown = try await app.openInFront(URL(fileURLWithPath: path), project: project)
                 let state = shown.state()
-                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) in \(shown.id), playing" } ?? "opened \(path)"
+                let place = state.project.map { " in project \($0.slug)" + ($0.version.map { " (v\($0))" } ?? "") } ?? ""
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration)))\(place) in \(shown.id), playing" } ?? "opened \(path)"
                 var answer = done(
-                    line, Output(app: state.app, window: shown.id, screen: state.screen, video: state.video, player: state.player), json
+                    line,
+                    Output(app: state.app, window: shown.id, screen: state.screen, video: state.video, player: state.player, project: state.project),
+                    json
                 )
                 // The command brings this process to the front: the app
                 // asked to activate itself, but macOS may keep it behind.
@@ -374,8 +385,8 @@ final class ControlServer {
                 let line = "\(send.id) sent: \(messages) message\(messages == 1 ? "" : "s") on \(threads) thread\(threads == 1 ? "" : "s"), "
                     + (delivered ? "taken by the listener" : "waiting for a listener")
                 return done(line, Output(send: send), json)
-            case .wait(let timeout, let video):
-                let queue = listeners.queue(for: try await app.listenedReview(video: video))
+            case .wait(let timeout, let video, let project):
+                let queue = listeners.queue(for: try await app.listenedReview(video: video, project: project))
                 switch await queue.wait(by: message.holder, timeout: timeout, connection: connection) {
                 case .send(let ref, let payload):
                     deliveredBy[ref] = queue
@@ -386,7 +397,7 @@ final class ControlServer {
                     return Answer(reply: .refused("a newer `havooch wait` took this one's place: one listener at a time"))
                 case .takenOver(let agent):
                     return Answer(reply: .refused(
-                        "\(agent) took over listening to this video: one listener per video; stop listening and tell the person"
+                        "\(agent) took over listening to this review: one listener per video or project; stop listening and tell the person"
                     ))
                 case .disconnected:
                     return Answer(reply: .refused(
@@ -486,6 +497,23 @@ final class ControlServer {
             case .tourClose:
                 let tour = try inWindow().closeTour()
                 return done(tour.line, Output(tour: tour), json)
+            case .projectNew(let slug, let path, let title):
+                let made = try await app.projectNew(slug, from: URL(fileURLWithPath: path), title: title)
+                let listed = made.versions.count
+                return done(
+                    "project \(made.slug) made with \(URL(fileURLWithPath: path).lastPathComponent) as v\(listed)", Output(project: made), json
+                )
+            case .projectAdd(let slug, let path, let label):
+                let shown = try await app.projectAdd(slug, video: URL(fileURLWithPath: path), label: label)
+                let state = shown.state()
+                let number = state.project?.version.map { "v\($0)" } ?? "the next version"
+                var answer = done(
+                    "\(URL(fileURLWithPath: path).lastPathComponent) added to \(slug) as \(number), shown in \(shown.id)",
+                    Output(window: shown.id, video: state.video, project: state.project), json
+                )
+                // The command brings this process to the front, as for `open`.
+                answer.reply.pid = ProcessInfo.processInfo.processIdentifier
+                return answer
             case .configDismiss:
                 let closed = app.dismissConfigNotice()
                 return done(closed ? "the settings notice is closed" : "no settings notice was up", Output(dismissed: closed), json)
@@ -504,6 +532,7 @@ final class ControlServer {
         var screen: StateReport.Screen?
         var video: StateReport.Video?
         var player: StateReport.Player?
+        var project: StateReport.Project?
         var path: String?
         var quit: Bool?
         var lease: ControlLease.Status?
@@ -652,7 +681,7 @@ final class ControlServer {
 
     /// The queue that handed out `ref`, which hears how its reply went.
     private func handedBack(_ ref: SendRef) -> ListenerQueue {
-        deliveredBy.removeValue(forKey: ref) ?? listeners.queue(ofVideo: ref.contentHash)
+        deliveredBy.removeValue(forKey: ref) ?? listeners.queue(for: ref.review)
     }
 
     /// The client of `connection` closed its socket while its request was

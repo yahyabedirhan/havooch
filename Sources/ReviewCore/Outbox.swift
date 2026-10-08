@@ -62,7 +62,8 @@ public struct Outbox: Codable, Equatable, Sendable {
     public private(set) var openAsks = 0
     /// When the listener last sent a command or closed its `wait`.
     public private(set) var lastHeard: Date?
-    /// The context this listener session has, by the video's content hash:
+    /// The context this listener session has, by its review's
+    /// `contextKey` (a plain video's content hash, or `project-<slug>`):
     /// the digest of the text it last got. Empty for a new session.
     public private(set) var contextSent: [String: String] = [:]
 
@@ -115,6 +116,24 @@ public struct Outbox: Codable, Equatable, Sendable {
         part.session = session
         part.contextSent = contextSent.filter { key.covers($0.key) }
         return part
+    }
+
+    /// This outbox as the review `to`'s, after the review `from` became it
+    /// (`project new` moves a plain video's review into a project): its
+    /// sends name the new review, and the listener session stays, so the
+    /// listener keeps listening. The context it had of `from` is kept
+    /// under `to`.
+    public func rekeyed(from: ReviewKey, to: ReviewKey) -> Outbox {
+        var moved = self
+        let rename = { (ref: SendRef) in ref.review == from ? SendRef(sendID: ref.sendID, review: to) : ref }
+        moved.pending = pending.map(rename)
+        moved.taken = taken.map(rename)
+        moved.inFlight = Dictionary(inFlight.map { (rename($0.key), $0.value) }, uniquingKeysWith: { first, _ in first })
+        if let context = contextSent[from.contextKey] {
+            moved.contextSent[from.contextKey] = nil
+            moved.contextSent[to.contextKey] = context
+        }
+        return moved
     }
 
     /// Whether `other` is the same on disk: the same line, taken sends,
@@ -206,7 +225,7 @@ public struct Outbox: Codable, Equatable, Sendable {
     public mutating func undelivered(_ ref: SendRef) {
         inFlight[ref] = nil
         // The context that payload may have carried was lost with it.
-        contextSent[ref.contentHash] = nil
+        contextSent[ref.review.contextKey] = nil
     }
 
     /// `ref` leaves the line undelivered: there's nothing of it to deliver.
@@ -224,22 +243,24 @@ public struct Outbox: Codable, Equatable, Sendable {
 
     // MARK: - The video context
 
-    /// The payload's `context` for a send of the video `contentHash`,
-    /// whose context is `text` now: the text when this session hasn't had
-    /// it (its first send of the video, or the text changed since), which
-    /// it has from now on; nil when the session has this very text, and
-    /// when there's no text.
-    public mutating func context(for contentHash: String, text: String?) -> String? {
-        guard let text, isContextDue(for: contentHash, text: text) else { return nil }
-        contextSent[contentHash] = Self.digest(text)
+    /// The payload's `context` for a send of the review whose
+    /// `contextKey` is `key` (a plain video's content hash), whose context
+    /// is `text` now: the text when this session hasn't had it (its first
+    /// send of the review, or the text changed since), which it has from
+    /// now on; nil when the session has this very text, and when there's
+    /// no text.
+    public mutating func context(for key: String, text: String?) -> String? {
+        guard let text, isContextDue(for: key, text: text) else { return nil }
+        contextSent[key] = Self.digest(text)
         return text
     }
 
-    /// Whether the next send of the video `contentHash` carries `text`:
-    /// there is a text, and it isn't the one this session last got.
-    public func isContextDue(for contentHash: String, text: String?) -> Bool {
+    /// Whether the next send of the review whose `contextKey` is `key`
+    /// carries `text`: there is a text, and it isn't the one this session
+    /// last got.
+    public func isContextDue(for key: String, text: String?) -> Bool {
         guard let text, !text.isEmpty else { return false }
-        return contextSent[contentHash] != Self.digest(text)
+        return contextSent[key] != Self.digest(text)
     }
 
     /// A short name for `text` that's the same in every run of the app:

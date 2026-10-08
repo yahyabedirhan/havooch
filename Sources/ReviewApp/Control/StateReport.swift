@@ -58,11 +58,30 @@ nonisolated struct StateReport: Encodable, Equatable {
             }
         }
 
-        /// The video a window holds.
+        /// The video a window holds, and its project's slug and the
+        /// version's number in a project.
         struct Held: Encodable, Equatable {
             var path: String
             var title: String
             var contentHash: String
+            /// The project's slug; `null` for a plain video.
+            var project: String? = nil
+            /// The number of the version on screen; `null` for a plain
+            /// video, and for a path that left the project's list.
+            var version: Int? = nil
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(path, forKey: .path)
+                try container.encode(title, forKey: .title)
+                try container.encode(contentHash, forKey: .contentHash)
+                try container.encode(project, forKey: .project)
+                try container.encode(version, forKey: .version)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case path, title, contentHash, project, version
+            }
         }
 
         func encode(to encoder: any Encoder) throws {
@@ -79,9 +98,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             case id, key, onScreen, screen, video, listener
         }
 
-        /// `w1 key player cut1.mp4 /Movies/cut1.mp4`, or `w2 home off screen`.
+        /// `w1 key player cut1.mp4 /Movies/cut1.mp4`, `w3 player launch-video v2
+        /// cut2.mp4 /Movies/cut2.mp4`, or `w2 home off screen`.
         var line: String {
-            let held = video.map { " \($0.title) \($0.path)" } ?? ""
+            let project = video?.project.map { project in " \(project) " + (video?.version.map { "v\($0)" } ?? "removed version") } ?? ""
+            let held = video.map { "\(project) \($0.title) \($0.path)" } ?? ""
             let heard = listener.map { " listener \($0.presence)" + ($0.session.map { " (\($0))" } ?? "") } ?? ""
             return "\(id)\(key ? " key" : "") \(screen.rawValue)\(onScreen ? "" : " off screen")\(held)\(heard)"
         }
@@ -120,6 +141,89 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
+    /// A version of a project: its number (from 1), its file and its label.
+    struct Version: Encodable, Equatable {
+        /// `null` for a version whose path left the project's list.
+        var number: Int?
+        var path: String
+        var label: String?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(number, forKey: .number)
+            try container.encode(path, forKey: .path)
+            try container.encode(label, forKey: .label)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case number, path, label
+        }
+    }
+
+    /// The project a window holds (ADR 0004): its slug and title, the
+    /// version on screen, and every version in order.
+    struct Project: Encodable, Equatable {
+        var slug: String
+        var title: String
+        /// The number of the version on screen; `null` when its path has
+        /// left the list.
+        var version: Int?
+        var versions: [Version]
+
+        init(_ outline: ProjectOutline, onScreen path: String?) {
+            slug = outline.slug
+            title = outline.title
+            version = path.flatMap(outline.number(of:))
+            versions = outline.versions.enumerated().map { Version(number: $0.offset + 1, path: $0.element.path, label: $0.element.label) }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(slug, forKey: .slug)
+            try container.encode(title, forKey: .title)
+            try container.encode(version, forKey: .version)
+            try container.encode(versions, forKey: .versions)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case slug, title, version, versions
+        }
+
+        /// `project: launch-video "Launch video", v2 of 2`.
+        var line: String {
+            "project: \(slug) \"\(title)\", " + (version.map { "v\($0)" } ?? "a removed version") + " of \(versions.count)"
+        }
+    }
+
+    /// One project on the home screen (story 48): its title, its latest
+    /// version and when the person last opened it.
+    struct HomeProject: Encodable, Equatable {
+        var slug: String
+        var title: String
+        /// How many versions it lists.
+        var versions: Int
+        /// The latest version's file; `null` with no version.
+        var latestPath: String?
+        /// Whether the latest version's file is there now.
+        var available: Bool
+        /// When the person last opened it; `null` before they did.
+        var openedAt: Date?
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(slug, forKey: .slug)
+            try container.encode(title, forKey: .title)
+            try container.encode(versions, forKey: .versions)
+            try container.encode(latestPath, forKey: .latestPath)
+            try container.encode(available, forKey: .available)
+            try container.encode(openedAt, forKey: .openedAt)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case slug, title, versions, latestPath, available, openedAt
+        }
+    }
+
     /// One thread: its number, its frame and keyframe, its state and its
     /// messages in the order written.
     struct Thread: Encodable, Equatable {
@@ -127,6 +231,10 @@ nonisolated struct StateReport: Encodable, Equatable {
         var number: Int
         /// The frame time; `null` for General.
         var time: Double?
+        /// In a project, the version the thread was raised on, tagged with
+        /// its number as the list is now (`null` for a removed version);
+        /// `null` on a plain video and for General.
+        var version: Version?
         /// The state of its latest open person message; `null` with no
         /// person message.
         var state: String?
@@ -144,6 +252,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(id, forKey: .id)
             try container.encode(number, forKey: .number)
             try container.encode(time, forKey: .time)
+            try container.encode(version, forKey: .version)
             try container.encode(state, forKey: .state)
             try container.encode(keyframePath, forKey: .keyframePath)
             try container.encode(popoverFrame, forKey: .popoverFrame)
@@ -152,20 +261,24 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, number, time, state, keyframePath, popoverFrame, unread, messages
+            case id, number, time, version, state, keyframePath, popoverFrame, unread, messages
         }
 
-        /// `thread` of the video with `contentHash`, whose pictures are
-        /// where `layout` says.
-        init(_ thread: ReviewThread, contentHash: String, layout: SupportLayout) {
+        /// `thread` of the review `review`, whose pictures are where
+        /// `layout` says; in a project, `project` tags its version.
+        init(_ thread: ReviewThread, review: ReviewKey, layout: SupportLayout, project: ProjectOutline? = nil) {
             id = thread.id.text
             number = thread.number
             time = thread.time
+            version = thread.anchor.map { anchor in
+                let number = project?.number(of: anchor.path)
+                return Version(number: number, path: anchor.path, label: number.flatMap { project?.version($0)?.label })
+            }
             state = thread.state?.rawValue
-            keyframePath = layout.keyframe(of: thread, on: contentHash)?.path
+            keyframePath = layout.keyframe(of: thread, on: review)?.path
             popoverFrame = thread.popoverFrame
             unread = thread.isUnread
-            messages = thread.messages.map { Message($0, contentHash: contentHash, layout: layout) }
+            messages = thread.messages.map { Message($0, review: review, layout: layout) }
         }
     }
 
@@ -210,7 +323,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             case id, author, kind, text, at, state, region, cropPath, sendId, choices
         }
 
-        init(_ message: ReviewCore.Message, contentHash: String, layout: SupportLayout) {
+        init(_ message: ReviewCore.Message, review: ReviewKey, layout: SupportLayout) {
             id = message.id.text
             author = message.author.rawValue
             kind = message.kind.rawValue
@@ -218,7 +331,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             at = message.at
             state = message.state?.rawValue
             region = message.region
-            cropPath = layout.crop(of: message, on: contentHash)?.path
+            cropPath = layout.crop(of: message, on: review)?.path
             sendId = message.sendID?.text
             choices = message.choices
         }
@@ -233,7 +346,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// order.
         var threadIds: [String]
 
-        init(_ send: ReviewCore.Send, in review: VideoReview) {
+        init(_ send: ReviewCore.Send, in review: Review) {
             id = send.id.text
             sentAt = send.sentAt
             messageIds = send.messageIDs.map(\.text)
@@ -575,6 +688,12 @@ nonisolated struct StateReport: Encodable, Equatable {
     var config: Config?
     /// The open video; `null` with none.
     var video: Video?
+    /// The project the window holds, with the version on screen; `null`
+    /// for a plain video and with none. The app's model fills it in.
+    var project: Project?
+    /// The projects in `config.toml`, the most recently opened first, as
+    /// the home screen shows them; the app's model fills it in.
+    var projects: [HomeProject] = []
     var player: Player
     /// The open video's transcript; `null` with no video. The app's model
     /// fills it in.
@@ -622,7 +741,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, screen, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, config, sidebar, tour, recents, setup, window, windows
+        case transcript, theme, config, sidebar, tour, recents, setup, window, windows, project, projects
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -637,6 +756,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(setup, forKey: .setup)
         try container.encode(config, forKey: .config)
         try container.encode(video, forKey: .video)
+        try container.encode(project, forKey: .project)
         try container.encode(player, forKey: .player)
         try container.encode(transcript, forKey: .transcript)
         try container.encode(popover, forKey: .popover)
@@ -646,6 +766,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(queue, forKey: .queue)
         try container.encode(sends, forKey: .sends)
         try container.encode(recents, forKey: .recents)
+        try container.encode(projects, forKey: .projects)
     }
 
     // MARK: - state
@@ -660,12 +781,13 @@ nonisolated struct StateReport: Encodable, Equatable {
         window: \(window ?? "none")
         screen: \(screen.rawValue)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
-        player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
+        \(project.map { $0.line + "\n" } ?? "")player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
         \(theme.map { $0.line + "\n" } ?? "")\(config.map { $0.lines + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")threads: \(threadLines)
         recents: \(recentLines)
+        projects: \(projectLines)
         \(Self.windowLines(windows))
         """
     }
@@ -686,6 +808,12 @@ nonisolated struct StateReport: Encodable, Equatable {
         return ([String(recents.count)] + lines).joined(separator: "\n")
     }
 
+    /// The home screen's projects, one line each: `launch-video "Launch video", 2 versions`.
+    private var projectLines: String {
+        let lines = projects.map { "  \($0.slug) \"\($0.title)\", \($0.versions) version\($0.versions == 1 ? "" : "s")" }
+        return ([String(projects.count)] + lines).joined(separator: "\n")
+    }
+
     /// `listener: listening (Claude Code), 0 sends waiting, 1 taken`.
     private var listenerLine: String {
         let who = listener.session.map { " (\($0)" + (listener.tookOverFrom.map { ", took over from \($0)" } ?? "") + ")" } ?? ""
@@ -698,7 +826,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     private var threadLines: String {
         let lines = threads.flatMap { thread in
             let place = thread.time.map { "#\(thread.number) at \(TimeCode.text($0))" } ?? "#0 General"
-            let head = "  \(place) \(thread.id) \(thread.state ?? "-")\(thread.unread ? " unread" : "")"
+            let version = thread.version.map { $0.number.map { " v\($0)" } ?? " removed version" } ?? ""
+            let head = "  \(place)\(version) \(thread.id) \(thread.state ?? "-")\(thread.unread ? " unread" : "")"
             return [head] + thread.messages.map { message in
                 let region = message.region.map { " region \($0.text)" } ?? ""
                 let state = message.state.map { " \($0)" } ?? ""

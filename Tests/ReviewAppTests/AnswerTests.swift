@@ -535,7 +535,7 @@ struct AnswerTests {
         #expect(await listen(.reply(thread: "1", text: "Done"), app).ok == false)
 
         #expect((status["message"] as? [String: Any])?["state"] as? String == "done")
-        let review = try #require(app.model.desk.review(of: first))
+        let review = try #require(app.model.desk.review(of: .video(contentHash: first)))
         #expect(review.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) } == [.done, .acknowledged])
         #expect(review.threads.map(\.messages.count) == [1, 2, 3])
         // The open video's review is untouched.

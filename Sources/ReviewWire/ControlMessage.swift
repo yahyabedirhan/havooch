@@ -38,7 +38,9 @@ public struct ControlMessage: Equatable, Sendable {
         case .appQuit: wire = Wire(command: "app.quit")
         case .appHome: wire = Wire(command: "app.home")
         case .appDemo: wire = Wire(command: "app.demo")
-        case .open(let path): wire = Wire(command: "open", path: path)
+        case .open(let path, let project):
+            wire = Wire(command: "open", path: path)
+            wire.project = project
         case .playerOpen(let path): wire = Wire(command: "player.open", path: path)
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
@@ -59,7 +61,9 @@ public struct ControlMessage: Equatable, Sendable {
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
         case .send: wire = Wire(command: "send")
-        case .wait(let timeoutSeconds, let video): wire = Wire(command: "wait", path: video, timeoutSeconds: timeoutSeconds)
+        case .wait(let timeoutSeconds, let video, let project):
+            wire = Wire(command: "wait", path: video, timeoutSeconds: timeoutSeconds)
+            wire.project = project
         case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
         case .status(let messageID, let state, let text):
             wire = Wire(command: "status", id: messageID, text: text, state: state.rawValue)
@@ -96,6 +100,14 @@ public struct ControlMessage: Equatable, Sendable {
         case .windowList: wire = Wire(command: "window.list")
         case .windowNew: wire = Wire(command: "window.new")
         case .windowClose: wire = Wire(command: "window.close")
+        case .projectNew(let slug, let path, let title):
+            wire = Wire(command: "project.new", path: path)
+            wire.project = slug
+            wire.title = title
+        case .projectAdd(let slug, let path, let label):
+            wire = Wire(command: "project.add", path: path)
+            wire.project = slug
+            wire.label = label
         }
         if case .screenshot = request {} else { wire.window = window }
         wire.holder = holder
@@ -148,7 +160,7 @@ public struct ControlMessage: Equatable, Sendable {
         case "app.quit": return .appQuit
         case "app.home": return .appHome
         case "app.demo": return .appDemo
-        case "open": return .open(path: try absolute(wire))
+        case "open": return .open(path: try absolute(wire), project: wire.project)
         case "player.open": return .playerOpen(path: try absolute(wire))
         case "player.play": return .playerPlay
         case "player.pause": return .playerPause
@@ -193,7 +205,10 @@ public struct ControlMessage: Equatable, Sendable {
                     "the control command `wait` needs a `timeoutSeconds` from 0 to \(ControlRequest.longestListen), not \(seconds)"
                 )
             }
-            return .wait(timeoutSeconds: wire.timeoutSeconds, video: wire.path == nil ? nil : try absolute(wire))
+            if wire.path != nil, wire.project != nil {
+                throw .unreadable("the control command `wait` takes a `path` or a `project`, not both")
+            }
+            return .wait(timeoutSeconds: wire.timeoutSeconds, video: wire.path == nil ? nil : try absolute(wire), project: wire.project)
         case "ack":
             return .ack(sendID: try field(wire.id, "id", of: wire), text: wire.text)
         case "status":
@@ -244,6 +259,10 @@ public struct ControlMessage: Equatable, Sendable {
         case "window.list": return .windowList
         case "window.new": return .windowNew
         case "window.close": return .windowClose
+        case "project.new":
+            return .projectNew(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), title: wire.title)
+        case "project.add":
+            return .projectAdd(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), label: wire.label)
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -307,5 +326,12 @@ public struct ControlMessage: Equatable, Sendable {
         var dryRun: Bool?
         /// `setup install --harness`: the harnesses named; left out with none.
         var harnesses: [String]?
+        /// A project's slug: `open --project`, `wait --project`, and the
+        /// project `project new` and `project add` name.
+        var project: String?
+        /// `project new --title`: the project's title.
+        var title: String?
+        /// `project add --label`: the version's label.
+        var label: String?
     }
 }

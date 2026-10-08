@@ -38,7 +38,7 @@ struct ComposerTests {
         let added = try await model.addMessage(text: "One", at: 5)
         _ = try await model.sendQueue()
         let id = try #require(ItemID(added.thread.id))
-        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
         return id
     }
 

@@ -28,7 +28,7 @@ struct ControlServerTests {
         /// The open video's content hash, and its review, kept in memory.
         static let hash = "abcdef0123"
         static let layout = SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
-        var review = VideoReview(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: "/videos/sample.mp4"))
+        var review = Review(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: "/videos/sample.mp4"))
         static let sentAt = Date(timeIntervalSince1970: 1_790_000_000)
 
         func state() -> StateReport {
@@ -37,7 +37,7 @@ struct ControlServerTests {
                 video: hasVideo
                     ? .init(path: "/videos/sample.mp4", contentHash: Self.hash, title: "sample", duration: 21.233, contextNote: note) : nil,
                 player: .init(time: time, playing: playing),
-                threads: review.threads.map { StateReport.Thread($0, contentHash: Self.hash, layout: Self.layout) },
+                threads: review.threads.map { StateReport.Thread($0, review: .video(contentHash: Self.hash), layout: Self.layout) },
                 queue: review.queue.map(\.id.text),
                 sends: review.sends.map { StateReport.Send($0, in: review) }
             )
@@ -76,7 +76,7 @@ struct ControlServerTests {
             return windowList()[0]
         }
 
-        private func change<Result>(_ call: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
+        private func change<Result>(_ call: String, _ change: (inout Review) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
             try record(call)
             do throws(ReviewRefusal) {
                 return try change(&review)
@@ -101,8 +101,8 @@ struct ControlServerTests {
                 return try review.write(text: text, at: target == nil ? (at ?? time) : at, region: region, to: target, now: Self.sentAt)
             }
             return (
-                StateReport.Message(written.message, contentHash: Self.hash, layout: Self.layout),
-                StateReport.Thread(written.thread, contentHash: Self.hash, layout: Self.layout)
+                StateReport.Message(written.message, review: .video(contentHash: Self.hash), layout: Self.layout),
+                StateReport.Thread(written.thread, review: .video(contentHash: Self.hash), layout: Self.layout)
             )
         }
 
@@ -114,13 +114,13 @@ struct ControlServerTests {
         func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message {
             let messageID = try self.id(id)
             let message = try change("comment edit \(id) \(text)") { review throws(ReviewRefusal) in try review.edit(messageID, text: text) }
-            return StateReport.Message(message, contentHash: Self.hash, layout: Self.layout)
+            return StateReport.Message(message, review: .video(contentHash: Self.hash), layout: Self.layout)
         }
 
         func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message {
             let messageID = try self.id(id)
             let deleted = try change("comment delete \(id)") { review throws(ReviewRefusal) in try review.delete(messageID) }
-            return StateReport.Message(deleted.message, contentHash: Self.hash, layout: Self.layout)
+            return StateReport.Message(deleted.message, review: .video(contentHash: Self.hash), layout: Self.layout)
         }
 
         var note = ""
@@ -141,7 +141,7 @@ struct ControlServerTests {
             let message = try change("thread answer \(thread) \(text)") { review throws(ReviewRefusal) in
                 try review.answer(threadID, text: text, now: Self.sentAt)
             }
-            return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
+            return (StateReport.Message(message, review: .video(contentHash: Self.hash), layout: Self.layout), threadID.number)
         }
 
         func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int) {
@@ -149,7 +149,7 @@ struct ControlServerTests {
             let message = try change("thread choose \(thread) \(number)") { review throws(ReviewRefusal) in
                 try review.answer(threadID, text: try review.choice(number, on: threadID), now: Self.sentAt)
             }
-            return (StateReport.Message(message, contentHash: Self.hash, layout: Self.layout), threadID.number)
+            return (StateReport.Message(message, review: .video(contentHash: Self.hash), layout: Self.layout), threadID.number)
         }
 
         func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
@@ -271,7 +271,11 @@ struct ControlServerTests {
         /// Whether the app is in front, as `openInFront` leaves it.
         var active = false
 
-        func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling {
+        func open(_ url: URL, project: String?) async throws(AppRefusal) {
+            try await open(url)
+        }
+
+        func openInFront(_ url: URL, project: String?) async throws(AppRefusal) -> any WindowControlling {
             try record("open in front \(url.path)")
             hasVideo = true
             playing = true
@@ -280,8 +284,20 @@ struct ControlServerTests {
         }
 
         /// A `wait` listens to the open video's review, or to the one its path names.
-        func listenedReview(video: String?) async throws(AppRefusal) -> ReviewKey {
-            .video(contentHash: video ?? Self.hash)
+        func listenedReview(video: String?, project: String?) async throws(AppRefusal) -> ReviewKey {
+            project.map { .project(slug: $0) } ?? .video(contentHash: video ?? Self.hash)
+        }
+
+        func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project {
+            try record("project new \(slug) \(url.path)")
+            return StateReport.Project(
+                ProjectOutline(slug: slug, title: title ?? slug, versions: [.init(path: url.path)]), onScreen: url.path
+            )
+        }
+
+        func projectAdd(_ slug: String, video url: URL, label: String?) async throws(AppRefusal) -> any WindowControlling {
+            try record("project add \(slug) \(url.path)")
+            return self
         }
 
         func goHome() async {
@@ -450,12 +466,14 @@ struct ControlServerTests {
         #expect(state["lease"] is NSNull)
         #expect(state["popover"] is NSNull)
         #expect(state["threads"] as? [[String: AnyHashable]] == [[
-            "id": "t-abcdef01-0", "number": 0, "time": NSNull(), "state": NSNull(), "keyframePath": NSNull(),
+            "id": "t-abcdef01-0", "number": 0, "time": NSNull(), "version": NSNull(), "state": NSNull(), "keyframePath": NSNull(),
             "popoverFrame": NSNull(), "unread": false, "messages": [] as [String],
         ]])
         #expect(state["queue"] as? [String] == [])
         #expect(state["sends"] as? [AnyHashable] == [])
         #expect(state["recents"] as? [AnyHashable] == [])
+        #expect(state["project"] is NSNull)
+        #expect(state["projects"] as? [AnyHashable] == [])
         #expect(state["screen"] as? String == "player")
         #expect(state["listener"] as? [String: AnyHashable] == [
             "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 0, "takenSends": 0, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
@@ -481,6 +499,7 @@ struct ControlServerTests {
             threads: 1 (0 queued)
               #0 General t-abcdef01-0 -
             recents: 0
+            projects: 0
             windows: 1
               w1 key player sample /videos/sample.mp4
 
@@ -697,6 +716,7 @@ struct ControlServerTests {
               #1 at 0:12.5 t-abcdef01-1 queued
                 m-abcdef01-1 person message queued: Later
             recents: 0
+            projects: 0
             windows: 1
               w1 key player sample /videos/sample.mp4
 

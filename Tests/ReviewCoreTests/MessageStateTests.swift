@@ -26,7 +26,7 @@ struct MessageStateTests {
     }
 
     /// Three messages on thread #1, sent together.
-    private func sentThree() throws -> VideoReview {
+    private func sentThree() throws -> Review {
         var review = newReview()
         for text in ["a", "b", "c"] { try review.write(text: text, at: 10, now: now) }
         try review.send(at: now)
@@ -75,7 +75,7 @@ struct MessageStateTests {
 @Suite("The listener's answers on a review")
 struct ListenerAnswerTests {
     /// Two messages on #1 and one on #2, sent together, and one queued on #1.
-    private func sent() throws -> VideoReview {
+    private func sent() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 5, now: now)
         try review.write(text: "This box", at: 5, now: now)

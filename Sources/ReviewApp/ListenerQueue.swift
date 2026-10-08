@@ -42,8 +42,9 @@ final class ListenerQueue {
         var at: Date
     }
 
-    /// The review this listener listens to.
-    let key: ReviewKey
+    /// The review this listener listens to. It changes once, when `project
+    /// new` moves a plain video's review into a project (`rekey`).
+    private(set) var key: ReviewKey
     /// When the data the listener is on opened: a session the last run
     /// left reconnects for `reconnectSeconds` after it (G6).
     let startedAt: Date
@@ -114,6 +115,9 @@ final class ListenerQueue {
     @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
     /// Told each time a `wait` opens: an agent connected.
     @ObservationIgnored var connected: (@MainActor () -> Void)?
+    /// The project `slug` as `config.toml` lists it now, for the payload's
+    /// project block; nil for a project the file doesn't have.
+    @ObservationIgnored var outline: @MainActor (String) -> ProjectOutline? = { _ in nil }
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -133,6 +137,20 @@ final class ListenerQueue {
         self.now = now
         self.startedAt = startedAt ?? now()
         outbox = desk.library.loadOutbox(key)
+    }
+
+    /// The review this listener listens to became the review `new` (`project
+    /// new --from`): its outbox moves to `new`'s file and names `new` in its
+    /// sends, and the open `wait`, the asks and the listener session stay,
+    /// so the listener keeps listening.
+    func rekey(to new: ReviewKey) {
+        let old = key
+        guard old != new else { return }
+        key = new
+        let moved = outbox.rekeyed(from: old, to: new)
+        if moved != outbox { outbox = moved }
+        keep(outbox)
+        desk.library.removeOutbox(old)
     }
 
     /// Saves `outbox`. One that can't be written is written with the next
@@ -198,7 +216,7 @@ final class ListenerQueue {
         close(.disconnected) { _ in true }
         for (id, ask) in asks { closeAsk(id, ask.ticket, .gone) }
         for ref in outbox.letGo() {
-            _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
+            _ = try? desk.change(ref.review) { review in review.requeue(ref.sendID) }
         }
         activities = [:]
         takeover = nil
@@ -249,7 +267,7 @@ final class ListenerQueue {
         let lastWasThere = last != nil && outbox.presence(at: time) != .absent
         let requeued = outbox.waitOpened(by: listener, at: time)
         for ref in requeued {
-            _ = try? desk.change(ref.contentHash) { review in review.requeue(ref.sendID) }
+            _ = try? desk.change(ref.review) { review in review.requeue(ref.sendID) }
         }
         // A new session starts its work over: what the last one did is past.
         if !requeued.isEmpty { activities = [:] }
@@ -291,7 +309,7 @@ final class ListenerQueue {
     /// this was heard leaves the line.
     func written(_ ref: SendRef) {
         outbox.written(ref)
-        if desk.review(of: ref.contentHash)?.isFinished(ref.sendID) ?? true { outbox.finished(ref) }
+        if desk.review(of: ref.review)?.isFinished(ref.sendID) ?? true { outbox.finished(ref) }
         // A send that stayed in line (its session ended meanwhile) is free for the next `wait`.
         deliver()
     }
@@ -322,14 +340,14 @@ final class ListenerQueue {
     /// `acknowledged`, and `text` is the agent's message on General.
     func ack(_ sendID: String, text: String?) throws(AppRefusal) -> StateReport.Send {
         outbox.heard(at: now())
-        guard let id = ItemID(sendID), id.kind == .send, let hash = desk.contentHash(of: id) else {
+        guard let id = ItemID(sendID), id.kind == .send, let owner = desk.key(of: id) else {
             throw AppRefusal("no send `\(sendID)`; the send `havooch wait` printed names its id")
         }
-        let before = desk.review(of: hash)?.general.messages.count ?? 0
-        let send = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
+        let before = desk.review(of: owner)?.general.messages.count ?? 0
+        let send = try desk.change(owner) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.acknowledge(id, text: text, session: session, now: time)
         }
-        guard let review = desk.review(of: hash) else { throw AppRefusal("there's no review of the video \(hash)") }
+        guard let review = desk.review(of: owner) else { throw AppRefusal("there's no review of \(ReviewDesk.name(owner))") }
         let count = send.messageIDs.count
         // The acknowledgement's own words, when it came with some.
         let words = review.general.messages.count > before ? review.general.messages.last?.text : nil
@@ -344,44 +362,44 @@ final class ListenerQueue {
     /// clear the line the message set.
     func status(_ messageID: String, _ state: MessageState, text: String? = nil) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        guard let id = ItemID(messageID), id.kind == .message, let hash = desk.contentHash(of: id) else {
+        guard let id = ItemID(messageID), id.kind == .message, let review = desk.key(of: id) else {
             throw AppRefusal("no message `\(messageID)`; the send `havooch wait` printed names each message's id")
         }
-        let message = try desk.change(hash) { review throws(ReviewRefusal) in try review.setState(id, state) }
+        let message = try desk.change(review) { review throws(ReviewRefusal) in try review.setState(id, state) }
         if state.isFinal {
             activities = activities.filter { $0.value.message != id }
-        } else if let text, let thread = desk.review(of: hash)?.threads.first(where: { $0.messages.contains { $0.id == id } })?.id {
+        } else if let text, let thread = desk.review(of: review)?.threads.first(where: { $0.messages.contains { $0.id == id } })?.id {
             let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
             activities[thread] = words.isEmpty ? nil : Activity(thread: thread, message: id, text: words, at: now())
         }
-        if let sendID = message.sendID, desk.review(of: hash)?.isFinished(sendID) == true {
-            outbox.finished(SendRef(sendID: sendID, contentHash: hash))
+        if let sendID = message.sendID, desk.review(of: review)?.isFinished(sendID) == true {
+            outbox.finished(SendRef(sendID: sendID, review: review))
         }
-        return StateReport.Message(message, contentHash: hash, layout: layout)
+        return StateReport.Message(message, review: review, layout: layout)
     }
 
     /// `havooch reply`: the agent's message on the thread `id`, of the
-    /// video with `hash`.
-    func reply(on id: ThreadID, of hash: String, text: String) throws(AppRefusal) -> StateReport.Message {
+    /// review `review`.
+    func reply(on id: ThreadID, of review: ReviewKey, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        let message = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
+        let message = try desk.change(review) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.reply(on: id, text: text, session: session, now: time)
         }
         notify(id, .message, message.text)
-        return StateReport.Message(message, contentHash: hash, layout: layout)
+        return StateReport.Message(message, review: review, layout: layout)
     }
 
-    /// `havooch ask`: the agent's question on the thread `id`, of the video
-    /// with `hash`, with its quick-reply `choices`, held until the person
+    /// `havooch ask`: the agent's question on the thread `id`, of the
+    /// review `review`, with its quick-reply `choices`, held until the person
     /// answers it, for up to `waitSeconds` (nil: with no limit). When the
     /// time runs out the question stays open, and an answer that comes
     /// later stays on the thread.
     func ask(
-        on id: ThreadID, of hash: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
+        on id: ThreadID, of review: ReviewKey, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
     ) async throws(AppRefusal) -> Asked {
         outbox.heard(at: now())
         let time = now()
-        let message = try desk.change(hash) { [session = outbox.session?.name] review throws(ReviewRefusal) in
+        let message = try desk.change(review) { [session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.ask(on: id, question: question, choices: choices, session: session, now: time)
         }
         notify(id, .question, message.text)
@@ -432,10 +450,8 @@ final class ListenerQueue {
 
     /// The review this listener listens to, as the desk keeps it; nil
     /// before it has one.
-    private var review: VideoReview? {
-        switch key {
-        case .video(let contentHash): desk.review(of: contentHash)
-        }
+    private var review: Review? {
+        desk.review(of: key)
     }
 
     // MARK: - Delivery
@@ -464,7 +480,7 @@ final class ListenerQueue {
     /// line instead.
     private func takeNext() -> Outcome? {
         while outbox.isWaitOpen, let first = outbox.pending.first(where: { outbox.inFlight[$0] == nil }) {
-            guard let review = desk.review(of: first.contentHash), let send = review.send(first.sendID),
+            guard let review = desk.review(of: first.review), let send = review.send(first.sendID),
                   !review.isFinished(first.sendID)
             else {
                 outbox.discard(first)
@@ -478,16 +494,17 @@ final class ListenerQueue {
 
     /// The payload of `send`, read at the moment the `wait` takes it. The
     /// context is in it when this listener session hasn't had it for the
-    /// video, or it changed. Each thread's transcript is the one the send
-    /// kept.
-    private func payload(of send: Send, in review: VideoReview) -> SendPayload {
-        let hash = review.video.contentHash
+    /// review, or it changed. Each thread's transcript is the one the send
+    /// kept. A project's review carries the project's list as it is now.
+    private func payload(of send: Send, in review: Review) -> SendPayload {
+        let key = review.key
         return SendPayload.assemble(
-            review: review, send: send, context: outbox.context(for: hash, text: ContextReader.text(for: review)),
+            review: review, send: send, context: outbox.context(for: key.contextKey, text: ContextReader.text(for: review)),
             images: SendPayload.Images(
-                keyframe: { [layout] in layout.keyframe(of: $0, on: hash)?.path },
-                crop: { [layout] in layout.crop(of: $0, on: hash)?.path }
-            )
+                keyframe: { [layout] in layout.keyframe(of: $0, on: key)?.path },
+                crop: { [layout] in layout.crop(of: $0, on: key)?.path }
+            ),
+            project: key.slug.flatMap(outline)
         )
     }
 }

@@ -40,6 +40,25 @@ final class Thumbnails {
         images[key] = NSImage(cgImage: frame, size: NSSize(width: frame.width, height: frame.height))
     }
 
+    /// The key of a project's card: its latest version's file, at 1 s.
+    static func key(of project: StateReport.HomeProject) -> Key {
+        Key(contentHash: "project \(project.slug) \(project.latestPath ?? "")", position: 1)
+    }
+
+    /// The thumbnail of `project`'s latest version; nil until it is made.
+    func image(for project: StateReport.HomeProject) -> NSImage? {
+        images[Self.key(of: project)]
+    }
+
+    /// Makes the thumbnail of `project`'s latest version once.
+    func load(_ project: StateReport.HomeProject) async {
+        let key = Self.key(of: project)
+        guard project.available, let path = project.latestPath, !asked.contains(key) else { return }
+        asked.insert(key)
+        guard let frame = await Self.frame(of: URL(fileURLWithPath: path), at: 1) else { return }
+        images[key] = NSImage(cgImage: frame, size: NSSize(width: frame.width, height: frame.height))
+    }
+
     /// The frame of the video at `url` at `seconds`, inside its duration,
     /// at most `maximumSize`, off the main actor.
     @concurrent

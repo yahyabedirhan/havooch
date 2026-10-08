@@ -300,7 +300,8 @@ AppModel.projectNew(slug, from url, title?)
   ConfigWriter.appendProject(slug, title, url.path) → ConfigDesk applies the new file
   ReviewDesk.adopt(.video(hash) → .project(slug), anchor url.path)   moves review folder, keeps hash8
   ListenerHub.rekey(.video(hash) → .project(slug))                   the listener keeps listening
-  WindowRegistry.retarget(.video(hash) → .project(slug))             the window now shows the switcher
+  WindowModel.moveIntoProject(slug)                                  the window holding the video now holds the project
+  (another project lists the video already → the new project starts fresh, nothing moves; E4)
 
 AppModel.projectAdd(slug, url, label?)
   reject unknown slug, missing file
@@ -345,7 +346,7 @@ listener (Claude Code, wait --video cut1.mp4) gets the send; message asks to tig
 skill: first change request → havooch project new launch-video --from cut1.mp4
   AppModel.projectNew
     config.toml += [[projects]] slug launch-video, versions = [{ path = ".../cut1.mp4" }]
-    ReviewDesk.adopt: videos/<hash>/ → projects/launch-video/; threads anchored to cut1.mp4 (v1); hash8 kept
+    ReviewDesk.adopt: videos/<hash>/ → projects/launch-video/ (the transcript stays); threads anchored to cut1.mp4 (v1); hash8 kept
     ListenerHub.rekey: the listener's queue is now launch-video's; its open wait stays open
     w1 retargeted → header shows "v1"
 agent renders cut2.mp4 → havooch project add launch-video cut2.mp4 --label "tighter intro"

@@ -278,7 +278,7 @@ struct PersistenceTests {
         #expect((try state(model)["recents"] as? [[String: Any]])?.count == 1)
         let (again, _) = await run()
         #expect(again.recents.map(\.path) == [Self.showcase.path])
-        #expect(try Library(layout: SupportLayout(root: support)).load(hash)?.threads.count == 2)
+        #expect(try Library(layout: SupportLayout(root: support)).load(.video(contentHash: hash))?.threads.count == 2)
     }
 
     @Test("each data folder keeps its own recent videos: a demo's video never joins the person's list")
@@ -324,7 +324,7 @@ struct PersistenceTests {
         // One folder for the one content, and its review names the new path.
         #expect(try FileManager.default.contentsOfDirectory(atPath: support.appendingPathComponent("videos").path).count == 1)
         let hash = try #require(again.video?.contentHash)
-        let kept = try #require(try Library(layout: SupportLayout(root: support)).load(hash))
+        let kept = try #require(try Library(layout: SupportLayout(root: support)).load(.video(contentHash: hash)))
         #expect(kept.video.path == renamed.path)
         #expect(kept.video.title == "renamed take 2.mov")
 
@@ -354,7 +354,7 @@ struct PersistenceTests {
         #expect(states(again) == [.queued, .done, .done])
         #expect(again.threads[2].messages.map(\.text) == ["Too fast here", "Slowed it down"])
         let hash = try #require(again.video?.contentHash)
-        let kept = try #require(try Library(layout: SupportLayout(root: support)).load(hash))
+        let kept = try #require(try Library(layout: SupportLayout(root: support)).load(.video(contentHash: hash)))
         #expect(kept.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) } == [.queued, .done, .done])
         #expect(kept.threads.first { $0.id.text == ids.one }?.messages.map(\.text) == ["Too fast here", "Slowed it down"])
     }
@@ -529,7 +529,7 @@ struct PersistenceTests {
         let comment = try await model.addMessage(text: "Kept", at: 1).message
         let hash = try #require(model.video?.contentHash)
         model.listeners().stop()
-        let file = Library(layout: SupportLayout(root: support)).layout.reviewFile(hash)
+        let file = Library(layout: SupportLayout(root: support)).layout.reviewFile(.video(contentHash: hash))
         let half = try Data(contentsOf: file).prefix(120)
         try half.write(to: file)
 
@@ -556,7 +556,7 @@ struct PersistenceTests {
         let ids = try await build(model, server)
         let before = try state(model)
         let hash = try #require(model.video?.contentHash)
-        let folder = Library(layout: SupportLayout(root: support)).layout.reviewFile(hash).deletingLastPathComponent()
+        let folder = Library(layout: SupportLayout(root: support)).layout.reviewFile(.video(contentHash: hash)).deletingLastPathComponent()
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
 

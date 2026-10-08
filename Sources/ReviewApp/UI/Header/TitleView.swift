@@ -20,12 +20,17 @@ struct HeaderWords: Equatable {
     /// - Parameters:
     ///   - video: the open video's file, if any.
     ///   - isDemo: whether this run is on demo data.
+    ///   - project: in a project, its title and the version on screen
+    ///     (`Launch video, v2`), which the subtitle shows in place of the
+    ///     folder.
     ///   - home: the home folder, written as `~`.
-    init(video: URL?, isDemo: Bool, home: String = NSHomeDirectory()) {
+    init(video: URL?, isDemo: Bool, project: String? = nil, home: String = NSHomeDirectory()) {
         title = video?.lastPathComponent ?? AppIdentity.appName
         let folder = video.map { $0.deletingLastPathComponent().path }
         fullPath = folder
-        if isDemo {
+        if let project, video != nil {
+            subtitle = project
+        } else if isDemo {
             subtitle = "Demo"
         } else if let folder {
             subtitle = Self.shortened(Self.tilde(folder, home: home), to: Self.subtitleLimit)

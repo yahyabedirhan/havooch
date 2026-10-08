@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ReviewConfig
+import ReviewCore
 import ReviewStore
 
 /// `config.toml` as the app runs it (ADR 0002): the last valid settings,
@@ -141,6 +142,46 @@ final class ConfigDesk {
             throw AppRefusal("\(location.file.path) wasn't changed: \(error.reason)")
         }
         reload()
+    }
+
+    /// Appends the project `slug` with `firstVersion` as v1 (`project
+    /// new`), then reads the file again. Refused when the file has a
+    /// problem, or a project has the slug already.
+    func addProject(slug: String, title: String?, firstVersion: ProjectEntry.Version) throws(AppRefusal) {
+        do throws(ConfigWriteFailure) {
+            try location.addProject(slug: slug, title: title, firstVersion: firstVersion)
+        } catch {
+            throw AppRefusal("\(location.file.path) wasn't changed: \(error.reason)")
+        }
+        reload()
+    }
+
+    /// Appends `version` to the project `slug` (`project add`), then reads
+    /// the file again. Refused when the file has a problem.
+    func addVersion(_ version: ProjectEntry.Version, toProject slug: String) throws(AppRefusal) {
+        do throws(ConfigWriteFailure) {
+            try location.addVersion(version, toProject: slug)
+        } catch {
+            throw AppRefusal("\(location.file.path) wasn't changed: \(error.reason)")
+        }
+        reload()
+    }
+
+    /// The project `slug` as the review's rules read it: its title, and
+    /// each version's path made absolute (a `~` is the home folder); nil
+    /// for a slug the settings don't have.
+    func outline(_ slug: String) -> ProjectOutline? {
+        config.project(slug).map { outline(of: $0) }
+    }
+
+    /// `project` as the review's rules read it.
+    func outline(of project: ProjectEntry) -> ProjectOutline {
+        ProjectOutline(
+            slug: project.slug, title: project.displayTitle,
+            versions: project.versions.map {
+                ProjectOutline.Version(path: location.expand($0.path).standardizedFileURL.path, label: $0.label)
+            }
+        )
     }
 
     // MARK: - Moving an older build's settings
