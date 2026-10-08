@@ -77,6 +77,20 @@ struct Palette: Equatable {
         Color(nsColor: .keyboardFocusIndicatorColor)
     }
 
+    /// Text and glyphs on `accentFill`: white, which every theme's fill
+    /// reads at `ThemeColor.filledTextContrast` or more with (ADR 0006), as
+    /// on a native prominent button. For a filled control drawn by hand
+    /// (`SplitButton`).
+    var textOnFill: Color {
+        Color(.sRGB, white: 1, opacity: 1)
+    }
+
+    /// A dark wash `amount` strong over a filled control drawn by hand:
+    /// its hover and its press (`SplitButton`).
+    func shade(_ amount: Double) -> Color {
+        Color(.sRGB, white: 0, opacity: amount)
+    }
+
     /// The colour of a message state. A state is never told by colour
     /// alone: `StateLook` gives its glyph and its name.
     func state(_ state: MessageState) -> Color {

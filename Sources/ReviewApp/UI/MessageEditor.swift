@@ -1,3 +1,4 @@
+import ReviewCore
 import AppKit
 import SwiftUI
 
@@ -153,11 +154,15 @@ final class FocusTextView: NSTextView {
 
 /// The editor with its placeholder, in the field look every place shares:
 /// the field colour with a hairline at rest, and the system focus ring
-/// while it has the focus in the key window (L42).
+/// while it has the focus in the key window (L42). With `wellFocus` it has
+/// the comment popover's softer look (L69): the `well` colour, and a
+/// hairline that turns that token at half strength in place of the ring.
 struct MessageField: View {
     @Binding var text: String
     var placeholder = "Add a message…"
     var takesFocus = true
+    /// The token of the soft look's focus hairline; nil for the field look.
+    var wellFocus: ThemeToken? = nil
     let commit: () -> Void
     let cancel: () -> Void
     @State private var isFocused = false
@@ -178,13 +183,21 @@ struct MessageField: View {
                         .allowsHitTesting(false)
                 }
             }
-            .background(palette[.field], in: Self.shape)
-            .overlay { Self.shape.strokeBorder(palette[.separator], lineWidth: 1) }
+            .background(palette[wellFocus == nil ? .field : .well], in: Self.shape)
+            .overlay { Self.shape.strokeBorder(hairline, lineWidth: 1) }
             .overlay {
-                if isFocused, activeState == .key {
+                if wellFocus == nil, isFocused, activeState == .key {
                     FocusRing(cornerRadius: 7)
                 }
             }
+            .animation(.easeOut(duration: 0.15), value: isFocused && activeState == .key)
+    }
+
+    /// The hairline: in the soft look, the focus token at half strength
+    /// while it has the focus in the key window.
+    private var hairline: Color {
+        guard let wellFocus, isFocused, activeState == .key else { return palette[.separator] }
+        return palette[wellFocus].opacity(0.5)
     }
 }
 
