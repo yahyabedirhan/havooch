@@ -317,12 +317,23 @@ heard() {
     exits 0 "wait (the listener, in a second process)"
 }
 
+# stop <pid>: ends a background command. Its pid is the subshell's that
+# runs the agent's function, and the havooch command is that subshell's
+# child: killing the subshell alone would leave the command running, a
+# `wait` that takes a later step's send.
+stop() {
+    pkill -TERM -P "$1" 2>/dev/null
+    kill "$1" 2>/dev/null
+    wait "$1" 2>/dev/null
+}
+
 # Leaves nothing behind: the background commands end and the lease is free.
 # The demo app keeps running: other agents may be in line for it.
 clean_up() {
-    [ -n "$listener_pid" ] && kill "$listener_pid" 2>/dev/null
-    [ -n "$ask_pid" ] && kill "$ask_pid" 2>/dev/null
-    for pid in "${window_pids[@]}"; do kill "$pid" 2>/dev/null; done
+    [ -n "$listener_pid" ] && stop "$listener_pid"
+    [ -n "$ask_pid" ] && stop "$ask_pid"
+    # Bash 3.2 calls an empty array unbound under set -u.
+    for pid in ${window_pids[@]+"${window_pids[@]}"}; do stop "$pid"; done
     [ "$holds_lease" -eq 1 ] && operator control release >/dev/null 2>&1
 }
 trap clean_up EXIT
@@ -772,7 +783,12 @@ cp "$video" "$cut"
 printf 'These are notes, not a video.\n' >"$out/open/notes.mp4"
 run listener open "$cut"
 exits 0 "open $cut (the listener, no lease)"
-state
+# The app asks macOS to bring it in front, and macOS does it a moment later.
+for _ in $(seq 1 20); do
+    state
+    jq -e '.app.active == true' "$stdout" >/dev/null 2>&1 && break
+    sleep 0.1
+done
 # A copy is the same video: the window that holds it comes forward (#86).
 holds "the copy's video plays in its one window, and the app is in front" "$stdout" \
     '.video.path == $path and .player.playing == true and .app.active == true and (.windows | length) == 1' --arg path "$video"
@@ -868,7 +884,7 @@ holds "w2 says Codex took over from Claude Code" "$stdout" \
     '.listener.session == "Codex" and .listener.tookOverFrom == "Claude Code"'
 run operator state --window w1 --json
 holds "w1's listener is untouched" "$stdout" '.listener.tookOverFrom == null and .listener.waitOpen == true'
-kill "$first_pid" 2>/dev/null
+stop "$first_pid"
 window_pids=()
 run operator window close "$second_window"
 exits 0 "window close w2"
