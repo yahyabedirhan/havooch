@@ -1,7 +1,8 @@
 # A release: push a tag v<version> that matches Version.app in
 # Sources/ReviewWire/Version.swift. The workflow tests, bundles, zips the app
-# and publishes the zip and its SHA-256 as a GitHub Release, then updates the
-# Homebrew tap's cask. It never runs on a plain push.
+# and publishes the zip, its SHA-256 and the mate skill's archive
+# (havooch-mate.tar.gz) as a GitHub Release, then updates the Homebrew tap's
+# cask. It never runs on a plain push.
 #
 # The tap step is inactive until the tap repository exists and the secret
 # TAP_TOKEN is set: without the token scripts/update-tap.sh skips with a
@@ -77,6 +78,19 @@ jobs:
           echo "zip=dist/$zip" >> "$GITHUB_OUTPUT"
           echo "sha256=$(awk '{print $1}' "dist/$zip.sha256")" >> "$GITHUB_OUTPUT"
 
+      - name: Pack the mate skill
+        id: skill
+        # The skill's folder as one archive with one top-level folder,
+        # havooch-mate. The app installs the skill from this asset of its own
+        # release (HarnessCatalog.source): the skills CLI downloads an archive
+        # but clones a whole repository. COPYFILE_DISABLE keeps macOS tar from
+        # adding ._ metadata files beside the folder.
+        run: |
+          mkdir -p dist
+          COPYFILE_DISABLE=1 tar -czf dist/havooch-mate.tar.gz -C .agents/skills havooch-mate
+          tar -tzf dist/havooch-mate.tar.gz
+          echo "archive=dist/havooch-mate.tar.gz" >> "$GITHUB_OUTPUT"
+
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,8 +98,9 @@ jobs:
           APP_NAME: ${{ steps.identity.outputs.app_name }}
           VERSION: ${{ steps.identity.outputs.version }}
           ZIP: ${{ steps.zip.outputs.zip }}
+          SKILL_ARCHIVE: ${{ steps.skill.outputs.archive }}
         run: |
-          gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+          gh release create "$TAG" "$ZIP" "$ZIP.sha256" "$SKILL_ARCHIVE" \
             --title "$APP_NAME $VERSION" \
             --generate-notes \
             --verify-tag

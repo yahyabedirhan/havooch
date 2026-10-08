@@ -253,7 +253,7 @@ What changes, in short:
 
 - `<target>` is the window's video file name, or `project <slug>`.
 - `SetupProbe.probe(fs) -> SetupReport`: command link (detected when the link file exists and points into a Havooch bundle), skill per harness (detected when `havooch-mate/SKILL.md` exists in one of its folders, else not detected), harness presence (detected from known app and binary locations, else not detected). Repo installs are never looked for.
-- `SkillInstall.start(harnesses)` runs `npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a …` through the login shell, streams lines, supports cancel, and ends with exit status. Missing `npx` ends as `.noNode` before running.
+- `SkillInstall.start(harnesses)` runs `npx skills add https://github.com/yahyabedirhan/havooch/releases/download/v<version>/havooch-mate.tar.gz --skill havooch-mate -g -y -a …` (the skill's archive in the app's own release) through the login shell, streams lines, supports cancel, and ends with exit status. Missing `npx` ends as `.noNode` before running.
 
 ### ReviewCore: the review and anchors
 

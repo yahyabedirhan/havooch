@@ -73,6 +73,11 @@ bundle_id() {
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null || true
 }
 
+# The app's version, from its Info.plist, or nothing.
+bundle_version() {
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$1/Contents/Info.plist" 2>/dev/null || true
+}
+
 # The one regular file in the app's Contents/Helpers, by name, or nothing.
 helper_name() {
     local found="" file
@@ -245,12 +250,21 @@ on_path "$bin_dir" || say "note: $bin_dir isn't on your PATH; add it in your she
 
 if [ "$skill" -eq 1 ]; then
     skill_name="$command_name-mate"
+    # The skill's archive in the release of the installed app's version, as
+    # the app installs it: the skills CLI downloads an archive, but clones a
+    # whole repository.
+    app_version="$(bundle_version "$source_app")"
+    if [ -n "$app_version" ]; then
+        skill_source="https://github.com/$repo/releases/download/v$app_version/$skill_name.tar.gz"
+    else
+        skill_source="https://github.com/$repo/releases/latest/download/$skill_name.tar.gz"
+    fi
     if ! command -v npx >/dev/null 2>&1; then
-        say "skipped the $skill_name skill: npx isn't installed (install Node.js, then: npx skills add $repo --skill $skill_name --global)"
-    elif npx_skills add "$repo" --skill "$skill_name" --global --yes; then
+        say "skipped the $skill_name skill: npx isn't installed (install Node.js, then: npx skills add $skill_source --skill $skill_name --global)"
+    elif npx_skills add "$skill_source" --skill "$skill_name" --global --yes; then
         say "installed the $skill_name skill"
     else
-        say "couldn't install the $skill_name skill; try: npx skills add $repo --skill $skill_name --global"
+        say "couldn't install the $skill_name skill; try: npx skills add $skill_source --skill $skill_name --global"
     fi
 fi
 

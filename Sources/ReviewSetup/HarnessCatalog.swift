@@ -1,5 +1,6 @@
 import Foundation
 import ReviewCore
+import ReviewWire
 
 /// An agent harness Havooch helps set up: where its user skills folders
 /// are, where it is usually installed, the name `npx skills add -a` takes
@@ -75,8 +76,16 @@ public enum PromptTarget: Hashable, Sendable {
 public enum HarnessCatalog {
     /// The skill an agent needs to listen.
     public static let skill = "havooch-mate"
-    /// Where the skill comes from, for `npx skills add`.
-    public static let source = "yahyabedirhan/havooch"
+    /// Where the skill comes from, for `npx skills add`: the
+    /// `havooch-mate.tar.gz` asset of this app's own release. The skills CLI
+    /// downloads an archive; a repository source would clone the whole
+    /// repository, assets and all.
+    public static let source = releaseArchive(version: Version.app)
+
+    /// The skill's archive in the release of `version`.
+    static func releaseArchive(version: String) -> String {
+        "https://github.com/yahyabedirhan/havooch/releases/download/v\(version)/\(skill).tar.gz"
+    }
 
     /// Where a command line tool is usually installed, for presence hints.
     private static let commandFolders = [".local/bin", "/opt/homebrew/bin", "/usr/local/bin", ".bun/bin", ".npm-global/bin"]

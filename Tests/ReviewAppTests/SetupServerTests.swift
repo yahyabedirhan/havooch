@@ -86,13 +86,13 @@ struct SetupServerTests {
     func install() async {
         let server = server()
         #expect(await server.reply(to: ControlRequest.setupInstall().sent(by: Self.agent)).reply.output == """
-            install: running for Codex: npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex
+            install: running for Codex: npx skills add \(HarnessCatalog.source) --skill havooch-mate -g -y -a codex
             havooch setup status follows its log; havooch setup cancel stops it
 
             """)
         #expect(await server.reply(to: ControlRequest.setupInstall(dryRun: true).sent(by: Self.agent)).reply.output
-            == "would run: npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex\n")
+            == "would run: npx skills add \(HarnessCatalog.source) --skill havooch-mate -g -y -a codex\n")
         #expect(await server.reply(to: ControlRequest.setupCancel.sent(by: Self.agent)).reply.output
-            == "install: cancelled for Codex: npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex\n")
+            == "install: cancelled for Codex: npx skills add \(HarnessCatalog.source) --skill havooch-mate -g -y -a codex\n")
     }
 }

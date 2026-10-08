@@ -168,7 +168,7 @@ struct SetupDeskTests {
         #expect(install.state == .done)
         #expect(install.exitStatus == 0)
         #expect(install.log == ["Installing havooch-mate", "Installed for Codex"])
-        #expect(runner.calls.withLock { $0 }.last == ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a codex"])
+        #expect(runner.calls.withLock { $0 }.last == ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add \(HarnessCatalog.source) --skill havooch-mate -g -y -a codex"])
         #expect(desk.report.harnesses.first { $0.harness.installName == "codex" }?.skill == .detected)
         let report = StateReport.Install(install)
         #expect(report.state == "done")

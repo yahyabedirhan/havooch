@@ -59,11 +59,13 @@ The app carries a command, `havooch`, in `Havooch.app/Contents/Helpers/`; both i
 - `havooch app open --demo <folder>`, the player and comment commands and `havooch screenshot` drive the app, under a lease the agent takes with `havooch control take` and gives back with `control release`, so it never fights you for the player.
 - `havooch --help` lists every command.
 
-The **havooch-mate** skill teaches a coding agent the listener's loop. Install it on its own with:
+The **havooch-mate** skill teaches a coding agent the listener's loop. Install it on its own, from the latest release, with:
 
 ```sh
-npx skills add yahyabedirhan/havooch --skill havooch-mate --global
+npx skills add https://github.com/yahyabedirhan/havooch/releases/latest/download/havooch-mate.tar.gz --skill havooch-mate --global
 ```
+
+Each release carries the skill as `havooch-mate.tar.gz`. The skills CLI downloads it in a few seconds; a repository source would clone the whole repository.
 
 Then ask your agent, for example Claude Code, to listen for Havooch feedback.
 
