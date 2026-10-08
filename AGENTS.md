@@ -37,6 +37,12 @@ Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and 
 
 `docs/low-level-design.md` is the design of this build, written with the `low-level-design` skill before the first build ticket. It is documentation for the maintainer to read later, not a review gate. Read it before adding or moving a module, and update it in the same change whenever the code moves away from it.
 
+Never use the stacked-layers symbol (`square.stack.3d.up` and its variants) anywhere in the app or its prototypes. The maintainer rejected it.
+
+Never use an em dash, an en dash or a spaced hyphen as punctuation in app copy. Write a full stop, a comma, a colon or two sentences instead, and "v1 to v47" for a range.
+
+Never emphasise a box with a one-sided coloured edge: no left stripe, and no right, top or bottom stripe either. Use a full soft fill, an icon, or text weight and colour.
+
 ## Testing
 
 Build and test with SwiftPM through the `Makefile` only; there is no Xcode project. `make test` runs the tests without driving the Mac. Check a visual change through app control: `make install`, then the `havooch` CLI (`app open --demo`, player and comment commands, `screenshot`). Take the lease before `make install` and release it at the end. Set `HAVOOCH_SUPPORT_DIR` to a scratch folder for `make install` and every command, so a check never opens the maintainer's data. Accessibility and System Events are not a way in; a check that needs a real click goes to the maintainer.
