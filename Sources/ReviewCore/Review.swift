@@ -41,7 +41,7 @@ public struct Review: Codable, Equatable, Sendable {
     public private(set) var versions: [VideoInfo]
     /// The id prefix every id of the review carries. Fixed when the review
     /// is made and never changed, so ids stay valid when a plain video's
-    /// review becomes a project's (P3).
+    /// review becomes a project's (L59).
     public let hash8: String
     /// The person's context note for the agent, added to the sidecar's
     /// text; empty for none.

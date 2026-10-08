@@ -8,7 +8,7 @@ import ReviewWire
 /// the video under review, with its threads), and appends each new render
 /// (`add`, which shows it and brings the window forward). Both go through
 /// the app, which moves the review and opens the window, with no lease
-/// (P4); the app is launched when it doesn't run. `list` reads the file
+/// (L59); the app is launched when it doesn't run. `list` reads the file
 /// itself and needs no app.
 enum ProjectCommands {
     static let commands: [Command] = [

@@ -5,9 +5,9 @@ import SwiftUI
 /// The stage: the video on its black letterbox, the layer that takes the
 /// mouse and shows regions, the popover over it while a message is written
 /// or a thread is open, the threads on the frame, and the notices of what
-/// the agent says. A click on the frame plays or pauses; a drag draws a
-/// region. While the window compares two versions (E11), the two pictures
-/// in their layout (`CompareStage`).
+/// the agent says. A click on the frame points and never plays (L67); a
+/// drag draws a region. While the window compares two versions (E11),
+/// the two pictures in their layout (`CompareStage`).
 struct StageView: View {
     let model: WindowModel
 

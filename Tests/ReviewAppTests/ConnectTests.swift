@@ -90,7 +90,7 @@ struct ConnectTests {
         #expect(answer.reply.ok)
         #expect(window.outboxBanner == .delivered(messages: 3, to: "Claude Code"))
         #expect(window.outboxBanner?.text == "Delivered 3 messages to Claude Code")
-        // Connected: the listener card, and setup counts as working (P11).
+        // Connected: the listener card, and setup counts as working (L57).
         #expect(window.sidebarReport.connect?.phase == "connected")
         #expect(window.sidebarReport.connect?.listener?.agent == "Claude Code")
         #expect(window.sidebarReport.connect?.listener?.place == "/Users/me/shop")

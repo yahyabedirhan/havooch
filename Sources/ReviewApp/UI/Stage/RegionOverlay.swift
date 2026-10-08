@@ -2,8 +2,9 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The layer above the picture that takes the mouse. A click plays or
-/// pauses, or closes an open popover as a click outside it. A drag draws a
+/// The layer above the picture that takes the mouse. A click points: it
+/// never plays or pauses (L67), it takes the keys from a text field, and it
+/// closes an open popover as a click outside it. A drag draws a
 /// rectangle, as Cmd+Shift+4 does, with no drawing mode: the video pauses,
 /// the rectangle shows its size in the frame's pixels while it's drawn
 /// (D 2.4), and letting go opens the popover beside it. The layer
@@ -15,7 +16,7 @@ struct RegionOverlay: View {
     /// The player of the picture under it, for the size of a rectangle.
     let engine: PlayerEngine
     /// While comparing, the side it is on: a click or a drag on it makes
-    /// the side active first (P9), and it shows regions only while active.
+    /// the side active first (L63), and it shows regions only while active.
     var side: CompareSide?
     /// How much of its width, from its leading edge, takes the mouse;
     /// nil for all of it.

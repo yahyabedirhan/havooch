@@ -267,7 +267,7 @@ struct RegionMessageTests {
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
     }
 
-    @Test("a rectangle too small to be a region opens nothing, and a click still plays and pauses")
+    @Test("a rectangle too small to be a region opens nothing, and a click leaves the playback as it is")
     func tooSmallAndClick() async throws {
         defer { cleanUp() }
         let model = try await model()
@@ -276,12 +276,18 @@ struct RegionMessageTests {
         #expect(model.draft == nil)
         #expect(!model.isDrawingRegion)
 
+        // A click on the frame is for pointing: a still video stays still.
         model.clickFrame()
-        await eventually { model.engine.isPlaying }
-        #expect(model.engine.isPlaying)
-        model.clickFrame()
-        await eventually { !model.engine.isPlaying }
+        try? await Task.sleep(for: .milliseconds(200))
         #expect(!model.engine.isPlaying)
+        // And a playing video plays on.
+        model.togglePlay()
+        await eventually { model.engine.isPlaying }
+        model.clickFrame()
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(model.engine.isPlaying)
+        model.togglePlay()
+        await eventually { !model.engine.isPlaying }
 
         // While the popover is open, a click on the frame is a click
         // outside it: the popover closes and the frame stays where it is.
@@ -289,6 +295,43 @@ struct RegionMessageTests {
         model.clickFrame()
         #expect(model.draft == nil)
         #expect(!model.engine.isPlaying)
+    }
+
+    @Test("a click or a drag on the frame takes the keys from the composer, and the composer keeps its words")
+    func clickTakesTheKeys() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        let (window, field) = windowWithAField(for: model)
+        _ = try model.compose(text: "Half a thought", region: nil, general: false)
+        #expect(window.makeFirstResponder(field))
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isTyping: window.firstResponder is NSText) == nil)
+
+        model.clickFrame()
+        #expect(!(window.firstResponder is NSText))
+        // Space plays and pauses again, and C starts a comment.
+        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isTyping: window.firstResponder is NSText) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: 8, modifiers: [], isTyping: window.firstResponder is NSText) == .startMessage)
+        #expect(model.composerText == "Half a thought")
+        #expect(field.string == "Half a thought")
+
+        // The start of a drag takes them too.
+        #expect(window.makeFirstResponder(field))
+        model.beginRegion()
+        #expect(!(window.firstResponder is NSText))
+        model.endRegion(nil)
+    }
+
+    /// A window for `model` with a text field in it, as the composer is.
+    private func windowWithAField(for model: WindowModel) -> (NSWindow, NSTextView) {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: true
+        )
+        window.isReleasedWhenClosed = false
+        let field = NSTextView(frame: CGRect(x: 0, y: 0, width: 200, height: 24))
+        field.string = "Half a thought"
+        window.contentView?.addSubview(field)
+        model.nsWindow = window
+        return (window, field)
     }
 
     @Test("drawing again while the popover is open is a click outside it: words are queued on their region, an empty popover just closes")

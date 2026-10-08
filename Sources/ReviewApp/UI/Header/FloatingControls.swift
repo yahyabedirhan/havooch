@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Finish setup" on its own while setup isn't finished (H4, P11), then
+/// "Finish setup" on its own while setup isn't finished (H4, L58), then
 /// the floating group at the top right of the window, from left to
 /// right: the agent-control icon (only while an agent holds the lease),
 /// Connect an Agent, "Open a Video…", Context, and the sidebar toggle;
@@ -42,7 +42,7 @@ struct FloatingControls: ToolbarContent {
 
 /// Connect an Agent: opens the Connect view in the sidebar, and goes back
 /// to the threads when it shows (G1). A dot shows while setup isn't fully
-/// detected and no agent has ever connected (P11).
+/// detected and no agent has ever connected (L57).
 private struct ConnectButton: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -139,7 +139,7 @@ private struct OpenVideoButton: View {
         Button {
             model.openFromPanel()
         } label: {
-            Label("Open a Video…", systemImage: "folder")
+            Label("Open a Video…", systemImage: "film")
         }
         .pressedByKeys(in: model) { model.openFromPanel() }
         .help("Open a Video…")

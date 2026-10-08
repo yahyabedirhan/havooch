@@ -50,14 +50,14 @@ extension WindowModel {
 
     /// How many setup items are left, the count on "Finish setup": the
     /// command line, the skill and a first connection, each until it is
-    /// detected (P11).
+    /// detected (L58).
     var setupItemsLeft: Int {
         let setup = app.setup
         return (setup.isLinked ? 0 : 1) + (setup.isSkillDetected ? 0 : 1) + (app.agentConnectedOnce ? 0 : 1)
     }
 
     /// Whether "Finish setup" shows in the header: beside a video, while
-    /// setup isn't fully detected and no agent has ever connected (P11), and
+    /// setup isn't fully detected and no agent has ever connected (L58), and
     /// while the tour shows, so the button that closes it stays.
     var showsFinishSetup: Bool {
         video != nil && (app.showsConnectDot || tour.isOpen)

@@ -13,7 +13,7 @@ import ReviewStore
 /// On its first run on a support folder it moves what older builds kept
 /// there: the pinned theme of `settings.json` into the file, the person's
 /// themes into `themes/` beside it. Token overrides are dropped, with a
-/// note (decision P7).
+/// note (decision L53).
 ///
 /// What the person needs to know shows as a notice in the window, which
 /// never blocks: what the move did, and a new set of problems. Its close
