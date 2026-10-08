@@ -82,7 +82,8 @@ struct ComposerTarget: Equatable {
     /// The thread's name: `#3`, or General.
     var name: String { isGeneral ? "General" : "#\(number)" }
 
-    /// The line above the field: what the words do, and where they go.
+    /// What the words do, and where they go, as `state` reports it and
+    /// the toolbar's label shows on hover.
     var label: String {
         switch kind {
         case .newThread: "New thread at \(TimeCode.text((time ?? 0).rounded(.down)))"
@@ -107,8 +108,15 @@ struct ComposerTarget: Equatable {
         }
     }
 
-    /// The keys under the field.
-    var keys: String { answers ? "↩ answer" : "↩ queue · ⌘↩ send" }
+    /// The quiet label in the composer's toolbar: "New thread at 0:12",
+    /// "#3", "General thread", or "Answer #3, goes at once".
+    var toolbarLabel: String {
+        switch kind {
+        case .newThread: label
+        case .reply, .followUp: isGeneral ? "General thread" : name
+        case .answer: "Answer \(name), goes at once"
+        }
+    }
 
     /// The SF Symbol before the label.
     var glyph: String {

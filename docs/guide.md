@@ -79,6 +79,10 @@ You can open a video from anywhere:
 
 Pause anywhere and write a comment, or drag a region on the frame first to point at something. Comments on one frame form a thread. Comments queue up until you send them: **Send**, or **Cmd+Enter**, sends the whole queue as one batch to the agent that listens, with each comment's timestamp, the keyframe, the region and the transcript around that moment.
 
+You can also write in the composer, the card at the foot of the sidebar. The bar under its field says where the words go: a new thread at the playhead, the thread of that frame (`#3`), the General thread, or the answer to the agent's question. **General** sends the words to the General thread instead of the frame, and a region you drew shows there as a chip. Return queues the words. **Send** sends the queue with them, and the menu beside it holds **Queue** and **Send** too. When the agent asks you something, the button says **Answer**, and the answer goes at once.
+
+![The composer: a card with the words, then where they go, General and Send](../assets/screenshots/composer-card/new-thread-typing-focus.png)
+
 A click on the video doesn't play or pause it: it only points. It also takes the keyboard from the message field, so Space plays and pauses and C starts a comment again. What you typed stays in the field.
 
 The agent acknowledges the batch, works through each thread in your repository, and answers on the thread, inside the player. When it can't tell what you mean, it asks you there, and you answer in place. The player shows whether an agent is listening, and each comment's state: queued, sent, acknowledged, working, done or failed.

@@ -56,7 +56,7 @@ struct ComposerTests {
         #expect(target.time == model.engine.frameTime(of: 12))
         #expect(target.label == "New thread at 0:12")
         #expect(target.placeholder == "Comment on 0:12…")
-        #expect(target.keys == "↩ queue · ⌘↩ send")
+        #expect(target.toolbarLabel == "New thread at 0:12")
         #expect(!target.answers)
 
         let frame = try #require(try thread(1, model).time)
@@ -65,6 +65,7 @@ struct ComposerTests {
         #expect(target.kind == .reply)
         #expect(target.thread == (try thread(1, model)).id)
         #expect(target.label == "Reply on #1")
+        #expect(target.toolbarLabel == "#1")
         #expect(target.placeholder == "Message #1…")
 
         model.toggleComposerGeneral()
@@ -73,6 +74,7 @@ struct ComposerTests {
         #expect(target.isGeneral)
         #expect(target.time == nil)
         #expect(target.label == "Reply on General")
+        #expect(target.toolbarLabel == "General thread")
         #expect(model.state().sidebar?.composer?.general == true)
         model.toggleComposerGeneral()
         #expect(try resolved(model).thread == (try thread(1, model)).id)
@@ -116,6 +118,7 @@ struct ComposerTests {
         #expect(target.kind == .followUp)
         #expect(target.thread == id)
         #expect(target.label == "Follow up on #1")
+        #expect(target.toolbarLabel == "#1")
         #expect(model.state().sidebar?.composer?.target == "Follow up on #1")
         #expect(model.state().sidebar?.composer?.kind == "follow-up")
         #expect(model.state().sidebar?.composer?.general == false)
@@ -150,7 +153,7 @@ struct ComposerTests {
         #expect(target.note == "goes at once")
         #expect(model.state().sidebar?.composer?.target == "Answer #1 · goes at once")
         #expect(target.placeholder == "Type your answer…")
-        #expect(target.keys == "↩ answer")
+        #expect(target.toolbarLabel == "Answer #1, goes at once")
         #expect(model.threadGroups.first?.group == .needsYou)
         model.composerText = "The intro"
         // An answer is not counted for the queue.
@@ -183,6 +186,21 @@ struct ComposerTests {
         #expect(try thread(1, model).messages.last?.kind == .answer)
         #expect(model.composerText.isEmpty)
         #expect(model.problem == nil)
+    }
+
+    @Test("the composer's Send counts what a send would deliver, the queue with the words, and names no count for one or none")
+    func sendTitle() async throws {
+        defer { cleanUp() }
+        let model = try await model()
+        #expect(Composer.sendTitle(model.sendCount) == "Send")
+        _ = try await model.addMessage(text: "One", at: 5)
+        #expect(Composer.sendTitle(model.sendCount) == "Send")
+        try await model.seek(to: 12)
+        model.composerText = "Two"
+        #expect(model.sendCount == 2)
+        #expect(Composer.sendTitle(model.sendCount) == "Send 2")
+        model.composerText = "   "
+        #expect(Composer.sendTitle(model.sendCount) == "Send")
     }
 
     @Test("the composer keeps one draft per target thread, and one for a new thread, until the words are written or another video opens")
