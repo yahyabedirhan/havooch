@@ -31,7 +31,13 @@ Or, without Homebrew:
 curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash
 ```
 
-**The first time you open it,** macOS may say "Havooch Not Opened", because the app isn't notarized by Apple yet. Open **System Settings › Privacy & Security** and click **Open Anyway** next to Havooch. You only do this once.
+Then run this once, so macOS lets Havooch open:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Havooch.app
+```
+
+Havooch isn't notarized by Apple yet, so without this macOS may say "Havooch Not Opened" the first time you open it. If you see that, open **System Settings › Privacy & Security** and click **Open Anyway** next to Havooch instead.
 
 ## Connect your agent
 
