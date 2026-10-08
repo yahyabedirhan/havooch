@@ -826,6 +826,8 @@ begin 13 "Open the second video in a second window. Two agents wait, one on each
 take
 run operator window new --json
 exits 0 "window new"
+# Window ids are not reused, so the new window is not w2 after step 12.
+second_window="$(jq -r .window "$stdout")"
 run listener open "$other_video"
 exits 0 "open $other_video in the new window, w2"
 first_wait="$out/window-wait-1.json"
@@ -843,9 +845,9 @@ for _ in $(seq 1 50); do
 done
 holds "w1 and w2 each show a listening agent, w2's is Claude Code" "$logs/window-listeners.json" \
     '[.windows[] | .listener.presence] == ["listening", "listening"] and .windows[1].listener.session == "Claude Code"'
-run operator comment add "Brighter logo here." --window w2
+run operator comment add "Brighter logo here." --window "$second_window"
 exits 0 "comment add --window w2"
-run operator send --window w2
+run operator send --window "$second_window"
 exits 0 "send --window w2"
 wait "$second_pid"
 code=$?
@@ -861,14 +863,14 @@ fi
 run codex_listener wait --video "$other_video" --timeout 0
 exits 0 "a third agent's wait on the second video (Codex)"
 holds "Codex gets the send Claude Code didn't finish" "$stdout" '.video.path == $path' --arg path "$other_video"
-run operator state --window w2 --json
+run operator state --window "$second_window" --json
 holds "w2 says Codex took over from Claude Code" "$stdout" \
     '.listener.session == "Codex" and .listener.tookOverFrom == "Claude Code"'
 run operator state --window w1 --json
 holds "w1's listener is untouched" "$stdout" '.listener.tookOverFrom == null and .listener.waitOpen == true'
 kill "$first_pid" 2>/dev/null
 window_pids=()
-run operator window close w2
+run operator window close "$second_window"
 exits 0 "window close w2"
 run operator control release
 exits 0 "control release"
