@@ -145,6 +145,38 @@ struct PersistenceTests {
         #expect(try await again.addMessage(text: "After the restart", at: 15).thread.number == 4)
     }
 
+    @Test("a relaunch on demo data shows home with the last video first in recents, and opening it again brings back its threads and sends")
+    func relaunchShowsHome() async throws {
+        defer { cleanUp() }
+        let video = try copy(to: "fixture", sidecars: ["sample.context.md"])
+        let demo = [SupportFolder.overrideVariable: support.path, SupportFolder.demoRunVariable: "1"]
+        let model = AppModel(environment: demo, speech: SlowRecognizer()).makeWindow()
+        let server = ControlServer(
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
+            screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+        )
+        try await model.open(video)
+        _ = try await build(model, server)
+        let before = try state(model)
+        model.listeners().stop()
+
+        // The launch opens no video by itself (spec 0.3.0): one window on home.
+        let app = AppModel(environment: demo, speech: SlowRecognizer())
+        let again = app.makeWindow()
+        #expect(app.isDemoRun)
+        #expect(again.video == nil)
+        #expect(again.screen == .home)
+        #expect(app.windows.windows.count == 1)
+        #expect(again.recents.first?.url == video.standardizedFileURL)
+
+        // The acceptance scenario's `player open` of the same file.
+        try await again.open(video)
+        let after = try state(again)
+        for key in ["threads", "queue", "sends", "video"] {
+            #expect(after[key] as? NSObject == before[key] as? NSObject, "\(key)")
+        }
+    }
+
     @Test("an agent reply on a thread the person isn't viewing is unread until its view opens, one on the thread shown is read, and both last a restart")
     func unread() async throws {
         defer { cleanUp() }

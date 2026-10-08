@@ -682,7 +682,7 @@ finish
 
 # --- step 9 --------------------------------------------------------------------
 
-begin 9 "Quit and open the app again. Check that state --json shows the threads, messages, states and theme, and the sidebar opens on the thread list"
+begin 9 "Quit and open the app again. Check that it shows home with the video first in recents, then open the video again and check that state --json shows the threads, messages, states and theme, and the sidebar opens on the thread list"
 state
 before="$stdout"
 run operator app quit
@@ -694,6 +694,14 @@ run operator app open --demo "$demo"
 exits 0 "app open --demo, the same folder"
 require_demo
 take
+# A launch opens no video by itself (spec 0.3.0, #65): one window on home,
+# with the fixture first in recents.
+state
+holds "the launch shows home in one window, with no video" "$stdout" \
+    '.screen == "home" and .video.path == null and (.windows | length) == 1'
+holds "the fixture is first in recents" "$stdout" '.recents[0].path == $path' --arg path "$video"
+run operator player open "$video"
+exits 0 "player open (the fixture, again)"
 state
 after="$stdout"
 # The lease, the listener's presence, the player and the sidebar's view are
