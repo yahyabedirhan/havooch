@@ -15,6 +15,9 @@
 # Step 16 adds projects (#92): an agent makes the first video a project, its
 # threads move in as v1, the second video becomes v2, and `wait --project`
 # gets the project's send with its project block.
+# Step 17 adds the first-run window (#90): its steps go on and back, the
+# Connect step shows the demo prompt in the picked harness's form, and
+# skip closes it.
 # Step 18 adds the thread list by version (#94): with four versions the list
 # shows the last three, v4 on screen; All versions searches and an older
 # version picked from it gets its section, until --remove takes it out.
