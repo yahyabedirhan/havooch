@@ -255,7 +255,7 @@ Sources/
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status
   ReviewWire/
     AppIdentity.swift              the app name, bundle id, support folder name ("Havooch", no suffix)
-    Version.swift                  the app version "0.3.0" and the protocol version 6 (L44, L54, L59, L61)
+    Version.swift                  the app version "0.4.0" and the protocol version 6 (L44, L54, L59, L61)
     ControlRequest.swift           every request as an enum case; its role; how long the app may hold it
     Compare.swift                  `CompareSide`, `CompareLayout` and `CompareChange`, the names compare's commands and the app share (L63)
     ControlMessage.swift           request plus holder as one JSON object; decode refuses another version
@@ -861,7 +861,7 @@ What Havooch can say of the person's setup, and the two actions that change it (
 
 ```json
 {
-  "app":      { "version": "0.3.0", "demo": true, "support": "/abs/demo", "active": true },
+  "app":      { "version": "0.4.0", "demo": true, "support": "/abs/demo", "active": true },
   "window":   "w1",
   "windows":  [ { "id": "w1", "key": true, "onScreen": true, "screen": "player",
                   "video": { "path": "/abs/cut2.mp4", "title": "cut2.mp4", "contentHash": "…", "project": "launch-video", "version": 2 },
