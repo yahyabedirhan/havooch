@@ -1,7 +1,7 @@
 import ReviewCore
 import SwiftUI
 
-/// The sidebar's views (L38), above the footer (`SidebarFooter`): the
+/// The sidebar's views (L38), above the dock (`Composer`): the
 /// thread list (`ThreadList`), the view of one thread (`ThreadView`)
 /// while `WindowModel.shown` names one, or the Connect view
 /// (`ConnectView`, G1) while `WindowModel.connect` is set. A thread view
