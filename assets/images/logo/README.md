@@ -89,9 +89,9 @@ A second logo, kept beside the first as a separate option in `v2-havuc/`. It doe
 - **Head**: a wider, rounder ellipse with big upright ears set wide, soft round tips and peach inner ears.
 - **The white**: a narrow stripe starts mid-forehead and runs down the nose. Below the eyes it opens into a round white muzzle and chin, an inverted Y like a candle flame. An orange rim stays under the chin, so the head keeps its outline on white.
 - **Eyes**: big, round and dark, with one white catchlight each. A thin orange ring wraps each eye where the muzzle meets it.
-- **Details at large sizes only**: a small pink nose, a small ink "w" mouth and three faint tabby marks on the forehead.
-- **Small cut** (16 to 32 px): head, ears, a wider stripe, the muzzle and larger dark eyes. It drops the inner ears, tabby marks, catchlights, nose and mouth.
-- **One colour**: the white and the eyes are holes; the catchlights and the nose are islands.
+- **Details**: a small pink nose and a small ink "w" mouth. Three faint tabby marks on the forehead, at large sizes only.
+- **Small cut** (24 pt and under, so 16 pt at 1x and 2x in the app icon): head, ears, a wider stripe, the muzzle and larger dark eyes, with a bolder face: bigger catchlights, a wider nose and a thicker mouth. It drops the inner ears and the tabby marks. From 32 pt, the app and the app icon use the full mark. The app's `HavoochMark` and `export.py` share this limit.
+- **One colour**: the white and the eyes are holes; the catchlights and the nose are islands, in the small cut too.
 - **Dropped**: the play sign. Havuç's white is a stripe that opens into a muzzle, not a triangle. The whiskers are dropped too.
 
 Extra colours, beside carrot, white, ink and night: peach `#F7B9A4` (inner ears), pink `#EE8E92` (nose) and tabby `#D9601A` (forehead marks). The wordmark paths are the same as in v1: `v2-havuc/build_logo.py` imports them from `build_logo.py`.

@@ -412,7 +412,7 @@ Sources/
                                    the compare popover's stills of a version at a time (L63)
       AgentMark.swift              `AgentLogoImage`, the logo loader (Contents/Resources/AgentLogos/, else Packaging/AgentLogos/);
                                    `AgentMark`, a known agent's logo at any size; `AgentAvatar`, the logo or the neutral symbol
-      HavoochMark.swift            the cat mark at any size (the small cut at 16 pt and under), on the empty screen, the home screen, in Settings and in the header while a video is open, where it goes home (L49)
+      HavoochMark.swift            the cat mark at any size (the small cut, with its face, at 24 pt and under; the full mark from 32 pt), on the empty screen, the home screen, in Settings and in the header while a video is open, where it goes home (L49)
       AboutPanel.swift             Havooch › About Havooch: the standard About panel with the app icon and the name's story; found for `screenshot --window about`
       KeyPress.swift               `pressedByKeys(in:isFocused:action:)`: a control tells the model when it has the keyboard focus and what pressing it does, and can follow its focus to show itself (L45)
       Header/

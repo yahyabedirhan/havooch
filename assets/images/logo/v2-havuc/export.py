@@ -24,23 +24,31 @@ def render(svg, out, width=None, height=None):
     subprocess.run(cmd, check=True)
 
 
+# The largest size, in points, that shows the small cut. The app's
+# HavoochMark follows the same rule (HavoochMarkImage.smallCutLimit).
+SMALL_CUT_LIMIT = 24
+
+
 def pngs():
     os.makedirs(PNG, exist_ok=True)
     for name in ["havooch-mark", "havooch-mark-black", "havooch-mark-white", "havooch-mark-carrot"]:
         for size in [16, 32, 64, 128, 256, 512, 1024]:
-            src = name.replace("havooch-mark", "havooch-mark-small") + ".svg" if size <= 32 else name + ".svg"
+            src = name.replace("havooch-mark", "havooch-mark-small") + ".svg" if size <= SMALL_CUT_LIMIT else name + ".svg"
             render(src, os.path.join(PNG, f"{name}-{size}.png"), size, size)
     for name in ["havooch-lockup", "havooch-lockup-dark", "havooch-lockup-black", "havooch-lockup-white"]:
         render(name + ".svg", os.path.join(PNG, f"{name}-1200.png"), width=1200)
     render("havooch-app-icon.svg", os.path.join(PNG, "havooch-app-icon-1024.png"), 1024, 1024)
-    # the light app icon at every size: the small cut at 16 and 32 px
+    # the light app icon at every size: the small cut at 16 px
     for size in [16, 32, 64, 128, 256, 512, 1024]:
-        src = "havooch-app-icon-light-small.svg" if size <= 32 else "havooch-app-icon-light.svg"
+        src = "havooch-app-icon-light-small.svg" if size <= SMALL_CUT_LIMIT else "havooch-app-icon-light.svg"
         render(src, os.path.join(PNG, f"havooch-app-icon-light-{size}.png"), size, size)
 
 
 def icns(big="havooch-app-icon.svg", small="havooch-app-icon-small.svg", out="AppIcon.icns"):
-    """An .icns from an .iconset: the small cut at 16 and 32 px, the full icon from 64 px up."""
+    """An .icns from an .iconset: the small cut at 16 pt (16 and 32 px), the full icon from 32 pt up.
+
+    It goes by points, as the app's mark does: Finder's list view draws 16 pt, its icon view 32 pt and up.
+    """
     work = tempfile.mkdtemp()
     iconset = os.path.join(work, "AppIcon.iconset")
     os.makedirs(iconset)
@@ -48,7 +56,7 @@ def icns(big="havooch-app-icon.svg", small="havooch-app-icon-small.svg", out="Ap
         for scale in [1, 2]:
             px = pt * scale
             suffix = "" if scale == 1 else "@2x"
-            src = small if px <= 32 else big
+            src = small if pt <= SMALL_CUT_LIMIT else big
             render(src, os.path.join(iconset, f"icon_{pt}x{pt}{suffix}.png"), px, px)
     subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, out)], check=True)
     shutil.rmtree(work)
@@ -88,13 +96,13 @@ def test_sheet():
         parts.append(label(x, 350, text))
 
     # Row 2: size ladder at true pixel size, light and dark
-    parts.append(label(48, 400, "true size: 128 / 64 / 48 / 32 / 24 / 16 px (32 px and below use the small cut)", "#2E1D14"))
+    parts.append(label(48, 400, "true size: 128 / 64 / 48 / 32 / 24 / 16 px (24 px and below use the small cut)", "#2E1D14"))
     for row, bg in enumerate(["#FFFFFF", "#1B1F2A"]):
         y = 416 + row * 150
         parts.append(f'<rect x="48" y="{y}" width="700" height="140" rx="12" fill="{bg}"/>')
         x = 64
         for size in [128, 64, 48, 32, 24, 16]:
-            src = "havooch-mark-small.svg" if size <= 32 else "havooch-mark.svg"
+            src = "havooch-mark-small.svg" if size <= SMALL_CUT_LIMIT else "havooch-mark.svg"
             parts.append(f'<image x="{x}" y="{y + 6 + (128 - size) // 2}" width="{size}" height="{size}" href="{png(src, size, size)}"/>')
             x += size + 40
     # Row 2 right: app icon ladder
@@ -102,13 +110,13 @@ def test_sheet():
     parts.append('<rect x="800" y="416" width="752" height="290" rx="12" fill="#D9DEE6"/>')
     x = 820
     for size in [128, 64, 32, 16]:
-        src = "havooch-app-icon-small.svg" if size <= 32 else "havooch-app-icon.svg"
+        src = "havooch-app-icon-small.svg" if size <= SMALL_CUT_LIMIT else "havooch-app-icon.svg"
         parts.append(f'<image x="{x}" y="{430 + (128 - size) // 2}" width="{size}" height="{size}" href="{png(src, size, size)}"/>')
         x += size + 40
     parts.append('<rect x="800" y="576" width="752" height="130" rx="12" fill="#1E1E1E"/>')
     x = 820
     for size in [128, 64, 32, 16]:
-        src = "havooch-app-icon-small.svg" if size <= 32 else "havooch-app-icon.svg"
+        src = "havooch-app-icon-small.svg" if size <= SMALL_CUT_LIMIT else "havooch-app-icon.svg"
         parts.append(f'<image x="{x}" y="{577 + (128 - size) // 2}" width="{size}" height="{size}" href="{png(src, size, size)}"/>')
         x += size + 40
 

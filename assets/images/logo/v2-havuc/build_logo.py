@@ -153,13 +153,15 @@ def eyes(small=False):
     """Big round dark eyes, set wide and a little low: the face looks young and gentle."""
     left, right, r = eye_geometry(small)
     whole = circle(*left, r) + circle(*right, r)
-    if small:
-        return whole, ""
-    glint = circle(left[0] + 8, left[1] - 8, 7) + circle(right[0] + 8, right[1] - 8, 7)
+    # the small cut's catchlights are bigger, so they keep a pixel at 16 px
+    off, gr = (9, 9.5) if small else (8, 7)
+    glint = circle(left[0] + off, left[1] - off, gr) + circle(right[0] + off, right[1] - off, gr)
     return whole, glint
 
 
-def nose():
+def nose(small=False):
+    if small:
+        return v1.rounded_poly([(113, 160), (143, 160), (128, 177)], [7, 7, 6])
     return v1.rounded_poly([(118, 160), (138, 160), (128, 172)], [6, 6, 5])
 
 
@@ -174,14 +176,15 @@ def stroke_bar(p, q, w):
             f"A{f(r)} {f(r)} 0 0 0 {f(p[0] + nx)} {f(p[1] + ny)}Z")
 
 
-def mouth():
+def mouth(small=False):
     """A small 'w' under the nose: a short stem and two half rings with round ends.
+    The small cut's is lower and bolder, under its bigger nose.
 
     Every piece winds clockwise, so they merge under the nonzero fill rule.
     """
-    w, r = 4.5, 7
-    ro, ri, cy = r + w / 2, r - w / 2, 177
-    d = stroke_bar((128, 170), (128, cy), w)
+    w, r, top, cy = (7, 9, 172, 183) if small else (4.5, 7, 170, 177)
+    ro, ri = r + w / 2, r - w / 2
+    d = stroke_bar((128, top), (128, cy), w)
     for cx in (128 - r, 128 + r):
         d += (f"M{f(cx + ro)} {cy}A{f(ro)} {f(ro)} 0 0 1 {f(cx - ro)} {cy}"
               f"L{f(cx - ri)} {cy}A{f(ri)} {f(ri)} 0 0 0 {f(cx + ri)} {cy}Z")
@@ -204,11 +207,9 @@ def mark_colour(small=False):
         parts.append(tabby())
     parts.append(f'<path fill="{WHITE}" d="{white_face(small)}"/>')
     parts.append(f'<path fill="{INK}" d="{eye}"/>')
-    if glint:
-        parts.append(f'<path fill="{WHITE}" d="{glint}"/>')
-    if not small:
-        parts.append(f'<path fill="{PINK}" d="{nose()}"/>')
-        parts.append(mouth())
+    parts.append(f'<path fill="{WHITE}" d="{glint}"/>')
+    parts.append(f'<path fill="{PINK}" d="{nose(small)}"/>')
+    parts.append(mouth(small))
     return "".join(parts)
 
 
@@ -219,9 +220,7 @@ def mark_mono(colour, small=False):
     island inside the muzzle hole. Inner ears, tabby marks and the mouth drop out.
     """
     eye, glint = eyes(small)
-    d = head_outline() + white_face(small) + eye + glint
-    if not small:
-        d += nose()
+    d = head_outline() + white_face(small) + eye + glint + nose(small)
     return f'<path fill="{colour}" fill-rule="evenodd" d="{d}"/>'
 
 
@@ -259,7 +258,7 @@ def app_icon():
 
 
 def app_icon_small():
-    """The same icon for 16 and 32 px: the small-cut cat, drawn larger on the tile."""
+    """The same icon for 16 pt, at 16 and 32 px: the small-cut cat, drawn larger on the tile."""
     s = 3.25
     tx = 512 - 128 * s
     ty = 512 - 128 * s - 4
@@ -284,7 +283,7 @@ def light_app_icons():
 
 def main():
     up = "0 6 256 256"            # optical centre: the head sits a little above the middle
-    tight = "18 14 220 220"       # the small cut is cropped tight to use every pixel
+    tight = "18 14 220 220"       # the small cut, for 24 pt and under, is cropped tight to use every pixel
     write("havooch-mark.svg", svg("Havooch, Havuç", mark_colour(), view=up))
     write("havooch-mark-small.svg", svg("Havooch, Havuç, small sizes", mark_colour(small=True), view=tight))
     for name, colour in [("black", "#000000"), ("white", "#FFFFFF"), ("carrot", CARROT)]:
