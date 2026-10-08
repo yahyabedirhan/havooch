@@ -109,6 +109,10 @@ struct ThreadRows: View {
                 model: model, thread: thread, isOnStage: thread.id == stageThread, showsVersion: showsVersion,
                 isOffVersion: isOffVersion && !thread.isGeneral
             )
+            // A small gap between rows, so two filled rows (the one on the
+            // stage and the one under the pointer) never touch; the
+            // hairline sits in it.
+            .padding(.top, index > 0 ? Self.rowGap : 0)
             .overlay(alignment: .top) {
                 if index > 0 { rowHairline }
             }
@@ -122,6 +126,9 @@ struct ThreadRows: View {
             ))
         }
     }
+
+    /// The space between two rows of a group.
+    static let rowGap: CGFloat = 2
 
     private var rowHairline: some View {
         Hairline(axis: .horizontal)
