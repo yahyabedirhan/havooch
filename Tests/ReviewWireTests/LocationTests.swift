@@ -12,12 +12,12 @@ struct LocationTests {
         try body(folder)
     }
 
-    @Test("the app is Havooch 0.4.0, with no prototype suffix in its name, bundle id or support folder")
+    @Test("the app is Havooch 0.4.1, with no prototype suffix in its name, bundle id or support folder")
     func identity() {
         #expect(AppIdentity.appName == "Havooch")
         #expect(AppIdentity.bundleID == "com.yahyabedirhan.havooch")
         #expect(SupportFolder.app(environment: [:]).lastPathComponent == "Havooch")
-        #expect(Version.app == "0.4.0")
+        #expect(Version.app == "0.4.1")
     }
 
     /// Whether the tests run on the Mac, where the support folder is

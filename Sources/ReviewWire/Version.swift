@@ -2,7 +2,7 @@
 public enum Version {
     /// The app's version, under semantic versioning. `havooch --version`
     /// prints it.
-    public static let app = "0.4.0"
+    public static let app = "0.4.1"
 
     /// The control protocol's version, a number of its own. A request of
     /// another version is refused with both numbers, never misread. 2 since
