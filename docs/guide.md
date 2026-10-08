@@ -57,7 +57,7 @@ The install script downloads with `curl`, which sets no quarantine flag, so macO
 
 On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
 
-![The first-run window's Connect step: pick your agent, install the skill, and copy the prompt that opens the demo video](../assets/screenshots/0.4.0/first-run/connect-light.png)
+![The first-run window's Connect step: pick your agent and copy the prompt that opens the demo video](../assets/screenshots/0.4.0/first-run/connect-light.png)
 
 ## Windows, home and recent videos
 

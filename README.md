@@ -45,7 +45,7 @@ Open the **Connect** view from the header and follow its three steps:
 
 Now send your comments, and your agent picks them up.
 
-![The Connect view: the command is linked, the skill isn't detected for any agent yet, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
+![The Connect view: the command isn't linked yet, the skill is installed, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
 
 ### What the command and the skill do
 
