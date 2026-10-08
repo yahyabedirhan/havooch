@@ -197,7 +197,7 @@ Mole removes the app, your reviews in `~/Library/Application Support/Havooch` an
 ```sh
 rm -f ~/.local/bin/havooch /usr/local/bin/havooch    # the command's link
 mv ~/.config/havooch ~/.Trash/                       # your settings
-npx skills remove havooch-mate --global --yes        # the skill, for every agent
+cd ~ && npx skills remove havooch-mate --global --yes   # the skill, for every agent
 ```
 
 Nothing is left when this prints only "No such file or directory" for each path:
@@ -214,7 +214,7 @@ ls ~/.local/bin/havooch /usr/local/bin/havooch ~/.config/havooch ~/.agents/skill
 | The command's link | `/opt/homebrew/bin/havooch` from Homebrew, or `/usr/local/bin/havooch` or `~/.local/bin/havooch` from the install script or **Link** |
 | Your reviews | `~/Library/Application Support/Havooch` |
 | Your settings | `~/.config/havooch`, which Homebrew and the install script leave in place |
-| The skill | `~/.agents/skills/havooch-mate`, linked into each agent's own skills folder. Remove it with `npx skills remove havooch-mate --global`. |
+| The skill | `~/.agents/skills/havooch-mate`, linked into each agent's own skills folder. Remove it from your home folder with `cd ~ && npx skills remove havooch-mate --global`. In a project folder, the command also deletes that project's own copy of the skill. |
 
 ## Build from source
 
