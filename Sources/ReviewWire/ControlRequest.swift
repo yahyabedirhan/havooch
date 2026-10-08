@@ -119,6 +119,16 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch thread list`: the sidebar shows the thread list, as
     /// Back in a thread view shows it.
     case threadList
+    /// `havooch thread versions [--search <text>]`: a project's thread
+    /// list with "All versions" open, its search set to `search`.
+    case threadVersionsOpen(search: String?)
+    /// `havooch thread versions --close`: "All versions" closes.
+    case threadVersionsClose
+    /// `havooch thread version <n> [--remove]`: the version `number` picked
+    /// in "All versions", which adds an older version's section to the
+    /// thread list and scrolls to it; with `remove`, a picked version's
+    /// section leaves the list, as its close button takes it.
+    case threadVersion(number: Int, remove: Bool)
     /// `havooch screenshot <abs.png> [--appearance light|dark]
     /// [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]`: the
     /// app's `window` written as a PNG at the absolute `path`; for `main`,
@@ -282,6 +292,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator
+        case .threadVersionsOpen, .threadVersionsClose, .threadVersion: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
         case .setupStatus: .free
         case .setupLink, .setupInstall, .setupCancel: .operator

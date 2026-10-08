@@ -12,5 +12,7 @@ public enum Version {
     /// `window`, and `window.list`, `window.new` and `window.close` came.
     /// 5 since projects: `project.new` and `project.add` came, and `open`
     /// and `wait` name a `project`, which an older app would not read.
-    public static let controlProtocol = 5
+    /// 6 since the thread list by version: `thread.versions.open`,
+    /// `thread.versions.close` and `thread.version` came.
+    public static let controlProtocol = 6
 }

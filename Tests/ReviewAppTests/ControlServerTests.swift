@@ -179,6 +179,29 @@ struct ControlServerTests {
             return StateReport.Sidebar(thread: nil, width: 340)
         }
 
+        /// A plain video: the thread list has no versions.
+        static let plainVideo = AppRefusal("the thread list shows versions only in a project; this window holds a plain video")
+
+        func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar {
+            try record("thread versions\(search.map { " --search \($0)" } ?? "")")
+            throw Self.plainVideo
+        }
+
+        func closeVersionMenu() -> StateReport.Sidebar {
+            calls.append("thread versions --close")
+            return StateReport.Sidebar(thread: nil, width: 340)
+        }
+
+        func pickVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
+            try record("thread version \(number)")
+            throw Self.plainVideo
+        }
+
+        func removePickedVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
+            try record("thread version \(number) --remove")
+            throw Self.plainVideo
+        }
+
         func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer {
             try record("comment compose \(text)\(region.map { " on \($0.text)" } ?? "")\(general ? " general" : "")")
             return StateReport.Sidebar.Composer(
@@ -606,6 +629,7 @@ struct ControlServerTests {
         let shown = try object(await answer(.threadShow(thread: "t-abcdef01-0"), json: true).reply.output)
         #expect(shown["sidebar"] as? [String: AnyHashable] == [
             "mode": "thread", "thread": "t-abcdef01-0", "width": 340, "composer": NSNull(), "connect": NSNull(),
+            "versions": NSNull(),
         ])
         #expect(shown.count == 1)
         #expect(await answer(.threadShow(thread: "t-abcdef01-9")).reply.ok == false)

@@ -15,6 +15,9 @@
 # Step 16 adds projects (#92): an agent makes the first video a project, its
 # threads move in as v1, the second video becomes v2, and `wait --project`
 # gets the project's send with its project block.
+# Step 18 adds the thread list by version (#94): with four versions the list
+# shows the last three, v4 on screen; All versions searches and an older
+# version picked from it gets its section, until --remove takes it out.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -55,7 +58,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 17 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 18 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -1003,11 +1006,51 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 18 -------------------------------------------------------------------
+
+begin 18 "Add v3 and v4 to the project. Check that the thread list shows v2 to v4 with v4 on screen, that All versions searches, and that picking v1 adds its section until it is removed"
+# Two copies of the first video, so the project has four versions.
+mkdir -p "$out/versions"
+for number in 3 4; do
+    cp "$video" "$out/versions/cut$number.mp4"
+    run claude_listener project add "$slug" "$out/versions/cut$number.mp4"
+    exits 0 "project add $slug, a copy of the first video as v$number"
+done
+take
+run operator thread list --window w1
+exits 0 "thread list"
+run operator state --window w1 --json
+holds "the list shows the last three versions, v4 on screen, and v1 under All versions" "$stdout" \
+    '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.onScreen == 4 and .sidebar.versions.older == [1]
+     and .sidebar.versions.showing == "Showing v2 to v4" and .sidebar.versions.menu == null'
+run operator thread versions --search v1 --window w1 --json
+exits 0 "thread versions --search v1"
+holds "All versions is open with the search, and finds v1" "$stdout" \
+    '.sidebar.versions.menu.search == "v1" and .sidebar.versions.menu.older == [1] and .sidebar.versions.menu.inList == []'
+run operator screenshot "$out/thread-list-all-versions.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of All versions"
+run operator thread version 1 --window w1 --json
+exits 0 "thread version 1"
+holds "v1 joins the list under the last three, picked, and the menu closes" "$stdout" \
+    '.sidebar.versions.sections == [4, 3, 2, 1] and .sidebar.versions.picked == [1] and .sidebar.versions.menu == null
+     and .sidebar.versions.older == []'
+run operator screenshot "$out/thread-list-v1-picked.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the list with v1"
+run operator thread version 3 --remove --window w1
+exits 1 "thread version 3 --remove (v3 is one of the last three)"
+run operator thread version 1 --remove --window w1 --json
+exits 0 "thread version 1 --remove"
+holds "v1 leaves the list" "$stdout" '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.picked == []'
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 17 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 18 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 17 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 18 steps. Screenshots: %s\n' "$shots"
 exit 0

@@ -3,7 +3,7 @@ import ReviewCore
 
 /// The thread list's groups (L38), by who must act next, in this order. A
 /// thread is in the first group it matches.
-enum ThreadGroup: CaseIterable, Equatable {
+nonisolated enum ThreadGroup: CaseIterable, Equatable, Sendable {
     /// The agent asked a question that waits for the person's answer.
     case needsYou
     /// A message is sent, acknowledged or being worked on.
@@ -57,7 +57,7 @@ enum ThreadGroup: CaseIterable, Equatable {
     }
 
     /// The header's glyph, an SF Symbol, the state's that the group holds.
-    var glyph: String {
+    @MainActor var glyph: String {
         switch self {
         case .needsYou: "questionmark.circle.fill"
         case .withAgent: StateLook.glyph(.working)
@@ -67,13 +67,15 @@ enum ThreadGroup: CaseIterable, Equatable {
     }
 }
 
-/// The line under the thread list's title (L38): how many threads, how
-/// many need the person and how many messages are queued;
-/// `6 threads · 1 needs you · 2 queued`. A count of none is left out.
+/// The line under the thread list's title (L38): how many threads, in a
+/// project how many versions (E9), how many need the person and how many
+/// messages are queued: `6 threads · 3 versions · 1 needs you · 2 queued`.
+/// A count of none is left out.
 enum ThreadListSummary {
-    static func line(threads: [ReviewThread], queued: Int) -> String {
+    static func line(threads: [ReviewThread], queued: Int, versions: Int? = nil) -> String {
         let needs = threads.filter { $0.openQuestion != nil }.count
         var parts = ["\(threads.count) \(threads.count == 1 ? "thread" : "threads")"]
+        if let versions, versions > 0 { parts.append("\(versions) \(versions == 1 ? "version" : "versions")") }
         if needs > 0 { parts.append("\(needs) \(needs == 1 ? "needs" : "need") you") }
         if queued > 0 { parts.append("\(queued) queued") }
         return parts.joined(separator: " · ")

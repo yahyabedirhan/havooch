@@ -135,6 +135,14 @@ struct ThreadRow: View {
     let thread: ReviewThread
     /// Whether the thread's frame is on the stage.
     let isOnStage: Bool
+    /// Whether the row shows its version's tag; a version section of a
+    /// project's list names the version in its header instead (E9).
+    /// VoiceOver reads the version either way.
+    var showsVersion = true
+    /// Whether the thread was raised on another version than the one on
+    /// screen: its keyframe and its title are quieter, nothing else
+    /// changes (thread-list V5).
+    var isOffVersion = false
 
     @State private var isHovered = false
     @Environment(\.palette) private var palette
@@ -155,6 +163,8 @@ struct ThreadRow: View {
         Button { model.perform(.open, on: thread.id) } label: {
             HStack(alignment: .top, spacing: Self.spacing) {
                 picture
+                    .opacity(isOffVersion ? 0.55 : 1)
+                    .saturation(isOffVersion ? 0.3 : 1)
                 VStack(alignment: .leading, spacing: 2) {
                     firstLine(summary)
                     preview(summary)
@@ -206,7 +216,8 @@ struct ThreadRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(summary.title)
                 .font(.body.weight(summary.isUnread ? .bold : .semibold).monospacedDigit())
-            if let version = summary.version {
+                .foregroundStyle(palette[isOffVersion ? .textSecondary : .textPrimary])
+            if showsVersion, let version = summary.version {
                 // The version's tag: a soft fill, no edge (look rules).
                 Text(version)
                     .font(.caption.weight(.semibold).monospacedDigit())

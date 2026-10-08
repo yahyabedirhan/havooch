@@ -70,7 +70,14 @@ final class WindowModel: WindowControlling {
     private(set) var video: OpenVideo?
     /// The slug of the project the window holds (ADR 0004); nil for a
     /// plain video, and with none.
-    private(set) var project: String?
+    private(set) var project: String? {
+        didSet {
+            // Another project, or none: its list starts from its last versions.
+            guard project != oldValue else { return }
+            pickedVersions = []
+            versionMenu = nil
+        }
+    }
     /// The open review; nil with no video.
     var review: Review? { reviewKey.flatMap(desk.opened) }
     /// What the window holds, as its scene's value; nil for nothing.
@@ -1041,8 +1048,9 @@ final class WindowModel: WindowControlling {
     }
 
     /// Escape: drops the rectangle being drawn, else the popover's words
-    /// with its region, else goes back from a thread view or the Connect
-    /// view to the thread list. False when there was none of them.
+    /// with its region, else closes "All versions", else goes back from a
+    /// thread view or the Connect view to the thread list. False when there
+    /// was none of them.
     @discardableResult
     func escape() -> Bool {
         if isDrawingRegion {
@@ -1051,6 +1059,10 @@ final class WindowModel: WindowControlling {
         }
         if draft != nil {
             closePopover(.discard)
+            return true
+        }
+        if versionMenu != nil {
+            versionMenu = nil
             return true
         }
         guard shown != nil || connect != nil, isSidebarVisible else { return false }
@@ -1345,6 +1357,94 @@ final class WindowModel: WindowControlling {
         return threads.indices.contains(next) ? threads[next] : nil
     }
 
+    // MARK: - A project's thread list by version (E9)
+
+    /// The versions the person picked from "All versions", the latest
+    /// first: each has its section under the last three versions until
+    /// it is closed.
+    private(set) var pickedVersions: [Int] = []
+    /// The search of "All versions" while the menu shows; nil while it is
+    /// closed.
+    var versionMenu: String?
+    /// The section the thread list scrolls to next; its `serial` changes
+    /// with each pick, so a pick of the same version scrolls again.
+    private(set) var versionJump: VersionJump?
+
+    /// A scroll of the thread list to a version's section.
+    struct VersionJump: Equatable {
+        var number: Int
+        var serial: Int
+    }
+
+    /// A project's thread list by version; nil on a plain video, whose
+    /// list is by group (`threadGroups`).
+    var versionTree: VersionTree? {
+        guard let outline = projectOutline else { return nil }
+        return VersionTree(outline: outline, threads: threads, onScreen: versionNumber, picked: pickedVersions)
+    }
+
+    /// "All versions" with its search; nil while it is closed.
+    var allVersionsMenu: AllVersionsMenu? {
+        guard let versionMenu, let tree = versionTree else { return nil }
+        return AllVersionsMenu(tree: tree, query: versionMenu)
+    }
+
+    /// The project's thread list, refused on a plain video.
+    private func needVersionTree() throws(AppRefusal) -> VersionTree {
+        try needVideo()
+        guard let tree = versionTree else {
+            throw AppRefusal("the thread list shows versions only in a project; this window holds a plain video")
+        }
+        return tree
+    }
+
+    /// "All versions" (`thread versions [--search]`): the sidebar shows the
+    /// thread list with the menu open, its search set to `search`.
+    func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar {
+        _ = try needVersionTree()
+        shown = nil
+        connect = nil
+        versionMenu = search ?? versionMenu ?? ""
+        return sidebarReport
+    }
+
+    /// A click outside "All versions", or `thread versions --close`.
+    func closeVersionMenu() -> StateReport.Sidebar {
+        versionMenu = nil
+        return sidebarReport
+    }
+
+    /// A version picked in "All versions", a "Still open" chip, or
+    /// `thread version <n>`: the menu closes, an older version's section
+    /// is added under the last three, and the list scrolls to it.
+    func pickVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
+        let tree = try needVersionTree()
+        guard tree.versions.contains(where: { $0.number == number }) else {
+            throw AppRefusal("the project has no v\(number); it has v1 to v\(tree.versions.count)")
+        }
+        shown = nil
+        connect = nil
+        versionMenu = nil
+        if !tree.shown.contains(number) {
+            pickedVersions.removeAll { $0 == number }
+            pickedVersions.insert(number, at: 0)
+        }
+        versionJump = VersionJump(number: number, serial: (versionJump?.serial ?? 0) + 1)
+        return sidebarReport
+    }
+
+    /// A picked version's close button, or `thread version <n> --remove`:
+    /// its section leaves the list. The last three versions and the one on
+    /// screen stay.
+    func removePickedVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
+        let tree = try needVersionTree()
+        guard let section = tree.sections.first(where: { $0.number == number }), section.isPicked else {
+            throw AppRefusal("v\(number) isn't picked from All versions; the last three versions and the one on screen stay")
+        }
+        pickedVersions.removeAll { $0 == number }
+        return sidebarReport
+    }
+
     /// The thread list's groups (`ThreadGroup`), in their order, each with
     /// its threads in time order; an empty group isn't there.
     var threadGroups: [ThreadGroup.Section] { ThreadGroup.sections(of: threads) }
@@ -1367,6 +1467,7 @@ final class WindowModel: WindowControlling {
         var report = StateReport.Sidebar(thread: shown?.text, width: Double(sidebarWidth), composer: composerReport)
         report.mode = connect != nil ? "connect" : shown != nil ? "thread" : "threads"
         report.connect = connectReport
+        report.versions = versionTree.map { StateReport.Sidebar.Versions($0, menu: allVersionsMenu, search: versionMenu) }
         return report
     }
 

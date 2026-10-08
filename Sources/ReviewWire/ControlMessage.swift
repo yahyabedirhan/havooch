@@ -77,6 +77,12 @@ public struct ControlMessage: Equatable, Sendable {
         case .threadOpen(let thread, let frame): wire = Wire(command: "thread.open", thread: thread, frame: frame)
         case .threadShow(let thread): wire = Wire(command: "thread.show", thread: thread)
         case .threadList: wire = Wire(command: "thread.list")
+        case .threadVersionsOpen(let search): wire = Wire(command: "thread.versions.open", text: search)
+        case .threadVersionsClose: wire = Wire(command: "thread.versions.close")
+        case .threadVersion(let number, let remove):
+            wire = Wire(command: "thread.version")
+            wire.number = number
+            wire.remove = remove ? true : nil
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
         case .setupStatus: wire = Wire(command: "setup.status")
@@ -247,6 +253,13 @@ public struct ControlMessage: Equatable, Sendable {
             return .threadOpen(thread: try field(wire.thread, "thread", of: wire), frame: wire.frame)
         case "thread.show": return .threadShow(thread: try field(wire.thread, "thread", of: wire))
         case "thread.list": return .threadList
+        case "thread.versions.open": return .threadVersionsOpen(search: wire.text)
+        case "thread.versions.close": return .threadVersionsClose
+        case "thread.version":
+            guard let number = wire.number, number >= 1 else {
+                throw .unreadable("the control command `thread.version` needs its `number`, 1 or more")
+            }
+            return .threadVersion(number: number, remove: wire.remove ?? false)
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
         case "setup.status": return .setupStatus
@@ -345,5 +358,9 @@ public struct ControlMessage: Equatable, Sendable {
         var title: String?
         /// `project add --label`: the version's label.
         var label: String?
+        /// `thread version <n>`: the version's number, from 1.
+        var number: Int?
+        /// `thread version --remove`: the picked version leaves the list.
+        var remove: Bool?
     }
 }

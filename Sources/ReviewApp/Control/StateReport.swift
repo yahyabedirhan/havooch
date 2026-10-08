@@ -483,6 +483,73 @@ nonisolated struct StateReport: Encodable, Equatable {
         var mode = "threads"
         /// The Connect view; `null` while it doesn't show.
         var connect: Connect? = nil
+        /// A project's thread list by version (E9); `null` on a plain
+        /// video, whose list is by group.
+        var versions: Versions? = nil
+
+        /// A project's thread list by version: its sections, the versions
+        /// with none, their open threads, and "All versions".
+        struct Versions: Encodable, Equatable {
+            /// The version sections in the list's order, by number: the last
+            /// three newest first, then an older one on screen, then each
+            /// picked one, the latest pick first.
+            var sections: [Int]
+            /// Whether a section holds threads of removed versions.
+            var removedSection: Bool
+            /// The number of the version on screen, marked in the list;
+            /// `null` for a removed version.
+            var onScreen: Int?
+            /// The versions picked from All versions, each with a close button.
+            var picked: [Int]
+            /// `Showing v48 to v50, v12`.
+            var showing: String
+            /// The versions with no section, newest first.
+            var older: [Int]
+            /// The ids of the open threads on those versions: the footer's chips.
+            var stillOpen: [String]
+            /// All versions while it shows; `null` while it is closed.
+            var menu: Menu?
+
+            /// All versions: its search and its three groups, by number.
+            struct Menu: Encodable, Equatable {
+                var search: String
+                var inList: [Int]
+                var stillOpen: [Int]
+                var older: [Int]
+            }
+
+            init(_ tree: VersionTree, menu: AllVersionsMenu?, search: String?) {
+                sections = tree.shown
+                removedSection = tree.sections.contains { $0.kind == .removed }
+                onScreen = tree.sections.first(where: \.isOnScreen)?.number
+                picked = tree.sections.filter(\.isPicked).compactMap(\.number)
+                showing = tree.showing
+                older = tree.older
+                stillOpen = tree.stillOpen.map(\.id.text)
+                self.menu = menu.map {
+                    Menu(
+                        search: search ?? "", inList: $0.inList.map(\.number), stillOpen: $0.stillOpen.map(\.number),
+                        older: $0.older.map(\.number)
+                    )
+                }
+            }
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(sections, forKey: .sections)
+                try container.encode(removedSection, forKey: .removedSection)
+                try container.encode(onScreen, forKey: .onScreen)
+                try container.encode(picked, forKey: .picked)
+                try container.encode(showing, forKey: .showing)
+                try container.encode(older, forKey: .older)
+                try container.encode(stillOpen, forKey: .stillOpen)
+                try container.encode(menu, forKey: .menu)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case sections, removedSection, onScreen, picked, showing, older, stillOpen, menu
+            }
+        }
 
         /// The Connect view: what opened it, the outbox banner, the picked
         /// harness with its readiness and prompt, and the listener card.
@@ -630,10 +697,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(width, forKey: .width)
             try container.encode(composer, forKey: .composer)
             try container.encode(connect, forKey: .connect)
+            try container.encode(versions, forKey: .versions)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case mode, thread, width, composer, connect
+            case mode, thread, width, composer, connect, versions
         }
     }
 

@@ -74,6 +74,11 @@ struct CommandTests {
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
         (["thread", "show", "3"], .threadShow(thread: "3")),
         (["thread", "list"], .threadList),
+        (["thread", "versions"], .threadVersionsOpen(search: nil)),
+        (["thread", "versions", "--search", "lower third"], .threadVersionsOpen(search: "lower third")),
+        (["thread", "versions", "--close"], .threadVersionsClose),
+        (["thread", "version", "12"], .threadVersion(number: 12, remove: false)),
+        (["thread", "version", "v12", "--remove"], .threadVersion(number: 12, remove: true)),
         (["window", "list"], .windowList),
         (["window", "new"], .windowNew),
         (["window", "close"], .windowClose),
@@ -247,6 +252,8 @@ struct CommandTests {
         ["thread", "choose"], ["thread", "choose", "1"], ["thread", "choose", "1", "0"], ["thread", "choose", "1", "first"],
         ["thread", "choose", "1", "2", "3"],
         ["thread", "open"], ["thread", "open", "1", "2"], ["thread", "open", "1", "--frame"], ["thread", "open", "1", "--frame", "1,2"],
+        ["thread", "versions", "12"], ["thread", "versions", "--search"], ["thread", "versions", "--close", "--search", "v1"],
+        ["thread", "version"], ["thread", "version", "0"], ["thread", "version", "twelve"], ["thread", "version", "1", "2"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }

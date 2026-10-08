@@ -115,6 +115,14 @@ protocol WindowControlling: AnyObject {
     func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
     /// Shows the thread list in the sidebar, as Back does.
     func showThreadList() -> StateReport.Sidebar
+    /// Opens "All versions" over a project's thread list, with `search`.
+    func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar
+    /// Closes "All versions".
+    func closeVersionMenu() -> StateReport.Sidebar
+    /// Picks a version in "All versions": an older one adds its section.
+    func pickVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar
+    /// Takes a picked version's section out of the thread list.
+    func removePickedVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar
     /// Puts words, a region chip and the General toggle in the composer at
     /// the sidebar's foot, as the person types, draws and clicks.
     func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
@@ -450,6 +458,17 @@ final class ControlServer {
             case .threadList:
                 let sidebar = try inWindow().showThreadList()
                 return done("the sidebar shows the thread list", Output(sidebar: sidebar), json)
+            case .threadVersionsOpen(let search):
+                let sidebar = try inWindow().openVersionMenu(search: search)
+                return done("All versions is open", Output(sidebar: sidebar), json)
+            case .threadVersionsClose:
+                let sidebar = try inWindow().closeVersionMenu()
+                return done("All versions is closed", Output(sidebar: sidebar), json)
+            case .threadVersion(let number, let remove):
+                let window = try inWindow()
+                let sidebar = remove ? try window.removePickedVersion(number) : try window.pickVersion(number)
+                let line = remove ? "v\(number) left the thread list" : "the thread list shows v\(number)"
+                return done(line, Output(sidebar: sidebar), json)
             case .themeList:
                 let list = app.themeList()
                 return done(json ? StateReport.json(list) : list.lines)
