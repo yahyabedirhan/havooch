@@ -49,7 +49,7 @@ struct AgentControlWords: Equatable {
 /// the lease is free or while a screenshot leaves it out. A click opens who
 /// controls the app, where, the time left, and Stop.
 struct AgentControlButton: View {
-    let model: AppModel
+    let model: WindowModel
     let indicator: AgentControlIcon
     /// Takes the app back from the holder (`ControlServer.stopLease`).
     let stop: () -> Void
@@ -104,7 +104,7 @@ struct AgentControlButton: View {
 /// the time left ticking each second, how many wait, and Stop, which ends
 /// the lease and bars that agent for five minutes.
 private struct AgentControlPopover: View {
-    let model: AppModel
+    let model: WindowModel
     let indicator: AgentControlIcon
     let stop: () -> Void
 

@@ -57,8 +57,8 @@ struct HeaderWords: Equatable {
 /// and under it a folder icon and the folder, with the full path on hover.
 struct TitleView: View {
     let words: HeaderWords
-    /// A click on the cat mark goes home on it (`AppModel.goHome`).
-    let model: AppModel
+    /// A click on the cat mark goes home on it (`WindowModel.goHome`).
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {

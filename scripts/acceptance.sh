@@ -3,7 +3,8 @@
 # steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
 # `havooch` CLI only, against the installed app in demo mode with the
 # fixture video. Step 11 adds `havooch open` (#82): the person's open,
-# run by the listener with no lease.
+# run by the listener with no lease. Step 12 adds the windows (#86): any
+# number of windows, each with one video, and `--window`.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -44,7 +45,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 11 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 12 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -58,6 +59,8 @@ cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
 
 # The fixture, and what its README says about it.
 video="$root/fixtures/sample/sample.mp4"
+# A second video, with other content, for a second window.
+other_video="$root/fixtures/launch/havooch-demo.mp4"
 context_file="$root/fixtures/sample/sample.context.md"
 frame_width=1920
 frame_height=1080
@@ -726,21 +729,58 @@ printf 'These are notes, not a video.\n' >"$out/open/notes.mp4"
 run listener open "$cut"
 exits 0 "open $cut (the listener, no lease)"
 state
-holds "the copy is open and playing, and the app is in front" "$stdout" \
-    '.video.path == $path and .player.playing == true and .app.active == true' --arg path "$cut"
+# A copy is the same video: the window that holds it comes forward (#86).
+holds "the copy's video plays in its one window, and the app is in front" "$stdout" \
+    '.video.path == $path and .player.playing == true and .app.active == true and (.windows | length) == 1' --arg path "$video"
 holds "no lease is held: the agent-control icon doesn't show" "$stdout" '.lease == null'
 run listener open "$out/open/notes.mp4"
 exits 1 "open of a file that doesn't play"
 state
-holds "the copy is still open" "$stdout" '.video.path == $path' --arg path "$cut"
+holds "the video is still open, in one window" "$stdout" '.video.path == $path and (.windows | length) == 1' --arg path "$video"
 holds "still no lease is held" "$stdout" '.lease == null'
 finish
 
+# --- step 12 -------------------------------------------------------------------
+
+begin 12 "Open a second window and a second video. Check that each window holds its own video, open brings the holder forward, and --window picks a window"
+take
+run operator window new --json
+exits 0 "window new"
+holds "window new names the new window, w2, showing home" "$stdout" '.window == "w2" and ([.windows[] | .id] == ["w1", "w2"])'
+state
+holds "state lists two windows, the new one key and home" "$stdout" \
+    '.window == "w2" and .screen == "home" and ([.windows[] | select(.key) | .id] == ["w2"])'
+run listener open "$other_video"
+exits 0 "open $other_video (the listener, no lease)"
+holds "the empty key window, w2, takes it" "$stdout" 'test(" in w2, playing$")' -R
+run operator state --window w2 --json
+holds "w2 holds the second video" "$stdout" '.video.path == $path' --arg path "$other_video"
+run listener open "$video"
+exits 0 "open $video again"
+state
+holds "the first video's window, w1, comes forward: still two windows" "$stdout" \
+    '.window == "w1" and .video.path == $path and (.windows | length) == 2' --arg path "$video"
+run operator player pause --window w2
+exits 0 "player pause --window w2"
+run operator state --window w2 --json
+holds "w2 is paused, and still holds its video" "$stdout" '.player.playing == false and .video.path == $path' --arg path "$other_video"
+run operator player open "$video" --window w2
+exits 1 "player open of w1's video in w2 is refused"
+run operator window close w2
+exits 0 "window close w2"
+run operator window list --json
+holds "one window is left, w1, with the first video" "$stdout" \
+    '[.windows[] | .id] == ["w1"] and .windows[0].video.path == $path' --arg path "$video"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 11 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 12 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 11 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 12 steps. Screenshots: %s\n' "$shots"
 exit 0

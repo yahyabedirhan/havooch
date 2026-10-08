@@ -3,27 +3,28 @@ import ReviewLease
 import ReviewWire
 import SwiftUI
 
-/// The app: one window, one video at a time, and Settings (⌘,).
+/// The app: any number of windows, each with one video or none (ADR
+/// 0003), and Settings (⌘,).
 @main
 struct HavoochApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window(AppIdentity.appName, id: PlayerWindow.sceneID) {
-            RootView(model: delegate.model, lease: delegate.lease) { delegate.stopLease() }
+        // One scene per window, its value what the window holds; a window
+        // that holds nothing shows the home screen.
+        WindowGroup(AppIdentity.appName, id: WindowScene.sceneID, for: WindowTarget.self) { $target in
+            WindowScene(app: delegate.model, target: $target, lease: delegate.lease) { delegate.stopLease() }
                 .modifier(SettingsOpener(settings: delegate.settings))
-                .modifier(PlayerWindowOpener(window: delegate.window))
         }
         // A 16:9 video fills the stage beside the sidebar with no letterbox.
         .defaultSize(width: 1360, height: 730)
+        // A launch opens no video: one empty window shows home.
+        .restorationBehavior(.disabled)
         .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("Open…") { delegate.model.openFromPanel() }
-                    .keyboardShortcut("o")
-            }
-            CloseVideoCommand(model: delegate.model)
+            FileCommands(app: delegate.model)
+            CloseVideoCommand()
             AboutCommand()
-            PlaybackCommands(model: delegate.model)
+            PlaybackCommands()
             ThemeMenu(model: delegate.model)
         }
         SwiftUI.Settings {
@@ -33,47 +34,66 @@ struct HavoochApp: App {
 
 }
 
-/// The Playback menu. Its playback items carry no key equivalents: the
-/// player's keys (`Shortcuts`) have no modifier, and a menu would take them
-/// from a text field. Send Messages shows Cmd+Return, the key `Shortcuts`
-/// acts on first; both go through `AppModel.send`.
-private struct PlaybackCommands: Commands {
-    let model: AppModel
+/// File › New Window, Cmd+N: a new empty window that shows home. File ›
+/// Open…, Cmd+O: a video for the window that has the keys, or for a new
+/// window with none.
+private struct FileCommands: Commands {
+    let app: AppModel
+    @FocusedValue(\.playerWindow) private var window
 
     var body: some Commands {
-        CommandMenu("Playback") {
-            Group {
-                Button(model.engine.isPlaying ? "Pause" : "Play") { model.togglePlay() }
-                Divider()
-                Button("Back 5 Seconds") { model.skip(by: -Shortcuts.skip) }
-                Button("Forward 5 Seconds") { model.skip(by: Shortcuts.skip) }
-                Button("Previous Frame") { model.step(frames: -1) }
-                Button("Next Frame") { model.step(frames: 1) }
-                Divider()
-                Button("Previous Marker") { model.jumpToMarker(forward: false) }
-                Button("Next Marker") { model.jumpToMarker(forward: true) }
-                Divider()
-                Button("Add Message") { model.startDraft() }
-            }
-            .disabled(model.video == nil)
-            // The one item with a key: Cmd+Return is no key a text field takes.
-            Button("Send Messages") { model.send() }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(!model.canSend)
+        CommandGroup(replacing: .newItem) {
+            Button("New Window") { app.newWindow() }
+                .keyboardShortcut("n")
+            Button("Open…") { app.openFromPanel(from: window) }
+                .keyboardShortcut("o")
         }
     }
 }
 
-/// File > Close Video, Shift+Cmd+W: home, as the Havooch mark in the
-/// header goes (`AppModel.goHome`). Cmd+W stays the window's Close.
+/// The Playback menu, on the window that has the keys. Its playback items
+/// carry no key equivalents: the player's keys (`Shortcuts`) have no
+/// modifier, and a menu would take them from a text field. Send Messages
+/// shows Cmd+Return, the key `Shortcuts` acts on first; both go through
+/// `WindowModel.send`.
+private struct PlaybackCommands: Commands {
+    @FocusedValue(\.playerWindow) private var model
+
+    var body: some Commands {
+        CommandMenu("Playback") {
+            Group {
+                Button(model?.engine.isPlaying == true ? "Pause" : "Play") { model?.togglePlay() }
+                Divider()
+                Button("Back 5 Seconds") { model?.skip(by: -Shortcuts.skip) }
+                Button("Forward 5 Seconds") { model?.skip(by: Shortcuts.skip) }
+                Button("Previous Frame") { model?.step(frames: -1) }
+                Button("Next Frame") { model?.step(frames: 1) }
+                Divider()
+                Button("Previous Marker") { model?.jumpToMarker(forward: false) }
+                Button("Next Marker") { model?.jumpToMarker(forward: true) }
+                Divider()
+                Button("Add Message") { model?.startDraft() }
+            }
+            .disabled(model?.video == nil)
+            // The one item with a key: Cmd+Return is no key a text field takes.
+            Button("Send Messages") { model?.send() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(model?.canSend != true)
+        }
+    }
+}
+
+/// File > Close Video, Shift+Cmd+W: the window that has the keys goes
+/// home, as the Havooch mark in its header does (`WindowModel.goHome`).
+/// Cmd+W stays the window's Close.
 private struct CloseVideoCommand: Commands {
-    let model: AppModel
+    @FocusedValue(\.playerWindow) private var model
 
     var body: some Commands {
         CommandGroup(after: .saveItem) {
-            Button("Close Video") { model.goHomeForPerson() }
+            Button("Close Video") { model?.goHomeForPerson() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
-                .disabled(model.video == nil)
+                .disabled(model?.video == nil)
         }
     }
 }
@@ -97,20 +117,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.
     let settings = SettingsWindow()
-    /// The player's window, which closes while the app runs on.
-    let window = PlayerWindow()
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         quitOnTermination()
-        model.showWindow = { [window] in window.show() }
-        model.bringToFront = { [window] in
-            window.show()
-            NSApp.activate()
-            PlayerWindow.window?.makeKeyAndOrderFront(nil)
-        }
-        window.watchClose { [model] in model.windowClosed() }
+        // `havooch open` has put its window forward; the app comes to the front.
+        model.bringToFront = { _ in NSApp.activate() }
+        model.watchWindows()
         Shortcuts.install(for: model)
         OutsideClicks.install(for: model)
         model.themes.followSystemAppearance()
@@ -131,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // edited by hand shows at once.
             model.config.startWatching()
             model.themes.startWatching()
-            // A launch opens no video: the window shows home.
+            // A launch opens no video: its one window shows home.
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))
@@ -164,20 +178,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        model.savePosition()
+        model.savePositions()
         server?.stop()
     }
 
-    /// Cmd+W closes the window and the app stays in the Dock, with its
-    /// model: the video, the playhead and the sidebar. Cmd+Q quits.
+    /// Closing the last window leaves the app running in the Dock, with no
+    /// window. Cmd+Q quits.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
 
-    /// A click on the Dock icon with the window closed shows it again, as
-    /// it was. Before the window has been on screen once, SwiftUI's own
-    /// reopen shows it.
+    /// A click on the Dock icon with no window open: a new empty window
+    /// that shows home. With a window open, or minimized, the app comes
+    /// forward as usual.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        flag || !window.show()
+        if !flag, model.windows.windows.isEmpty, model.windows.openScene != nil {
+            model.newWindow()
+            return false
+        }
+        return true
     }
 }

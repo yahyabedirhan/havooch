@@ -7,10 +7,12 @@ import UniformTypeIdentifiers
 /// What the control server asks for a `havooch screenshot`.
 protocol Screenshotting: AnyObject {
     /// The app's `window` written as a PNG at `file`, in `appearance` when
-    /// it's set (and back to the app's own afterwards). The agent-control
-    /// icon is left out when `hideAgentIndicator` asks.
+    /// it's set (and back to the app's own afterwards): for `main`, the
+    /// player window `player`. The agent-control icon is left out when
+    /// `hideAgentIndicator` asks.
     func capture(
-        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window,
+        player: NSWindow?
     ) async throws(AppRefusal)
 }
 
@@ -38,13 +40,16 @@ final class Screenshotter: Screenshotting {
     private var last: Task<Void, Never>?
 
     func capture(
-        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window,
+        player: NSWindow?
     ) async throws(AppRefusal) {
         let before = last
         let turn = Task { () -> AppRefusal? in
             await before?.value
             do throws(AppRefusal) {
-                try await self.captureNow(to: file, appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window)
+                try await self.captureNow(
+                    to: file, appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window, player: player
+                )
                 return nil
             } catch {
                 return error
@@ -55,7 +60,8 @@ final class Screenshotter: Screenshotting {
     }
 
     private func captureNow(
-        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window which: ControlRequest.Window
+        to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window which: ControlRequest.Window,
+        player: NSWindow?
     ) async throws(AppRefusal) {
         // Settings opens for the capture, as ⌘, opens it, and closes after
         // it when it was closed before.
@@ -65,7 +71,7 @@ final class Screenshotter: Screenshotting {
         switch which {
         case .main:
             opened = false
-            found = Self.appWindow
+            found = player?.isVisible == true ? player : nil
         case .settings:
             opened = settings.window == nil
             try await settings.show()
@@ -92,9 +98,6 @@ final class Screenshotter: Screenshotting {
         let image = try await Self.captureOwnWindow(CGWindowID(window.windowNumber))
         try Self.write(image, to: file)
     }
-
-    /// The player's window while it's on screen.
-    private static var appWindow: NSWindow? { PlayerWindow.window }
 
     /// The window `windowID` names, captured from this process's shareable
     /// content only, at its display's scale.

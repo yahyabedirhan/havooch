@@ -200,7 +200,7 @@ What changes, in short:
                                           appstate.json (recents, last listener per review, first run done, agent connected once)
      Settings.swift                     shrinks to the sidebar width; theme moves to config (one-time migration, P7)
    ReviewApp/
-     HavoochApp.swift                   WindowGroup(for: WindowTarget?) in place of the one Window; first-run window; Open With
+     HavoochApp.swift                   WindowGroup(for: WindowTarget) in place of the one Window; first-run window; Open With
      AppModel.swift                     app-wide: open, resolveTarget, project new/add, config, theme, setup, first run
 +    Windows/
 +      WindowTarget.swift               .video(hash, path) | .project(slug); Codable, Hashable (the scene value)
@@ -263,7 +263,7 @@ What changes, in short:
 
 ### ReviewApp: windows
 
-- `WindowGroup(for: WindowTarget?.self)` gives one scene per value; `nil` is the empty window. `WindowRegistry` keeps target → `WindowModel` and opens or focuses through SwiftUI's `openWindow(value:)`.
+- `WindowGroup(for: WindowTarget.self)` gives one scene per value; its binding is nil for the empty window. `WindowRegistry` keeps target → `WindowModel` and opens or focuses through SwiftUI's `openWindow(value:)`.
 - `AppModel.open(url, project:)`: resolve the target (C4), then `WindowRegistry.show(target)`: focus the window that holds it, else reuse the key window if it is empty, else make a new one. Then `NSApp.activate`.
 - Operator commands take `--window <id>` (from `window list`); without it they act on the key window.
 

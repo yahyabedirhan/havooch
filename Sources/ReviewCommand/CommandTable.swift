@@ -4,7 +4,7 @@ import ReviewWire
 /// What a command line asks for.
 enum Invocation: Equatable, Sendable {
     /// A request the running app answers.
-    case send(ControlRequest)
+    case send(ControlRequest, window: String? = nil)
     /// `app status`: answered without the app when it isn't running.
     case appStatus
     /// `app open`: launch the app unless it runs on the data asked for, on
@@ -112,15 +112,28 @@ struct Command: Sendable {
     /// The `--flags` it takes, each with no value.
     var flags: Set<String> = []
     var parse: @Sendable (Arguments, CommandEnvironment) throws(UsageError) -> Invocation
+    /// Whether it acts on one window and takes `--window <id>`, the key
+    /// window without it.
+    var takesWindow = false
+
+    /// The option that names the window a command acts on.
+    static let windowOption = "--window"
+
+    /// The same command, acting on the window `--window` names.
+    func onAWindow() -> Command {
+        var command = self
+        command.takesWindow = true
+        return command
+    }
 }
 
 /// The commands of `havooch`, by name. A new command is a `Command` in
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
-    static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
-        + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
-        + SetupCommands.commands
-        + ConfigCommands.commands
+    static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands
+        + PlayerCommands.commands.map { $0.onAWindow() } + CommentCommands.commands.map { $0.onAWindow() }
+        + [ScreenshotCommand.command] + WindowCommands.commands + ListenerCommands.commands + ThemeCommands.commands
+        + SetupCommands.commands + ConfigCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {
@@ -144,6 +157,9 @@ public enum CommandTable {
 
             \(lines.joined(separator: "\n"))
 
+            --window <id> names the window a command acts on, as `window list` shows it;
+            without it, the key window. It goes with app home, app demo, state, screenshot,
+            the player, comment, context, send, thread and window close commands.
             --json prints machine output on every command.
             --version prints the version of Havooch this command comes with.
             Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.

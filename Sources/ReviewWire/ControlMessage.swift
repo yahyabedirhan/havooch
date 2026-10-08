@@ -15,11 +15,15 @@ public struct ControlMessage: Equatable, Sendable {
     public var holder: Holder
     /// Whether the answer's `output` is JSON, not lines.
     public var json: Bool
+    /// `--window <id>`: the window the request acts on, as `window list`
+    /// names it (`w2`); nil for the key window.
+    public var window: String?
 
-    public init(_ request: ControlRequest, holder: Holder, json: Bool = false) {
+    public init(_ request: ControlRequest, holder: Holder, json: Bool = false, window: String? = nil) {
         self.request = request
         self.holder = holder
         self.json = json
+        self.window = window
     }
 
     /// The message as one JSON object.
@@ -44,8 +48,8 @@ public struct ControlMessage: Equatable, Sendable {
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
-            // The player's window is the default and goes unsaid.
-            wire.window = window == .main ? nil : window.rawValue
+            // A player window goes by its id, or unsaid for the key one.
+            wire.window = window == .main ? self.window : window.rawValue
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
@@ -81,7 +85,11 @@ public struct ControlMessage: Equatable, Sendable {
             wire.dryRun = dryRun ? true : nil
         case .setupCancel: wire = Wire(command: "setup.cancel")
         case .configDismiss: wire = Wire(command: "config.dismiss")
+        case .windowList: wire = Wire(command: "window.list")
+        case .windowNew: wire = Wire(command: "window.new")
+        case .windowClose: wire = Wire(command: "window.close")
         }
+        if case .screenshot = request {} else { wire.window = window }
         wire.holder = holder
         wire.json = json
         let encoder = JSONEncoder()
@@ -106,7 +114,13 @@ public struct ControlMessage: Equatable, Sendable {
         guard let holder = wire.holder else {
             throw .unreadable("the control command `\(wire.command)` needs its `holder`")
         }
-        return ControlMessage(try request(wire), holder: holder, json: wire.json ?? false)
+        let request = try request(wire)
+        // A screenshot's `window` names Settings, the About panel, or a player window.
+        var window = wire.window
+        if case .screenshot(_, _, _, let which) = request, which != .main || window == ControlRequest.Window.main.rawValue {
+            window = nil
+        }
+        return ControlMessage(request, holder: holder, json: wire.json ?? false, window: window)
     }
 
     /// The request `wire` names, with the fields its command needs.
@@ -144,13 +158,8 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            var window = ControlRequest.Window.main
-            if let name = wire.window {
-                guard let known = ControlRequest.Window(rawValue: name) else {
-                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main`, `settings` or `about`")
-                }
-                window = known
-            }
+            // Any other name is a player window's id, which the app looks up.
+            let window = wire.window.flatMap(ControlRequest.Window.init(rawValue:)) ?? .main
             return .screenshot(
                 path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false, window: window
             )
@@ -216,6 +225,9 @@ public struct ControlMessage: Equatable, Sendable {
         case "setup.install": return .setupInstall(harnesses: wire.harnesses ?? [], dryRun: wire.dryRun ?? false)
         case "setup.cancel": return .setupCancel
         case "config.dismiss": return .configDismiss
+        case "window.list": return .windowList
+        case "window.new": return .windowNew
+        case "window.close": return .windowClose
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -255,7 +267,8 @@ public struct ControlMessage: Equatable, Sendable {
         var appearance: String?
         var waitSeconds: Int?
         var hideAgentIndicator: Bool?
-        /// `screenshot --window`: the window captured, when not the player's.
+        /// `--window`: the player window a request acts on, by its id; for
+        /// `screenshot`, also `settings` or `about`.
         var window: String?
         var id: String?
         var text: String?

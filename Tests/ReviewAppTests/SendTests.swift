@@ -23,11 +23,11 @@ struct SendDeliveryTests {
     }
 
     /// The model with the fixture open, and the server in front of it.
-    private func app(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> (AppModel, ControlServer) {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func app(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> (WindowModel, ControlServer) {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model.app, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
     }
@@ -52,7 +52,7 @@ struct SendDeliveryTests {
     /// Two queued messages: one on the frame at 10 s (#1), one on a region
     /// at 12.5 s (#2).
     private func queueTwo(
-        _ model: AppModel
+        _ model: WindowModel
     ) async throws -> ((message: StateReport.Message, thread: StateReport.Thread), (message: StateReport.Message, thread: StateReport.Thread)) {
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
@@ -60,7 +60,7 @@ struct SendDeliveryTests {
     }
 
     /// The person's messages of the open video, in the threads' order.
-    private func work(_ model: AppModel) -> [Message] {
+    private func work(_ model: WindowModel) -> [Message] {
         model.threads.flatMap { $0.messages.filter(\.isWork) }
     }
 

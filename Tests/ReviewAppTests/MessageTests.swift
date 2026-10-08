@@ -18,8 +18,8 @@ struct MessageTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(Self.fixture)
         return model
     }
@@ -178,7 +178,7 @@ struct MessageTests {
         #expect(throws: AppRefusal.self) { try model.editMessage(first.thread.id, text: "x") }
         #expect(throws: AppRefusal.self) { try model.deleteMessage("nope") }
 
-        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         await #expect(throws: AppRefusal.self) { try await empty.addMessage(text: "no video", at: nil) }
     }
 
@@ -188,7 +188,7 @@ struct MessageTests {
         let model = try await model()
         try await model.seek(to: 12.5)
         model.startDraft()
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         #expect(model.state().popover == StateReport.Popover(thread: 1, time: 12.5, text: ""))
 
         // No words: Return leaves the popover open.
@@ -197,7 +197,7 @@ struct MessageTests {
 
         model.draft?.text = "From the popover"
         model.commitDraft()
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         await eventually { model.state().queue.count == 1 }
         let thread = try #require(model.state().threads.last)
         #expect(thread.time == 12.5)

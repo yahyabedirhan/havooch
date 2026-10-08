@@ -7,7 +7,7 @@ import SwiftUI
 /// the agent says. A click on the frame plays or pauses; a drag draws a
 /// region.
 struct StageView: View {
-    let model: AppModel
+    let model: WindowModel
 
     /// The popover's size as it was last laid out, for placing it beside a
     /// region, and as the size a first drag or resize starts from.
@@ -63,7 +63,7 @@ struct StageView: View {
     /// popover, else beside the region for a message on one, else above
     /// the playhead at the foot of the stage. One view in every place, so
     /// a drag that starts from where it opened keeps going.
-    private func commentPopover(_ draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
+    private func commentPopover(_ draft: WindowModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
         let thread = model.draftThread
         let place = placement(draft, thread: thread, geometry: geometry, stage: stage, moving: moving, growing: growing)
         return CommentPopover(
@@ -93,7 +93,7 @@ struct StageView: View {
     /// The end of a drag or a resize: the thread keeps the popover's frame
     /// in the video area, and the gesture's offsets are spent.
     private func keep(
-        _ thread: ReviewThread, draft: AppModel.Draft, geometry: VideoFrameGeometry, stage: CGSize,
+        _ thread: ReviewThread, draft: WindowModel.Draft, geometry: VideoFrameGeometry, stage: CGSize,
         moving: CGSize, growing: CGSize
     ) {
         let place = placement(draft, thread: thread, geometry: geometry, stage: stage, moving: moving, growing: growing)
@@ -101,14 +101,14 @@ struct StageView: View {
         do throws(AppRefusal) {
             try model.movePopover(thread.id, to: ThreadPopover.frame(of: rect, in: stage))
         } catch {
-            model.problem = AppModel.Problem(title: "The popover's place wasn't kept", reason: error.reason)
+            model.problem = WindowModel.Problem(title: "The popover's place wasn't kept", reason: error.reason)
         }
         self.moving = .zero
         self.growing = .zero
     }
 
     private func placement(
-        _ draft: AppModel.Draft, thread: ReviewThread?, geometry: VideoFrameGeometry, stage: CGSize,
+        _ draft: WindowModel.Draft, thread: ReviewThread?, geometry: VideoFrameGeometry, stage: CGSize,
         moving: CGSize, growing: CGSize
     ) -> Placement {
         let natural: Placement

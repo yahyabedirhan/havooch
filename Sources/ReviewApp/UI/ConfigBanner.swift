@@ -6,7 +6,8 @@ import SwiftUI
 /// and closes it, or `havooch config dismiss` does. A full soft fill and
 /// an icon set it apart, never a coloured edge.
 struct ConfigBanner: View {
-    let model: AppModel
+    /// The window it shows in: every window shows the app's one notice.
+    let model: WindowModel
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -46,7 +47,7 @@ struct ConfigBanner: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button {
-                model.dismissConfigNotice()
+                model.app.dismissConfigNotice()
             } label: {
                 Image(systemName: "xmark")
                     .foregroundStyle(palette[.textSecondary])
@@ -54,7 +55,7 @@ struct ConfigBanner: View {
             .buttonStyle(.borderless)
             .help("Close")
             .accessibilityLabel("Close the settings notice")
-            .pressedByKeys(in: model) { model.dismissConfigNotice() }
+            .pressedByKeys(in: model) { model.app.dismissConfigNotice() }
         }
         .padding(12)
         .frame(width: Self.width)

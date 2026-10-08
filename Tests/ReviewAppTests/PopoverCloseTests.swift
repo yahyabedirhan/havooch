@@ -13,8 +13,8 @@ struct PopoverCloseTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -32,13 +32,13 @@ struct PopoverCloseTests {
     }
 
     /// Opens the popover at `time`, on `region` when there is one, with `text`.
-    private func open(_ model: AppModel, at time: Double, region: Region? = nil, text: String) async throws {
+    private func open(_ model: WindowModel, at time: Double, region: Region? = nil, text: String) async throws {
         try await model.seek(to: time)
         _ = try model.openPopover(text: text, region: region)
     }
 
     /// The only queued message, once it's queued.
-    private func queued(_ model: AppModel) async throws -> (message: StateReport.Message, time: Double?) {
+    private func queued(_ model: WindowModel) async throws -> (message: StateReport.Message, time: Double?) {
         await eventually { model.state().queue.count == 1 }
         let state = model.state()
         try #require(state.queue.count == 1)
@@ -88,7 +88,7 @@ struct PopoverCloseTests {
 
         var testDescription: String { rawValue }
 
-        func run(on model: AppModel, thread: ThreadID) async throws {
+        func run(on model: WindowModel, thread: ThreadID) async throws {
             switch self {
             case .seek: try await model.seek(to: 15)
             case .scrub: model.scrub(to: 15)
@@ -184,7 +184,7 @@ struct PopoverCloseTests {
         #expect(message.text == "First words")
         #expect(time == 12.5)
 
-        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         #expect(throws: AppRefusal.self) { try empty.openPopover(text: "", region: nil) }
     }
 

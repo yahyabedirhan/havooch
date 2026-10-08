@@ -69,7 +69,7 @@ struct ThemePicker: View {
                 do throws(AppRefusal) {
                     _ = try model.setTheme(name)
                 } catch {
-                    model.problem = AppModel.Problem(title: "The theme didn't change", reason: error.reason)
+                    model.windows.key?.problem = WindowModel.Problem(title: "The theme didn't change", reason: error.reason)
                 }
             }
         )

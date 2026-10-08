@@ -8,7 +8,7 @@ import SwiftUI
 /// open one. All of it is on one surface, the theme's
 /// `window`; hairlines, not background colours, separate the parts.
 struct RootView: View {
-    @Bindable var model: AppModel
+    @Bindable var model: WindowModel
     /// The lease as the header's agent-control icon draws it, and its Stop.
     let lease: AgentControlIcon
     let stopLease: () -> Void
@@ -115,7 +115,7 @@ struct RootView: View {
 /// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
 /// on that edge separates it from the stage.
 struct SidebarColumn: View {
-    let model: AppModel
+    let model: WindowModel
     /// The width while the person drags; nil shows the kept width.
     @State private var dragged: CGFloat?
     /// The width when the drag started.

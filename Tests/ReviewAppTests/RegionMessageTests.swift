@@ -121,8 +121,8 @@ struct RegionMessageTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -195,7 +195,7 @@ struct RegionMessageTests {
         try await model.seek(to: 12.5)
         model.beginRegion()
         model.endRegion(region)
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: "", region: region))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: "", region: region))
         #expect(model.state().popover == StateReport.Popover(thread: 1, time: 12.5, text: "", region: region))
         model.draft?.text = "from the box"
         model.commitDraft()
@@ -304,7 +304,7 @@ struct RegionMessageTests {
         model.beginRegion()
         #expect(model.draft == nil)
         model.endRegion(second)
-        #expect(model.draft == AppModel.Draft(time: 0, text: "", region: second))
+        #expect(model.draft == WindowModel.Draft(time: 0, text: "", region: second))
         // C with the popover open changes nothing.
         model.startDraft()
         #expect(model.draft?.region == second)
@@ -312,7 +312,7 @@ struct RegionMessageTests {
         model.draft?.text = "this one"
         model.beginRegion()
         model.endRegion(third)
-        #expect(model.draft == AppModel.Draft(time: 0, text: "", region: third))
+        #expect(model.draft == WindowModel.Draft(time: 0, text: "", region: third))
         await eventually { model.state().queue.count == 1 }
         let queued = try #require(model.state().threads.last?.messages.last)
         #expect(queued.text == "this one")
@@ -331,7 +331,7 @@ struct RegionMessageTests {
         _ = try await model.addMessage(text: "The whole frame", at: 12.5)
         let pointedID = try #require(ItemID(pointed.thread.id))
         // The player is on #2's frame: one badge, two outlines.
-        #expect(model.frameMarks == [AppModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
+        #expect(model.frameMarks == [WindowModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
 
         model.showThread(try #require(ItemID(plain.thread.id)))
         await eventually { model.engine.time == 3 }

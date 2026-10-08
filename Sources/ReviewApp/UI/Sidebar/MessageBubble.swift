@@ -91,7 +91,7 @@ enum MessageAction: CaseIterable, Identifiable {
 /// as an attachment under its bubble. A right-click offers Edit, Delete and
 /// Copy where they apply.
 struct MessageBubble: View {
-    let model: AppModel
+    let model: WindowModel
     let message: Message
     var isOpenQuestion = false
     var run: ChatRun
@@ -351,7 +351,7 @@ struct MessageBubble: View {
                 Button("Save", action: save)
                     .filledButton(palette)
                     .pressedByKeys(in: model, action: save)
-                    .disabled(!AppModel.hasWords(text))
+                    .disabled(!WindowModel.hasWords(text))
             }
             .controlSize(.small)
         }
@@ -362,7 +362,7 @@ struct MessageBubble: View {
     }
 
     private func save() {
-        guard let edited, AppModel.hasWords(edited) else { return }
+        guard let edited, WindowModel.hasWords(edited) else { return }
         model.edit(message.id, text: edited)
         self.edited = nil
     }

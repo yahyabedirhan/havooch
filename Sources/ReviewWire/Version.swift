@@ -8,6 +8,7 @@ public enum Version {
     /// another version is refused with both numbers, never misread. 2 since
     /// 0.1.0: the prototypes spoke 1. 3 since 0.2.0: `thread.show` replaced
     /// `thread.expand`, `state` names `sidebar.thread`, and `screenshot`
-    /// takes a `window`.
-    public static let controlProtocol = 3
+    /// takes a `window`. 4 since the windows: a request names its
+    /// `window`, and `window.list`, `window.new` and `window.close` came.
+    public static let controlProtocol = 4
 }

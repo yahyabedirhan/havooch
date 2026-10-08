@@ -51,7 +51,7 @@ enum ThreadPopover {
 /// foot. One message style in both places, and both read the same thread,
 /// so a message written in either shows in both.
 struct PopoverConversation: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ReviewThread
     /// Whether the conversation takes the room the popover has, in a
     /// popover the person sized; else it grows to `conversationHeight`.

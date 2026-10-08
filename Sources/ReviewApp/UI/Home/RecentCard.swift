@@ -8,7 +8,7 @@ import SwiftUI
 /// any more is dimmed, with an "unavailable" symbol and a trash button
 /// that removes it; a click on the rest of it does nothing.
 struct RecentCard: View {
-    let model: AppModel
+    let model: WindowModel
     let recent: StateReport.Recent
     let now: Date
     @State private var isHovered = false

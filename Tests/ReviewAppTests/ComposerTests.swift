@@ -15,8 +15,8 @@ struct ComposerTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -25,20 +25,20 @@ struct ComposerTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    private func thread(_ number: Int, _ model: AppModel) throws -> ReviewThread {
+    private func thread(_ number: Int, _ model: WindowModel) throws -> ReviewThread {
         try #require(model.threads.first { $0.number == number })
     }
 
-    private func resolved(_ model: AppModel) throws -> ComposerTarget {
+    private func resolved(_ model: WindowModel) throws -> ComposerTarget {
         try #require(model.composerTarget)
     }
 
     /// Thread 1 at 5 s, sent, with the agent's open question on it.
-    private func asked(_ model: AppModel) async throws -> ThreadID {
+    private func asked(_ model: WindowModel) async throws -> ThreadID {
         let added = try await model.addMessage(text: "One", at: 5)
         _ = try await model.sendQueue()
         let id = try #require(ItemID(added.thread.id))
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.video!.contentHash) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
         return id
     }
 

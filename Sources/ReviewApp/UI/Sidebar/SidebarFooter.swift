@@ -11,7 +11,7 @@ import SwiftUI
 /// hairline above it separates it from the threads; it lies inside that
 /// height.
 struct SidebarFooter: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {

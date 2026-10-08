@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ReviewCore
 import ReviewLease
 import ReviewWire
@@ -12,19 +12,60 @@ nonisolated struct AppRefusal: Error, Equatable {
     }
 }
 
-/// The app as the control server drives it: the actions an operator can
-/// take. `AppModel` is the real one; the server's tests use a fake.
+/// The app as the control server drives it: its windows, and what isn't
+/// one window's. `AppModel` is the real one; the server's tests use a fake.
 protocol AppControlling: AnyObject {
+    /// What the window `window` names shows, else the key window's, with
+    /// every window. Refused for a window that isn't there.
+    func state(window: String?) throws(AppRefusal) -> StateReport
+    /// The window an operator command acts on: the one `id` names, else
+    /// the key window. With `making`, a new window when there is none.
+    func controlledWindow(_ id: String?, making: Bool) throws(AppRefusal) -> any WindowControlling
+    /// `havooch open`: opens the video for the person, plays it and
+    /// brings its window and the app to the front: the window that holds
+    /// it, else an empty key window, else a new one. A file that doesn't
+    /// play changes nothing.
+    @discardableResult
+    func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling
+    /// Every window, in the order they were made.
+    func windowList() -> [StateReport.Window]
+    /// A new empty window, as File › New Window makes one.
+    func openWindow() -> StateReport.Window
+    /// Closes the window `id` names, else the key window.
+    func closeWindow(_ id: String?) throws(AppRefusal) -> StateReport.Window
+    /// Every theme, and the files left out.
+    func themeList() -> StateReport.ThemeList
+    /// Pins the theme called `name`, or follows the system for `system`.
+    func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme
+    /// What Havooch detects of the setup, read from disk again.
+    func setupStatus() -> StateReport.Setup
+    /// Links the `havooch` command in `~/.local/bin`, as Link does, or
+    /// with `dryRun` says what it would do; the line says which.
+    func linkCommand(dryRun: Bool) throws(AppRefusal) -> (line: String, setup: StateReport.Setup)
+    /// Starts installing the skill for the harnesses `harnesses` name, or
+    /// every harness found without it, as Install does; with `dryRun` only
+    /// plans it.
+    func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
+    /// Stops the running install, as Cancel does, once it has stopped.
+    func cancelInstall() async throws(AppRefusal) -> StateReport.Setup.Install
+    /// Closes the settings notice, as its close button does; false when
+    /// none was up.
+    func dismissConfigNotice() -> Bool
+}
+
+/// One window as the control server drives it: the actions an operator
+/// can take in it. `WindowModel` is the real one.
+protocol WindowControlling: AnyObject {
+    /// The window's name for `--window`: `w1`.
+    var id: String { get }
+    /// The AppKit window that shows it, for a screenshot; nil off screen.
+    var nsWindow: NSWindow? { get }
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
-    /// `havooch open`: opens the video for the person, plays it and
-    /// brings the app to the front. A file that doesn't play changes nothing.
-    func openInFront(_ url: URL) async throws(AppRefusal)
     /// Goes home, as a click on the Havooch mark does: the video closes
-    /// and an in-app demo is left. Shows a closed window.
+    /// and an in-app demo is left.
     func goHome() async
-    /// Runs the demo in the same window, as "Try the Demo" does. Shows a
-    /// closed window.
+    /// Runs the demo in the window, as "Try the Demo" does.
     func openDemo() async throws(AppRefusal)
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
@@ -62,24 +103,6 @@ protocol AppControlling: AnyObject {
     /// Puts words, a region chip and the General toggle in the composer at
     /// the sidebar's foot, as the person types, draws and clicks.
     func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
-    /// Every theme, and the files left out.
-    func themeList() -> StateReport.ThemeList
-    /// Pins the theme called `name`, or follows the system for `system`.
-    func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme
-    /// What Havooch detects of the setup, read from disk again.
-    func setupStatus() -> StateReport.Setup
-    /// Links the `havooch` command in `~/.local/bin`, as Link does, or
-    /// with `dryRun` says what it would do; the line says which.
-    func linkCommand(dryRun: Bool) throws(AppRefusal) -> (line: String, setup: StateReport.Setup)
-    /// Starts installing the skill for the harnesses `harnesses` name, or
-    /// every harness found without it, as Install does; with `dryRun` only
-    /// plans it.
-    func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
-    /// Stops the running install, as Cancel does, once it has stopped.
-    func cancelInstall() async throws(AppRefusal) -> StateReport.Setup.Install
-    /// Closes the settings notice, as its close button does; false when
-    /// none was up.
-    func dismissConfigNotice() -> Bool
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -202,6 +225,12 @@ final class ControlServer {
             case .failure(let refusal): return Answer(reply: .refused(refusal.message(at: time, timeZone: timeZone)))
             }
         }
+        // The window an operator command acts on: `--window`, else the key
+        // window; one that shows something makes a window when there's none.
+        let window = message.window
+        func inWindow(making: Bool = false) throws(AppRefusal) -> any WindowControlling {
+            try app.controlledWindow(window, making: making)
+        }
         do throws(AppRefusal) {
             switch message.request {
             case .controlTake(let seconds):
@@ -211,62 +240,84 @@ final class ControlServer {
                 _ = lease.release(by: message.holder, at: now())
                 return done("released \(AppIdentity.appName)", Output(released: true), json)
             case .appStatus, .appOpen:
-                let state = state()
+                let state = try state(window: nil)
                 return done(json ? state.statusJSON : state.statusLines)
             case .state:
-                let state = state()
+                let state = try state(window: window)
                 return done(json ? state.json : state.lines)
             case .appQuit:
                 let line = "\(AppIdentity.appName) quit"
                 let output = json ? StateReport.json(Output(quit: true)) : line + "\n"
                 return Answer(reply: ControlReply(ok: true, output: output, lease: held), quits: true)
             case .appHome:
-                await app.goHome()
-                let state = app.state()
+                let shown = try inWindow(making: true)
+                await shown.goHome()
+                let state = shown.state()
                 let count = state.recents.count
                 return done(
-                    "home, \(count) recent video\(count == 1 ? "" : "s"), \(state.app.demo ? "demo data" : "your data")",
-                    Output(app: state.app, screen: state.screen), json
+                    "home in \(shown.id), \(count) recent video\(count == 1 ? "" : "s"), \(state.app.demo ? "demo data" : "your data")",
+                    Output(app: state.app, window: shown.id, screen: state.screen), json
                 )
             case .appDemo:
-                try await app.openDemo()
-                let state = app.state()
-                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) on demo data" } ?? "opened the demo"
-                return done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
+                let shown = try inWindow(making: true)
+                try await shown.openDemo()
+                let state = shown.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) on demo data in \(shown.id)" } ?? "opened the demo"
+                return done(
+                    line, Output(app: state.app, window: shown.id, screen: state.screen, video: state.video, player: state.player), json
+                )
             case .open(let path):
-                try await app.openInFront(URL(fileURLWithPath: path))
-                let state = app.state()
-                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))), playing" } ?? "opened \(path)"
-                var answer = done(line, Output(app: state.app, screen: state.screen, video: state.video, player: state.player), json)
+                let shown = try await app.openInFront(URL(fileURLWithPath: path))
+                let state = shown.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) in \(shown.id), playing" } ?? "opened \(path)"
+                var answer = done(
+                    line, Output(app: state.app, window: shown.id, screen: state.screen, video: state.video, player: state.player), json
+                )
                 // The command brings this process to the front: the app
                 // asked to activate itself, but macOS may keep it behind.
                 answer.reply.pid = ProcessInfo.processInfo.processIdentifier
                 return answer
             case .playerOpen(let path):
-                try await app.open(URL(fileURLWithPath: path))
-                let state = app.state()
-                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration)))" } ?? "opened \(path)"
-                return done(line, Output(video: state.video, player: state.player), json)
+                let shown = try inWindow(making: true)
+                try await shown.open(URL(fileURLWithPath: path))
+                let state = shown.state()
+                let line = state.video.map { "opened \($0.title) (\(TimeCode.text($0.duration))) in \(shown.id)" } ?? "opened \(path)"
+                return done(line, Output(window: shown.id, video: state.video, player: state.player), json)
             case .playerPlay:
-                try app.play()
-                let player = app.state().player
+                let shown = try inWindow()
+                try shown.play()
+                let player = shown.state().player
                 return done("playing from \(TimeCode.text(player.time))", Output(player: player), json)
             case .playerPause:
-                try app.pause()
-                let player = app.state().player
+                let shown = try inWindow()
+                try shown.pause()
+                let player = shown.state().player
                 return done("paused at \(TimeCode.text(player.time))", Output(player: player), json)
             case .playerSeek(let seconds):
-                try await app.seek(to: seconds)
-                let player = app.state().player
+                let shown = try inWindow()
+                try await shown.seek(to: seconds)
+                let player = shown.state().player
                 return done(TimeCode.text(player.time), Output(player: player), json)
-            case .screenshot(let path, let appearance, let hideAgentIndicator, let window):
+            case .screenshot(let path, let appearance, let hideAgentIndicator, let which):
+                // A player window is the one `--window` names, else the key one.
+                let player = which == .main ? try inWindow() : nil
                 try await screenshotter.capture(
-                    to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: window
+                    to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: which,
+                    player: player?.nsWindow
                 )
                 return done(path, Output(path: path), json)
+            case .windowList:
+                let windows = app.windowList()
+                return done(json ? StateReport.json(Output(windows: windows)) : StateReport.windowLines(windows))
+            case .windowNew:
+                let made = app.openWindow()
+                return done("\(made.id) opened, showing home", Output(window: made.id, windows: app.windowList()), json)
+            case .windowClose:
+                let closed = try app.closeWindow(window)
+                return done("\(closed.id) closed", Output(window: closed.id, windows: app.windowList()), json)
             case .commentAdd(let text, let at, let rectangle, let thread):
                 let region = try Self.region(rectangle)
-                let added = try await app.addMessage(text: text, at: at, region: region, thread: thread)
+                let added = try await inWindow().addMessage(text: text, at: at, region: region, thread: thread)
                 let place = added.thread.time.map { " at \(TimeCode.text($0))" } ?? ""
                 let area = added.message.region.map { " on the region \($0.text)" } ?? ""
                 return done(
@@ -274,28 +325,29 @@ final class ControlServer {
                     Output(message: added.message, thread: Output.ThreadRef(id: added.thread.id, number: added.thread.number)), json
                 )
             case .commentOpen(let text, let rectangle):
-                let popover = try app.openPopover(text: text, region: try Self.region(rectangle))
+                let popover = try inWindow().openPopover(text: text, region: try Self.region(rectangle))
                 let thread = popover.thread.map { " on #\($0)" } ?? ""
                 let area = popover.region.map { " on the region \($0.text)" } ?? ""
                 return done("popover open\(thread) at \(TimeCode.text(popover.time))\(area)", Output(popover: popover), json)
             case .commentCompose(let text, let rectangle, let general):
-                let composer = try app.compose(text: text, region: try Self.region(rectangle), general: general)
+                let composer = try inWindow().compose(text: text, region: try Self.region(rectangle), general: general)
                 let area = composer.region.map { " with the region \($0.text)" } ?? ""
                 return done("the composer says \"\(composer.target)\"\(area)", Output(composer: composer), json)
             case .commentEdit(let id, let text):
-                let message = try app.editMessage(id, text: text)
+                let message = try inWindow().editMessage(id, text: text)
                 return done("\(message.id) edited", Output(message: message), json)
             case .commentDelete(let id):
-                let message = try app.deleteMessage(id)
+                let message = try inWindow().deleteMessage(id)
                 return done("\(message.id) deleted", Output(deleted: message.id), json)
             case .contextSet(let text):
-                let note = try app.setContextNote(text)
+                let shown = try inWindow()
+                let note = try shown.setContextNote(text)
                 let line = note.isEmpty
                     ? "context note cleared"
                     : "context note set (\(note.count) character\(note.count == 1 ? "" : "s"))"
-                return done(line, Output(video: app.state().video), json)
+                return done(line, Output(video: shown.state().video), json)
             case .send:
-                let send = try await app.sendQueue()
+                let send = try await inWindow().sendQueue()
                 let messages = send.messageIds.count
                 let threads = send.threadIds.count
                 let delivered = listeners.isDelivered(send.id)
@@ -339,22 +391,22 @@ final class ControlServer {
                     return Answer(reply: .refused("\(AppIdentity.appName) is quitting"), silent: true)
                 }
             case .threadAnswer(let thread, let text):
-                let answered = try app.answer(thread, text: text)
+                let answered = try inWindow().answer(thread, text: text)
                 return done("#\(answered.number) answered", Output(message: answered.message), json)
             case .threadChoose(let thread, let choice):
-                let answered = try app.choose(thread, choice: choice)
+                let answered = try inWindow().choose(thread, choice: choice)
                 return done("#\(answered.number) answered: \(answered.message.text)", Output(message: answered.message), json)
             case .threadOpen(let thread, let rectangle):
                 // A frame is a rectangle of the video area, checked as a region is.
                 let frame = try Self.region(rectangle).map { PopoverFrame(x: $0.x, y: $0.y, w: $0.w, h: $0.h) }
-                let popover = try await app.openThread(thread, frame: frame)
+                let popover = try await inWindow().openThread(thread, frame: frame)
                 let number = popover.thread.map { "#\($0)" } ?? thread
                 return done("popover open on \(number) at \(TimeCode.text(popover.time))", Output(popover: popover), json)
             case .threadShow(let thread):
-                let shown = try await app.showThread(thread)
+                let shown = try await inWindow().showThread(thread)
                 return done("the sidebar shows #\(shown.number)", Output(sidebar: shown.sidebar), json)
             case .threadList:
-                let sidebar = app.showThreadList()
+                let sidebar = try inWindow().showThreadList()
                 return done("the sidebar shows the thread list", Output(sidebar: sidebar), json)
             case .themeList:
                 let list = app.themeList()
@@ -389,6 +441,9 @@ final class ControlServer {
     /// What an action prints with `--json`: only the parts it changed.
     private struct Output: Encodable {
         var app: StateReport.App?
+        /// The window the command acted on: its id.
+        var window: String?
+        var windows: [StateReport.Window]?
         var screen: StateReport.Screen?
         var video: StateReport.Video?
         var player: StateReport.Player?
@@ -436,9 +491,10 @@ final class ControlServer {
         }
     }
 
-    /// What the app shows, with the lease and the listener as they are now.
-    private func state() -> StateReport {
-        var state = app.state()
+    /// What the window `window` names (else the key window) shows, with
+    /// the lease and the listener as they are now.
+    private func state(window: String?) throws(AppRefusal) -> StateReport {
+        var state = try app.state(window: window)
         state.lease = lease.status(at: now())
         state.listener = listeners.report(at: now())
         return state

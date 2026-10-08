@@ -91,12 +91,14 @@ public struct ControlClient: Sendable {
         case failed(String)
     }
 
-    public func send(_ request: ControlRequest) -> Result<ControlReply, Failure> {
+    /// Sends `request` for the window `window` names (`--window`), or
+    /// the key window when it's nil.
+    public func send(_ request: ControlRequest, window: String? = nil) -> Result<ControlReply, Failure> {
         let data: Data
         let limit = request.holdSeconds.map { timeout + $0 }
         do throws(ControlTransportFailure) {
             data = try transport.exchange(
-                ControlMessage(request, holder: holder, json: json).encoded(), socket: socket, timeout: limit
+                ControlMessage(request, holder: holder, json: json, window: window).encoded(), socket: socket, timeout: limit
             )
         } catch {
             switch error {

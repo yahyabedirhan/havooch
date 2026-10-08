@@ -199,9 +199,14 @@ final class SetupDesk {
 // MARK: - The model's setup actions
 
 extension AppModel {
-    /// Setup as `state` reports it, prompts naming the open video.
+    /// Setup as `state` reports it, prompts naming the key window's video.
     var setupReport: StateReport.Setup {
-        StateReport.Setup(setup, target: video.map { .video(fileName: $0.url.lastPathComponent) })
+        setupReport(for: windows.key)
+    }
+
+    /// Setup as `state` reports it for `window`, prompts naming its video.
+    func setupReport(for window: WindowModel?) -> StateReport.Setup {
+        StateReport.Setup(setup, target: window?.video.map { .video(fileName: $0.url.lastPathComponent) })
     }
 
     /// `setup status`: the disk read again, then the report.

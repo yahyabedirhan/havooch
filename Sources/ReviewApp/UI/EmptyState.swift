@@ -6,7 +6,7 @@ import SwiftUI
 /// is the launch video bundled in the app, on demo data (`DemoRun`); a
 /// build with no bundled demo leaves the button out.
 struct EmptyState: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -39,7 +39,7 @@ struct EmptyState: View {
 /// home screen alike. A dashed outline over it shows while a file is
 /// dragged over it.
 private struct VideoDropTarget: ViewModifier {
-    let model: AppModel
+    let model: WindowModel
     @State private var isTargeted = false
     @Environment(\.palette) private var palette
 
@@ -70,7 +70,7 @@ private struct VideoDropTarget: ViewModifier {
 
 extension View {
     /// Takes a video dropped anywhere on this view, with the drop outline.
-    func videoDropTarget(_ model: AppModel) -> some View {
+    func videoDropTarget(_ model: WindowModel) -> some View {
         modifier(VideoDropTarget(model: model))
     }
 }

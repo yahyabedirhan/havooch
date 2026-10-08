@@ -6,7 +6,7 @@ import SwiftUI
 /// or the picture's top-left corner for a thread on the whole frame. A
 /// click on a badge opens its thread popover. Nothing opens by itself (D 2.11).
 struct FrameMarks: View {
-    let model: AppModel
+    let model: WindowModel
     let geometry: VideoFrameGeometry
 
     static let badgeSize: CGFloat = 20
@@ -32,7 +32,7 @@ struct FrameMarks: View {
 
     /// Where `mark`'s badge is centred: its first region's corner, else the
     /// picture's corner, beside the badges of the threads before it there.
-    private func anchor(of mark: AppModel.FrameMark, index: Int, in marks: [AppModel.FrameMark]) -> CGPoint {
+    private func anchor(of mark: WindowModel.FrameMark, index: Int, in marks: [WindowModel.FrameMark]) -> CGPoint {
         if let region = mark.regions.first {
             let rect = geometry.rect(of: region)
             return CGPoint(x: rect.minX, y: rect.minY)

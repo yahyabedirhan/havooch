@@ -9,7 +9,7 @@ import SwiftUI
 /// also shows the region of the message in the popover, else the region
 /// chip of the composer at the sidebar's foot (L41).
 struct RegionOverlay: View {
-    let model: AppModel
+    let model: WindowModel
     let geometry: VideoFrameGeometry
 
     /// The drag under way, in the stage's points.

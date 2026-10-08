@@ -24,8 +24,8 @@ struct ConfigDeskTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    private func model() -> AppModel {
-        AppModel(environment: [SupportFolder.overrideVariable: layout.root.path])
+    private func model() -> WindowModel {
+        AppModel(environment: [SupportFolder.overrideVariable: layout.root.path]).makeWindow()
     }
 
     private func object(_ url: URL) throws -> [String: Any] {
@@ -96,11 +96,11 @@ struct ConfigDeskTests {
         #expect(model.config.notice?.lines.first?.hasSuffix("..") == false)
 
         // The same problems again don't come up again; theme set doesn't write over the file.
-        #expect(model.dismissConfigNotice())
-        #expect(!model.dismissConfigNotice())
+        #expect(model.app.dismissConfigNotice())
+        #expect(!model.app.dismissConfigNotice())
         #expect(model.config.reload() == .rejected)
         #expect(model.config.notice == nil)
-        #expect(throws: AppRefusal.self) { try model.setTheme("Default Dark") }
+        #expect(throws: AppRefusal.self) { try model.app.setTheme("Default Dark") }
 
         // A new problem comes up; a file that reads again takes it away.
         try save("version = 1\ntheme = 4\n")
@@ -199,7 +199,7 @@ struct ConfigDeskTests {
         let model = model()
         #expect(model.config.notes == ["The 1 token override in settings.json no longer applies. To keep it, write a theme that extends another in \(location.themesFolder.path)."])
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let holder = ThemeDeskTests.operatorAgent

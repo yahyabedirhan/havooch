@@ -51,11 +51,11 @@ struct TranscriptDeliveryTests {
     }
 
     /// The model with `video` open, and the server in front of it.
-    private func app(_ video: URL, speech: SlowRecognizer = SlowRecognizer()) async throws -> (AppModel, ControlServer) {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: speech)
+    private func app(_ video: URL, speech: SlowRecognizer = SlowRecognizer()) async throws -> (WindowModel, ControlServer) {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: speech).makeWindow()
         try await model.open(video)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -223,7 +223,7 @@ struct TranscriptDeliveryTests {
     @Test("state has transcript null with no video, and one line for it")
     func state() async throws {
         defer { cleanUp() }
-        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
+        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer()).makeWindow()
         #expect(empty.state().transcript == nil)
         #expect(try object(empty.state().json)["transcript"] is NSNull)
         #expect(empty.state().lines.contains("transcript: none\n"))

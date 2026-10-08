@@ -73,7 +73,7 @@ struct ThreadSummary: Hashable {
     }
 }
 
-/// What a row's menu offers (L40); `AppModel.rowActions` says which
+/// What a row's menu offers (L40); `WindowModel.rowActions` says which
 /// apply to a thread.
 enum RowAction: Identifiable {
     /// Shows the thread's view, as a click on the row does.
@@ -127,7 +127,7 @@ enum RelativeTime {
 /// Keyboard navigation reaches the row, with the system focus ring, and
 /// Space or Return opens it as a click does.
 struct ThreadRow: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ReviewThread
     /// Whether the thread's frame is on the stage.
     let isOnStage: Bool

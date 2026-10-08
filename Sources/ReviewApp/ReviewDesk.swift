@@ -4,7 +4,8 @@ import ReviewCore
 import ReviewStore
 
 /// The one path for changing a review: take a video's review, run the
-/// change, save it, publish it to the views. A refused change, and one
+/// change, save it, publish it to the views. Every window on the data
+/// reads its review here, by its video's content hash. A refused change, and one
 /// that can't be saved, leaves the review as it was, in memory and on disk.
 ///
 /// A review is read from the `Library` the first time it's asked for and
@@ -13,10 +14,9 @@ import ReviewStore
 /// and answered.
 @Observable
 final class ReviewDesk {
-    /// The open video's review; nil with no video.
-    private(set) var review: VideoReview?
-    /// The reviews this run has read or made, by content hash.
-    @ObservationIgnored private var reviews: [String: VideoReview] = [:]
+    /// The reviews this run has read or made, by content hash. A view
+    /// that shows one follows its changes.
+    private var reviews: [String: VideoReview] = [:]
     @ObservationIgnored let library: Library
 
     init(library: Library) {
@@ -30,9 +30,11 @@ final class ReviewDesk {
         try kept(video.contentHash) ?? VideoReview(video: video)
     }
 
-    /// Makes `review` the open one, as `review(for:)` gave it. A review
-    /// that's on disk is saved when its video moved or was renamed; a new
-    /// one is first saved with its first change.
+    /// Keeps `review`, as `review(for:)` gave it, for a window that opens
+    /// its video. A review that's on disk is saved when its video moved or
+    /// was renamed; a new one is first saved with its first change. It
+    /// stays kept when its window closes, so a listener can still answer
+    /// on it.
     func open(_ review: VideoReview) {
         let hash = review.video.contentHash
         let isKept = FileManager.default.fileExists(atPath: library.layout.reviewFile(hash).path)
@@ -41,13 +43,12 @@ final class ReviewDesk {
             try? library.save(review)
         }
         reviews[hash] = review
-        self.review = review
     }
 
-    /// No review is the open one: the video closed. Its review stays kept,
-    /// so a listener can still answer on it.
-    func close() {
-        review = nil
+    /// The review of the video with `contentHash` as this run keeps it,
+    /// never read from disk: what a window that opened the video shows.
+    func opened(_ contentHash: String) -> VideoReview? {
+        reviews[contentHash]
     }
 
     /// The review of the video with `contentHash`, open or not; nil when
@@ -64,13 +65,14 @@ final class ReviewDesk {
     }
 
     /// The thread a command names, and its video's content hash: a full id
-    /// names its video by its prefix, a bare number is the open video's
-    /// (`0` is General). Refused for what isn't a thread of a review.
-    func threadID(_ text: String) throws(AppRefusal) -> (ThreadID, String) {
+    /// names its video by its prefix, a bare number is a thread of the video
+    /// with content hash `open`, the window's (`0` is General). Refused for
+    /// what isn't a thread of a review.
+    func threadID(_ text: String, open: String?) throws(AppRefusal) -> (ThreadID, String) {
         let ref = ThreadRef(text)
         let hash: String? = switch ref {
         case .id(let id): contentHash(of: id)
-        case .number: review?.video.contentHash
+        case .number: open
         case nil: nil
         }
         guard let ref, let hash, let review = review(of: hash) else {
@@ -85,16 +87,8 @@ final class ReviewDesk {
         }
     }
 
-    /// Runs `change` on the open review, saves and publishes the result.
-    func change<Result>(_ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
-        guard let review else {
-            throw AppRefusal("no video is open; open one with `havooch player open <path>`")
-        }
-        return try self.change(review.video.contentHash, change)
-    }
-
     /// Runs `change` on the review of the video with `contentHash`, open
-    /// or not, saves it, and publishes the result when it's the open one.
+    /// in a window or not, saves it, and publishes the result.
     func change<Result>(
         _ contentHash: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result
     ) throws(AppRefusal) -> Result {
@@ -115,7 +109,6 @@ final class ReviewDesk {
             throw AppRefusal("nothing changed: \(error.reason)")
         }
         reviews[contentHash] = changed
-        if review?.video.contentHash == contentHash { review = changed }
         return result
     }
 

@@ -115,8 +115,9 @@ public enum ControlRequest: Equatable, Sendable {
     /// Back in a thread view shows it.
     case threadList
     /// `havooch screenshot <abs.png> [--appearance light|dark]
-    /// [--hide-agent-indicator] [--window main|settings]`: the app's
-    /// `window` written as a PNG at the absolute `path`, in `appearance`
+    /// [--hide-agent-indicator] [--window main|settings|about|<id>]`: the
+    /// app's `window` written as a PNG at the absolute `path`; for `main`,
+    /// the player window the message's `window` names, else the key one, in `appearance`
     /// when it's set, as the Mac shows it otherwise. The agent-control
     /// indicator shows as the person sees it, unless `hideAgentIndicator`
     /// leaves it out. The Settings window is opened for the capture, as
@@ -147,6 +148,16 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch config dismiss`: the settings notice in the window goes,
     /// as its close button does.
     case configDismiss
+    /// `havooch window list`: every window, in the order they were made,
+    /// with what each holds and which one is key.
+    case windowList
+    /// `havooch window new`: a new empty window that shows the home
+    /// screen, as File › New Window makes one.
+    case windowNew
+    /// `havooch window close [<id>]`: a window closed, as its close
+    /// button closes it. The window is the message's `window`, else the
+    /// key window.
+    case windowClose
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -181,7 +192,8 @@ public enum ControlRequest: Equatable, Sendable {
         case light, dark
     }
 
-    /// The window `screenshot` captures: the player's, Settings or the About panel.
+    /// The window `screenshot` captures: a player window (the message's
+    /// `window`), Settings or the About panel.
     public enum Window: String, Equatable, Sendable, CaseIterable {
         case main, settings, about
     }
@@ -204,9 +216,9 @@ public enum ControlRequest: Equatable, Sendable {
     /// requests take the lease without a table.
     public var role: Role {
         switch self {
-        case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
+        case .appStatus, .state, .controlTake, .controlRelease, .themeList, .windowList: .free
         case .open: .person
-        case .themeSet, .configDismiss: .operator
+        case .themeSet, .configDismiss, .windowNew, .windowClose: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator

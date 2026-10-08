@@ -15,10 +15,10 @@ import SwiftUI
 /// Return and Queue queue the words, or answer an open question at once
 /// (L14), and the popover stays on its thread; the × and Escape drop them.
 /// A click outside and a change of the moment close it through
-/// `AppModel.closePopover`, which owns the rules.
+/// `WindowModel.closePopover`, which owns the rules.
 struct CommentPopover: View {
-    let model: AppModel
-    let draft: AppModel.Draft
+    let model: WindowModel
+    let draft: WindowModel.Draft
     /// Where the notch points, from the box's leading edge; nil for a box
     /// beside a region.
     let notch: CGFloat?
@@ -60,7 +60,7 @@ struct CommentPopover: View {
                     .filledButton(palette)
                     .pressedByKeys(in: model) { model.commitDraft() }
                     .controlSize(.mini)
-                    .disabled(!AppModel.hasWords(draft.text))
+                    .disabled(!WindowModel.hasWords(draft.text))
                 if resize != nil {
                     // Room for the grip in the corner.
                     Spacer().frame(width: 6)

@@ -56,10 +56,39 @@ struct ControlMessageTests {
         .threadChoose(thread: "t-f92cbb2a-1", choice: 2), .threadChoose(thread: "1", choice: 1),
         .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
         .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
+        .windowList, .windowNew, .windowClose,
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
         #expect(try ControlMessage.decode(message.encoded()) == message)
+    }
+
+    @Test("a request names its window, and reads back with it; with none it goes unsaid", arguments: [
+        ControlRequest.playerPlay, .state, .windowClose, .commentAdd(text: "Too fast", at: 12.5),
+        .screenshot(path: "/tmp/shot.png", appearance: nil),
+    ])
+    func window(request: ControlRequest) throws {
+        let message = ControlMessage(request, holder: Self.holder, window: "w2")
+        #expect(try ControlMessage.decode(message.encoded()) == message)
+        let fields = try #require(try JSONSerialization.jsonObject(with: message.encoded()) as? [String: Any])
+        #expect(fields["window"] as? String == "w2")
+        let keyWindow = try #require(try JSONSerialization.jsonObject(with: ControlMessage(request, holder: Self.holder).encoded()) as? [String: Any])
+        #expect(keyWindow["window"] == nil)
+    }
+
+    @Test("a screenshot's window is Settings, the About panel, or a player window by its id; main is the key window")
+    func screenshotWindow() throws {
+        func decoded(_ window: String) throws -> ControlMessage {
+            try ControlMessage.decode(raw([
+                "version": Version.controlProtocol, "command": "screenshot", "holder": holderFields,
+                "path": "/tmp/shot.png", "window": window,
+            ]))
+        }
+        #expect(try decoded("settings").request == .screenshot(path: "/tmp/shot.png", appearance: nil, window: .settings))
+        #expect(try decoded("settings").window == nil)
+        #expect(try decoded("w3").request == .screenshot(path: "/tmp/shot.png", appearance: nil, window: .main))
+        #expect(try decoded("w3").window == "w3")
+        #expect(try decoded("main").window == nil)
     }
 
     @Test("a region is four numbers with commas between them, and anything else isn't one")
@@ -132,8 +161,6 @@ struct ControlMessageTests {
             == .unreadable("the control command `screenshot` needs an absolute `path`, not `shot.png`"))
         #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "appearance": "sepia"]))
             == .unreadable("the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"))
-        #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "window": "inspector"]))
-            == .unreadable("the control command `screenshot` has no window `inspector`; it takes `main`, `settings` or `about`"))
         #expect(refusal(fields("control.take", ["waitSeconds": -1]))
             == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)

@@ -21,9 +21,49 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     /// What the window shows: the player with a video open, else home.
     /// The home screen and the first launch's empty state are both home:
-    /// the screen with no video.
+    /// the screen with no video. `none` while no window is open.
     enum Screen: String, Encodable, Equatable {
-        case home, player
+        case home, player, none
+    }
+
+    /// One window, as `window list` and `state` list it.
+    struct Window: Encodable, Equatable {
+        /// Its name for `--window`: `w1`.
+        var id: String
+        /// Whether commands without `--window` act on it: the window with
+        /// the keys, else the one that had them last.
+        var key: Bool
+        /// Whether its window is on screen.
+        var onScreen: Bool
+        var screen: Screen
+        /// The video it holds; `null` for none.
+        var video: Held?
+
+        /// The video a window holds.
+        struct Held: Encodable, Equatable {
+            var path: String
+            var title: String
+            var contentHash: String
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(key, forKey: .key)
+            try container.encode(onScreen, forKey: .onScreen)
+            try container.encode(screen, forKey: .screen)
+            try container.encode(video, forKey: .video)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, key, onScreen, screen, video
+        }
+
+        /// `w1 key player cut1.mp4 /Movies/cut1.mp4`, or `w2 home off screen`.
+        var line: String {
+            let held = video.map { " \($0.title) \($0.path)" } ?? ""
+            return "\(id)\(key ? " key" : "") \(screen.rawValue)\(onScreen ? "" : " off screen")\(held)"
+        }
     }
 
     struct Video: Encodable, Equatable {
@@ -388,6 +428,10 @@ nonisolated struct StateReport: Encodable, Equatable {
     var recents: [Recent] = []
     /// What the window shows; the app's model fills it in.
     var screen: Screen = .home
+    /// The window this report is of: its id; `null` with no window open.
+    var window: String?
+    /// Every window, in the order they were made.
+    var windows: [Window] = []
 
     init(
         app: App, lease: ControlLease.Status? = nil, video: Video?, player: Player, popover: Popover? = nil,
@@ -410,12 +454,14 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, screen, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, config, sidebar, recents, setup
+        case transcript, theme, config, sidebar, recents, setup, window, windows
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(app, forKey: .app)
+        try container.encode(window, forKey: .window)
+        try container.encode(windows, forKey: .windows)
         try container.encode(screen, forKey: .screen)
         try container.encode(lease, forKey: .lease)
         try container.encode(listener, forKey: .listener)
@@ -442,6 +488,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     var lines: String {
         """
         \(AppIdentity.appName) \(app.version), \(app.demo ? "demo data" : "your data") in \(app.support)
+        window: \(window ?? "none")
         screen: \(screen.rawValue)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
@@ -450,8 +497,14 @@ nonisolated struct StateReport: Encodable, Equatable {
         \(listenerLine)
         \(theme.map { $0.line + "\n" } ?? "")\(config.map { $0.lines + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")threads: \(threadLines)
         recents: \(recentLines)
-
+        \(Self.windowLines(windows))
         """
+    }
+
+    /// `window list`, and the end of `state`: `windows: 2`, then one line
+    /// per window.
+    static func windowLines(_ windows: [Window]) -> String {
+        (["windows: \(windows.count)"] + windows.map { "  " + $0.line }).joined(separator: "\n") + "\n"
     }
 
     /// The recent videos, one line each: `sample at 0:12, 2026-10-06T…, /videos/sample.mp4`.

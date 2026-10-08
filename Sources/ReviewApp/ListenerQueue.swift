@@ -83,6 +83,9 @@ final class ListenerQueue {
     @ObservationIgnored private var asks: [ThreadID: OpenAsk] = [:]
     /// Told each thing the agent says, to show it as a notice.
     @ObservationIgnored var announce: (@MainActor (Notice) -> Void)?
+    /// The content hash of the video a bare thread number (`reply 3`) is
+    /// on: the key window's. The app sets it; nil with no video.
+    @ObservationIgnored var keyVideo: @MainActor () -> String? = { nil }
     @ObservationIgnored private let desk: ReviewDesk
     @ObservationIgnored private let layout: SupportLayout
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -267,7 +270,7 @@ final class ListenerQueue {
     /// `havooch reply`: the agent's message on a thread.
     func reply(on thread: String, text: String) throws(AppRefusal) -> StateReport.Message {
         outbox.heard(at: now())
-        let (id, hash) = try desk.threadID(thread)
+        let (id, hash) = try desk.threadID(thread, open: keyVideo())
         let message = try desk.change(hash) { [time = now(), session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.reply(on: id, text: text, session: session, now: time)
         }
@@ -283,7 +286,7 @@ final class ListenerQueue {
         on thread: String, question: String, choices: [String] = [], waitSeconds: Int?, connection: UUID? = nil
     ) async throws(AppRefusal) -> Asked {
         outbox.heard(at: now())
-        let (id, hash) = try desk.threadID(thread)
+        let (id, hash) = try desk.threadID(thread, open: keyVideo())
         let time = now()
         let message = try desk.change(hash) { [session = outbox.session?.name] review throws(ReviewRefusal) in
             try review.ask(on: id, question: question, choices: choices, session: session, now: time)

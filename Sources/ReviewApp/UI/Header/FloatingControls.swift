@@ -6,7 +6,7 @@ import SwiftUI
 /// the player only, since home has its own "Open a Video…". They are toolbar items, so the system
 /// draws them as one floating group.
 struct FloatingControls: ToolbarContent {
-    let model: AppModel
+    let model: WindowModel
     let lease: AgentControlIcon
     let stopLease: () -> Void
     /// Whether the agent-control icon shows: an agent holds the lease, and
@@ -33,7 +33,7 @@ struct FloatingControls: ToolbarContent {
 /// The sidebar toggle. The root view animates the column in and out with
 /// one spring (`SidebarColumn.animation`), whatever opens it.
 private struct SidebarToggle: View {
-    let model: AppModel
+    let model: WindowModel
 
     var body: some View {
         Button {
@@ -49,7 +49,7 @@ private struct SidebarToggle: View {
 /// "Open a Video…" in the header: the Open panel, without going home
 /// first. On an in-app demo the video opens on the person's data.
 private struct OpenVideoButton: View {
-    let model: AppModel
+    let model: WindowModel
 
     var body: some View {
         Button {

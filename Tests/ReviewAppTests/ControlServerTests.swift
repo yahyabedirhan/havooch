@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 @testable import ReviewApp
@@ -13,8 +14,11 @@ import Testing
 @Suite("The control server")
 struct ControlServerTests {
     /// A player with a 21.233 s video open (or none), which records each
-    /// call and refuses all of them with `refusal` when it's set.
-    final class FakeApp: AppControlling {
+    /// call and refuses all of them with `refusal` when it's set. It is the
+    /// app and its one window, `w1`.
+    final class FakeApp: AppControlling, WindowControlling {
+        let id = "w1"
+        var nsWindow: NSWindow? { nil }
         var calls: [String] = []
         var refusal: AppRefusal?
         var hasVideo = true
@@ -39,7 +43,37 @@ struct ControlServerTests {
             )
             report.sidebar = StateReport.Sidebar(thread: shown, width: 340)
             report.screen = hasVideo ? .player : .home
+            report.window = id
+            report.windows = windowList()
             return report
+        }
+
+        func state(window: String?) throws(AppRefusal) -> StateReport {
+            _ = try controlledWindow(window, making: false)
+            return state()
+        }
+
+        func controlledWindow(_ id: String?, making: Bool) throws(AppRefusal) -> any WindowControlling {
+            if let id, id != self.id { throw AppRefusal("no window `\(id)`; the windows are w1") }
+            return self
+        }
+
+        func windowList() -> [StateReport.Window] {
+            [StateReport.Window(
+                id: id, key: true, onScreen: true, screen: hasVideo ? .player : .home,
+                video: hasVideo ? .init(path: "/videos/sample.mp4", title: "sample", contentHash: Self.hash) : nil
+            )]
+        }
+
+        func openWindow() -> StateReport.Window {
+            calls.append("new window")
+            return StateReport.Window(id: "w2", key: false, onScreen: false, screen: .home, video: nil)
+        }
+
+        func closeWindow(_ id: String?) throws(AppRefusal) -> StateReport.Window {
+            _ = try controlledWindow(id, making: false)
+            try record("close window")
+            return windowList()[0]
         }
 
         private func change<Result>(_ call: String, _ change: (inout VideoReview) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
@@ -164,11 +198,12 @@ struct ControlServerTests {
         /// Whether the app is in front, as `openInFront` leaves it.
         var active = false
 
-        func openInFront(_ url: URL) async throws(AppRefusal) {
+        func openInFront(_ url: URL) async throws(AppRefusal) -> any WindowControlling {
             try record("open in front \(url.path)")
             hasVideo = true
             playing = true
             active = true
+            return self
         }
 
         func goHome() async {
@@ -201,7 +236,8 @@ struct ControlServerTests {
         var calls: [String] = []
 
         func capture(
-            to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window
+            to file: URL, appearance: ControlRequest.Appearance?, hideAgentIndicator: Bool, window: ControlRequest.Window,
+            player: NSWindow?
         ) async throws(AppRefusal) {
             calls.append(
                 "\(file.path) \(appearance?.rawValue ?? "as is")" + (hideAgentIndicator ? " without the indicator" : "")
@@ -259,7 +295,7 @@ struct ControlServerTests {
 
     @Test("player commands reach the app and answer one line")
     func player() async {
-        #expect(await answer(.playerOpen(path: "/videos/sample.mp4")).reply == .done("opened sample (0:21.233)\n"))
+        #expect(await answer(.playerOpen(path: "/videos/sample.mp4")).reply == .done("opened sample (0:21.233) in w1\n"))
         #expect(await answer(.playerSeek(seconds: 10)).reply == .done("0:10\n"))
         #expect(await answer(.playerPlay).reply == .done("playing from 0:10\n"))
         #expect(await answer(.playerPause).reply == .done("paused at 0:10\n"))
@@ -271,7 +307,7 @@ struct ControlServerTests {
         app.hasVideo = false
         // The reply names the app's process, for the command to bring to the front.
         #expect(await answer(.open(path: "/videos/sample.mp4")).reply
-            == ControlReply(ok: true, output: "opened sample (0:21.233), playing\n", pid: ProcessInfo.processInfo.processIdentifier))
+            == ControlReply(ok: true, output: "opened sample (0:21.233) in w1, playing\n", pid: ProcessInfo.processInfo.processIdentifier))
         #expect(app.calls == ["open in front /videos/sample.mp4"])
         let open = try object(await answer(.open(path: "/videos/sample.mp4"), json: true).reply.output)
         #expect((open["app"] as? [String: Any])?["active"] as? Bool == true)
@@ -357,6 +393,7 @@ struct ControlServerTests {
     func lines() async {
         #expect(await answer(.state).reply.output == """
             \(AppIdentity.appName) 0.3.0, demo data in /demo
+            window: w1
             screen: player
             video: sample (0:21.233) /videos/sample.mp4
             player: paused at 0:00
@@ -366,6 +403,8 @@ struct ControlServerTests {
             threads: 1 (0 queued)
               #0 General t-abcdef01-0 -
             recents: 0
+            windows: 1
+              w1 key player sample /videos/sample.mp4
 
             """)
         #expect(await answer(.appStatus).reply.output == """
@@ -533,6 +572,8 @@ struct ControlServerTests {
               #1 at 0:12.5 t-abcdef01-1 queued
                 m-abcdef01-1 person message queued: Later
             recents: 0
+            windows: 1
+              w1 key player sample /videos/sample.mp4
 
             """))
 
@@ -550,9 +591,9 @@ struct ControlServerTests {
         let state = try object(await answer(.state, json: true).reply.output)
         #expect((state["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
         #expect(await answer(.contextSet(text: "")).reply == .done("context note cleared\n"))
-        app.refusal = AppRefusal("no video is open; open one with `havooch player open <path>`")
+        app.refusal = AppRefusal("no video is open in the window; open one with `havooch player open <path>`")
         #expect(await answer(.contextSet(text: "note")).reply
-            == .refused("no video is open; open one with `havooch player open <path>`"))
+            == .refused("no video is open in the window; open one with `havooch player open <path>`"))
     }
 
     @Test("send reaches the app and answers the send's id, how many messages it carries and on how many threads")

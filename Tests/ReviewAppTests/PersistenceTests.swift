@@ -30,11 +30,11 @@ struct PersistenceTests {
     /// launch opens none by itself.
     private func run(
         on support: URL? = nil, reopening: Bool = false, speech: any SpeechRecognizing = SlowRecognizer()
-    ) async -> (AppModel, ControlServer) {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech)
+    ) async -> (WindowModel, ControlServer) {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: (support ?? self.support).path], speech: speech).makeWindow()
         if reopening, let last = model.recents.first { try? await model.open(last.url) }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -57,7 +57,7 @@ struct PersistenceTests {
         try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
     }
 
-    private func state(_ model: AppModel) throws -> [String: Any] {
+    private func state(_ model: WindowModel) throws -> [String: Any] {
         try object(model.state().json)
     }
 
@@ -78,7 +78,7 @@ struct PersistenceTests {
     /// #3, a popover frame on #2 and a note. Returns the ids of the send,
     /// its two messages and their threads.
     private func build(
-        _ model: AppModel, _ server: ControlServer
+        _ model: WindowModel, _ server: ControlServer
     ) async throws -> (send: String, first: String, second: String, one: String, two: String) {
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
@@ -99,7 +99,7 @@ struct PersistenceTests {
     }
 
     /// The person's messages' states, in the threads' order.
-    private func states(_ model: AppModel) -> [MessageState?] {
+    private func states(_ model: WindowModel) -> [MessageState?] {
         model.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) }
     }
 
@@ -153,7 +153,7 @@ struct PersistenceTests {
         let one = try await model.addMessage(text: "Too fast here", at: 10).thread.id
         _ = try await model.sendQueue()
         #expect(await listen(.wait(timeoutSeconds: 0), server).ok)
-        func unread(_ model: AppModel) -> [Bool] { model.state().threads.map(\.unread) }
+        func unread(_ model: WindowModel) -> [Bool] { model.state().threads.map(\.unread) }
         #expect(unread(model) == [false, false])
 
         #expect(await listen(.reply(thread: one, text: "Slowed it down"), server).ok)

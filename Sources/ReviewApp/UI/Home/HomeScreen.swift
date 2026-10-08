@@ -11,7 +11,7 @@ enum StageContent: Equatable {
     }
 
     /// What the stage of `model` shows now.
-    init(_ model: AppModel) {
+    init(_ model: WindowModel) {
         self.init(hasVideo: model.video != nil, hasRecents: !model.recents.isEmpty)
     }
 
@@ -29,7 +29,7 @@ enum StageContent: Equatable {
 /// as a gallery of cards, the newest first, as Finder shows files in icon
 /// view. The whole screen takes a dropped video, as the empty state does.
 struct HomeScreen: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     /// Adaptive columns of 16:9 cards.

@@ -98,7 +98,7 @@ struct ShortcutsTests {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: support) }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         var pressed: [String] = []
         let notice = UUID(), symbol = UUID()
         #expect(!model.isControlFocused)
@@ -128,7 +128,7 @@ struct ShortcutsTests {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: support) }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         var pressed: [String] = []
         let row = UUID(), stop = UUID()
 

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The sidebar's two views (L38), above the footer (`SidebarFooter`): the
 /// thread list (`ThreadList`), or the view of one thread (`ThreadView`)
-/// while `AppModel.shown` names one. A thread view slides in from the
+/// while `WindowModel.shown` names one. A thread view slides in from the
 /// trailing edge over the list and back out, with the sidebar's own
 /// spring; with Reduce Motion the two fade.
 ///
@@ -12,7 +12,7 @@ import SwiftUI
 /// `well`, and only the messages are in bubbles. Its column
 /// (`SidebarColumn`) keeps the width the person gives it (D 5.10).
 struct SidebarView: View {
-    let model: AppModel
+    let model: WindowModel
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

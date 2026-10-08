@@ -73,17 +73,19 @@ enum Shortcuts {
         reported || (keyboardNavigation && firstResponderIsControl)
     }
 
-    /// Starts handling the player's keys for `model`, for as long as the
-    /// app runs.
-    static func install(for model: AppModel) {
+    /// Starts handling the player's keys in each of `app`'s windows, for
+    /// as long as the app runs: a key acts on the window it's pressed in.
+    static func install(for app: AppModel) {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let handled = MainActor.assumeIsolated { handle(event, model) }
+            let handled = MainActor.assumeIsolated {
+                app.windows.window(showing: event.window).map { handle(event, $0) } ?? false
+            }
             return handled ? nil : event
         }
     }
 
     /// Whether `event` was a player key and was acted on.
-    private static func handle(_ event: NSEvent, _ model: AppModel) -> Bool {
+    private static func handle(_ event: NSEvent, _ model: WindowModel) -> Bool {
         // While the context popover is open every key is its own: Cmd+Return
         // there must not send the queue with a note that isn't saved yet.
         guard model.video != nil, !model.isContextShown,

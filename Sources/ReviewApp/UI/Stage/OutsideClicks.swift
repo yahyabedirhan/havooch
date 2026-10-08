@@ -6,16 +6,18 @@ import AppKit
 /// the popover it's the popover's, on the frame `RegionOverlay` closes the
 /// popover without playing.
 enum OutsideClicks {
-    /// Starts watching the window's clicks for `model`, for as long as the
-    /// app runs.
-    static func install(for model: AppModel) {
+    /// Starts watching the clicks in each of `app`'s windows, for as long
+    /// as the app runs: a click closes the popover of the window it's in.
+    static func install(for app: AppModel) {
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { event in
-            MainActor.assumeIsolated { handle(event, model) }
+            MainActor.assumeIsolated {
+                if let model = app.windows.window(showing: event.window) { handle(event, model) }
+            }
             return event
         }
     }
 
-    private static func handle(_ event: NSEvent, _ model: AppModel) {
+    private static func handle(_ event: NSEvent, _ model: WindowModel) {
         // Only the main window: a click in a popover window of its own
         // (Context, the agent-control icon) is not on the video's window.
         guard model.draft != nil, let window = event.window, window.isMainWindow, window.attachedSheet == nil,

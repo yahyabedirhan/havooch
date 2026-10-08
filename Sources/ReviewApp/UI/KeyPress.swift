@@ -9,7 +9,7 @@ extension View {
     /// control hidden until hover shows while it has the focus, so keys
     /// never press a button the person can't see.
     func pressedByKeys(
-        in model: AppModel, isFocused: Binding<Bool>? = nil, action: @escaping () -> Void
+        in model: WindowModel, isFocused: Binding<Bool>? = nil, action: @escaping () -> Void
     ) -> some View {
         modifier(KeyPress(model: model, reportsFocus: isFocused, action: action))
     }
@@ -17,7 +17,7 @@ extension View {
 
 /// Reports the control's keyboard focus to the model (`pressedByKeys`).
 private struct KeyPress: ViewModifier {
-    let model: AppModel
+    let model: WindowModel
     let reportsFocus: Binding<Bool>?
     let action: () -> Void
 

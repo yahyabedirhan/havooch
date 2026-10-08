@@ -71,6 +71,9 @@ struct CommandTests {
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
         (["thread", "show", "3"], .threadShow(thread: "3")),
         (["thread", "list"], .threadList),
+        (["window", "list"], .windowList),
+        (["window", "new"], .windowNew),
+        (["window", "close"], .windowClose),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -78,6 +81,34 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
+    }
+
+    @Test("--window names the window a command acts on; without it the key window", arguments: [
+        (["player", "play", "--window", "w2"], ControlRequest.playerPlay, "w2" as String?),
+        (["--window", "w2", "state"], .state, nil),
+        (["state", "--window", "w2"], .state, "w2"),
+        (["app", "home", "--window", "w3"], .appHome, "w3"),
+        (["comment", "add", "Too fast", "--window", "w2", "--at", "5"], .commentAdd(text: "Too fast", at: 5), "w2"),
+        (["send", "--window", "w2"], .send, "w2"),
+        (["thread", "show", "1", "--window", "w2"], .threadShow(thread: "1"), "w2"),
+        (["window", "close", "w2"], .windowClose, "w2"),
+        (["window", "close", "--window", "w2"], .windowClose, "w2"),
+        (["screenshot", "/tmp/shot.png", "--window", "w2"], .screenshot(path: "/tmp/shot.png", appearance: nil), "w2"),
+        (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil), nil),
+        (["player", "play"], .playerPlay, nil),
+    ])
+    func window(arguments: [String], request: ControlRequest, window: String?) {
+        let run = Run { _, _ in .success(.done("done\n")) }
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        // `--window` before the command's name isn't the command's.
+        if arguments.first == "--window" {
+            #expect(result.exitCode == 64)
+            return
+        }
+        #expect(result == CommandResult(output: "done\n"))
+        #expect(run.transport.requests == [request])
+        #expect(run.transport.sent.map(\.message.window) == [window])
     }
 
     @Test("a request carries the holder, and --json wherever it's written")
@@ -183,7 +214,10 @@ struct CommandTests {
         ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
-        ["screenshot", "/tmp/shot.png", "--window", "inspector"],
+        ["screenshot", "/tmp/shot.png", "--window", ""], ["screenshot", "/tmp/shot.png", "--window"],
+        ["window"], ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
+        ["window", "close", "w1", "--window", "w2"], ["window", "list", "--window", "w1"], ["player", "play", "--window"],
+        ["wait", "--window", "w1"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],

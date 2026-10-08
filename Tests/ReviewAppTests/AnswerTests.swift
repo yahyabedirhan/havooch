@@ -25,7 +25,7 @@ struct AnswerTests {
     /// in front of it, and a send of two messages on #1 and #2 that the
     /// listener took.
     private struct Taken {
-        var model: AppModel
+        var model: WindowModel
         var server: ControlServer
         var send: String
         /// The threads' ids.
@@ -38,10 +38,10 @@ struct AnswerTests {
     }
 
     private func taken(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> Taken {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model.app, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
@@ -50,7 +50,7 @@ struct AnswerTests {
         #expect(wait.reply.ok)
         return Taken(
             model: model, server: server, send: send.id, one: first.thread.id, two: second.thread.id,
-            first: first.message.id, second: second.message.id, general: try #require(model.desk.review?.general.id.text)
+            first: first.message.id, second: second.message.id, general: try #require(model.review?.general.id.text)
         )
     }
 

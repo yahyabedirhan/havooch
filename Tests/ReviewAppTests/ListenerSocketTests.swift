@@ -29,7 +29,7 @@ struct ListenerSocketTests {
     /// The model with the fixture open, two messages queued on #1 and #2,
     /// and the server listening in front of it.
     private struct Running {
-        var model: AppModel
+        var model: WindowModel
         var server: ControlServer
         var one: String
         var two: String
@@ -38,10 +38,10 @@ struct ListenerSocketTests {
     }
 
     private func running() async throws -> Running {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: ControlSocket.url(in: folder), app: model, listeners: { model.listeners },
+            socket: ControlSocket.url(in: folder), app: model.app, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         try server.start()
@@ -167,7 +167,7 @@ struct ListenerSocketTests {
         #expect(app.model.listeners.outbox.openAsks == 0)
         #expect(app.model.threads[1].openQuestion == nil)
         #expect(app.model.threads[1].messages.map(\.kind) == [.message, .question, .answer])
-        #expect(app.model.desk.review?.queue.isEmpty == true)
+        #expect(app.model.review?.queue.isEmpty == true)
         #expect(app.model.listeners.outbox.pending.isEmpty)
         // No question is open now: an answer is refused.
         #expect(try await command(.threadAnswer(thread: one, text: "Again"), as: Self.operatorAgent, app).ok == false)

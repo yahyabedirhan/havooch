@@ -8,7 +8,7 @@ import SwiftUI
 /// while a rectangle is drawn, and while a drawn one waits in the composer,
 /// since the composer's words then go as a message, not an answer.
 struct QuickReplies: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ThreadID
     let choices: [String]
     @Environment(\.palette) private var palette
@@ -44,7 +44,7 @@ struct QuickReplies: View {
 /// One quick reply: the choice's words in a capsule tinted with `question`,
 /// filled on hover.
 private struct QuickReplyChip: View {
-    let model: AppModel
+    let model: WindowModel
     let title: String
     let action: () -> Void
     @State private var isHovered = false

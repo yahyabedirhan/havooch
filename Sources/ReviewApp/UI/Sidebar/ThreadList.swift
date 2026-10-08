@@ -6,7 +6,7 @@ import SwiftUI
 /// that stay at the top while the list scrolls. A click on a row shows the
 /// thread's view.
 struct ThreadList: View {
-    let model: AppModel
+    let model: WindowModel
 
     @Environment(\.palette) private var palette
 

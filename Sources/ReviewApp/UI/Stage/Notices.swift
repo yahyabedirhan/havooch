@@ -7,7 +7,7 @@ import SwiftUI
 /// stays open on its thread, where the person answers it (L28). A click
 /// opens the thread it's on.
 struct Notices: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let width: CGFloat = 300

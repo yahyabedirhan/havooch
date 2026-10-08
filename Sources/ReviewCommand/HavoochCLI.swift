@@ -105,9 +105,15 @@ public enum HavoochCLI {
         guard let (command, rest) = CommandTable.find(arguments) else {
             return .usage("havooch: unknown command `\(arguments.prefix(2).joined(separator: " "))`\n\n" + CommandTable.usageText)
         }
-        let invocation: Invocation
+        var invocation: Invocation
         do throws(UsageError) {
-            invocation = try command.parse(try Arguments(rest, valued: command.valuedOptions, flags: command.flags), environment)
+            let valued = command.takesWindow ? command.valuedOptions.union([Command.windowOption]) : command.valuedOptions
+            let parsed = try Arguments(rest, valued: valued, flags: command.flags)
+            invocation = try command.parse(parsed, environment)
+            // The window `--window` names, unless the command named one itself.
+            if command.takesWindow, case .send(let request, .none) = invocation, let window = parsed.options[Command.windowOption] {
+                invocation = .send(request, window: window)
+            }
         } catch {
             return .usage("havooch \(command.name): \(error.message)\nusage: havooch \(command.synopsis)")
         }
@@ -129,7 +135,7 @@ public enum HavoochCLI {
         )
         let app = AppCommands.Context(support: support, client: client, launcher: environment.launcher, pause: environment.pause)
         switch invocation {
-        case .send(let request): return result(of: client.send(request))
+        case .send(let request, let window): return result(of: client.send(request, window: window))
         case .appStatus: return AppCommands.status(app)
         case .appOpen(let demo): return AppCommands.open(demo: demo, app)
         case .appQuit: return AppCommands.quit(app)

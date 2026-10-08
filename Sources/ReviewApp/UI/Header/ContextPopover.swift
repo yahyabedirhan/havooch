@@ -36,7 +36,7 @@ struct ContextWords: Equatable {
 /// filled while the video has a context to send, and pulses while this Mac
 /// transcribes the video's speech.
 struct ContextButton: View {
-    @Bindable var model: AppModel
+    @Bindable var model: WindowModel
     /// The transcript's words, read again each second: speech arrives with
     /// no event.
     @State private var transcript: TranscriptChip?
@@ -75,7 +75,7 @@ struct ContextButton: View {
 /// transcript around each message comes from. Save and Return keep the
 /// note; Escape closes the popover and drops the change.
 struct ContextPopover: View {
-    let model: AppModel
+    let model: WindowModel
     /// The note as it's being written; the model's until it's saved.
     @State private var note = ""
 
@@ -86,7 +86,7 @@ struct ContextPopover: View {
     @Environment(\.palette) private var palette
     private static let partShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
-    static func words(for model: AppModel) -> ContextWords {
+    static func words(for model: WindowModel) -> ContextWords {
         ContextWords(
             sidecar: model.sidecar?.file.lastPathComponent,
             names: model.video.map { ContextReader.names(for: $0.url) } ?? [],

@@ -7,7 +7,7 @@ import SwiftUI
 /// It shows while an agent is there and the line's message works; `done`
 /// or `failed` clears it.
 struct ThreadActivity: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ThreadID
 
     var body: some View {

@@ -23,15 +23,15 @@ struct OpenInFrontTests {
 
     /// The app on the person's folder, the demo's under the test's root,
     /// counting each time it's brought to the front.
-    private func run() -> (AppModel, ControlServer, Fronts) {
+    private func run() -> (WindowModel, ControlServer, Fronts) {
         let model = AppModel(
             environment: [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo,
             demoVideo: MessageTests.fixture
-        )
+        ).makeWindow()
         let fronts = Fronts()
-        model.bringToFront = { fronts.count += 1 }
+        model.app.bringToFront = { _ in fronts.count += 1 }
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server, fronts)
@@ -71,7 +71,7 @@ struct OpenInFrontTests {
         let reply = await send(.open(path: cut.path), to: server)
         #expect(reply.ok)
         #expect(reply.output.hasPrefix("opened cut2.mp4 ("))
-        #expect(reply.output.hasSuffix("), playing\n"))
+        #expect(reply.output.hasSuffix(") in w1, playing\n"))
         #expect(model.video?.url == cut.standardizedFileURL)
         #expect(model.engine.isPlaying)
         #expect(fronts.count == 1)

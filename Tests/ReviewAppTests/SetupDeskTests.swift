@@ -245,7 +245,7 @@ struct SetupStateTests {
                                           "/Applications/Havooch.app/Contents/Helpers/havooch": .file]),
             runner: ScriptedRunner()
         )
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], setup: setup)
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], setup: setup).makeWindow()
         let state = model.state()
         #expect(state.setup?.commandLine.detection == "detected")
         #expect(state.setup?.harnesses.allSatisfy { $0.prompt == nil } == true)
