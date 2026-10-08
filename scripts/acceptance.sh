@@ -22,6 +22,10 @@
 # from v4 to v1 with the playhead at the same time, the field names v1 and
 # the thread list marks its section, the picker searches, and a plain video
 # has no switcher.
+# Step 20 adds Compare (#95): the popover opens on v3 and v4, a side's
+# picker searches, the other side's version swaps the sides, the window
+# compares on one playhead, a message goes to the side made active, the
+# layouts change, and compare exit returns to the right side's version.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -62,7 +66,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 18 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 20 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -1096,11 +1100,75 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 20 -------------------------------------------------------------------
+
+begin 20 "Compare v3 and v4 of the project. Check that the popover opens on the previous version and the one on screen, that the other side's version swaps the sides, that both play on one playhead, that a message goes to the side made active, and that compare exit returns to the right side's version"
+take
+run operator player pause --window w1
+exits 0 "player pause"
+run operator player seek 1 --window w1
+exits 0 "player seek 1 on v4"
+run operator compare open --window w1 --json
+exits 0 "compare open"
+holds "the popover opens on v3 and v4, side by side" "$stdout" \
+    '.project.compare.phase == "choosing" and .project.compare.left == 3 and .project.compare.right == 4
+     and .project.compare.layout == "side-by-side" and .project.compare.active == null'
+run operator compare pick left v1 --window w1 --json
+exits 0 "compare pick left v1"
+holds "the left side's picker finds v1" "$stdout" \
+    '.project.compare.picker.side == "left" and .project.compare.picker.matches == [1] and .project.compare.picker.highlighted == 1'
+run operator screenshot "$out/compare-popover.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the compare popover"
+run operator compare set --right 3 --window w1 --json
+exits 0 "compare set --right 3"
+holds "v3 on the right swaps the sides, and the picker closes" "$stdout" \
+    '.project.compare.left == 4 and .project.compare.right == 3 and .project.compare.picker == null'
+run operator compare swap --window w1 --json
+exits 0 "compare swap"
+holds "the swap button puts v3 back on the left" "$stdout" '.project.compare.left == 3 and .project.compare.right == 4'
+run operator compare start --window w1 --json
+exits 0 "compare start"
+holds "the window compares v3 and v4 at the same time; messages go to v4 on the right" "$stdout" \
+    '.project.compare.phase == "comparing" and .project.compare.active == "right" and .project.version == 4
+     and (.player.time - 1 | fabs) < 0.05'
+run operator screenshot "$out/compare-side-by-side.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of side by side"
+run operator compare set --side left --window w1 --json
+exits 0 "compare set --side left"
+holds "the left side is active: v3 is the version on screen" "$stdout" \
+    '.project.compare.active == "left" and .project.version == 3'
+compare_text="The title is cut off on this cut"
+run operator comment add "$compare_text" --window w1 --json
+exits 0 "comment add on the left side"
+run operator state --window w1 --json
+holds "the message is on v3, the left side's version" "$stdout" \
+    '[.threads[] | select(any(.messages[]; .text == $text))][0].version.number == 3' --arg text "$compare_text"
+run operator compare set --layout flip --window w1 --json
+exits 0 "compare set --layout flip"
+holds "Flip shows the active side" "$stdout" '.project.compare.layout == "flip" and .project.compare.showing == "left"'
+run operator screenshot "$out/compare-flip.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of flip"
+run operator compare set --layout slider --slider 0.3 --window w1 --json
+exits 0 "compare set --layout slider --slider 0.3"
+holds "Slider shows the left side on 30% of the picture" "$stdout" \
+    '.project.compare.layout == "slider" and .project.compare.slider == 0.3 and .project.compare.showing == null'
+run operator screenshot "$out/compare-slider.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of slider"
+run operator compare exit --window w1 --json
+exits 0 "compare exit"
+holds "one version again: v4, the right side's" "$stdout" '.project.compare == null and .project.version == 4'
+run operator compare exit --window w1
+exits 0 "compare exit with Compare closed"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 19 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 20 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 19 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 20 steps. Screenshots: %s\n' "$shots"
 exit 0

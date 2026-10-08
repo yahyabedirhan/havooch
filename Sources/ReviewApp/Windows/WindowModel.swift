@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Observation
 import ReviewCore
 import ReviewLease
@@ -36,7 +37,9 @@ final class WindowModel: WindowControlling {
     /// The window's name in `window list` and for `--window`: `w1`, `w2`…,
     /// never used twice in a run.
     let id: String
-    let engine = PlayerEngine()
+    /// The player of the version on screen; while comparing, the active
+    /// side's, one of `pair`'s two.
+    private(set) var engine = PlayerEngine()
     /// The AppKit window that shows this one; nil before its scene shows,
     /// and in tests.
     @ObservationIgnored weak var nsWindow: NSWindow?
@@ -107,6 +110,10 @@ final class WindowModel: WindowControlling {
     var projectWords: HeaderWords.Project? {
         guard let project else { return nil }
         let title = projectOutline?.title ?? project
+        // While comparing, the line under the title names both (E11).
+        if let compare, isComparing {
+            return HeaderWords.Project(title: title, version: "Comparing v\(compare.number(.left)) and v\(compare.number(.right))")
+        }
         return HeaderWords.Project(title: title, version: versionSwitch?.onScreen?.line ?? "a removed version")
     }
 
@@ -298,6 +305,8 @@ final class WindowModel: WindowControlling {
         // queued on the video they were written on, before it goes.
         closePopover(.momentChanged)
         await committing?.value
+        // One version comes on screen: a comparison ends first (E11).
+        if isComparing { exitCompare() }
         try needData(data, for: url)
         let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path), in: key)
         // Where the person left the video that goes, before the player takes the new one.
@@ -396,12 +405,17 @@ final class WindowModel: WindowControlling {
             throw AppRefusal("this window holds a plain video, which has no versions; `project new` makes it a project")
         }
         versionPicker = nil
+        // While comparing, a version on a side is that side made active.
+        if let side = compare?.side(of: number), isComparing {
+            activate(side)
+            return
+        }
         guard number != versionNumber else { return }
         let time = engine.time
-        let wasPlaying = engine.isPlaying
+        let wasPlaying = isPlaying
         try await showVersion(number, of: project)
-        await engine.seek(to: min(time, engine.duration))
-        if wasPlaying { engine.play() }
+        await seekPlayers(to: min(time, engine.duration))
+        if wasPlaying { playPlayers() }
     }
 
     /// A click on a segment or a row of the picker, and Return in the
@@ -480,6 +494,12 @@ final class WindowModel: WindowControlling {
     /// its thread stays, with no frame.
     private func showVersion(of thread: ReviewThread) async -> Bool {
         guard let anchor = thread.anchor, anchor != onScreen else { return true }
+        // While comparing, a thread of the other side's version makes that
+        // side active; one of a third version ends the comparison.
+        if let companion, anchor.path == companion.url.path, let side = activeSide {
+            activate(side.other)
+            return true
+        }
         guard let project, projectOutline?.number(of: anchor.path) != nil else { return false }
         do throws(AppRefusal) {
             try await open(URL(fileURLWithPath: anchor.path), project: project)
@@ -495,7 +515,7 @@ final class WindowModel: WindowControlling {
     /// keeps its position for its recent-video entry. Its review stays.
     func closed() {
         closePopover(.momentChanged)
-        engine.pause()
+        pausePlayers()
         savePosition()
     }
 
@@ -528,6 +548,7 @@ final class WindowModel: WindowControlling {
         isContextShown = false
         versionPicker = nil
         guard !keepingReview else { return }
+        compare = nil
         selection = nil
         shown = nil
         connect = nil
@@ -599,6 +620,7 @@ final class WindowModel: WindowControlling {
     /// still answer on it.
     private func closeVideo() {
         closes += 1
+        if isComparing { exitCompare() }
         engine.close()
         video = nil
         forgetVideoViews()
@@ -664,12 +686,12 @@ final class WindowModel: WindowControlling {
     func play() throws(AppRefusal) {
         try needVideo()
         closePopover(.momentChanged)
-        engine.play()
+        playPlayers()
     }
 
     func pause() throws(AppRefusal) {
         try needVideo()
-        engine.pause()
+        pausePlayers()
     }
 
     func seek(to seconds: Double) async throws(AppRefusal) {
@@ -679,7 +701,7 @@ final class WindowModel: WindowControlling {
         // `seek` answers once the popover's words are in the queue, so
         // `state` after it shows them.
         await committing?.value
-        await engine.seek(to: seconds)
+        await seekPlayers(to: seconds)
     }
 
     /// `comment add`: queues a message, as a person would. On `thread` (a
@@ -722,12 +744,12 @@ final class WindowModel: WindowControlling {
         if !onItsFrame, region != nil, let thread {
             throw AppRefusal("#\(thread.number) is on a removed version, which has no frame to draw a region on")
         }
-        engine.pause()
+        pausePlayers()
         if let time, onItsFrame {
             // The words in the popover are queued at their own frame first.
             closePopover(.momentChanged)
             await committing?.value
-            await engine.seek(to: time)
+            await seekPlayers(to: time)
         }
         let written = try await queueMessage(text: text, time: time, region: region, thread: thread?.id)
         return (
@@ -860,7 +882,7 @@ final class WindowModel: WindowControlling {
                     contextNote: contextNote
                 )
             },
-            player: .init(time: engine.time, playing: engine.isPlaying),
+            player: .init(time: engine.time, playing: isPlaying),
             popover: draft.map { .init(thread: draftThreadNumber, time: $0.time, text: $0.text, region: $0.region) },
             threads: reviewKey.map { key in threads.map { StateReport.Thread($0, review: key, layout: layout, project: outline) } } ?? [],
             queue: review?.queue.map(\.id.text) ?? [],
@@ -868,6 +890,7 @@ final class WindowModel: WindowControlling {
         )
         report.project = outline.map { StateReport.Project($0, onScreen: video?.url.path) }
         report.project?.switcher = versionSwitch.map { StateReport.Switcher($0, picker: versionPicker) }
+        report.project?.compare = compareReport
         report.projects = app.homeProjects
         report.transcript = transcript
         report.listener = listener?.report(at: Date()) ?? .absent
@@ -919,12 +942,17 @@ final class WindowModel: WindowControlling {
     /// once it has the message, so a message written meanwhile (a
     /// listener's reply) can't take their place.
     private func queueMessage(
-        text: String, time: Double?, region: Region?, thread: ThreadID?
+        text: String, time: Double?, region: Region?, thread: ThreadID?, on showing: Showing? = nil
     ) async throws(AppRefusal) -> Review.Written {
         // The message and its pictures stay on the data its video is on,
-        // also when the run switches to other data meanwhile.
-        let (desk, layout, onScreen) = (self.desk, self.layout, self.onScreen)
-        guard let video, let hash = reviewKey, let asset = engine.asset, var trial = review else { throw Self.noVideo }
+        // also when the run switches to other data meanwhile, and on the
+        // version they were written on, also when a compare side becomes
+        // active meanwhile.
+        let (desk, layout) = (self.desk, self.layout)
+        guard let showing = showing ?? self.showing, let hash = reviewKey, let asset = showing.asset, var trial = review else {
+            throw Self.noVideo
+        }
+        let (video, onScreen) = (showing.video, showing.anchor)
         // What the write will do, refused before any picture is written.
         let planned: Review.Written
         do throws(ReviewRefusal) {
@@ -937,7 +965,7 @@ final class WindowModel: WindowControlling {
         let pendingCrop = region == nil ? nil : layout.pendingImage("\(token)-crop", of: hash)
         if let frame = planned.thread.time, pendingKeyframe != nil || pendingCrop != nil {
             try await FrameGrabber.writeImages(
-                of: asset, at: frame, duration: engine.duration, frameDuration: engine.frameDuration,
+                of: asset, at: frame, duration: showing.duration, frameDuration: showing.frameDuration,
                 keyframe: pendingKeyframe, region: region, crop: pendingCrop
             )
         }
@@ -946,7 +974,9 @@ final class WindowModel: WindowControlling {
             if let pendingKeyframe { ImageFiles.remove(pendingKeyframe) }
             if let pendingCrop { ImageFiles.remove(pendingCrop) }
         }
-        guard self.video == video else { throw AppRefusal("another video opened before the message was queued") }
+        // Another version of the same project may be on screen now: the
+        // message stays on the version it was written on.
+        guard reviewKey == hash else { throw AppRefusal("another video opened before the message was queued") }
         let written = try desk.change(hash) { review throws(ReviewRefusal) in
             try review.write(text: text, at: time, region: region, to: thread, on: onScreen, now: Date())
         }
@@ -957,7 +987,7 @@ final class WindowModel: WindowControlling {
             } else if let frame = written.thread.time {
                 // The thread it was to join went meanwhile; this one gets its keyframe now.
                 try? await FrameGrabber.writeImages(
-                    of: asset, at: frame, duration: engine.duration, frameDuration: engine.frameDuration,
+                    of: asset, at: frame, duration: showing.duration, frameDuration: showing.frameDuration,
                     keyframe: keyframe, region: nil, crop: nil
                 )
             }
@@ -1001,9 +1031,23 @@ final class WindowModel: WindowControlling {
     /// the frame isn't the one they were written on, and they go.
     var frameMarks: [FrameMark] {
         guard video != nil else { return [] }
-        let frame = engine.frameTime(of: engine.time)
+        return marks(of: frameThreads, at: engine.frameTime(of: engine.time))
+    }
+
+    /// The marks on `side`'s frame while comparing: the active side's are
+    /// `frameMarks`; the other side's are its version's threads at its
+    /// own player's frame. `frameMarks` with no side.
+    func frameMarks(on side: CompareSide?) -> [FrameMark] {
+        guard let side, let pair, let companion, side != activeSide else { return frameMarks }
+        let other = pair.engine(side)
+        let anchor = VersionAnchor(path: companion.url.path)
+        return marks(of: threads.filter { !$0.isGeneral && $0.anchor == anchor }, at: other.frameTime(of: other.time))
+    }
+
+    /// The marks of `threads` on the frame at `frame`.
+    private func marks(of threads: [ReviewThread], at frame: Double) -> [FrameMark] {
         // A thousandth of a second: thread times are kept in milliseconds.
-        return frameThreads.compactMap { thread in
+        threads.compactMap { thread in
             guard let time = thread.time, abs(time - frame) < 0.0005 else { return nil }
             return FrameMark(
                 thread: thread.id, number: thread.number, state: thread.state ?? .queued,
@@ -1057,11 +1101,11 @@ final class WindowModel: WindowControlling {
     /// of the moment: the popover closes by its rules first.
     func togglePlay() {
         guard video != nil else { return }
-        if engine.isPlaying {
-            engine.pause()
+        if isPlaying {
+            pausePlayers()
         } else {
             closePopover(.momentChanged)
-            engine.play()
+            playPlayers()
         }
     }
 
@@ -1072,13 +1116,13 @@ final class WindowModel: WindowControlling {
 
     /// Shift+Left, Shift+Right, comma and period: `frames` back or forward.
     func step(frames: Int) {
-        engine.pause()
+        pausePlayers()
         move(to: engine.time + Double(frames) * engine.frameDuration)
     }
 
     /// The player bar's speed menu.
     func setSpeed(_ speed: Double) {
-        engine.speed = speed
+        if let pair { pair.setSpeed(speed) } else { engine.speed = speed }
     }
 
     /// A drag on the scrubber, to `seconds`.
@@ -1092,7 +1136,7 @@ final class WindowModel: WindowControlling {
         guard video != nil else { return }
         closePopover(.momentChanged)
         let target = min(max(seconds, 0), engine.duration)
-        Task { await engine.seek(to: target) }
+        Task { await seekPlayers(to: target) }
     }
 
     /// C, Return and the Comment button: pauses and opens the popover at
@@ -1106,7 +1150,7 @@ final class WindowModel: WindowControlling {
             guard region != nil else { return }
             closePopover(.clickOutside)
         }
-        engine.pause()
+        pausePlayers()
         let time = engine.frameTime(of: engine.time)
         draft = Draft(time: time, text: "", region: region)
         // The region is the composer's chip too, until words take it (L41).
@@ -1161,7 +1205,7 @@ final class WindowModel: WindowControlling {
     func beginRegion() {
         guard video != nil else { return }
         closePopover(.clickOutside)
-        engine.pause()
+        pausePlayers()
         isDrawingRegion = true
     }
 
@@ -1174,13 +1218,20 @@ final class WindowModel: WindowControlling {
         if let region { startDraft(region: region) }
     }
 
-    /// Escape: closes the version picker, else drops the rectangle being
-    /// drawn, else the popover's words with its region, else closes "All
-    /// versions", else goes back from a thread view or the Connect view to
-    /// the thread list. False when there was none of them.
+    /// Escape: closes the version picker, else a compare side's picker,
+    /// else the compare popover, else drops the rectangle being drawn,
+    /// else the popover's words with its region, else closes "All
+    /// versions", else ends a comparison (E11), else goes back from a
+    /// thread view or the Connect view to the thread list. False when
+    /// there was none of them.
     @discardableResult
     func escape() -> Bool {
         if closeVersionPicker() { return true }
+        if closeComparePicker() { return true }
+        if compare?.phase == .choosing {
+            compare = nil
+            return true
+        }
         if isDrawingRegion {
             isDrawingRegion = false
             return true
@@ -1191,6 +1242,10 @@ final class WindowModel: WindowControlling {
         }
         if versionMenu != nil {
             versionMenu = nil
+            return true
+        }
+        if isComparing {
+            exitCompare()
             return true
         }
         guard shown != nil || connect != nil, isSidebarVisible else { return false }
@@ -1233,12 +1288,12 @@ final class WindowModel: WindowControlling {
             // A thread of another version opens once its version is on screen.
             Task {
                 guard let thread = review?.thread(id), await showVersion(of: thread), let time = startThread(id) else { return }
-                await engine.seek(to: time)
+                await seekPlayers(to: time)
             }
             return
         }
         guard let time = startThread(id) else { return }
-        Task { await engine.seek(to: time) }
+        Task { await seekPlayers(to: time) }
     }
 
     /// `thread open`: the thread popover opens as a click on the thread's
@@ -1257,7 +1312,7 @@ final class WindowModel: WindowControlling {
         if let frame { try movePopover(id, to: frame) }
         guard let time = startThread(id) else { throw Self.noVideo }
         await committing?.value
-        await engine.seek(to: time)
+        await seekPlayers(to: time)
         guard let popover = state().popover else { throw Self.noVideo }
         return popover
     }
@@ -1269,7 +1324,7 @@ final class WindowModel: WindowControlling {
         selection = id
         // The sidebar shows the same conversation as the popover (L38).
         shown = id
-        engine.pause()
+        pausePlayers()
         if draft?.time != time {
             closePopover(.momentChanged)
             draft = Draft(time: time, text: "", region: nil)
@@ -1294,12 +1349,15 @@ final class WindowModel: WindowControlling {
     /// the popover closes at once while the pictures are written.
     private func queue(_ draft: Draft) {
         let before = committing
+        // The version the words were written on, before another side of a
+        // comparison becomes active.
+        let showing = self.showing
         commitsUnderWay += 1
         committing = Task {
             defer { commitsUnderWay -= 1 }
             await before?.value
             do throws(AppRefusal) {
-                _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil)
+                _ = try await queueMessage(text: draft.text, time: draft.time, region: draft.region, thread: nil, on: showing)
             } catch {
                 // The words aren't lost: the popover holds them again.
                 if self.draft?.text.isEmpty != false { self.draft = draft }
@@ -1328,6 +1386,449 @@ final class WindowModel: WindowControlling {
                 problem = Problem(title: "The messages weren't sent", reason: error.reason)
             }
         }
+    }
+
+    // MARK: - Compare (E11)
+
+    /// The comparison: the popover's choice while it is open, or the two
+    /// versions the window compares; nil while neither.
+    private(set) var compare: CompareSession?
+    /// The two players while the window compares; nil otherwise. `engine`
+    /// is one of them, the active side's.
+    private(set) var pair: PlayerPair?
+    /// While comparing, the version on the side that isn't active; nil
+    /// otherwise. `video` is the active side's.
+    private(set) var companion: OpenVideo?
+
+    /// Whether the window compares two versions.
+    var isComparing: Bool { pair != nil }
+    /// The side new messages go to while comparing (P9): the one the
+    /// person last clicked or drew on, the right one at first, in Flip the
+    /// one showing; nil while not comparing.
+    var activeSide: CompareSide? { pair?.side(of: engine) }
+    /// Whether the player plays: both sides while comparing.
+    var isPlaying: Bool { pair?.isPlaying ?? engine.isPlaying }
+
+    private func playPlayers() {
+        if let pair { pair.play() } else { engine.play() }
+    }
+
+    private func pausePlayers() {
+        if let pair { pair.pause() } else { engine.pause() }
+    }
+
+    private func seekPlayers(to seconds: Double) async {
+        if let pair { await pair.seek(to: seconds) } else { await engine.seek(to: seconds) }
+    }
+
+    /// What a message is written on: the video, its version and its
+    /// player's picture, taken when the words leave the popover, so they
+    /// stay on that version when another side becomes active.
+    struct Showing {
+        var video: OpenVideo
+        var anchor: VersionAnchor?
+        var asset: AVURLAsset?
+        var duration: Double
+        var frameDuration: Double
+    }
+
+    /// The video on screen as a message is written on it; nil with none.
+    private var showing: Showing? {
+        video.map {
+            Showing(video: $0, anchor: onScreen, asset: engine.asset, duration: engine.duration, frameDuration: engine.frameDuration)
+        }
+    }
+
+    /// Whether the header shows the Compare button: in a project of two
+    /// versions or more, while the window doesn't compare.
+    var canCompare: Bool {
+        project != nil && (projectOutline?.versions.count ?? 0) >= 2 && !isComparing
+    }
+
+    /// The comparison the Compare button opens on now, for the popover's
+    /// "Opens on v3 and v4"; nil where there is nothing to compare.
+    var compareOpening: CompareSession? { try? openingCompare() }
+
+    /// The file of the project's version `number`; nil outside the list.
+    func versionPath(_ number: Int) -> String? {
+        projectOutline?.version(number)?.path
+    }
+
+    /// The comparison the Compare button opens on, refused on a plain
+    /// video and a project of one version.
+    private func openingCompare() throws(AppRefusal) -> CompareSession {
+        try needVideo()
+        guard project != nil, let outline = projectOutline else {
+            throw AppRefusal("this window holds a plain video, which has no versions to compare; `project new` makes it a project")
+        }
+        guard let session = CompareSession.opening(versions: outline.versions.count, onScreen: versionNumber) else {
+            throw AppRefusal("the project has 1 version; Compare needs two, and `project add` adds the next")
+        }
+        return session
+    }
+
+    /// Refused while the window compares: the popover is for the choice
+    /// before it does.
+    private func needPopoverPhase() throws(AppRefusal) {
+        guard !isComparing else {
+            throw AppRefusal("the window compares already; `compare set` changes it and `compare exit` ends it")
+        }
+    }
+
+    /// The Compare button and `compare open`: the popover opens on the
+    /// previous version and the one on screen, side by side.
+    func openCompare() throws(AppRefusal) {
+        try needPopoverPhase()
+        let session = try openingCompare()
+        versionPicker = nil
+        compare = session
+    }
+
+    /// A click on the Compare button: the popover opens, or closes.
+    func toggleCompare() {
+        if compare?.phase == .choosing {
+            compare = nil
+        } else {
+            try? openCompare()
+        }
+    }
+
+    /// A click on a side in the popover and `compare pick`: that side's
+    /// version picker opens with `query` in its search field, the first
+    /// row highlighted. The popover opens first when it is closed.
+    func pickCompareSide(_ side: CompareSide, query: String = "") throws(AppRefusal) {
+        try needPopoverPhase()
+        if compare == nil { try openCompare() }
+        compare?.picker = CompareSession.SidePicker(side: side, picker: VersionPicker(query: query))
+    }
+
+    /// A click on a side whose picker is open closes it; on the other
+    /// side, opens that one's.
+    func toggleComparePicker(_ side: CompareSide) {
+        if compare?.picker?.side == side {
+            closeComparePicker()
+        } else {
+            try? pickCompareSide(side)
+        }
+    }
+
+    /// Escape in a side's picker and a click away: it closes. False when
+    /// none was open.
+    @discardableResult
+    func closeComparePicker() -> Bool {
+        guard compare?.picker != nil else { return false }
+        compare?.picker = nil
+        return true
+    }
+
+    /// Typing in a side's picker: the rows filter, the first is highlighted.
+    func typeCompareQuery(_ query: String) {
+        guard compare?.picker != nil else { return }
+        compare?.picker?.picker = VersionPicker(query: query)
+    }
+
+    /// Up and Down in a side's picker.
+    func moveCompareHighlight(by steps: Int) {
+        guard let open = compare?.picker, let versions = versionSwitch else { return }
+        compare?.picker?.picker = open.picker.moved(by: steps, in: versions.matches(open.picker.query))
+    }
+
+    /// Return in a side's picker: the highlighted version goes on its side.
+    func pickHighlightedCompareVersion() {
+        guard let open = compare?.picker, let versions = versionSwitch,
+              let number = open.picker.highlight(in: versions.matches(open.picker.query))
+        else { return }
+        changeCompareForPerson(placing(number, on: open.side))
+    }
+
+    /// The change that puts `number` on `side`.
+    private func placing(_ number: Int, on side: CompareSide) -> CompareChange {
+        side == .left ? CompareChange(left: number) : CompareChange(right: number)
+    }
+
+    /// A row of a side's picker, a layout's segment, the flip key and the
+    /// slider's handle: `setCompare`, with the person told why when it fails.
+    func changeCompareForPerson(_ change: CompareChange) {
+        Task {
+            do throws(AppRefusal) {
+                try await setCompare(change)
+            } catch {
+                problem = Problem(title: "The comparison didn't change", reason: error.reason)
+            }
+        }
+    }
+
+    /// `compare set` and the person's picks: in the popover the choice
+    /// changes; while comparing a side's new version loads on its player
+    /// at the playhead's time, the layout changes, `side` becomes the
+    /// active side (in Flip the one showing) and the slider moves. A side
+    /// given the other side's version swaps the sides.
+    func setCompare(_ change: CompareChange) async throws(AppRefusal) {
+        try needVideo()
+        guard var session = compare else {
+            throw AppRefusal("Compare isn't open; `compare open` opens its popover and `compare start` compares")
+        }
+        let count = projectOutline?.versions.count ?? 0
+        for number in [change.left, change.right].compactMap(\.self) where !(1...max(count, 1)).contains(number) {
+            throw AppRefusal("the project has no v\(number); it has v1 to v\(count)")
+        }
+        guard session.phase == .comparing else {
+            guard change.side == nil else {
+                throw AppRefusal("the side messages go to is picked on the stage, once the window compares")
+            }
+            if let left = change.left { session.pick(left, for: .left) }
+            if let right = change.right { session.pick(right, for: .right) }
+            if let layout = change.layout { session.layout = layout }
+            if let slider = change.slider { session.slide(to: slider) }
+            compare = session
+            return
+        }
+        if let left = change.left { try await show(left, on: .left) }
+        if let right = change.right { try await show(right, on: .right) }
+        if let layout = change.layout, compare?.layout != layout {
+            compare?.layout = layout
+            // Flip shows the active side, so the picture stays.
+            if layout == .flip, let side = activeSide { compare?.showing = side }
+        }
+        if let side = change.side { activate(side) }
+        if let slider = change.slider { compare?.slide(to: slider) }
+    }
+
+    /// The swap button and `compare swap`: left and right exchange their
+    /// versions; while comparing the players change sides, and the active
+    /// version stays active.
+    func swapCompare() throws(AppRefusal) {
+        try needVideo()
+        guard compare != nil else {
+            throw AppRefusal("Compare isn't open; `compare open` opens its popover and `compare start` compares")
+        }
+        compare?.picker = nil
+        compare?.swap()
+        guard let pair else { return }
+        pair.swap()
+        if compare?.layout == .flip, let side = activeSide { compare?.showing = side }
+    }
+
+    /// The flip key (\) and the flip bar in Flip: the other side shows,
+    /// and new messages go to it (P9). False outside Flip.
+    @discardableResult
+    func flipCompare() -> Bool {
+        guard isComparing, compare?.layout == .flip, let side = activeSide else { return false }
+        activate(side.other)
+        return true
+    }
+
+    /// A drag of the slider's handle: the left side shows on `fraction`
+    /// of the picture's width.
+    func slideCompare(to fraction: Double) {
+        guard isComparing else { return }
+        compare?.slide(to: fraction)
+    }
+
+    /// The popover's Show side by side or Compare, Return in it, and
+    /// `compare start`: the window compares the two versions on one
+    /// playhead, at the playhead's time, playing on when it played. When
+    /// neither side is on screen the right side comes on screen first.
+    /// The active side is the right one, in Flip the one showing. With
+    /// the popover closed it starts on the opening choice. Nothing while
+    /// it compares already.
+    func startCompare() async throws(AppRefusal) {
+        guard !isComparing else { return }
+        var session: CompareSession
+        if let compare { session = compare } else { session = try openingCompare() }
+        session.picker = nil
+        let wasPlaying = isPlaying
+        closePopover(.momentChanged)
+        await committing?.value
+        versionPicker = nil
+        if versionNumber.flatMap(session.side(of:)) == nil {
+            try await switchVersion(to: session.number(.right))
+        }
+        guard let project, let video, let outline = projectOutline, let mine = versionNumber.flatMap(session.side(of:)),
+              let version = outline.version(session.number(mine.other))
+        else {
+            throw AppRefusal("the comparison didn't open: the window changed meanwhile")
+        }
+        let (other, theirs) = try await loadSide(version.path)
+        guard self.video == video, self.project == project, !isComparing else {
+            other.retire()
+            throw AppRefusal("the comparison didn't open: the window changed meanwhile")
+        }
+        engine.pause()
+        let pair = mine == .left
+            ? PlayerPair(left: engine, right: other, lead: .left)
+            : PlayerPair(left: other, right: engine, lead: .right)
+        companion = theirs
+        self.pair = pair
+        session.phase = .comparing
+        compare = session
+        record(theirs, playedBy: other)
+        record(video, playedBy: engine)
+        activate(session.layout == .flip ? session.showing : .right)
+        if wasPlaying { pair.play() }
+    }
+
+    /// The popover's action button and Return: `startCompare`, with the
+    /// person told why when it fails.
+    func startCompareForPerson() {
+        Task {
+            do throws(AppRefusal) {
+                try await startCompare()
+            } catch {
+                problem = Problem(title: "The comparison didn't open", reason: error.reason)
+            }
+        }
+    }
+
+    /// Exit Compare, Escape and `compare exit`: the window shows one
+    /// version again, the right side's, where the playhead is; in the
+    /// popover, Cancel. Words in the popover are queued on the version
+    /// they were written on. False when Compare wasn't open.
+    @discardableResult
+    func exitCompare() -> Bool {
+        guard compare != nil else { return false }
+        guard let pair else {
+            compare = nil
+            return true
+        }
+        activate(.right)
+        closePopover(.momentChanged)
+        isDrawingRegion = false
+        let other = pair.engine(.left)
+        pair.end()
+        other.retire()
+        self.pair = nil
+        companion = nil
+        compare = nil
+        return true
+    }
+
+    /// A click on a side's picture while comparing: the side becomes the
+    /// active one, the click goes no further. On the active side, or with
+    /// no comparison, it plays or pauses as ever.
+    func clickFrame(on side: CompareSide?) {
+        if let side, isComparing, side != activeSide {
+            activate(side)
+            return
+        }
+        clickFrame()
+    }
+
+    /// A drag starts on `side`'s picture: the side becomes the active one,
+    /// and the rectangle is drawn on its frame.
+    func beginRegion(on side: CompareSide?) {
+        if let side, isComparing { activate(side) }
+        beginRegion()
+    }
+
+    /// `side` becomes the active side (P9): its version is the one on
+    /// screen, new messages and the composer go to it, and the player bar
+    /// shows its player. Words in the popover are queued first, on the
+    /// version they were written on. In Flip, it shows.
+    func activate(_ side: CompareSide) {
+        guard let pair, let companion, let video, activeSide != side else { return }
+        closePopover(.momentChanged)
+        isDrawingRegion = false
+        drawnRegion = nil
+        self.companion = video
+        self.video = companion
+        engine = pair.engine(side)
+        pair.lead = side
+        sidecar = ContextReader.sidecar(beside: companion.url)
+        if compare?.layout == .flip { compare?.showing = side }
+        record(companion, playedBy: engine)
+    }
+
+    /// The version `number` on `side` while comparing: the other side's
+    /// swaps the sides; another loads on a player of its own at the
+    /// playhead's time, which takes the side's place.
+    private func show(_ number: Int, on side: CompareSide) async throws(AppRefusal) {
+        guard let session = compare, let pair, session.number(side) != number else { return }
+        guard session.number(side.other) != number else {
+            try swapCompare()
+            return
+        }
+        guard let version = projectOutline?.version(number) else { throw Self.noVideo }
+        let (loaded, shown) = try await loadSide(version.path)
+        guard self.pair === pair, compare?.number(side) == session.number(side) else {
+            loaded.retire()
+            throw AppRefusal("the comparison changed before v\(number) opened")
+        }
+        let wasPlaying = isPlaying
+        pausePlayers()
+        if side == activeSide {
+            closePopover(.momentChanged)
+            await committing?.value
+            guard self.pair === pair else {
+                loaded.retire()
+                throw AppRefusal("the comparison ended before v\(number) opened")
+            }
+        }
+        await loaded.seek(to: min(engine.time, loaded.duration))
+        let old = pair.replace(side, with: loaded)
+        if old === engine {
+            engine = loaded
+            self.video = shown
+            forgetVideoViews(keepingReview: true)
+            sidecar = ContextReader.sidecar(beside: shown.url)
+        } else {
+            companion = shown
+        }
+        old.retire()
+        compare?.pick(number, for: side)
+        record(shown, playedBy: loaded)
+        if let video = self.video { record(video, playedBy: engine) }
+        if wasPlaying { pair.play() }
+    }
+
+    /// The video at `path` on a player of its own, paused at the
+    /// playhead's time, at the window's speed, for a side of the
+    /// comparison: the player and the video.
+    private func loadSide(_ path: String) async throws(AppRefusal) -> (PlayerEngine, OpenVideo) {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        try AppModel.needFile(url)
+        guard let contentHash = await Self.contentHash(of: url, in: app.hashes) else {
+            throw AppRefusal("can't read \(url.path)")
+        }
+        let loaded = PlayerEngine()
+        do {
+            try await loaded.load(url)
+        } catch {
+            loaded.retire()
+            throw error
+        }
+        loaded.speed = engine.speed
+        await loaded.seek(to: min(engine.time, loaded.duration))
+        return (loaded, OpenVideo(url: url, title: url.lastPathComponent, contentHash: contentHash))
+    }
+
+    /// The review keeps `video` as a version it shows, played by `engine`,
+    /// so a send cuts its threads' transcript from it; the last one
+    /// recorded is the review's video on screen.
+    private func record(_ video: OpenVideo, playedBy engine: PlayerEngine) {
+        let frameRate = 1 / engine.frameDuration
+        let info = VideoInfo(
+            contentHash: video.contentHash, title: video.title, duration: engine.duration, path: video.url.path, frameRate: frameRate
+        )
+        _ = try? change { review in review.show(info) }
+        transcripts.opened(VideoFile(url: video.url, contentHash: video.contentHash, frameRate: frameRate, duration: engine.duration))
+    }
+
+    /// The comparison as `state` reports it; nil while Compare is closed.
+    var compareReport: StateReport.Compare? {
+        guard let compare else { return nil }
+        let picker = compare.picker.map { open in
+            let matches = versionSwitch?.matches(open.picker.query) ?? []
+            return StateReport.Compare.Picker(
+                side: open.side.rawValue, query: open.picker.query, matches: matches.map(\.number),
+                highlighted: open.picker.highlight(in: matches)
+            )
+        }
+        return StateReport.Compare(
+            phase: compare.phase.rawValue, left: compare.number(.left), right: compare.number(.right),
+            layout: compare.layout.rawValue, showing: compare.layout == .flip ? compare.showing.rawValue : nil,
+            slider: compare.slider, active: activeSide?.rawValue, picker: picker
+        )
     }
 
     // MARK: - The sidebar
@@ -1365,7 +1866,7 @@ final class WindowModel: WindowControlling {
         if onItsVersion, let time = thread.time {
             closePopover(.momentChanged)
             await committing?.value
-            await engine.seek(to: time)
+            await seekPlayers(to: time)
         }
         return (sidebarReport, id.number)
     }
@@ -1376,7 +1877,7 @@ final class WindowModel: WindowControlling {
         guard let thread = review?.thread(id) else { return nil }
         selection = id
         shown = id
-        engine.pause()
+        pausePlayers()
         return thread
     }
 
@@ -1442,13 +1943,13 @@ final class WindowModel: WindowControlling {
             Task {
                 guard await showVersion(of: thread) else { return }
                 selection = id
-                engine.pause()
+                pausePlayers()
                 move(to: time)
             }
             return
         }
         selection = id
-        engine.pause()
+        pausePlayers()
         move(to: time)
     }
 
@@ -1650,7 +2151,7 @@ final class WindowModel: WindowControlling {
     /// The person clicked into the composer: the player pauses, so the
     /// frame it writes at holds still.
     func composerBegan() {
-        engine.pause()
+        pausePlayers()
     }
 
     /// Return in the composer and its button: the words go to the target,
@@ -1681,7 +2182,7 @@ final class WindowModel: WindowControlling {
             _ = try answer(thread.text, text: text)
         } else {
             let region = target.takesRegion ? drawnRegion?.region : nil
-            engine.pause()
+            pausePlayers()
             _ = try await queueMessage(text: text, time: target.isGeneral ? nil : target.time, region: region, thread: target.thread)
             if region != nil, drawnRegion?.region == region { drawnRegion = nil }
         }
@@ -1702,7 +2203,7 @@ final class WindowModel: WindowControlling {
     /// frame on the stage.
     func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer {
         try needVideo()
-        engine.pause()
+        pausePlayers()
         isComposerGeneral = general
         if let region {
             drawnRegion = Draft(time: engine.frameTime(of: engine.time), text: "", region: region)

@@ -172,6 +172,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// The header's version switcher (E10), in a window's `state`;
         /// left out elsewhere, such as in `project new`'s answer.
         var switcher: Switcher?
+        /// The comparison (E11), in a window's `state`, where it is `null`
+        /// while Compare is closed; left out with the switcher elsewhere.
+        var compare: Compare?
 
         init(_ outline: ProjectOutline, onScreen path: String?) {
             slug = outline.slug
@@ -187,17 +190,96 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(version, forKey: .version)
             try container.encode(versions, forKey: .versions)
             try container.encodeIfPresent(switcher, forKey: .switcher)
+            if switcher != nil { try container.encode(compare, forKey: .compare) }
         }
 
         private enum CodingKeys: String, CodingKey {
-            case slug, title, version, versions, switcher
+            case slug, title, version, versions, switcher, compare
         }
 
         /// `project: launch-video "Launch video", v2 of 2`, then the
         /// switcher's line when there is one.
         var line: String {
             "project: \(slug) \"\(title)\", " + (version.map { "v\($0)" } ?? "a removed version") + " of \(versions.count)"
-                + (switcher.map { "\n" + $0.line } ?? "")
+                + (switcher.map { "\n" + $0.line } ?? "") + (compare.map { "\n" + $0.line } ?? "")
+        }
+    }
+
+    /// The comparison of two versions in a project's window (E11,
+    /// compare-control V4): the popover's choice while it is open, or what
+    /// the window compares.
+    struct Compare: Encodable, Equatable {
+        /// `choosing` while the popover is open, `comparing` once the window
+        /// compares.
+        var phase: String
+        /// The versions on the left and on the right, from 1.
+        var left: Int
+        var right: Int
+        /// `side-by-side`, `flip` or `slider`.
+        var layout: String
+        /// In Flip, the side showing; `null` in the other layouts.
+        var showing: String?
+        /// How much of the picture's width shows the left side in Slider.
+        var slider: Double
+        /// While comparing, the side new messages go to (P9); `null` in the
+        /// popover.
+        var active: String?
+        /// A side's version picker open in the popover; `null` while none is.
+        var picker: Picker?
+
+        struct Picker: Encodable, Equatable {
+            var side: String
+            var query: String
+            var matches: [Int]
+            var highlighted: Int?
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(side, forKey: .side)
+                try container.encode(query, forKey: .query)
+                try container.encode(matches, forKey: .matches)
+                try container.encode(highlighted, forKey: .highlighted)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case side, query, matches, highlighted
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(phase, forKey: .phase)
+            try container.encode(left, forKey: .left)
+            try container.encode(right, forKey: .right)
+            try container.encode(layout, forKey: .layout)
+            try container.encode(showing, forKey: .showing)
+            try container.encode(slider, forKey: .slider)
+            try container.encode(active, forKey: .active)
+            try container.encode(picker, forKey: .picker)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case phase, left, right, layout, showing, slider, active, picker
+        }
+
+        /// `compare: popover, v1 on the left and v2 on the right, side by
+        /// side`, or while comparing `compare: v1 on the left and v2 on the
+        /// right, flip showing the left, messages go to v1 on the left`, then
+        /// an open picker: `  picker left "alt": 1 match, v3 highlighted`.
+        var line: String {
+            let sides = "v\(left) on the left and v\(right) on the right"
+            let how: String
+            switch layout {
+            case CompareLayout.flip.rawValue: how = "flip" + (showing.map { " showing the \($0)" } ?? "")
+            case CompareLayout.slider.rawValue: how = "slider at \(Int((slider * 100).rounded()))%"
+            default: how = "side by side"
+            }
+            let target = active.map { side in ", messages go to v\(side == "left" ? left : right) on the \(side)" } ?? ""
+            let open = picker.map { picker in
+                "\n  picker \(picker.side) \"\(picker.query)\": \(picker.matches.count) match\(picker.matches.count == 1 ? "" : "es")"
+                    + (picker.highlighted.map { ", v\($0) highlighted" } ?? "")
+            } ?? ""
+            return "compare: " + (phase == "choosing" ? "popover, " : "") + "\(sides), \(how)\(target)\(open)"
         }
     }
 

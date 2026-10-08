@@ -1,12 +1,87 @@
 import ReviewCore
+import ReviewWire
 import SwiftUI
 
 /// The stage: the video on its black letterbox, the layer that takes the
 /// mouse and shows regions, the popover over it while a message is written
 /// or a thread is open, the threads on the frame, and the notices of what
 /// the agent says. A click on the frame plays or pauses; a drag draws a
-/// region.
+/// region. While the window compares two versions (E11), the two pictures
+/// in their layout (`CompareStage`).
 struct StageView: View {
+    let model: WindowModel
+
+    /// The stage in the window, as it was last laid out.
+    @State private var area: CGRect = .zero
+
+    var body: some View {
+        Group {
+            if let pair = model.pair, let session = model.compare, model.isComparing {
+                CompareStage(model: model, pair: pair, session: session)
+            } else {
+                ZStack(alignment: .topLeading) {
+                    StagePane(model: model, engine: model.engine)
+                    StagePopoverLayer(model: model)
+                    // What the agent just said, over everything on the stage.
+                    Notices(model: model)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
+        // The tour's write step rings the frame (H4); the ring stands in the gutter.
+        .coachRing(model.tourRings(.stage), radius: Metrics.stageCorner)
+        // Where a click is on the stage, which closes the popover by its own
+        // gestures; a click anywhere else is outside it (`OutsideClicks`).
+        // Side by side, the active side's pane is the stage (`CompareStage`).
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { area in
+            self.area = area
+            keepArea()
+        }
+        .onChange(of: model.compare?.layout) { keepArea() }
+        .onChange(of: model.isComparing) { keepArea() }
+        .padding([.top, .horizontal], Metrics.gutter)
+        .accessibilityLabel("Video")
+    }
+
+    /// The whole stage is where a click is on the stage, but side by side.
+    private func keepArea() {
+        guard !(model.isComparing && model.compare?.layout == .sideBySide) else { return }
+        model.stageArea = area
+    }
+}
+
+/// One picture on the stage: the video of `engine` on its letterbox, the
+/// layer that takes the mouse and draws regions, and the threads on its
+/// frame. While comparing, one pane per side.
+struct StagePane: View {
+    let model: WindowModel
+    let engine: PlayerEngine
+    /// The compare side it shows; nil for the window's one video.
+    var side: CompareSide?
+    /// How much of its width, from its leading edge, takes the mouse;
+    /// nil for all of it. Slider's left side takes it up to the handle.
+    var hitWidth: CGFloat?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        GeometryReader { proxy in
+            let geometry = VideoFrameGeometry(stage: proxy.size, video: engine.videoSize)
+            ZStack(alignment: .topLeading) {
+                palette[.letterbox]
+                PlayerSurface(player: engine.player)
+                // Above the picture, which takes no events itself.
+                RegionOverlay(model: model, geometry: geometry, engine: engine, side: side, hitWidth: hitWidth)
+                // The threads on this frame: outlines and badges.
+                FrameMarks(model: model, geometry: geometry, side: side)
+            }
+        }
+    }
+}
+
+/// The popover over the stage while a message is written or a thread is
+/// open, on the active picture: where the person left its thread's
+/// popover, else beside the region, else above the playhead.
+struct StagePopoverLayer: View {
     let model: WindowModel
 
     /// The popover's size as it was last laid out, for placing it beside a
@@ -17,7 +92,6 @@ struct StageView: View {
     /// The drag on the popover's corner grip under way.
     @State private var growing: CGSize = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.palette) private var palette
 
     /// How far the popover travels as it comes and goes.
     private static let arrivalDistance: CGFloat = 8
@@ -26,28 +100,13 @@ struct StageView: View {
         GeometryReader { proxy in
             let geometry = VideoFrameGeometry(stage: proxy.size, video: model.engine.videoSize)
             ZStack(alignment: .topLeading) {
-                palette[.letterbox]
-                PlayerSurface(player: model.engine.player)
-                // Above the picture, which takes no events itself.
-                RegionOverlay(model: model, geometry: geometry)
-                // The threads on this frame: outlines and badges.
-                FrameMarks(model: model, geometry: geometry)
                 if let draft = model.draft {
                     commentPopover(draft, geometry: geometry, stage: proxy.size)
                 }
-                // What the agent just said, over everything on the stage.
-                Notices(model: model)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.2), value: model.draft == nil)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
-        // The tour's write step rings the frame (H4); the ring stands in the gutter.
-        .coachRing(model.tourRings(.stage), radius: Metrics.stageCorner)
-        // Where a click is on the stage, which closes the popover by its own
-        // gestures; a click anywhere else is outside it (`OutsideClicks`).
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.stageArea = $0 }
-        .padding([.top, .horizontal], Metrics.gutter)
-        .accessibilityLabel("Video")
     }
 
     /// Where the popover sits and how it comes in.

@@ -14,6 +14,8 @@ public enum Version {
     /// and `wait` name a `project`, which an older app would not read.
     /// 6 since the thread list by version and the version switcher:
     /// `thread.versions.open`, `thread.versions.close`, `thread.version`,
-    /// `version.show`, `version.pick` and `version.close` came.
+    /// `version.show`, `version.pick` and `version.close` came, then
+    /// compare's `compare.open`, `.pick`, `.set`, `.swap`, `.start` and
+    /// `.exit`, which an older app refuses in words as unknown commands.
     public static let controlProtocol = 6
 }

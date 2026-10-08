@@ -121,8 +121,15 @@ struct TitleView: View {
                 }
                 .labelStyle(HeaderLabelStyle())
                 .accessibilityElement(children: .combine)
-                if words.isProject, let versions = model.versionSwitch {
+                // While comparing, the two versions and Exit Compare take
+                // the switcher's place (E11).
+                if words.isProject, let session = model.compare, model.isComparing {
+                    ComparingBadge(model: model, session: session)
+                } else if words.isProject, let versions = model.versionSwitch {
                     VersionSwitcher(model: model, versions: versions)
+                    if model.canCompare {
+                        CompareButton(model: model)
+                    }
                 }
             }
             if let subtitle = words.subtitle {

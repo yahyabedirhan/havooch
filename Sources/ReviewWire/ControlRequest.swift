@@ -238,6 +238,26 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch version close`: the version picker closed, as Escape
     /// closes it.
     case versionClose
+    /// `havooch compare open`: the compare popover open under the Compare
+    /// button, on the previous version and the one on screen, as a click
+    /// on the button opens it (E11).
+    case compareOpen
+    /// `havooch compare pick <side> [<query>]`: the version picker of one
+    /// side open in the popover, with `query` typed in its search field,
+    /// as a click on the side and typing do.
+    case comparePick(side: CompareSide, query: String = "")
+    /// `havooch compare set`: versions, layout, the side messages go to
+    /// and the slider, in the popover or on the stage.
+    case compareSet(CompareChange)
+    /// `havooch compare swap`: left and right exchanged, as the swap
+    /// button does.
+    case compareSwap
+    /// `havooch compare start`: the window compares the two versions on
+    /// one playhead, as the popover's Show side by side or Compare does.
+    case compareStart
+    /// `havooch compare exit`: back to one version, the right side's, as
+    /// Exit Compare and Escape do; in the popover, Cancel.
+    case compareExit
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -312,6 +332,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .tourShow, .tourNext, .tourSkip, .tourClose: .operator
         case .firstRunShow, .firstRunNext, .firstRunBack, .firstRunPick, .firstRunDemo, .firstRunSkip: .operator
         case .versionShow, .versionPick, .versionClose: .operator
+        case .compareOpen, .comparePick, .compareSet, .compareSwap, .compareStart, .compareExit: .operator
         }
     }
 

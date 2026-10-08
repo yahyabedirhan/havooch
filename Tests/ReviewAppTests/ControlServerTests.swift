@@ -295,6 +295,31 @@ struct ControlServerTests {
             return false
         }
 
+        func openCompare() throws(AppRefusal) {
+            try record("compare open")
+        }
+
+        func pickCompareSide(_ side: CompareSide, query: String) throws(AppRefusal) {
+            try record("compare pick \(side.rawValue) \(query)")
+        }
+
+        func setCompare(_ change: CompareChange) async throws(AppRefusal) {
+            try record("compare set")
+        }
+
+        func swapCompare() throws(AppRefusal) {
+            try record("compare swap")
+        }
+
+        func startCompare() async throws(AppRefusal) {
+            try record("compare start")
+        }
+
+        func exitCompare() -> Bool {
+            calls.append("compare exit")
+            return false
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }

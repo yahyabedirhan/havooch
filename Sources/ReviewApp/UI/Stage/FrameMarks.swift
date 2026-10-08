@@ -1,4 +1,5 @@
 import ReviewCore
+import ReviewWire
 import SwiftUI
 
 /// The threads on the frame on screen (D 2.6): each one's region outlines,
@@ -8,13 +9,16 @@ import SwiftUI
 struct FrameMarks: View {
     let model: WindowModel
     let geometry: VideoFrameGeometry
+    /// While comparing, the side whose frame it marks; nil for the
+    /// window's one video.
+    var side: CompareSide?
 
     static let badgeSize: CGFloat = 20
     /// How far a whole-frame badge sits in from the picture's corner.
     private static let inset: CGFloat = 10
 
     var body: some View {
-        let marks = model.frameMarks
+        let marks = model.frameMarks(on: side)
         ZStack(alignment: .topLeading) {
             ForEach(marks, id: \.thread) { mark in
                 ForEach(Array(mark.regions.enumerated()), id: \.offset) { _, region in

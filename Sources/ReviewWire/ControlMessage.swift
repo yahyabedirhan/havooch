@@ -125,6 +125,20 @@ public struct ControlMessage: Equatable, Sendable {
             wire.number = number
         case .versionPick(let query): wire = Wire(command: "version.pick", text: query)
         case .versionClose: wire = Wire(command: "version.close")
+        case .compareOpen: wire = Wire(command: "compare.open")
+        case .comparePick(let side, let query):
+            wire = Wire(command: "compare.pick", text: query)
+            wire.side = side.rawValue
+        case .compareSet(let change):
+            wire = Wire(command: "compare.set")
+            wire.left = change.left
+            wire.right = change.right
+            wire.layout = change.layout?.rawValue
+            wire.side = change.side?.rawValue
+            wire.slider = change.slider
+        case .compareSwap: wire = Wire(command: "compare.swap")
+        case .compareStart: wire = Wire(command: "compare.start")
+        case .compareExit: wire = Wire(command: "compare.exit")
         }
         if case .screenshot = request {} else { wire.window = window }
         wire.holder = holder
@@ -300,8 +314,42 @@ public struct ControlMessage: Equatable, Sendable {
             return .versionShow(number: number)
         case "version.pick": return .versionPick(query: wire.text ?? "")
         case "version.close": return .versionClose
+        case "compare.open": return .compareOpen
+        case "compare.pick": return .comparePick(side: try side(field(wire.side, "side", of: wire), of: wire), query: wire.text ?? "")
+        case "compare.set": return .compareSet(try change(of: wire))
+        case "compare.swap": return .compareSwap
+        case "compare.start": return .compareStart
+        case "compare.exit": return .compareExit
         default: throw .unknownCommand(wire.command)
         }
+    }
+
+    /// The side `name` names.
+    private static func side(_ name: String, of wire: Wire) throws(ControlProtocolError) -> CompareSide {
+        guard let side = CompareSide(rawValue: name) else {
+            throw .unreadable("the control command `\(wire.command)` names no side `\(name)`; it is `left` or `right`")
+        }
+        return side
+    }
+
+    /// `compare.set`'s change: at least one field, each one readable.
+    private static func change(of wire: Wire) throws(ControlProtocolError) -> CompareChange {
+        var change = CompareChange(left: wire.left, right: wire.right, slider: wire.slider)
+        for number in [wire.left, wire.right].compactMap(\.self) where number < 1 {
+            throw .unreadable("the control command `compare.set` needs versions of 1 or more, not \(number)")
+        }
+        if let name = wire.layout {
+            guard let layout = CompareLayout(rawValue: name) else {
+                throw .unreadable("the control command `compare.set` names no layout `\(name)`")
+            }
+            change.layout = layout
+        }
+        if let name = wire.side { change.side = try side(name, of: wire) }
+        if let slider = wire.slider, !(0...1).contains(slider) {
+            throw .unreadable("the control command `compare.set` needs a slider from 0 to 1, not \(slider)")
+        }
+        guard !change.isEmpty else { throw .unreadable("the control command `compare.set` changes nothing") }
+        return change
     }
 
     /// A field the command needs.
@@ -375,5 +423,14 @@ public struct ControlMessage: Equatable, Sendable {
         var number: Int?
         /// `thread version --remove`: the picked version leaves the list.
         var remove: Bool?
+        /// `compare pick` and `compare set --side`: a side, `left` or `right`.
+        var side: String?
+        /// `compare set --left` and `--right`: a side's version, from 1.
+        var left: Int?
+        var right: Int?
+        /// `compare set --layout`: `side-by-side`, `flip` or `slider`.
+        var layout: String?
+        /// `compare set --slider`: the left side's share of the width.
+        var slider: Double?
     }
 }

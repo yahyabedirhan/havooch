@@ -150,6 +150,20 @@ protocol WindowControlling: AnyObject {
     func openVersionPicker(query: String) throws(AppRefusal) -> VersionSwitch
     /// Closes the version picker, as Escape does; false when it was closed.
     func closeVersionPicker() -> Bool
+    /// Opens the compare popover on the previous version and the one on
+    /// screen, as the Compare button does (E11).
+    func openCompare() throws(AppRefusal)
+    /// Opens one side's version picker in the popover with `query` typed.
+    func pickCompareSide(_ side: CompareSide, query: String) throws(AppRefusal)
+    /// Changes the comparison, in the popover or on the stage.
+    func setCompare(_ change: CompareChange) async throws(AppRefusal)
+    /// Exchanges left and right, as the swap button does.
+    func swapCompare() throws(AppRefusal)
+    /// Compares the two versions on one playhead.
+    func startCompare() async throws(AppRefusal)
+    /// Back to one version, the right side's; false when Compare wasn't open.
+    @discardableResult
+    func exitCompare() -> Bool
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -552,6 +566,35 @@ final class ControlServer {
                     closed ? "the version picker is closed" : "the version picker wasn't open",
                     Output(window: shown.id, project: shown.state().project, dismissed: closed), json
                 )
+            case .compareOpen:
+                let shown = try inWindow()
+                try shown.openCompare()
+                return compared(shown, json)
+            case .comparePick(let side, let query):
+                let shown = try inWindow()
+                try shown.pickCompareSide(side, query: query)
+                return compared(shown, json)
+            case .compareSet(let change):
+                let shown = try inWindow()
+                try await shown.setCompare(change)
+                return compared(shown, json)
+            case .compareSwap:
+                let shown = try inWindow()
+                try shown.swapCompare()
+                return compared(shown, json)
+            case .compareStart:
+                let shown = try inWindow()
+                try await shown.startCompare()
+                return compared(shown, json)
+            case .compareExit:
+                let shown = try inWindow()
+                let exited = shown.exitCompare()
+                let state = shown.state()
+                let version = state.project?.version.map { "v\($0)" } ?? "a removed version"
+                return done(
+                    exited ? "Compare is closed: \(version) on screen in \(shown.id)" : "Compare wasn't open",
+                    Output(window: shown.id, player: state.player, project: state.project, dismissed: exited), json
+                )
             case .projectNew(let slug, let path, let title):
                 let made = try await app.projectNew(slug, from: URL(fileURLWithPath: path), title: title)
                 let listed = made.versions.count
@@ -633,6 +676,16 @@ final class ControlServer {
         case .id(let id): "#\(id.number)"
         case nil: nil
         }
+    }
+
+    /// A compare action's answer: the comparison's line, or with `--json`
+    /// the window, the player and the project with its `compare`.
+    private func compared(_ shown: any WindowControlling, _ json: Bool) -> Answer {
+        let state = shown.state()
+        return done(
+            state.project?.compare?.line ?? "compare: closed",
+            Output(window: shown.id, player: state.player, project: state.project), json
+        )
     }
 
     /// A first-run action's answer: its line, or with `--json` the window.

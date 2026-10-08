@@ -31,6 +31,13 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
     }
 
+    @Test("backslash flips Compare's Flip, and is no key while the person types")
+    func flipKey() {
+        #expect(Shortcuts.action(keyCode: 42, modifiers: []) == .flip)
+        #expect(Shortcuts.action(keyCode: 42, modifiers: .shift) == nil)
+        #expect(Shortcuts.action(keyCode: 42, modifiers: [], isTyping: true) == nil)
+    }
+
     /// Return and the keypad's Enter.
     @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app",
           arguments: [36, 76] as [UInt16])
