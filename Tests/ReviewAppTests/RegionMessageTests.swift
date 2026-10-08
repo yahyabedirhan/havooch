@@ -122,7 +122,7 @@ struct RegionMessageTests {
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> WindowModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }

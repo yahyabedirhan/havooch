@@ -11,7 +11,8 @@
 #                   video in Contents/Resources/Demo, ad-hoc signed
 #   make install    bundle, then replace /Applications/<app name>.app and open
 #                   it; on the support folder HAVOOCH_SUPPORT_DIR names when
-#                   it's set, so a check never opens the person's own data
+#                   it's set, so a check never opens the person's own data,
+#                   and muted with HAVOOCH_MUTED=1, so a check plays no sound
 #   make acceptance run the acceptance scenario through the installed app's
 #                   command, on demo data (scripts/acceptance.sh); after make install
 #   make agent-logos redraw Packaging/AgentLogos/*.pdf from the SVGs in
@@ -118,8 +119,9 @@ install: bundle
 	@echo "installed $(INSTALLED)"
 	@# In the background: the terminal keeps the focus. With
 	@# HAVOOCH_SUPPORT_DIR set, on that folder: a check that installs never
-	@# opens the person's data.
-	open -g $(if $(HAVOOCH_SUPPORT_DIR),--env "HAVOOCH_SUPPORT_DIR=$(HAVOOCH_SUPPORT_DIR)") "$(INSTALLED)"
+	@# opens the person's data. With HAVOOCH_MUTED=1, muted: a check never
+	@# plays sound.
+	open -g $(if $(HAVOOCH_SUPPORT_DIR),--env "HAVOOCH_SUPPORT_DIR=$(HAVOOCH_SUPPORT_DIR)") $(if $(HAVOOCH_MUTED),--env "HAVOOCH_MUTED=$(HAVOOCH_MUTED)") "$(INSTALLED)"
 
 # Drives the installed app, in demo mode only. It is not part of `make test`.
 acceptance:

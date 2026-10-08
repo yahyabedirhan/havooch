@@ -14,7 +14,7 @@ struct PopoverCloseTests {
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> WindowModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -184,7 +184,7 @@ struct PopoverCloseTests {
         #expect(message.text == "First words")
         #expect(time == 12.5)
 
-        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let empty = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         #expect(throws: AppRefusal.self) { try empty.openPopover(text: "", region: nil) }
     }
 

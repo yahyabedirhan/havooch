@@ -47,6 +47,10 @@
 set -u
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+
+# An agent's check plays no sound on the person's Mac: `app open --demo`
+# passes HAVOOCH_MUTED=1 on to the app it launches.
+export HAVOOCH_MUTED=1
 cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
 video="$root/fixtures/sample/sample.mp4"
 

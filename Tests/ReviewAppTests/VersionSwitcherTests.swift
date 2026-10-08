@@ -143,7 +143,7 @@ struct VersionSwitcherTests {
     /// v2 the launch video, then `more` copies of the sample, the last on
     /// screen.
     private func run(more: Int = 0) async throws -> (app: AppModel, window: WindowModel, server: ControlServer) {
-        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
+        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"], speech: SlowRecognizer())
         let window = app.makeWindow()
         try await window.open(Self.sample)
         let server = ControlServer(
@@ -310,7 +310,7 @@ struct VersionSwitcherTests {
     @Test("a plain video shows no switcher, and version show and pick are refused on it")
     func plainVideo() async throws {
         defer { cleanUp() }
-        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
+        let app = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"], speech: SlowRecognizer())
         let window = app.makeWindow()
         try await window.open(Self.sample)
         let server = ControlServer(

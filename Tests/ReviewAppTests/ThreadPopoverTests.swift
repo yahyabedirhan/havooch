@@ -14,7 +14,7 @@ struct ThreadPopoverTests {
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
     private func model() async throws -> WindowModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -132,7 +132,7 @@ struct ThreadPopoverTests {
         #expect(model.engine.time == 12.5)
         #expect(model.state().threads[1].popoverFrame == frame)
 
-        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         try await again.open(MessageTests.fixture)
         #expect(again.threads.first { $0.id.text == added.thread.id }?.popoverFrame == frame)
 
