@@ -183,11 +183,38 @@ Pick the way that matches how you installed Havooch.
 | Homebrew | `brew uninstall --cask havooch` | `brew uninstall --cask --zap havooch` |
 | The install script | `curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh \| bash -s -- --uninstall` | Move `~/Library/Application Support/Havooch` to the Trash too |
 
-To remove everything Havooch left on your Mac in one go, an app uninstaller such as [Mole](https://github.com/tw93/mole) does it: run `mo uninstall` and pick Havooch. Run `mo uninstall --dry-run` first to see what it removes.
+### With Mole
 
-Your reviews live in `~/Library/Application Support/Havooch`, and your settings in `~/.config/havooch`, which Homebrew and the install script leave in place. Keep them if you might install Havooch again.
+[Mole](https://github.com/tw93/mole) removes an app and most of what it leaves behind. Preview first, then remove:
 
-The skill is separate. To remove it, run `npx skills remove havooch-mate --global`.
+```sh
+mo uninstall --dry-run    # pick Havooch: shows what it would remove
+mo uninstall              # pick Havooch again
+```
+
+Mole removes the app, your reviews in `~/Library/Application Support/Havooch` and the preferences file. Three things stay, so remove them after it:
+
+```sh
+rm -f ~/.local/bin/havooch /usr/local/bin/havooch    # the command's link
+mv ~/.config/havooch ~/.Trash/                       # your settings
+npx skills remove havooch-mate --global --yes        # the skill, for every agent
+```
+
+Nothing is left when this prints only "No such file or directory" for each path:
+
+```sh
+ls ~/.local/bin/havooch /usr/local/bin/havooch ~/.config/havooch ~/.agents/skills/havooch-mate
+```
+
+### What lives where
+
+| What | Where |
+|---|---|
+| The app | `/Applications/Havooch.app` |
+| The command's link | `/opt/homebrew/bin/havooch` from Homebrew, or `/usr/local/bin/havooch` or `~/.local/bin/havooch` from the install script or **Link** |
+| Your reviews | `~/Library/Application Support/Havooch` |
+| Your settings | `~/.config/havooch`, which Homebrew and the install script leave in place |
+| The skill | `~/.agents/skills/havooch-mate`, linked into each agent's own skills folder. Remove it with `npx skills remove havooch-mate --global`. |
 
 ## Build from source
 
