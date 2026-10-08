@@ -37,6 +37,8 @@ Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and 
 
 `docs/low-level-design.md` is the design of this build, written with the `low-level-design` skill before the first build ticket. It is documentation for the maintainer to read later, not a review gate. Read it before adding or moving a module, and update it in the same change whenever the code moves away from it.
 
+`docs/low-level-design-projects-and-onboarding.md` is the target design of `effort:projects-and-onboarding`. Build that effort's tickets toward it, and update `docs/low-level-design.md` for what each ticket builds.
+
 Never use the stacked-layers symbol (`square.stack.3d.up` and its variants) anywhere in the app or its prototypes. The maintainer rejected it.
 
 Never use an em dash, an en dash or a spaced hyphen as punctuation in app copy. Write a full stop, a comma, a colon or two sentences instead, and "v1 to v47" for a range.
