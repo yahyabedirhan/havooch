@@ -74,9 +74,11 @@ struct CommentPopover: View {
     /// through the player's keys.
     private var footer: some View {
         HStack(spacing: 6) {
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 KeyHint(key: "↩", does: answers ? "answer" : "queue")
+                Text("·").foregroundStyle(palette[.textTertiary])
                 KeyHint(key: "⌘↩", does: "send")
+                Text("·").foregroundStyle(palette[.textTertiary])
                 KeyHint(key: "esc", does: "discard")
             }
             Spacer(minLength: 4)
@@ -86,7 +88,8 @@ struct CommentPopover: View {
                 Button("Send Now") { model.send() }
                     // Shown in the menu; the player's keys take Cmd+Return first.
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!model.canSend)
+                    // An answer goes at once, so there's nothing to send now.
+                    .disabled(answers || !model.canSend)
                 Divider()
                 // Escape is the field's and the player's: a key on this item
                 // could take it from a text input method mid-word.
@@ -103,13 +106,15 @@ struct CommentPopover: View {
             .fixedSize()
             .pressedByKeys(in: model) { model.commitDraft() }
             .disabled(!WindowModel.hasWords(draft.text))
-            .help(answers ? "Answer (Return). The arrow sends now or discards." : "Queue (Return). The arrow sends now or discards.")
+            .help(answers ? "Answer at once (Return). The arrow discards." : "Queue (Return). The arrow sends now or discards.")
             if resize != nil {
                 // Room for the grip in the corner.
                 Spacer().frame(width: 6)
             }
         }
-        .padding(.top, 2)
+        // 10 pt from the field, in a new message's popover and a thread's
+        // alike: the stack's 6 and these 4.
+        .padding(.top, 4)
     }
 
     /// `#3 · 0:12`, the kind of message before it and the × after it.
