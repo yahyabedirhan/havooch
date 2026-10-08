@@ -75,8 +75,11 @@ public enum PromptTarget: Hashable, Sendable {
 public enum HarnessCatalog {
     /// The skill an agent needs to listen.
     public static let skill = "havooch-mate"
-    /// Where the skill comes from, for `npx skills add`.
-    public static let source = "yahyabedirhan/havooch"
+    /// Where the skill comes from, for `npx skills add`: a repository of
+    /// the skill alone, which the release workflow writes the skill into
+    /// from `.agents/skills/havooch-mate`. The CLI clones a repository
+    /// source, and this one is small where Havooch's own is 269 MB.
+    public static let source = "yahyabedirhan/havooch-mate"
 
     /// Where a command line tool is usually installed, for presence hints.
     private static let commandFolders = [".local/bin", "/opt/homebrew/bin", "/usr/local/bin", ".bun/bin", ".npm-global/bin"]

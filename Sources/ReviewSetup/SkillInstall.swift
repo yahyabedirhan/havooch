@@ -32,7 +32,7 @@ public struct SkillInstall: Equatable, Sendable {
         case cancelled
     }
 
-    /// `npx skills add yahyabedirhan/havooch --skill havooch-mate -g -y -a claude-code -a codex`.
+    /// `npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -g -y -a claude-code -a codex`.
     public var commandLine: String {
         Self.commandLine(for: harnesses, global: true)
     }

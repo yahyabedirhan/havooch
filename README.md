@@ -62,7 +62,7 @@ The app carries a command, `havooch`, in `Havooch.app/Contents/Helpers/`; both i
 The **havooch-mate** skill teaches a coding agent the listener's loop. Install it on its own with:
 
 ```sh
-npx skills add yahyabedirhan/havooch --skill havooch-mate --global
+npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
 ```
 
 Then ask your agent, for example Claude Code, to listen for Havooch feedback.

@@ -55,6 +55,6 @@ cask "havooch" do
       xattr -dr com.apple.quarantine "#{appdir}/Havooch.app"
 
     For your coding agent, install the mate skill:
-      npx skills add yahyabedirhan/havooch --skill havooch-mate --global
+      npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
   EOS
 end

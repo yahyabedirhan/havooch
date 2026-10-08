@@ -12,7 +12,7 @@ To connect an agent, the person needs the `havooch` command and the `havooch-mat
 - **The prompt stays primary.** When something is not detected, the view still shows the prompt at full size: "If it's installed another way, paste the prompt and your agent will take it from there. If not, install it first."
 - **Each harness gets its own prompt**, in its own skill invocation: Claude Code and Cursor `/havooch-mate listen for my feedback on <video>`, Codex `$havooch-mate …`, Pi `/skill:havooch-mate …`, OpenCode "Use the havooch-mate skill to listen for my feedback on <video>". Cursor's form is not verified yet; its live QA confirms it.
 - **"Finish setup" leaves once an agent has connected** in the window, even when the skill was not detected: a real connection proves setup works. The maintainer confirmed it.
-- **Installing the skill**: one click installs it globally for every harness found (`npx skills add yahyabedirhan/havooch --skill havooch-mate -g`); a per-repository install is a command to copy.
+- **Installing the skill**: one click installs it globally for every harness found (`npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -g`); a per-repository install is a command to copy.
 
 ## Considered Options
 
