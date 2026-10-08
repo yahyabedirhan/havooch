@@ -58,7 +58,7 @@ The install script downloads with `curl`, which sets no quarantine flag, so macO
 
 On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. If you close the window without using it, it shows again at the next launch. It stops once you click **Get Started** or **Skip Setup**, open a video, or connect an agent. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
 
-![The first-run window's Connect step: pick your agent and copy the prompt that opens the demo video](../assets/screenshots/0.4.0/first-run/connect-light.png)
+![The first-run window's Connect step: pick your agent and copy the prompt that opens the demo video](../assets/screenshots/0.5.0/first-run/connect-light.png)
 
 ## Windows, home and recent videos
 
@@ -73,7 +73,7 @@ You can open a video from anywhere:
 
 **Try the Demo** on the home screen opens a short video about Havooch itself.
 
-![The home screen: a project with three versions, and three recent videos](../assets/screenshots/0.4.0/home/projects-and-recent-videos-light.png)
+![The home screen: a project with three versions, and three recent videos](../assets/screenshots/0.5.0/home/projects-and-recent-videos-light.png)
 
 ## Sound
 
@@ -91,7 +91,7 @@ Pause anywhere and write a comment, or drag a region on the frame first to point
 
 You can also write in the dock at the foot of the sidebar. In the thread list, the switch above it says where the words go: **At 0:15**, the playhead's frame and its thread, or **General**, the General thread about the whole video. A thread you opened shows its number there instead. A region you drew shows as a chip under the words. Return queues the words. **Send** sends the queue with them, and its menu holds **Queue** and **Send** too. When the agent asks you something, the button says **Answer**, and the answer goes at once. The pill beside it says whether an agent listens, and opens the **Connect** view.
 
-![The dock: the switch, the words, then the agent's pill and Send](../assets/screenshots/sidebar-dock/typing-2-queued-light.png)
+![The dock: the switch, the words, then the agent's pill and Send](../assets/screenshots/0.5.0/sidebar-dock/typing-2-queued-light.png)
 
 A click on the video doesn't play or pause it: it only points. It also takes the keyboard from the message field, so Space plays and pauses and C starts a comment again. What you typed stays in the field.
 
@@ -150,7 +150,7 @@ When you ask your agent for a change to the video itself, it makes a **project**
 - **Threads.** Threads belong to the project, not to one version. Each thread is tagged with the version it was raised on, and the thread list groups threads by version, newest first. **All versions** finds older ones. You can follow up on any thread, on any version.
 - **Compare.** **Compare** opens a small preview of two versions, the previous one and the one on screen. Click a side to pick its version, and choose **Side by side**, **Flip** or **Slider**. Both versions play on one playhead, and a message goes to the side you click or draw on. **Exit Compare** or Escape goes back to one version.
 
-![Compare: v1 and v3 side by side on one playhead](../assets/screenshots/0.4.0/compare/side-by-side-light.png)
+![Compare: v1 and v3 side by side on one playhead](../assets/screenshots/0.5.0/compare/side-by-side-light.png)
 
 ## Settings: config.toml
 
