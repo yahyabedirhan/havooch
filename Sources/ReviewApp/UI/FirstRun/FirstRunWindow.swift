@@ -26,9 +26,41 @@ final class FirstRunWindow: NSObject, NSWindowDelegate {
             made?.close()
             return
         }
+        let placed = made != nil
         let window = made ?? make()
-        if !window.isVisible { window.center() }
+        // Placed once, the first time it shows: a later show in the same
+        // run keeps where the person moved it.
+        if !placed { place(window) }
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Sizes `window` to what its view settles on, then centers it over the
+    /// player window in front, else on the screen. `center()` alone measured
+    /// the size the window was made with, before the hosting view resized it,
+    /// and centered it on the screen, not over the player window.
+    private func place(_ window: NSWindow) {
+        if let view = window.contentView {
+            view.layoutSubtreeIfNeeded()
+            let fitting = view.fittingSize
+            if fitting.width > 0, fitting.height > 0 { window.setContentSize(fitting) }
+        }
+        let player = (app.windows.key?.nsWindow).flatMap { $0.isVisible ? $0 : nil }
+            ?? app.windows.windows.lazy.compactMap(\.nsWindow).first(where: \.isVisible)
+        guard let screen = player?.screen ?? NSScreen.main else {
+            window.center()
+            return
+        }
+        window.setFrame(Self.frame(of: window.frame.size, over: player?.frame, on: screen.visibleFrame), display: false)
+    }
+
+    /// A frame of `size` centered over `player`, else over `screen`, moved
+    /// in where it would leave `screen`.
+    static func frame(of size: CGSize, over player: CGRect?, on screen: CGRect) -> CGRect {
+        let around = player ?? screen
+        var origin = CGPoint(x: (around.midX - size.width / 2).rounded(), y: (around.midY - size.height / 2).rounded())
+        origin.x = min(max(origin.x, screen.minX), screen.maxX - size.width)
+        origin.y = min(max(origin.y, screen.minY), screen.maxY - size.height)
+        return CGRect(origin: origin, size: size)
     }
 
     private func make() -> NSWindow {

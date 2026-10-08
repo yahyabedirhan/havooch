@@ -313,3 +313,31 @@ struct FirstRunTests {
         #expect(app.firstRun.isShowing)
     }
 }
+
+/// Where the first-run window opens: centered over the player window in
+/// front, kept on that window's screen; centered on the screen with none.
+@Suite("The first-run window's place")
+struct FirstRunPlaceTests {
+    let screen = CGRect(x: 0, y: 0, width: 1512, height: 944)
+
+    @Test("over the player window, with equal space on the left and the right, and above and below")
+    func overThePlayerWindow() {
+        let player = CGRect(x: 76, y: 107, width: 1360, height: 730)
+        let frame = FirstRunWindow.frame(of: CGSize(width: 760, height: 568), over: player, on: screen)
+        #expect(frame == CGRect(x: 376, y: 188, width: 760, height: 568))
+        #expect(frame.minX - player.minX == player.maxX - frame.maxX)
+    }
+
+    @Test("with no player window, in the middle of the screen")
+    func onTheScreen() {
+        let frame = FirstRunWindow.frame(of: CGSize(width: 760, height: 568), over: nil, on: screen)
+        #expect(frame == CGRect(x: 376, y: 188, width: 760, height: 568))
+    }
+
+    @Test("over a player window near the screen's edge, moved in to stay on the screen")
+    func keptOnTheScreen() {
+        let player = CGRect(x: 900, y: 0, width: 700, height: 400)
+        let frame = FirstRunWindow.frame(of: CGSize(width: 760, height: 568), over: player, on: screen)
+        #expect(frame == CGRect(x: 752, y: 0, width: 760, height: 568))
+    }
+}
