@@ -14,13 +14,41 @@ _Avoid_: file, clip
 A video the person opened lately, kept with the path it was last opened at, when it was opened and where its playhead stopped. The app keeps the 10 newest. Removing one leaves its review on the disk.
 _Avoid_: history, recent file
 
+**Window**:
+One Havooch window, holding either nothing, one plain video or one project. The person can open any number of them, and each has its own listener.
+_Avoid_: tab, workspace, document
+
+**Empty window**:
+A window that holds nothing yet. It shows the home screen.
+_Avoid_: new window (as a state), blank window
+
 **Home screen**:
-The stage with no video open and one or more recent videos: the cat mark, "Open a Video…", "Try the Demo" and the recent videos as cards with thumbnails. With no recent videos the stage shows the empty state.
+What an empty window shows: the cat mark, "Open a Video…", "Try the Demo" and the recent videos and projects as cards with thumbnails. With nothing recent it shows the empty state.
 _Avoid_: start screen, welcome screen, launcher
 
+**Plain video**:
+A video opened in a window without a project.
+_Avoid_: loose video, single video
+
+**Project**:
+A named line of versions of one video, set in the configuration file. The agent makes it when the person starts asking for changes.
+_Avoid_: series, collection, folder, workspace
+
+**Version**:
+One video in a project, named by its full path and an optional label, and numbered by its place in the line: v1, v2.
+_Avoid_: cut, revision, iteration, variant
+
+**Version switcher**:
+The control in the header of a project window that shows which version is on screen and switches to another, keeping the playhead time.
+_Avoid_: version picker, version tabs
+
+**Compare**:
+Two versions of a project on one playhead, laid out side by side, as a flip between them or as a slider across them.
+_Avoid_: diff, A/B view (flip is one layout of it)
+
 **Review**:
-Everything kept about one video: its threads, its sends and its context note.
-_Avoid_: session, project
+Everything kept about one plain video or one project: its threads, its sends and its context note. A project has one review across all its versions.
+_Avoid_: session
 
 **Keyframe**:
 The image of the exact frame a thread is about.
@@ -99,16 +127,20 @@ _Avoid_: progress, status text
 ### Sending
 
 **Queue**:
-The person's messages of the open video that are written but not yet sent.
+The person's messages of one window that are written but not yet sent.
 _Avoid_: drafts, pending list
 
 **Send**:
-Every queued message of the open video, delivered to the agent at once by Cmd+Enter.
+Every queued message of one window, delivered to its listener at once by Cmd+Enter.
 _Avoid_: batch, submission, round
 
 **Outbox**:
 The line of sends that wait for a listener or that a listener has taken and not finished.
 _Avoid_: delivery queue, inbox
+
+**Outbox banner**:
+The line at the top of the connect view that says how many messages wait for an agent and that they will be delivered when one connects.
+_Avoid_: warning, error, no-agent alert
 
 ### Agents and control
 
@@ -117,7 +149,7 @@ The human at the Mac who watches the video and writes messages.
 _Avoid_: user, reviewer
 
 **Listener**:
-The agent session that receives sends and answers on their threads. It needs no lease.
+The agent session that receives the sends of one window and answers on their threads. Each window has at most one. It needs no lease.
 _Avoid_: mate, worker, consumer
 
 **Operator**:
@@ -144,6 +176,40 @@ _Avoid_: avatar (the avatar is where the logo shows), icon
 The icon in the header that shows while an agent holds the lease, with a popover that names it and stops it.
 _Avoid_: banner, lease banner, indicator
 
+### Setup
+
+**Connect view**:
+The sidebar view that guides the person to connect an agent to a window: the setup steps, the choice of harness with its prompt, and, once connected, the listener. The presence pill, Send with no listener and a header button all open it.
+_Avoid_: setup screen, onboarding panel, settings
+
+**Setup step**:
+One thing an agent needs before it can listen: the **command line** (the `havooch` command linked into the person's PATH folder) or the **skill** (the `havooch-mate` skill installed for a harness).
+_Avoid_: requirement, prerequisite, check
+
+**Not detected**:
+The state of a setup step or harness that Havooch could not find. It does not mean missing: the thing may be set up in a way Havooch cannot see.
+_Avoid_: missing, not installed, failed
+
+**Prompt**:
+The one line the person pastes into their harness to make an agent listen to a window, written in that harness's skill invocation and naming the window's video or project.
+_Avoid_: command, snippet, instruction
+
+**First run**:
+The step-by-step setup a person sees the first time they open Havooch: welcome, setup steps, connect, then the demo.
+_Avoid_: onboarding (as a screen name), wizard, welcome flow
+
+**Tour**:
+The optional guided walk through setup, writing a message, sending and reading the reply, shown over the real window.
+_Avoid_: walkthrough, coach marks, tutorial
+
+**Finish setup**:
+The header button that opens the tour, shown only until an agent has connected.
+_Avoid_: setup badge, onboarding button
+
+**Demo reference**:
+The part of the `havooch-mate` skill that an agent reads only when a send comes from the bundled demo video, to guide a beginner through the first loop.
+_Avoid_: demo agent, tutorial mode
+
 ### Look
 
 **Theme**:
@@ -157,3 +223,7 @@ _Avoid_: colour variable, swatch
 **Surface**:
 A token that a part of the window is drawn on: the window, a popover, a notice, a field or a separator. The whole window is on one surface, with hairlines between its parts. A surface set to `system` is the native macOS one, as in Default Light and Default Dark.
 _Avoid_: background, panel colour, sidebar colour
+
+**Accent fill**:
+The token that filled controls such as Send are drawn on, dark enough for white text in every theme. The accent itself stays for lines, rings and selections.
+_Avoid_: button colour, primary colour

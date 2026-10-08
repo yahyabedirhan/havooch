@@ -11,3 +11,13 @@ In October 2026, three agents built the spec `Spec: Havooch v1` on their own, on
 | [assessments.md](assessments.md) | The code assessment of each prototype. |
 
 The prototype branches stay in the repository for reference. Their low-level designs are `docs/low-level-design.md` on each branch.
+
+## The projects and onboarding round
+
+In October 2026 the grilling of `Mate: Make opening a video and connecting any agent simple for new users` (#76) grew into projects, versions, compare, windows and agent onboarding, prototyped in Swift Lab.
+
+| File | What it holds |
+|---|---|
+| [2026-10-08-feedback-verbatim.md](2026-10-08-feedback-verbatim.md) | The maintainer's words, by topic. |
+| [2026-10-08-decisions.md](2026-10-08-decisions.md) | Every decision, itemized and numbered (A to I). |
+| [2026-10-08-lab/](2026-10-08-lab/) | The final Swift Lab variants to build from, with a README that names each final and what not to build from. |
