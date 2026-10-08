@@ -25,20 +25,21 @@ The script:
 1. Downloads the latest release and checks its SHA-256.
 2. Puts `Havooch.app` in `/Applications`.
 3. Links the `havooch` command into `/usr/local/bin`, or into `~/.local/bin` when it can't write there.
-4. Installs the `havooch-mate` skill for your agents, when Node.js is installed.
+
+It leaves your agents' skills alone. Install the `havooch-mate` skill from Havooch's Connect view, for the agent you pick, or add `--with-skill`.
 
 To pass an option, add `-s --` after `bash`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash -s -- --no-skill
+curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash -s -- --with-skill
 ```
 
 | Option | What it does |
 |---|---|
-| `--no-skill` | Skips the skill. Install it later from Havooch's Connect view. |
+| `--with-skill` | Also installs the `havooch-mate` skill for Claude Code, Codex, Cursor, Pi and OpenCode. It needs Node.js. With `--uninstall`, removes it too. |
 | `--app-dir <folder>` | Puts the app in another folder. |
 | `--bin-dir <folder>` | Links the command into another folder. |
-| `--uninstall` | Removes the app, the command's link and the skill. |
+| `--uninstall` | Removes the app and the command's link. |
 
 ### First launch
 
