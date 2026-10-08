@@ -566,6 +566,46 @@ nonisolated struct StateReport: Encodable, Equatable {
         var playing: Bool
     }
 
+    /// The sound, the same in every window: `volume` is the level from 0
+    /// to 100, where 0 is muted; `muted` is whether nothing plays, also in
+    /// a run muted for an agent's check (`mutedForCheck`, started with
+    /// `HAVOOCH_MUTED=1`), whatever its level. `panelOpen` is whether the
+    /// window's sound panel is open over the stage.
+    struct Sound: Encodable, Equatable {
+        var volume: Int
+        var muted: Bool
+        var mutedForCheck: Bool
+        var panelOpen: Bool
+
+        init(volume: Int, muted: Bool, mutedForCheck: Bool = false, panelOpen: Bool = false) {
+            self.volume = volume
+            self.muted = muted
+            self.mutedForCheck = mutedForCheck
+            self.panelOpen = panelOpen
+        }
+
+        /// `sound` as it is now, with a window's panel.
+        @MainActor
+        init(_ sound: ReviewApp.Sound, panelOpen: Bool) {
+            self.init(
+                volume: Int((sound.level * 100).rounded()), muted: sound.isMuted, mutedForCheck: sound.isMutedForCheck,
+                panelOpen: panelOpen
+            )
+        }
+
+        /// `sound: 70%`, `sound: muted`, or `sound: muted for an agent
+        /// check (HAVOOCH_MUTED=1), level 70%`, with `, panel open`.
+        var line: String {
+            let level: String
+            if mutedForCheck {
+                level = "muted for an agent check (HAVOOCH_MUTED=1), level \(volume)%"
+            } else {
+                level = muted ? "muted" : "\(volume)%"
+            }
+            return "sound: \(level)\(panelOpen ? ", panel open" : "")"
+        }
+    }
+
     /// One recent video, as the home screen shows it and `state` reports it.
     struct Recent: Encodable, Equatable {
         /// The absolute path it was last opened at.
@@ -922,6 +962,8 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// the home screen shows them; the app's model fills it in.
     var projects: [HomeProject] = []
     var player: Player
+    /// The sound, the app's; the app's model fills it in.
+    var sound: Sound?
     /// The open video's transcript; `null` with no video. The app's model
     /// fills it in.
     var transcript: Transcript?
@@ -967,7 +1009,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case app, screen, lease, listener, video, player, popover, threads, queue, sends
+        case app, screen, lease, listener, video, player, sound, popover, threads, queue, sends
         case transcript, theme, config, sidebar, tour, recents, setup, window, windows, project, projects, firstRun
     }
 
@@ -986,6 +1028,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(video, forKey: .video)
         try container.encode(project, forKey: .project)
         try container.encode(player, forKey: .player)
+        try container.encode(sound, forKey: .sound)
         try container.encode(transcript, forKey: .transcript)
         try container.encode(popover, forKey: .popover)
         try container.encode(sidebar, forKey: .sidebar)
@@ -1010,7 +1053,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         screen: \(screen.rawValue)
         video: \(video.map { "\($0.title) (\(TimeCode.text($0.duration))) \($0.path)" } ?? "none")
         \(project.map { $0.line + "\n" } ?? "")player: \(player.playing ? "playing" : "paused") at \(TimeCode.text(player.time))
-        transcript: \(transcript?.line ?? "none")
+        \(sound.map { $0.line + "\n" } ?? "")transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
         \(theme.map { $0.line + "\n" } ?? "")\(config.map { $0.lines + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")\(firstRun.map { $0.line + "\n" } ?? "")threads: \(threadLines)

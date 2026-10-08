@@ -4,6 +4,7 @@ import AppKit
 /// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
 /// comma and the period move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a message,
+/// M mutes and unmutes,
 /// backslash flips Compare's Flip to the other version,
 /// Escape drops a rectangle that's being drawn, else the popover, else goes
 /// back from a thread view to the thread list. They're off while a text
@@ -35,6 +36,8 @@ enum Shortcuts {
         case pressControl
         /// Backslash: in Compare's Flip, the other version shows (E11).
         case flip
+        /// M: mutes, or brings back the last level when muted.
+        case toggleMute
     }
 
     /// The action of the key `keyCode` with `modifiers`, if it has one.
@@ -63,6 +66,7 @@ enum Shortcuts {
         case 8, 36, 76: return shift ? nil : .startMessage // C, Return, Enter
         case 53: return .cancel // Escape
         case 42: return shift ? nil : .flip // backslash
+        case 46: return shift ? nil : .toggleMute // M
         default: return nil
         }
     }
@@ -116,6 +120,8 @@ enum Shortcuts {
         case .pressControl: return model.pressFocusedControl()
         // Outside Flip the key stays the window's.
         case .flip: return model.flipCompare()
+        // The app's sound, in every window.
+        case .toggleMute: model.app.toggleMuteForPerson()
         }
         return true
     }

@@ -39,7 +39,10 @@ final class PlayerEngine {
     /// How long a file gets to become ready to play.
     private static let readyWait = Duration.seconds(10)
 
-    init() {
+    /// A player at `sound`'s level, which it follows from now on; at full
+    /// volume with none.
+    init(sound: Sound? = nil) {
+        sound?.attach(self)
         player.actionAtItemEnd = .pause
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(value: 1, timescale: 30), queue: .main

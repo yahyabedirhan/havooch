@@ -3,7 +3,7 @@ import Foundation
 /// App state the window keeps between runs, in `settings.json` in the
 /// support folder:
 ///
-///     { "agentConnectedOnce": true, "firstRunDone": true, "sidebarWidth": 360 }
+///     { "agentConnectedOnce": true, "firstRunDone": true, "sidebarWidth": 360, "unmuteVolume": 0.7, "volume": 0 }
 ///
 /// Not settings a person sets on purpose: those are in `config.toml`
 /// (ADR 0002). Builds before it kept the pinned theme and token overrides
@@ -18,11 +18,21 @@ public struct Settings: Codable, Equatable, Sendable {
     /// later step, Skip Setup, a video opened or an agent connected. Until
     /// then the first-run window shows by itself at each launch (L65).
     public var firstRunDone: Bool?
+    /// The sound's level, 0 to 1, the same in every window; 0 is muted
+    ///. Missing is full volume.
+    public var volume: Double?
+    /// The level unmute brings back: the last one above 0.
+    public var unmuteVolume: Double?
 
-    public init(sidebarWidth: Double? = nil, agentConnectedOnce: Bool? = nil, firstRunDone: Bool? = nil) {
+    public init(
+        sidebarWidth: Double? = nil, agentConnectedOnce: Bool? = nil, firstRunDone: Bool? = nil, volume: Double? = nil,
+        unmuteVolume: Double? = nil
+    ) {
         self.sidebarWidth = sidebarWidth
         self.agentConnectedOnce = agentConnectedOnce
         self.firstRunDone = firstRunDone
+        self.volume = volume
+        self.unmuteVolume = unmuteVolume
     }
 
     /// What builds before `config.toml` kept in `settings.json`: the pinned

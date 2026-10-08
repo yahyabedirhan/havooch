@@ -42,6 +42,10 @@ struct RootView: View {
                             )
                         PlayerBar(model: model)
                     }
+                    // The sound panel over the foot of the stage, pointing
+                    // at the bar's speaker: inside the views that take its clicks.
+                    .overlay(alignment: .topLeading) { SoundPanel(model: model) }
+                    .coordinateSpace(.named(SoundPanel.space))
                 case .home:
                     HomeScreen(model: model)
                 case .empty:
