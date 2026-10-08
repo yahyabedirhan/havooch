@@ -53,7 +53,7 @@ A `v<version>` tag publishes the GitHub Release, the cask in `yahyabedirhan/home
 
 Each document has one reader:
 
-- `README.md` is the welcome, for someone who just found the project: what Havooch is, how the loop works, how to install and connect an agent. Plain words, short paragraphs, no shortcuts or option lists. Change it only when that first impression changes.
+- `README.md` is the welcome, for someone who just found the project: what Havooch is, how the loop works, how to install and connect an agent. Plain words, short paragraphs, no shortcuts or option lists. Change it only when that first impression changes. The README's first image is a dark-mode screenshot of the app.
 - `docs/guide.md` is the reference, for someone using Havooch: every option, command, setting, agent prompt and shortcut. A change to what a person can do updates the guide in the same pull request.
 - `docs/decisions/` and this file hold the maintainer notes: why something is built a certain way, where a file is maintained, how it is published. User-facing text (the README, the guide, the cask caveat, the site, repository descriptions) says what to do, and leaves the maintainer notes here.
 

@@ -2,7 +2,7 @@
 
 <h1 align="center">Havooch</h1>
 
-![Havooch with a project open: the agent answered thread #2 with the version it made, and a follow-up waits in the queue](assets/screenshots/0.4.0/player/thread-answered-and-queued-light.png)
+![Havooch with a project open: the agent answered thread #2 with the version it made, and a follow-up waits in the queue](assets/screenshots/0.5.0/player/thread-answered-and-queued-dark.png)
 
 ## What is Havooch
 
@@ -51,7 +51,7 @@ Open the **Connect** view from the header and follow its three steps:
 
 Now send your comments, and your agent picks them up.
 
-![The Connect view: the command isn't linked yet, the skill is installed, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
+![The Connect view: the command is linked, the skill is installed, and Codex is picked](assets/screenshots/0.5.0/connect/connect-view-light.png)
 
 ### What the command and the skill do
 
@@ -63,7 +63,7 @@ Now send your comments, and your agent picks them up.
 
 When you ask for a change to the video itself, your agent turns it into a **project**. Each new render opens as the next version, and your threads come along. Switch versions from the header, or open **Compare** to see two versions side by side, flip between them or drag a slider across.
 
-![A project on v3: the version switcher in the header, and the thread list grouped by version](assets/screenshots/0.4.0/projects/version-switcher-light.png)
+![A project on v3: the version switcher in the header, and the thread list grouped by version](assets/screenshots/0.5.0/projects/version-switcher-light.png)
 
 ## Learn more
 
