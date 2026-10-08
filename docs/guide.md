@@ -1,6 +1,6 @@
 # Havooch guide
 
-The details behind the [README](../README.md): how to install, open videos, connect an agent, work with projects, change your settings, and use the `havooch` command.
+The details behind the [README](../README.md): how to install, open videos, connect an agent, work with projects, change your settings, use the `havooch` command, and uninstall.
 
 ## Install
 
@@ -173,6 +173,21 @@ The command ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Hom
 | App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data. |
 
 `havooch --help` lists every command, and `havooch --version` prints the version.
+
+## Uninstall
+
+Pick the way that matches how you installed Havooch.
+
+| You installed with | Remove the app and the command | Also remove your reviews |
+|---|---|---|
+| Homebrew | `brew uninstall --cask havooch` | `brew uninstall --cask --zap havooch` |
+| The install script | `curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh \| bash -s -- --uninstall` | Move `~/Library/Application Support/Havooch` to the Trash too |
+
+To remove everything Havooch left on your Mac in one go, an app uninstaller such as [Mole](https://github.com/tw93/mole) does it: run `mo uninstall` and pick Havooch. Run `mo uninstall --dry-run` first to see what it removes.
+
+Your reviews live in `~/Library/Application Support/Havooch`, and your settings in `~/.config/havooch`, which no uninstall removes. Keep them if you might install Havooch again.
+
+The skill is separate. To remove it, run `npx skills remove havooch-mate --global`.
 
 ## Build from source
 

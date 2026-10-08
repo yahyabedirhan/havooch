@@ -61,7 +61,7 @@ When you ask for a change to the video itself, your agent turns it into a **proj
 
 ## Learn more
 
-The [guide](docs/guide.md) covers the rest: windows and the ways to open a video, the first-run window, the prompt for each agent, Compare, your settings in `config.toml`, every `havooch` command, and the install options.
+The [guide](docs/guide.md) covers the rest: windows and the ways to open a video, the first-run window, the prompt for each agent, Compare, your settings in `config.toml`, every `havooch` command, the install options, and how to uninstall.
 
 ## Build from source
 
