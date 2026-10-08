@@ -85,6 +85,8 @@ You can also write in the dock at the foot of the sidebar. In the thread list, t
 
 A click on the video doesn't play or pause it: it only points. It also takes the keyboard from the message field, so Space plays and pauses and C starts a comment again. What you typed stays in the field.
 
+A click on a thread's pin or badge opens the thread in a popover on the video. Drag any edge or corner of a popover to resize it, as you resize a window: the pointer shows the resize arrows there. A click without a drag changes nothing. Drag a thread's popover by its header to move it. Each thread keeps the place and the size you give its popover.
+
 The agent acknowledges the batch, works through each thread in your repository, and answers on the thread, inside the player. When it can't tell what you mean, it asks you there, and you answer in place. The player shows whether an agent is listening, and each comment's state: queued, sent, acknowledged, working, done or failed.
 
 ## Connect an agent

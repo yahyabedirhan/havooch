@@ -2,6 +2,7 @@ import Foundation
 @testable import ReviewApp
 import ReviewCore
 import ReviewWire
+import SwiftUI
 import Testing
 
 /// The thread popover through the app's model, on the fixture video
@@ -156,15 +157,87 @@ struct ThreadPopoverTests {
     @Test("a kept frame is fitted to the stage: no smaller than the popover can be used at, and inside the margins")
     func geometry() {
         let stage = CGSize(width: 1000, height: 600)
-        let rect = ThreadPopover.rect(of: PopoverFrame(x: 0.55, y: 0.1, w: 0.4, h: 0.5), in: stage)
-        #expect(rect == CGRect(x: 550, y: 60, width: 400, height: 300))
-        #expect(ThreadPopover.frame(of: rect, in: stage) == PopoverFrame(x: 0.55, y: 0.1, w: 0.4, h: 0.5))
+        let rect = ThreadPopover.rect(of: PopoverFrame(x: 0.55, y: 0.1, w: 0.4, h: 0.6), in: stage)
+        #expect(rect == CGRect(x: 550, y: 60, width: 400, height: 360))
+        #expect(ThreadPopover.frame(of: rect, in: stage) == PopoverFrame(x: 0.55, y: 0.1, w: 0.4, h: 0.6))
 
         // Dragged past the corner: back inside the margin.
-        let outside = ThreadPopover.fit(CGRect(x: 900, y: -40, width: 400, height: 300), in: stage)
-        #expect(outside == CGRect(x: 592, y: 8, width: 400, height: 300))
+        let outside = ThreadPopover.fit(CGRect(x: 900, y: -40, width: 400, height: 360), in: stage)
+        #expect(outside == CGRect(x: 592, y: 8, width: 400, height: 360))
         // Resized too small, or larger than the stage.
         #expect(ThreadPopover.fit(CGRect(x: 100, y: 100, width: 50, height: 20), in: stage).size == ThreadPopover.minimumSize)
         #expect(ThreadPopover.fit(CGRect(x: 0, y: 0, width: 4000, height: 4000), in: stage) == CGRect(x: 8, y: 8, width: 984, height: 584))
+    }
+
+    @Test("a resize moves only the sides of its edge or corner, and stops at the minimum size, the maximum size and the room")
+    func resized() {
+        let rules = ThreadPopover.rules
+        let room = CGRect(x: 8, y: 8, width: 984, height: 584)
+        let start = CGRect(x: 300, y: 120, width: 400, height: 360)
+        // An edge moves its side alone, whatever the drag does across it.
+        #expect(rules.resized(start, from: .trailing, by: CGSize(width: 30, height: 50), in: room) == CGRect(x: 300, y: 120, width: 430, height: 360))
+        #expect(rules.resized(start, from: .top, by: CGSize(width: 30, height: -50), in: room) == CGRect(x: 300, y: 70, width: 400, height: 410))
+        // A corner moves its two sides; the ones across stay.
+        #expect(rules.resized(start, from: .bottomLeading, by: CGSize(width: -40, height: 20), in: room) == CGRect(x: 260, y: 120, width: 440, height: 380))
+        // Past the minimum size, 340 by 320, the moved sides stop; the sides across don't move.
+        #expect(rules.resized(start, from: .topLeading, by: CGSize(width: 500, height: 500), in: room) == CGRect(x: 360, y: 160, width: 340, height: 320))
+        // Past the maximum width, 640, and past the room's foot.
+        #expect(rules.resized(start, from: .bottomTrailing, by: CGSize(width: 900, height: 900), in: room) == CGRect(x: 300, y: 120, width: 640, height: 472))
+        #expect(rules.resized(start, from: .leading, by: CGSize(width: -900, height: 0), in: room) == CGRect(x: 60, y: 120, width: 640, height: 360))
+        // Past the room's top, the moved side stops at it.
+        #expect(rules.resized(start, from: .top, by: CGSize(width: 0, height: -900), in: room) == CGRect(x: 300, y: 8, width: 400, height: 472))
+        // No drag, no change.
+        #expect(rules.resized(start, from: .bottom, by: .zero, in: room) == start)
+    }
+
+    @Test("a new message's popover resizes between 340 by 170 and 560 by 320, and its sides never pass the notch")
+    func newMessage() {
+        let rules = CommentPopover.rules
+        let room = CGRect(x: 10, y: 10, width: 620, height: 355)
+        let start = CGRect(x: 100, y: 195, width: 340, height: 170)
+        #expect(rules.resized(start, from: .top, by: CGSize(width: 0, height: -50), in: room) == CGRect(x: 100, y: 145, width: 340, height: 220))
+        // At the minimum height, the top edge can't come down.
+        #expect(rules.resized(start, from: .top, by: CGSize(width: 0, height: 50), in: room) == start)
+        // The top stops at the maximum height, the trailing side at the room.
+        #expect(rules.resized(start, from: .topTrailing, by: CGSize(width: 600, height: -400), in: room) == CGRect(x: 100, y: 45, width: 530, height: 320))
+        #expect(rules.resized(CGRect(x: 10, y: 195, width: 340, height: 170), from: .trailing, by: CGSize(width: 600, height: 0), in: room).width == 560)
+        // The leading side stops at the notch, before the minimum width does.
+        let wide = CGRect(x: 50, y: 195, width: 450, height: 170)
+        #expect(rules.resized(wide, from: .leading, by: CGSize(width: 100, height: 0), in: room, covers: 80...124).minX == 80)
+        // The trailing side stops at the minimum width.
+        #expect(rules.resized(wide, from: .trailing, by: CGSize(width: -300, height: 0), in: room, covers: 80...124).maxX == 390)
+        // The bottom edge stays above the notch's room.
+        #expect(rules.resized(start, from: .bottom, by: CGSize(width: 0, height: 50), in: room).maxY == 365)
+    }
+
+    @Test("every step of a drag is measured from where it started; the header moves the popover inside the stage at its size")
+    func drag() {
+        let stage = CGSize(width: 1000, height: 600)
+        var drag = ThreadPopover.Drag(handle: .bottomTrailing, start: CGRect(x: 10, y: 260, width: 360, height: 330))
+        drag.translation = CGSize(width: 3, height: 3)
+        #expect(drag.rect(in: stage) == CGRect(x: 10, y: 260, width: 363, height: 332))
+        // The same step again gives the same box: the drag doesn't build on itself.
+        #expect(drag.rect(in: stage) == CGRect(x: 10, y: 260, width: 363, height: 332))
+        drag.translation = CGSize(width: -3, height: -3)
+        #expect(drag.rect(in: stage) == CGRect(x: 10, y: 260, width: 357, height: 327))
+
+        var move = ThreadPopover.Drag(handle: nil, start: CGRect(x: 300, y: 180, width: 400, height: 360))
+        move.translation = CGSize(width: 40, height: 20)
+        #expect(move.rect(in: stage) == CGRect(x: 340, y: 200, width: 400, height: 360))
+        move.translation = CGSize(width: 900, height: -900)
+        #expect(move.rect(in: stage) == CGRect(x: 592, y: 8, width: 400, height: 360))
+    }
+
+    @Test("the resize pointer shows only the outward arrows at the minimum size and only the inward ones at the maximum")
+    func directions() {
+        let rules = ThreadPopover.rules
+        #expect(rules.directions(.trailing, size: CGSize(width: 400, height: 400)) == .all)
+        #expect(rules.directions(.leading, size: CGSize(width: 340, height: 400)) == .outward)
+        #expect(rules.directions(.top, size: CGSize(width: 340, height: 400)) == .all)
+        #expect(rules.directions(.bottom, size: CGSize(width: 400, height: 560)) == .inward)
+        // A corner at the minimum one way and free the other goes both ways.
+        #expect(rules.directions(.topLeading, size: CGSize(width: 340, height: 400)) == .all)
+        #expect(rules.directions(.bottomTrailing, size: CGSize(width: 340, height: 320)) == .outward)
+        #expect(CommentPopover.rules.directions(.topTrailing, size: CGSize(width: 560, height: 320)) == .inward)
     }
 }
