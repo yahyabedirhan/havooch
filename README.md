@@ -1,10 +1,10 @@
-<p align="center"><img src="assets/images/logo/v2-havuc/havooch-mark.svg" width="128" alt="Havooch: the head of Havuç, an orange and white cat"></p>
+<p align="center"><img src="assets/images/logo/v2-havuc/png/havooch-app-icon-light-256.png" width="128" alt="Havooch's app icon: the head of Havuç, an orange tabby cat with pink ears, on a white rounded tile"></p>
 
-# Havooch
+<h1 align="center">Havooch</h1>
 
 A native macOS video player for giving feedback to coding agents: pause a video, point at its frame, comment, and your agent does the work and answers beside the video.
 
-![Havooch with a thread open: the agent answered, asked a question, and a follow-up waits in the queue](assets/screenshots/0.2.0/chat/default-light-answered-and-queued.png)
+![Havooch with a project open: the agent answered thread #2 with the version it made, and a follow-up waits in the queue](assets/screenshots/0.4.0/player/thread-answered-and-queued-light.png)
 
 ## The agent loop
 
@@ -25,13 +25,15 @@ Havooch needs macOS 26 (Tahoe) or later on an Apple silicon Mac.
 brew install --cask yahyabedirhan/tap/havooch
 ```
 
+The cask installs `Havooch.app` and links the `havooch` command onto your `PATH`.
+
 **Install script:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash
 ```
 
-The script downloads the latest release, checks its SHA-256, installs `Havooch.app` in `/Applications`, links the `havooch` command into `/usr/local/bin` (or `~/.local/bin` when that isn't writable) and installs the `havooch-mate` skill with `npx skills add` when `npx` is there. Options: `--app-dir <dir>`, `--bin-dir <dir>`, `--no-skill`. To remove the app and the command's link:
+The script downloads the latest release, checks its SHA-256, installs `Havooch.app` in `/Applications`, links the `havooch` command into `/usr/local/bin` (or `~/.local/bin` when that isn't writable) and installs the `havooch-mate` skill with `npx skills add` when `npx` is there. Options: `--app-dir <dir>`, `--bin-dir <dir>`, `--no-skill`. To remove the app, the command's link and the skill:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/install.sh | bash -s -- --uninstall
@@ -39,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/yahyabedirhan/havooch/main/scripts/
 
 ## First launch
 
-Havooch is ad-hoc signed and not notarized by Apple, so macOS may refuse to open it the first time, saying it can't check the app for malicious software. Allow it once:
+Havooch is ad hoc signed and not notarized by Apple. Homebrew quarantines the app it downloads, so macOS blocks Havooch the first time you open it or run `havooch`, since the command is a link into the app. macOS says "Havooch Not Opened" and that it can't check the app for malicious software. Allow it once:
 
 1. Open **System Settings › Privacy & Security**.
 2. Next to the message about Havooch, click **Open Anyway**, then confirm.
@@ -50,22 +52,110 @@ Or clear the quarantine flag from a terminal:
 xattr -dr com.apple.quarantine /Applications/Havooch.app
 ```
 
-## The command and the mate skill
+The install script downloads with `curl`, which sets no quarantine flag, so macOS doesn't usually ask.
 
-The app carries a command, `havooch`, in `Havooch.app/Contents/Helpers/`; both installs link it onto your `PATH`. An agent drives the app through it:
+On the first launch Havooch shows a short first-run window: Welcome, Tools, Connect and Try It. You can skip any step. Until an agent connects, **Finish setup** in the header shows how many setup steps are left and opens a tour of the window.
 
-- `havooch wait`, `ack`, `status`, `reply` and `ask` are the listener's commands: take a send, acknowledge it, report progress, answer on a thread, ask a question. Each window has its own listener: `havooch wait --video <path>` listens to the window of that video, so two agents can work on two videos at the same time.
-- `havooch project new <slug> --from <video>`, `project add <slug> <video>` and `project list` group the versions of one video into a project in `config.toml`. The agent makes one the first time you ask for a change; your threads move in as v1, and each new render opens as the next version. `havooch wait --project <slug>` listens to the project's window. The header switches between versions: the last three as segments, older ones from a searchable picker, and the playhead keeps its time. `havooch version show <n>` does the same from the CLI. Compare plays two versions on one playhead, side by side, with a flip or with a slider, and a message goes to the side you click or draw on; `havooch compare open`, `compare set`, `compare swap`, `compare start` and `compare exit` drive it.
-- `havooch app open --demo <folder>`, the player and comment commands and `havooch screenshot` drive the app, under a lease the agent takes with `havooch control take` and gives back with `control release`, so it never fights you for the player.
-- `havooch --help` lists every command.
+![The first-run window's Connect step: pick your agent, install the skill, and copy the prompt that opens the demo video](assets/screenshots/0.4.0/first-run/connect-light.png)
 
-The **havooch-mate** skill teaches a coding agent the listener's loop. Install it on its own with:
+## Windows, home and recent videos
+
+Each window holds one video or one project. **File › New Window** (Cmd+N) opens an empty window on the home screen, which lists your projects and recent videos; click one to open it. A video that's already open brings its own window to the front instead of opening a second one.
+
+You can open a video from anywhere:
+
+- `havooch open <path>`, from a terminal or an agent. It starts the app when needed and brings the window to the front.
+- **File › Open…** (Cmd+O), or **Open a Video…** on the home screen.
+- Finder's **Open With › Havooch**, or a drop on Havooch in the Dock. Havooch never asks to be your default player.
+- `open -a Havooch <path>`.
+
+**Try the Demo** on the home screen opens a short video about Havooch itself.
+
+![The home screen: a project with three versions, and three recent videos](assets/screenshots/0.4.0/home/projects-and-recent-videos-light.png)
+
+## Connect an agent
+
+Havooch isn't an agent. It works with the coding agent you already use, through the `havooch` command and the **havooch-mate** skill. Each window has its own listener, so two agents can work on two videos at the same time.
+
+The connect button in the header, the **No agent** pill, and **Send** with no agent listening all open the **Connect** view in the sidebar. It has three steps:
+
+1. **`havooch` command line.** **Link** puts the command in `~/.local/bin`. Homebrew and the install script already link it.
+2. **`/havooch-mate` skill.** **Run Command** installs the skill globally, for each agent that doesn't have it yet, with `npx skills add` in your login shell. It needs Node.js. **In one repo…** gives the command to install it in one repository instead.
+3. **Your agent.** Pick your agent and copy its prompt into a session in your project.
+
+Havooch shows a check mark only for what it can detect: it looks in each agent's user skills folder. A skill installed in a repository shows **Not detected** and still works.
+
+![The Connect view: the command is linked, the skill isn't detected for any agent yet, and Codex is picked](assets/screenshots/0.4.0/connect/connect-view-light.png)
+
+Havooch supports these agents. The prompt names the window's video, or its project:
+
+| Agent | Prompt |
+|---|---|
+| Claude Code | `/havooch-mate listen for my feedback on launch.mp4` |
+| Codex | `$havooch-mate listen for my feedback on launch.mp4` |
+| Cursor | `/havooch-mate listen for my feedback on launch.mp4` |
+| Pi | `/skill:havooch-mate listen for my feedback on launch.mp4` |
+| OpenCode | `Use the havooch-mate skill to listen for my feedback on launch.mp4` |
+
+For a project, the prompt ends with `project <slug>`, for example `project launch-video`. When nobody listens, **Send** keeps your messages in the outbox and delivers them when an agent connects. Once an agent listens, the Connect view shows it, where it runs and since when, with **Disconnect** and the prompt to listen again later.
+
+To install the skill on its own:
 
 ```sh
 npx skills add yahyabedirhan/havooch-mate --skill havooch-mate --global
 ```
 
-Then ask your agent, for example Claude Code, to listen for Havooch feedback.
+## Projects, versions and Compare
+
+When you ask your agent for a change to the video itself, it makes a **project**: the video you're reviewing becomes v1, and your threads move into the project with it. Each new render the agent makes opens as the next version, with a short label of what changed. A video that only gets questions stays a plain video.
+
+![A project on v3: the version switcher in the header, and the thread list grouped by version](assets/screenshots/0.4.0/projects/version-switcher-light.png)
+
+- **Versions.** The header switches between versions: the last three as segments, older ones from a searchable picker. The playhead keeps its time, so you see the same moment in each version.
+- **Threads.** Threads belong to the project, not to one version. Each thread is tagged with the version it was raised on, and the thread list groups threads by version, newest first. **All versions** finds older ones. You can follow up on any thread, on any version.
+- **Compare.** **Compare** opens a small preview of two versions, the previous one and the one on screen. Click a side to pick its version, and choose **Side by side**, **Flip** or **Slider**. Both versions play on one playhead, and a message goes to the side you click or draw on. **Exit Compare** or Escape goes back to one version.
+
+![Compare: v1 and v3 side by side on one playhead](assets/screenshots/0.4.0/compare/side-by-side-light.png)
+
+## Settings: config.toml
+
+Your settings are one file, `~/.config/havooch/config.toml` (or `$XDG_CONFIG_HOME/havooch/config.toml` when that variable is set). You and your agent edit it, and Havooch applies each save at once. A save with a mistake keeps the last valid settings, and the window says what is wrong.
+
+```toml
+version = 1
+
+# Leave it out to follow the Mac's light or dark appearance.
+theme = "Tokyo Night"
+
+[[projects]]
+slug = "launch-video"
+title = "Launch video"
+versions = [
+  { path = "~/Videos/launch-cut1.mp4" },
+  { path = "~/Videos/launch-cut2.mp4", label = "slower intro" },
+]
+```
+
+- `theme` pins a theme by name. `havooch theme list` prints the built-in themes and yours; your own themes are JSON files in `themes/` beside `config.toml`.
+- `[[projects]]` holds each project and its versions, v1 first. `havooch project new` and `havooch project add` write it for you.
+- `havooch config path` prints where the file is, and `havooch config check` says whether it reads, each problem with its line. The file's `#:schema` line names its JSON Schema.
+
+Recent videos, playheads and your threads are app state, kept out of this file.
+
+## The command and the mate skill
+
+The app carries the `havooch` command in `Havooch.app/Contents/Helpers/`; both installs link it onto your `PATH`. The **havooch-mate** skill teaches a coding agent to listen with it. The commands, by group:
+
+| Group | Commands | What they do |
+|---|---|---|
+| Open | `open` | Open a video, in its project when one lists it. Needs no lease. |
+| Listen | `wait`, `ack`, `status`, `reply`, `ask` | The listener's loop: take a send, acknowledge it, report progress, answer on a thread, ask a question. `wait --video <path>` or `wait --project <slug>` picks the window. |
+| Projects | `project`, `version`, `compare` | Make a project and add versions, show a version, drive Compare. |
+| Settings | `config`, `theme` | Find and check `config.toml`, list and pin themes. |
+| Setup | `setup`, `connect`, `first-run`, `tour` | Link the command, install the skill, and drive the Connect view, the first-run window and the tour. |
+| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots, under a lease the agent takes with `control take` and gives back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data. |
+
+`havooch --help` lists every command, and `havooch --version` prints the version.
 
 ## Build from source
 
@@ -74,9 +164,11 @@ You need macOS 26 and Swift 6.2 or later (Xcode 26, or the Command Line Tools). 
 ```sh
 make           # build the app and the command (release)
 make test      # run the tests
-make bundle    # build/Havooch.app, ad-hoc signed
+make bundle    # build/Havooch.app, ad hoc signed
 make install   # bundle, then replace /Applications/Havooch.app and open it
 ```
+
+`make install INSTALLED=<path>/Havooch.app` installs the build somewhere else and leaves the copy in `/Applications` alone.
 
 A `v<version>` tag that matches `Sources/ReviewWire/Version.swift` makes a GitHub Release with the zipped app and its SHA-256 (`.github/workflows/release.yml`).
 
