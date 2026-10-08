@@ -512,11 +512,13 @@ final class WindowModel: WindowControlling {
 
     /// The window closed: words in the popover are queued on their video,
     /// as a change of the moment queues them, and the video pauses and
-    /// keeps its position for its recent-video entry. Its review stays.
+    /// keeps its position for its recent-video entry. Its review stays. A
+    /// comparison ends, so the side that isn't active lets its player go.
     func closed() {
         closePopover(.momentChanged)
         pausePlayers()
         savePosition()
+        if isComparing { exitCompare() }
     }
 
     /// The hash of the file at `url`, read off the main actor: it reads the

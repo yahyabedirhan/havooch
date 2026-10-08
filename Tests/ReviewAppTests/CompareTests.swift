@@ -363,6 +363,13 @@ struct CompareTests {
         #expect(await ask(.versionShow(number: 3), server).ok)
         #expect(!window.isComparing)
         #expect(window.versionNumber == 3)
+
+        // Closing the window ends a comparison: the inactive side's player lets its video go.
+        #expect(await ask(.compareStart, server).ok)
+        let companion = try #require(window.pair?.engine(window.activeSide?.other ?? .left))
+        app.windowClosed(window)
+        #expect(!window.isComparing)
+        #expect(companion.player.currentItem == nil)
         app.listeners.stop()
     }
 
