@@ -124,8 +124,10 @@ npx_skills() {
         return 127
     fi
     # Standard input is this script under `curl | bash`: npx would read the
-    # rest of it as its own input, and the script would end early.
-    npx --yes skills "$@" </dev/null
+    # rest of it as its own input, and the script would end early. It runs
+    # from the home folder: in a project, the skills CLI also acts on the
+    # project's own .agents/skills, and `remove` would delete its copy.
+    (cd "$HOME" && npx --yes skills "$@" </dev/null)
 }
 
 # --- uninstall --------------------------------------------------------------
@@ -161,7 +163,7 @@ if [ "$uninstall" -eq 1 ]; then
             if npx_skills remove "$command_name-mate" --global --yes >/dev/null 2>&1; then
                 say "removed the $command_name-mate skill"
             else
-                say "didn't remove the $command_name-mate skill; remove it with: npx skills remove $command_name-mate --global"
+                say "didn't remove the $command_name-mate skill; remove it with: cd ~ && npx skills remove $command_name-mate --global"
             fi
         fi
     done
