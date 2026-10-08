@@ -312,7 +312,7 @@ extension StateReport {
 
         /// `first run: showing connect, claude-code`, or `first run: done, closed`.
         var line: String {
-            "first run: \(done ? "done" : "not shown"), " + (showing ? "showing \(step), \(harness)" : "closed")
+            "first run: \(done ? "done" : "not done"), " + (showing ? "showing \(step), \(harness)" : "closed")
         }
     }
 }

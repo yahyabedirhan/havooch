@@ -79,6 +79,7 @@ struct FirstRunTests {
         #expect(first.firstRun.isShowing)
         #expect(first.firstRun.step == .welcome)
         #expect(!first.firstRunReport.done)
+        #expect(first.firstRunReport.line == "first run: not done, showing welcome, claude-code")
     }
 
     @Test("closed with its close button, or quit at once, the first-run window shows again at the next launch")
