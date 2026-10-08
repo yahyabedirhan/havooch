@@ -42,7 +42,7 @@ Everything else in the two sessions is history. Do not build from it.
 Follow the swift-lab skill's "Apply a winner":
 
 1. Read the final's folder here, and its `context/` sources in the Swift Lab session for the Havooch commit it started from.
-2. Copy the view code into Havooch's own structure and names, as the target design (`docs/low-level-design-projects-and-onboarding.md`) places it.
+2. Copy the view code into Havooch's own structure and names, as the low-level design (`docs/low-level-design.md`) places it.
 3. Remove the lab parts: `import LabHost`, the `public let variant = LabVariant …` line, `LabWindow`, `.labID` (use Havooch's own identifiers), and the "Lab fixture" strips and simulate buttons.
 4. Replace fixtures with Havooch's models: `Review`, `ProjectEntry`, `SetupReport`, the window's `ListenerQueue`.
 5. Replace hard-coded colours with Havooch's `Palette` tokens, including `accentFill`.
