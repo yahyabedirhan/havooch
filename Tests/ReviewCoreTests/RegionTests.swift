@@ -53,13 +53,13 @@ struct RegionTests {
 
     @Test("a message keeps its region, and a message without one has none")
     func message() throws {
-        var review = VideoReview(video: Self.video)
+        var review = Review(video: Self.video)
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
         let now = Date(timeIntervalSince1970: 1_790_000_000)
         let pointed = try review.write(text: "This box", at: 12.5, region: region, now: now).message
         let plain = try review.write(text: "Too fast", at: 3, now: now).message
         #expect(pointed.region == region)
         #expect(plain.region == nil)
-        #expect(try JSONDecoder().decode(VideoReview.self, from: JSONEncoder().encode(review)) == review)
+        #expect(try JSONDecoder().decode(Review.self, from: JSONEncoder().encode(review)) == review)
     }
 }

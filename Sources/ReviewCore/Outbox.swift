@@ -8,11 +8,15 @@ public struct ListenerSession: Codable, Equatable, Sendable {
     public var name: String
     /// Where it runs: a Herdr pane, else its working folder.
     public var place: String
+    /// When its first `wait` opened: the listener card's "Since". Nil for
+    /// a session kept by a build before it.
+    public var since: Date?
 
-    public init(key: String, name: String, place: String) {
+    public init(key: String, name: String, place: String, since: Date? = nil) {
         self.key = key
         self.name = name
         self.place = place
+        self.since = since
     }
 }
 
@@ -58,7 +62,8 @@ public struct Outbox: Codable, Equatable, Sendable {
     public private(set) var openAsks = 0
     /// When the listener last sent a command or closed its `wait`.
     public private(set) var lastHeard: Date?
-    /// The context this listener session has, by the video's content hash:
+    /// The context this listener session has, by its review's
+    /// `contextKey` (a plain video's content hash, or `project-<slug>`):
     /// the digest of the text it last got. Empty for a new session.
     public private(set) var contextSent: [String: String] = [:]
 
@@ -100,6 +105,37 @@ public struct Outbox: Codable, Equatable, Sendable {
         for ref in unfinished where present.insert(ref).inserted { pending.append(ref) }
     }
 
+    /// The part of this outbox that is the review `key`'s: its sends in
+    /// line and taken, and the context its listener had of its videos,
+    /// with the same listener session. The outbox of builds before a
+    /// listener per review held every video's sends, and splits this way.
+    public func part(for key: ReviewKey) -> Outbox {
+        var part = Outbox()
+        part.pending = pending.filter(key.holds)
+        part.taken = taken.filter(key.holds)
+        part.session = session
+        part.contextSent = contextSent.filter { key.covers($0.key) }
+        return part
+    }
+
+    /// This outbox as the review `to`'s, after the review `from` became it
+    /// (`project new` moves a plain video's review into a project): its
+    /// sends name the new review, and the listener session stays, so the
+    /// listener keeps listening. The context it had of `from` is kept
+    /// under `to`.
+    public func rekeyed(from: ReviewKey, to: ReviewKey) -> Outbox {
+        var moved = self
+        let rename = { (ref: SendRef) in ref.review == from ? SendRef(sendID: ref.sendID, review: to) : ref }
+        moved.pending = pending.map(rename)
+        moved.taken = taken.map(rename)
+        moved.inFlight = Dictionary(inFlight.map { (rename($0.key), $0.value) }, uniquingKeysWith: { first, _ in first })
+        if let context = contextSent[from.contextKey] {
+            moved.contextSent[from.contextKey] = nil
+            moved.contextSent[to.contextKey] = context
+        }
+        return moved
+    }
+
     /// Whether `other` is the same on disk: the same line, taken sends,
     /// session and context sent.
     public func isKeptAs(_ other: Outbox) -> Bool {
@@ -126,9 +162,30 @@ public struct Outbox: Codable, Equatable, Sendable {
             // The new session has read no video's context yet.
             contextSent = [:]
         }
+        var listener = listener
+        // The same session keeps the time it started; a new one starts now.
+        listener.since = (session?.key == listener.key ? session?.since : nil) ?? listener.since ?? now
         session = listener
         isWaitOpen = true
         lastHeard = now
+        return requeued
+    }
+
+    /// The person let the listener go: Disconnect while it listens, or
+    /// Forget while it reconnects. Nobody listens from now on, and the next
+    /// `wait` starts a new session. What it took and didn't finish goes
+    /// back to the front of the line, as for a new session; its context is
+    /// forgotten. Returns those sends, whose unfinished messages the caller
+    /// returns to `sent`.
+    @discardableResult
+    public mutating func letGo() -> [SendRef] {
+        let requeued = taken
+        pending.insert(contentsOf: taken, at: 0)
+        taken = []
+        contextSent = [:]
+        session = nil
+        isWaitOpen = false
+        lastHeard = nil
         return requeued
     }
 
@@ -168,7 +225,7 @@ public struct Outbox: Codable, Equatable, Sendable {
     public mutating func undelivered(_ ref: SendRef) {
         inFlight[ref] = nil
         // The context that payload may have carried was lost with it.
-        contextSent[ref.contentHash] = nil
+        contextSent[ref.review.contextKey] = nil
     }
 
     /// `ref` leaves the line undelivered: there's nothing of it to deliver.
@@ -186,22 +243,24 @@ public struct Outbox: Codable, Equatable, Sendable {
 
     // MARK: - The video context
 
-    /// The payload's `context` for a send of the video `contentHash`,
-    /// whose context is `text` now: the text when this session hasn't had
-    /// it (its first send of the video, or the text changed since), which
-    /// it has from now on; nil when the session has this very text, and
-    /// when there's no text.
-    public mutating func context(for contentHash: String, text: String?) -> String? {
-        guard let text, isContextDue(for: contentHash, text: text) else { return nil }
-        contextSent[contentHash] = Self.digest(text)
+    /// The payload's `context` for a send of the review whose
+    /// `contextKey` is `key` (a plain video's content hash), whose context
+    /// is `text` now: the text when this session hasn't had it (its first
+    /// send of the review, or the text changed since), which it has from
+    /// now on; nil when the session has this very text, and when there's
+    /// no text.
+    public mutating func context(for key: String, text: String?) -> String? {
+        guard let text, isContextDue(for: key, text: text) else { return nil }
+        contextSent[key] = Self.digest(text)
         return text
     }
 
-    /// Whether the next send of the video `contentHash` carries `text`:
-    /// there is a text, and it isn't the one this session last got.
-    public func isContextDue(for contentHash: String, text: String?) -> Bool {
+    /// Whether the next send of the review whose `contextKey` is `key`
+    /// carries `text`: there is a text, and it isn't the one this session
+    /// last got.
+    public func isContextDue(for key: String, text: String?) -> Bool {
         guard let text, !text.isEmpty else { return false }
-        return contextSent[contentHash] != Self.digest(text)
+        return contextSent[key] != Self.digest(text)
     }
 
     /// A short name for `text` that's the same in every run of the app:

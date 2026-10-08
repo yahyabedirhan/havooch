@@ -13,8 +13,8 @@ struct ThreadPopoverTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -43,7 +43,7 @@ struct ThreadPopoverTests {
         try await model.seek(to: 18)
 
         model.openThread(try id(moment.thread.id))
-        #expect(model.draft == AppModel.Draft(time: 3, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 3, text: ""))
         #expect(model.draftThread?.messages.map(\.text) == ["Too fast"])
         #expect(model.selection?.text == moment.thread.id)
         await eventually { model.engine.time == 3 }
@@ -51,7 +51,7 @@ struct ThreadPopoverTests {
         #expect(!model.engine.isPlaying)
 
         model.openThread(try id(boxed.thread.id))
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         #expect(model.draftThread?.messages.map(\.text) == ["This box"])
         #expect(model.state().popover == StateReport.Popover(thread: 2, time: 12.5, text: ""))
         await eventually { model.engine.time == 12.5 }
@@ -69,7 +69,7 @@ struct ThreadPopoverTests {
         #expect(model.draft?.text == "More on one")
 
         model.openThread(try id(two.thread.id))
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         await eventually { model.state().queue.count == 3 }
         #expect(model.threads.first { $0.id.text == one.thread.id }?.messages.map(\.text) == ["One", "More on one"])
 
@@ -88,7 +88,7 @@ struct ThreadPopoverTests {
         model.openThread(try id(boxed.thread.id))
         model.draft?.text = "And make it larger"
         model.commitDraft()
-        #expect(model.draft == AppModel.Draft(time: 12.5, text: ""))
+        #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         await eventually { model.state().queue.count == 2 }
         let thread = try #require(model.draftThread)
         #expect(thread.messages.map(\.text) == ["This box", "And make it larger"])
@@ -102,7 +102,7 @@ struct ThreadPopoverTests {
         let model = try await model()
         let added = try await model.addMessage(text: "Keys", at: 12.5)
         _ = try await model.sendQueue()
-        _ = try await model.listeners.ask(on: added.thread.id, question: "Cmd+Return or Cmd+Enter?", waitSeconds: 0)
+        _ = try await model.app.listeners.ask(on: added.thread.id, question: "Cmd+Return or Cmd+Enter?", waitSeconds: 0)
 
         model.openThread(try id(added.thread.id))
         #expect(model.draftThread?.openQuestion?.text == "Cmd+Return or Cmd+Enter?")
@@ -116,7 +116,7 @@ struct ThreadPopoverTests {
         #expect(model.threads.first { $0.id == thread.id } == thread)
 
         // A message the agent writes meanwhile shows in the open popover.
-        _ = try model.listeners.reply(on: added.thread.id, text: "Cmd+Return it is.")
+        _ = try model.app.listeners.reply(on: added.thread.id, text: "Cmd+Return it is.")
         #expect(model.draftThread?.messages.last?.text == "Cmd+Return it is.")
     }
 
@@ -132,7 +132,7 @@ struct ThreadPopoverTests {
         #expect(model.engine.time == 12.5)
         #expect(model.state().threads[1].popoverFrame == frame)
 
-        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await again.open(MessageTests.fixture)
         #expect(again.threads.first { $0.id.text == added.thread.id }?.popoverFrame == frame)
 
@@ -148,7 +148,7 @@ struct ThreadPopoverTests {
         _ = try await model.sendQueue()
         try await model.seek(to: 2)
         try model.play()
-        _ = try model.listeners.reply(on: added.thread.id, text: "On it.")
+        _ = try model.app.listeners.reply(on: added.thread.id, text: "On it.")
         #expect(model.draft == nil)
         try model.pause()
     }

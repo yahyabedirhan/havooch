@@ -47,6 +47,9 @@ final class FakeTransport: ControlTransport {
 final class FakeLauncher: AppLaunching {
     private struct State {
         var launches: [[String: String]] = []
+        var inFront: [Bool] = []
+        var fronted: [Int32] = []
+        var frontWorks = true
         var failure: AppLaunchFailure?
         var launched: @Sendable ([String: String]) -> Void = { _ in }
     }
@@ -65,10 +68,30 @@ final class FakeLauncher: AppLaunching {
         set { state.withLock { $0.launched = newValue } }
     }
 
-    func launch(environment: [String: String]) throws(AppLaunchFailure) {
+    /// The processes brought to the front, in order.
+    var fronted: [Int32] { state.withLock { $0.fronted } }
+
+    /// Whether bringing a process to the front works.
+    var frontWorks: Bool {
+        get { state.withLock { $0.frontWorks } }
+        set { state.withLock { $0.frontWorks = newValue } }
+    }
+
+    func bringToFront(pid: Int32) -> Bool {
+        state.withLock {
+            $0.fronted.append(pid)
+            return $0.frontWorks
+        }
+    }
+
+    /// Whether each launch asked for the app in front, in order.
+    var inFront: [Bool] { state.withLock { $0.inFront } }
+
+    func launch(environment: [String: String], inFront: Bool) throws(AppLaunchFailure) {
         if let failure { throw failure }
         let launched: @Sendable ([String: String]) -> Void = state.withLock {
             $0.launches.append(environment)
+            $0.inFront.append(inFront)
             return $0.launched
         }
         launched(environment)

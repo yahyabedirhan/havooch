@@ -6,8 +6,8 @@ import Testing
 let hash = "f92cbb2a0123456789abcdef"
 let now = Date(timeIntervalSince1970: 1_790_000_000)
 
-func newReview() -> VideoReview {
-    VideoReview(video: VideoInfo(contentHash: hash, title: "sample.mp4", duration: 21.233, path: "/videos/sample.mp4"))
+func newReview() -> Review {
+    Review(video: VideoInfo(contentHash: hash, title: "sample.mp4", duration: 21.233, path: "/videos/sample.mp4"))
 }
 
 func thread(_ number: Int) -> ThreadID { ItemID("t-f92cbb2a-\(number)")! }
@@ -176,7 +176,7 @@ struct ThreadModelTests {
         try review.setPopoverFrame(thread(1), frame)
         #expect(review.thread(thread(1))?.popoverFrame == frame)
         #expect(throws: ReviewRefusal.unknownID("t-f92cbb2a-9")) { try review.setPopoverFrame(thread(9), frame) }
-        #expect(try JSONDecoder().decode(VideoReview.self, from: JSONEncoder().encode(review)) == review)
+        #expect(try JSONDecoder().decode(Review.self, from: JSONEncoder().encode(review)) == review)
     }
 
     @Test("a review reads back as it was, counters included")
@@ -184,7 +184,7 @@ struct ThreadModelTests {
         var review = newReview()
         try review.write(text: "a", at: 10, now: now)
         try review.delete(message(1))
-        let decoded = try JSONDecoder().decode(VideoReview.self, from: JSONEncoder().encode(review))
+        let decoded = try JSONDecoder().decode(Review.self, from: JSONEncoder().encode(review))
         #expect(decoded == review)
         var again = decoded
         #expect(try again.write(text: "b", at: 10, now: now).thread.id == thread(2))
@@ -210,7 +210,7 @@ struct SessionNameTests {
         #expect(messages.map(\.id) == [2, 1, 3, 4, 5, 6].map(message))
         #expect(messages.map(\.sessionName) == ["Claude Code", nil, "Codex CLI", nil, "Codex CLI", nil])
 
-        let read = try JSONDecoder().decode(VideoReview.self, from: try JSONEncoder().encode(review))
+        let read = try JSONDecoder().decode(Review.self, from: try JSONEncoder().encode(review))
         #expect(read.threads.flatMap(\.messages).map(\.sessionName) == messages.map(\.sessionName))
     }
 
@@ -227,7 +227,7 @@ struct SessionNameTests {
 @Suite("Quick-reply choices on a question")
 struct ChoiceTests {
     /// A review whose thread 1 was sent, so the listener may ask on it.
-    private func sentReview() throws -> VideoReview {
+    private func sentReview() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 10, now: now)
         try review.send(at: now)
@@ -241,7 +241,7 @@ struct ChoiceTests {
 
         #expect(asked.choices == ["The intro", "The end"])
         #expect(review.thread(thread(1))?.openQuestion?.choices == ["The intro", "The end"])
-        let read = try JSONDecoder().decode(VideoReview.self, from: try JSONEncoder().encode(review))
+        let read = try JSONDecoder().decode(Review.self, from: try JSONEncoder().encode(review))
         #expect(read.thread(thread(1))?.openQuestion?.choices == ["The intro", "The end"])
     }
 

@@ -23,11 +23,11 @@ struct SendDeliveryTests {
     }
 
     /// The model with the fixture open, and the server in front of it.
-    private func app(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> (AppModel, ControlServer) {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func app(socket: URL = URL(fileURLWithPath: "/nowhere/control.sock")) async throws -> (WindowModel, ControlServer) {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: socket, app: model, listeners: { model.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
+            socket: socket, app: model.app, listeners: { model.app.listeners }, screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
     }
@@ -52,7 +52,7 @@ struct SendDeliveryTests {
     /// Two queued messages: one on the frame at 10 s (#1), one on a region
     /// at 12.5 s (#2).
     private func queueTwo(
-        _ model: AppModel
+        _ model: WindowModel
     ) async throws -> ((message: StateReport.Message, thread: StateReport.Thread), (message: StateReport.Message, thread: StateReport.Thread)) {
         let first = try await model.addMessage(text: "Too fast here", at: 10)
         let second = try await model.addMessage(text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
@@ -60,7 +60,7 @@ struct SendDeliveryTests {
     }
 
     /// The person's messages of the open video, in the threads' order.
-    private func work(_ model: AppModel) -> [Message] {
+    private func work(_ model: WindowModel) -> [Message] {
         model.threads.flatMap { $0.messages.filter(\.isWork) }
     }
 
@@ -71,8 +71,8 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let wait = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.presence(at: Date()) == .listening)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().presence(at: Date()) == .listening)
         let (first, second) = try await queueTwo(model)
 
         let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
@@ -84,14 +84,15 @@ struct SendDeliveryTests {
         #expect(answer.delivered == SendRef(sendID: send.id, contentHash: try #require(model.video?.contentHash)))
 
         let payload = try object(answer.reply.output)
-        #expect(Set(payload.keys) == ["send", "video", "context", "threads"])
+        #expect(Set(payload.keys) == ["send", "video", "project", "context", "threads"])
+        #expect(payload["project"] is NSNull)
         let sendPart = try #require(payload["send"] as? [String: String])
         #expect(sendPart["id"] == send.id.text)
         #expect(ItemID(send.id.text)?.kind == .send)
         #expect(ISO8601DateFormatter().date(from: try #require(sendPart["sentAt"])) != nil)
         #expect(payload["video"] as? [String: AnyHashable] == [
             "path": MessageTests.fixture.standardizedFileURL.path, "contentHash": try #require(model.video?.contentHash),
-            "duration": 21.233, "title": "sample.mp4",
+            "duration": 21.233, "title": "sample.mp4", "demo": false,
         ])
         // The fixture's sidecar, on this session's first send.
         #expect(payload["context"] as? String == ContextReader.sidecar(beside: MessageTests.fixture)?.text)
@@ -100,7 +101,7 @@ struct SendDeliveryTests {
         #expect(threads.map { $0["id"] as? String } == [first.thread.id, second.thread.id])
         #expect(threads[0].filter { !["transcript", "messages"].contains($0.key) } as? [String: AnyHashable] == [
             "id": first.thread.id, "number": 1, "time": 10, "keyframePath": try #require(first.thread.keyframePath),
-            "history": [] as [String],
+            "version": NSNull(), "history": [] as [String],
         ])
         #expect(threads[0]["messages"] as? [[String: AnyHashable]] == [
             ["id": first.message.id, "text": "Too fast here", "region": NSNull(), "cropPath": NSNull()],
@@ -121,9 +122,9 @@ struct SendDeliveryTests {
         }
 
         // The listener has the send: it works, and waits no longer.
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.presence(at: Date()) == .working)
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().presence(at: Date()) == .working)
     }
 
     @Test("sent messages are sent in the state report, name their send, and leave the queue")
@@ -164,11 +165,11 @@ struct SendDeliveryTests {
 
         let send = try #require(model.sends.first)
         #expect(sent.reply == .done("\(send.id) sent: 2 messages on 2 threads, waiting for a listener\n"))
-        #expect(model.listeners.outbox.pending.map(\.sendID) == [send.id])
-        #expect(model.listeners.presence(at: Date()) == .absent)
+        #expect(model.listeners().outbox.pending.map(\.sendID) == [send.id])
+        #expect(model.listeners().presence(at: Date()) == .absent)
         var state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0, "activity": [AnyHashable](),
+            "presence": "absent", "waitOpen": false, "session": NSNull(), "pendingSends": 1, "takenSends": 0, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
         ])
 
         let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
@@ -178,7 +179,7 @@ struct SendDeliveryTests {
         #expect((payload["threads"] as? [[String: Any]])?.count == 2)
         state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
         #expect(state["listener"] as? [String: AnyHashable] == [
-            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1, "activity": [AnyHashable](),
+            "presence": "working", "waitOpen": false, "session": "Claude Code", "pendingSends": 0, "takenSends": 1, "activity": [AnyHashable](), "tookOverFrom": NSNull(),
         ])
         #expect(await server.reply(to: ControlRequest.state.sent(by: Self.listener)).reply.output
             .contains("listener: working (Claude Code), 0 sends waiting, 1 taken\n"))
@@ -211,7 +212,7 @@ struct SendDeliveryTests {
         #expect(!sent.reply.ok)
         #expect(sent.reply.error.hasPrefix("no message is queued"))
         #expect(model.sends.isEmpty)
-        #expect(model.listeners.outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.pending.isEmpty)
     }
 
     // MARK: - The person's key
@@ -234,7 +235,7 @@ struct SendDeliveryTests {
         #expect(work(model).map(\.text) == ["Queued", "Still in the box"])
         #expect(work(model).map(\.state) == [.sent, .sent])
         #expect(model.sends.count == 1)
-        #expect(model.listeners.outbox.pending.count == 1)
+        #expect(model.listeners().outbox.pending.count == 1)
         #expect(model.sendCount == 0)
 
         // With nothing to send the key does nothing: no send, no problem shown.
@@ -270,18 +271,18 @@ struct SendDeliveryTests {
         let (model, server) = try await app()
         let started = Date()
         let wait = waiting(server, timeout: 1)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.presence(at: Date()) == .listening)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().presence(at: Date()) == .listening)
 
         let answer = await wait.value
 
         #expect(answer.reply == .ranOut)
         #expect(answer.delivered == nil)
         #expect(Date().timeIntervalSince(started) >= 1)
-        #expect(!model.listeners.outbox.isWaitOpen)
-        let closed = try #require(model.listeners.outbox.lastHeard)
-        #expect(model.listeners.presence(at: closed.addingTimeInterval(4)) == .listening)
-        #expect(model.listeners.presence(at: closed.addingTimeInterval(5)) == .absent)
+        #expect(!model.listeners().outbox.isWaitOpen)
+        let closed = try #require(model.listeners().outbox.lastHeard)
+        #expect(model.listeners().presence(at: closed.addingTimeInterval(4)) == .listening)
+        #expect(model.listeners().presence(at: closed.addingTimeInterval(5)) == .absent)
     }
 
     @Test("a newer wait replaces the one that's open: one listener at a time")
@@ -289,11 +290,11 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let older = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         let newer = waiting(server)
 
         #expect(await older.value.reply == .refused("a newer `havooch wait` took this one's place: one listener at a time"))
-        #expect(model.listeners.outbox.isWaitOpen)
+        #expect(model.listeners().outbox.isWaitOpen)
         _ = try await model.addMessage(text: "For the newer one", at: 3)
         _ = try await model.sendQueue()
         #expect(await newer.value.reply.ok)
@@ -304,7 +305,7 @@ struct SendDeliveryTests {
         defer { cleanUp() }
         let (model, server) = try await app()
         let wait = waiting(server)
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         server.stop()
         let answer = await wait.value
         #expect(answer.silent)
@@ -325,16 +326,16 @@ struct SendDeliveryTests {
 
         // The same session waits again before it works on the send: nothing for it.
         #expect(await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
 
         // The listener restarts: another holder key.
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
 
         #expect(again.delivered == first.delivered)
         #expect(again.reply.output == first.reply.output)
-        #expect(model.listeners.outbox.taken.map(\.sendID) == [send.id])
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.outbox.session?.key == Self.restarted.key)
+        #expect(model.listeners().outbox.taken.map(\.sendID) == [send.id])
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.session?.key == Self.restarted.key)
         #expect(work(model).map(\.state) == [.sent, .sent])
     }
 
@@ -348,8 +349,8 @@ struct SendDeliveryTests {
 
         server.undelivered(lost)
 
-        #expect(model.listeners.outbox.taken.isEmpty)
-        #expect(model.listeners.outbox.pending == [try #require(lost.delivered)])
+        #expect(model.listeners().outbox.taken.isEmpty)
+        #expect(model.listeners().outbox.pending == [try #require(lost.delivered)])
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
         #expect(again.reply.output == lost.reply.output)
     }
@@ -365,17 +366,17 @@ struct SendDeliveryTests {
         let handed = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener))
 
         #expect(handed.delivered == ref)
-        #expect(model.listeners.outbox.pending == [ref])
-        #expect(model.listeners.outbox.taken.isEmpty)
-        #expect(model.listeners.isDelivered(send.id))
+        #expect(model.listeners().outbox.pending == [ref])
+        #expect(model.listeners().outbox.taken.isEmpty)
+        #expect(model.listeners().isDelivered(send.id))
         // A second wait while the reply is written gets nothing.
         #expect(await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener)).reply == .ranOut)
 
         server.written(handed)
 
-        #expect(model.listeners.outbox.pending.isEmpty)
-        #expect(model.listeners.outbox.taken == [ref])
-        #expect(model.listeners.outbox.inFlight.isEmpty)
+        #expect(model.listeners().outbox.pending.isEmpty)
+        #expect(model.listeners().outbox.taken == [ref])
+        #expect(model.listeners().outbox.inFlight.isEmpty)
     }
 
     // MARK: - Over the socket
@@ -400,7 +401,7 @@ struct SendDeliveryTests {
         async let waited = LeaseServerTests.sending {
             ControlClient(socket: socket, holder: Self.listener, transport: UnixSocketTransport()).send(.wait(timeoutSeconds: 30))
         }
-        await eventually { model.listeners.outbox.isWaitOpen }
+        await eventually { model.listeners().outbox.isWaitOpen }
         let sent = await LeaseServerTests.sending {
             ControlClient(socket: socket, holder: Self.operatorAgent, transport: UnixSocketTransport()).send(.send)
         }
@@ -410,9 +411,9 @@ struct SendDeliveryTests {
         #expect(reply.ok)
         #expect((try object(reply.output)["send"] as? [String: String])?["id"] == model.sends.first?.id.text)
         // Taken once the socket wrote the reply.
-        await eventually { model.listeners.outbox.taken.count == 1 }
-        #expect(model.listeners.outbox.taken.count == 1)
-        #expect(model.listeners.outbox.inFlight.isEmpty)
+        await eventually { model.listeners().outbox.taken.count == 1 }
+        #expect(model.listeners().outbox.taken.count == 1)
+        #expect(model.listeners().outbox.inFlight.isEmpty)
     }
 
     @Test("a wait whose client goes away is closed: the listener no longer waits, and a send made then waits for the next one")
@@ -430,11 +431,11 @@ struct SendDeliveryTests {
         #expect(UnixSocket.connectSocket(descriptor, to: address) == 0)
         #expect(UnixSocket.writeAll(descriptor, ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)))
         UnixSocket.finishWriting(descriptor)
-        await eventually { model.listeners.outbox.isWaitOpen }
-        #expect(model.listeners.outbox.isWaitOpen)
+        await eventually { model.listeners().outbox.isWaitOpen }
+        #expect(model.listeners().outbox.isWaitOpen)
         // Half-closed isn't gone: the wait stays open while its client reads.
         try await Task.sleep(for: .milliseconds(1200))
-        #expect(model.listeners.outbox.isWaitOpen)
+        #expect(model.listeners().outbox.isWaitOpen)
         // Meanwhile the held wait got the heartbeat: spaces, and nothing else.
         var buffer = [UInt8](repeating: 0, count: 64)
         let count = buffer.withUnsafeMutableBytes { recv(descriptor, $0.baseAddress, $0.count, Int32(MSG_DONTWAIT)) }
@@ -442,19 +443,19 @@ struct SendDeliveryTests {
         #expect(buffer.prefix(max(count, 0)).allSatisfy { $0 == UInt8(ascii: " ") })
 
         close(descriptor)
-        await eventually { !model.listeners.outbox.isWaitOpen }
+        await eventually { !model.listeners().outbox.isWaitOpen }
 
-        #expect(!model.listeners.outbox.isWaitOpen)
+        #expect(!model.listeners().outbox.isWaitOpen)
         _ = try await model.addMessage(text: "After the listener left", at: 3)
         _ = try await model.sendQueue()
-        #expect(model.listeners.outbox.pending.count == 1)
-        #expect(model.listeners.outbox.taken.isEmpty)
+        #expect(model.listeners().outbox.pending.count == 1)
+        #expect(model.listeners().outbox.taken.isEmpty)
     }
 }
 
 @Suite("The sidebar's words")
 struct SidebarWordsTests {
-    @Test("the presence pill says Listening, Working or No listener, and its hover names the agent")
+    @Test("the presence pill says Listening, Working, Reconnecting or No agent, and its hover names the agent")
     func pill() {
         let listening = PresencePill(presence: .listening, session: "Claude Code", pendingSends: 0)
         #expect(listening.title == "Listening")
@@ -466,8 +467,13 @@ struct SidebarWordsTests {
         #expect(working.help.hasSuffix("2 sends wait for it."))
 
         let absent = PresencePill(presence: .absent, session: nil, pendingSends: 0)
-        #expect(absent.title == "No listener")
-        #expect(absent.help == "No agent runs `havooch wait`. What you send waits for the next one.")
+        #expect(absent.title == "No agent")
+        #expect(absent.help == "No agent is listening. What you send waits for the next one. Click to connect an agent.")
+        let reconnecting = PresencePill.reconnecting("Codex", pendingSends: 0)
+        #expect(reconnecting.title == "Reconnecting")
+        #expect(reconnecting.isReconnecting)
+        #expect(reconnecting.logo == .codex)
+        #expect(reconnecting.help == "Havooch relaunched. Codex picks up again on its next `havooch wait`.")
         #expect(PresencePill(presence: .absent, session: "Claude Code", pendingSends: 1).help.hasSuffix("1 send waits for it."))
         // Before anyone listened, the hover still says who: an agent.
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).help.hasPrefix("An agent is listening."))
@@ -482,5 +488,11 @@ struct SidebarWordsTests {
         // An unknown harness, or none yet: the glyph.
         #expect(PresencePill(presence: .listening, session: "pipeline", pendingSends: 0).logo == nil)
         #expect(PresencePill(presence: .listening, session: nil, pendingSends: 0).logo == nil)
+    }
+
+    @Test("each harness whose session the holder knows gets its own logo from the holder's name")
+    func holderSessionLogos() {
+        let logos = Holder.sessionVariables.map { PresencePill(presence: .listening, session: $0.agent, pendingSends: 0).logo }
+        #expect(logos == [.claude, .codex, .pi])
     }
 }

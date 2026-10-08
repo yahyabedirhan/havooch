@@ -14,8 +14,8 @@ struct SidebarTests {
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
-    private func model() async throws -> AppModel {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+    private func model() async throws -> WindowModel {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         return model
     }
@@ -24,7 +24,7 @@ struct SidebarTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    private func thread(_ number: Int, _ model: AppModel) throws -> ReviewThread {
+    private func thread(_ number: Int, _ model: WindowModel) throws -> ReviewThread {
         try #require(model.threads.first { $0.number == number })
     }
 
@@ -64,9 +64,9 @@ struct SidebarTests {
         let failed = try await model.addMessage(text: "Failed one", at: 18)
         _ = try await model.sendQueue()
         let (doneID, failedID, askedID) = (try id(done.message.id), try id(failed.message.id), try id(asked.thread.id))
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.setState(doneID, .done) }
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.setState(failedID, .failed) }
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.ask(on: askedID, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(doneID, .done) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(failedID, .failed) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: askedID, question: "Which part?", now: Date()) }
         // Queued after the send: a new thread, a follow-up on a sent one, and General.
         _ = try await model.addMessage(text: "Queued one", at: 12)
         _ = try await model.addMessage(text: "And this", at: nil, thread: "4")
@@ -114,9 +114,9 @@ struct SidebarTests {
 
         _ = try await model.sendQueue()
         let id = try id(added.thread.id)
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.reply(on: id, text: "Slowed it", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.reply(on: id, text: "Slowed it", now: Date()) }
         #expect(ThreadSummary(try thread(1, model), agent: "Claude Code").preview == "Claude Code: Slowed it")
-        _ = try model.desk.change { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
+        _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: id, question: "Which part?", now: Date()) }
         summary = ThreadSummary(try thread(1, model), agent: "Claude Code")
         #expect(summary.state == .sent)
         #expect(summary.preview == "Asks: Which part?")
@@ -271,7 +271,7 @@ struct SidebarTests {
 
         // Questions on #1 and #3: Back in #3 counts #1 only.
         for thread in [first, third] {
-            _ = try model.desk.change { review throws(ReviewRefusal) in try review.ask(on: thread, question: "Which?", now: Date()) }
+            _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: thread, question: "Which?", now: Date()) }
         }
         #expect(model.othersNeedingYou == 1)
         _ = model.showThreadList()
@@ -296,11 +296,11 @@ struct SidebarTests {
     @Test("the sidebar's width stays within its limits, and the width a drag ends at is kept in settings.json for the next run")
     func width() async throws {
         defer { cleanUp() }
-        #expect(AppModel.sidebarWidth(kept: nil) == Metrics.sidebarWidth)
-        #expect(AppModel.sidebarWidth(kept: 380) == 380)
-        #expect(AppModel.sidebarWidth(kept: 10) == Metrics.sidebarWidthRange.lowerBound)
-        #expect(AppModel.sidebarWidth(kept: 9000) == Metrics.sidebarWidthRange.upperBound)
-        #expect(AppModel.sidebarWidth(kept: .infinity) == Metrics.sidebarWidth)
+        #expect(WindowModel.sidebarWidth(kept: nil) == Metrics.sidebarWidth)
+        #expect(WindowModel.sidebarWidth(kept: 380) == 380)
+        #expect(WindowModel.sidebarWidth(kept: 10) == Metrics.sidebarWidthRange.lowerBound)
+        #expect(WindowModel.sidebarWidth(kept: 9000) == Metrics.sidebarWidthRange.upperBound)
+        #expect(WindowModel.sidebarWidth(kept: .infinity) == Metrics.sidebarWidth)
 
         let model = try await model()
         #expect(model.state().sidebar?.width == Double(Metrics.sidebarWidth))
@@ -311,7 +311,7 @@ struct SidebarTests {
         #expect(try Settings.load(layout).sidebarWidth == 390)
 
         // The next run opens at that width.
-        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let again = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         #expect(again.sidebarWidth == 390)
 
         // A drag past a limit is kept at the limit.
@@ -326,7 +326,7 @@ struct SidebarTests {
         let added = try await model.addMessage(text: "One", at: 5)
         _ = try await model.addMessage(text: "Two", at: 15)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         let holder = Holder(key: "operator", name: "Claude Code", place: "/work")

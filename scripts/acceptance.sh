@@ -2,7 +2,33 @@
 # The 0.2.0 acceptance scenario (`Spec: Havooch 0.2.0`, #36): the 10
 # steps of 0.1.0's scenario, rewritten for the 0.2.0 sidebar, through the
 # `havooch` CLI only, against the installed app in demo mode with the
-# fixture video.
+# fixture video. Step 11 adds `havooch open` (#82): the person's open,
+# run by the listener with no lease. Step 12 adds the windows (#86): any
+# number of windows, each with one video, and `--window`. Step 13 adds a
+# listener per window: two agents wait on two videos, each gets only
+# its own window's sends, and a third agent takes one window over. Step 14
+# adds the Connect view (#89): a send with no agent opens it with the outbox
+# banner, an agent's wait delivers it, a harness is picked, and Disconnect
+# lets the agent go. Step 15 adds the setup tour (#91): it shows, moves on,
+# closes at its step and is skipped, and "Finish setup" is gone once an
+# agent has connected.
+# Step 16 adds projects (#92): an agent makes the first video a project, its
+# threads move in as v1, the second video becomes v2, and `wait --project`
+# gets the project's send with its project block.
+# Step 17 adds the first-run window (#90): its steps go on and back, the
+# Connect step shows the demo prompt in the picked harness's form, and
+# skip closes it.
+# Step 18 adds the thread list by version (#94): with four versions the list
+# shows the last three, v4 on screen; All versions searches and an older
+# version picked from it gets its section, until --remove takes it out.
+# Step 19 adds the version switcher (#93): `version show` moves the project
+# from v4 to v1 with the playhead at the same time, the field names v1 and
+# the thread list marks its section, the picker searches, and a plain video
+# has no switcher.
+# Step 20 adds Compare (#95): the popover opens on v3 and v4, a side's
+# picker searches, the other side's version swaps the sides, the window
+# compares on one playhead, a message goes to the side made active, the
+# layouts change, and compare exit returns to the right side's version.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -43,7 +69,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 10 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 20 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -57,6 +83,8 @@ cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
 
 # The fixture, and what its README says about it.
 video="$root/fixtures/sample/sample.mp4"
+# A second video, with other content, for a second window.
+other_video="$root/fixtures/launch/havooch-demo.mp4"
 context_file="$root/fixtures/sample/sample.context.md"
 frame_width=1920
 frame_height=1080
@@ -91,6 +119,20 @@ operator_key="${HAVOOCH_CONTROL_KEY:-acceptance-operator-$run_id}"
 listener_key="${HAVOOCH_LISTENER_KEY:-acceptance-listener-$run_id}"
 operator() { HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@"; }
 listener() { HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@"; }
+# Step 13's agents, each named by its harness's session variable, so the
+# window can say which agent took over from which.
+claude_listener() {
+    env -u CODEX_THREAD_ID -u PI_SESSION_ID CLAUDE_CODE_SESSION_ID="acceptance-$run_id" \
+        HAVOOCH_CONTROL_KEY="acceptance-claude-$run_id" "$cli" "$@"
+}
+codex_listener() {
+    env -u CLAUDE_CODE_SESSION_ID -u PI_SESSION_ID CODEX_THREAD_ID="acceptance-$run_id" \
+        HAVOOCH_CONTROL_KEY="acceptance-codex-$run_id" "$cli" "$@"
+}
+# The settings commands read config.toml themselves, with no app: on the
+# demo's support folder, so they read its config/config.toml and never the
+# person's ~/.config/havooch.
+settings() { HAVOOCH_SUPPORT_DIR="$demo" "$cli" "$@"; }
 
 # The thread list's rule (spec 0.2.0, L38), over a thread of `state --json`:
 # Needs you (the last question has no answer after it), With agent (a
@@ -127,6 +169,7 @@ stdout=""
 stderr=""
 listener_pid=""
 ask_pid=""
+window_pids=()
 holds_lease=0
 
 ok() { printf '  ok    %s\n' "$1"; }
@@ -274,11 +317,23 @@ heard() {
     exits 0 "wait (the listener, in a second process)"
 }
 
+# stop <pid>: ends a background command. Its pid is the subshell's that
+# runs the agent's function, and the havooch command is that subshell's
+# child: killing the subshell alone would leave the command running, a
+# `wait` that takes a later step's send.
+stop() {
+    pkill -TERM -P "$1" 2>/dev/null
+    kill "$1" 2>/dev/null
+    wait "$1" 2>/dev/null
+}
+
 # Leaves nothing behind: the background commands end and the lease is free.
 # The demo app keeps running: other agents may be in line for it.
 clean_up() {
-    [ -n "$listener_pid" ] && kill "$listener_pid" 2>/dev/null
-    [ -n "$ask_pid" ] && kill "$ask_pid" 2>/dev/null
+    [ -n "$listener_pid" ] && stop "$listener_pid"
+    [ -n "$ask_pid" ] && stop "$ask_pid"
+    # Bash 3.2 calls an empty array unbound under set -u.
+    for pid in ${window_pids[@]+"${window_pids[@]}"}; do stop "$pid"; done
     [ "$holds_lease" -eq 1 ] && operator control release >/dev/null 2>&1
 }
 trap clean_up EXIT
@@ -611,7 +666,7 @@ finish
 
 # --- step 8 --------------------------------------------------------------------
 
-begin 8 "Run theme set with Dimmed, then with Default Dark. Check state --json"
+begin 8 "Run theme set with Dimmed, then with Default Dark. Check state --json and config check"
 run operator theme set Dimmed
 exits 0 "theme set Dimmed"
 state
@@ -622,11 +677,23 @@ exits 0 "theme set \"Default Dark\""
 state
 holds "Default Dark is active and pinned, a dark theme" "$stdout" \
     '.theme.active == "Default Dark" and .theme.pinned == "Default Dark" and .theme.kind == "dark"'
+holds "filled buttons use Default Dark's accentFill, which white text reads on" "$stdout" '.theme.accentFill == "#48689d"'
+holds "the pin is in the demo's config.toml, which the app accepted" "$stdout" \
+    '.config.path == $path and .config.accepted == true' --arg path "$demo/config/config.toml"
+run settings config check --json
+exits 0 "config check"
+holds "config check reads the demo's config.toml and accepts it" "$stdout" \
+    '.config == $path and .accepted == true' --arg path "$demo/config/config.toml"
+if grep -q '^theme = "Default Dark"$' "$demo/config/config.toml" 2>/dev/null; then
+    ok "config.toml has the line theme = \"Default Dark\""
+else
+    bad "config.toml has the line theme = \"Default Dark\""
+fi
 finish
 
 # --- step 9 --------------------------------------------------------------------
 
-begin 9 "Quit and open the app again. Check that state --json shows the threads, messages, states and theme, and the sidebar opens on the thread list"
+begin 9 "Quit and open the app again. Check that it shows home with the video first in recents, then open the video again and check that state --json shows the threads, messages, states and theme, and the sidebar opens on the thread list"
 state
 before="$stdout"
 run operator app quit
@@ -638,6 +705,14 @@ run operator app open --demo "$demo"
 exits 0 "app open --demo, the same folder"
 require_demo
 take
+# A launch opens no video by itself (spec 0.3.0, #65): one window on home,
+# with the fixture first in recents.
+state
+holds "the launch shows home in one window, with no video" "$stdout" \
+    '.screen == "home" and .video.path == null and (.windows | length) == 1'
+holds "the fixture is first in recents" "$stdout" '.recents[0].path == $path' --arg path "$video"
+run operator player open "$video"
+exits 0 "player open (the fixture, again)"
 state
 after="$stdout"
 # The lease, the listener's presence, the player and the sidebar's view are
@@ -699,11 +774,430 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 11 -------------------------------------------------------------------
+
+begin 11 "Run havooch open as the listener, with no lease. Check that the video plays in front, no lease is taken, and a file that doesn't play is refused"
+mkdir -p "$out/open"
+cut="$out/open/cut2.mp4"
+cp "$video" "$cut"
+printf 'These are notes, not a video.\n' >"$out/open/notes.mp4"
+run listener open "$cut"
+exits 0 "open $cut (the listener, no lease)"
+# The app asks macOS to bring it in front, and macOS does it a moment later.
+for _ in $(seq 1 20); do
+    state
+    jq -e '.app.active == true' "$stdout" >/dev/null 2>&1 && break
+    sleep 0.1
+done
+# A copy is the same video: the window that holds it comes forward (#86).
+holds "the copy's video plays in its one window, and the app is in front" "$stdout" \
+    '.video.path == $path and .player.playing == true and .app.active == true and (.windows | length) == 1' --arg path "$video"
+holds "no lease is held: the agent-control icon doesn't show" "$stdout" '.lease == null'
+run listener open "$out/open/notes.mp4"
+exits 1 "open of a file that doesn't play"
+state
+holds "the video is still open, in one window" "$stdout" '.video.path == $path and (.windows | length) == 1' --arg path "$video"
+holds "still no lease is held" "$stdout" '.lease == null'
+finish
+
+# --- step 12 -------------------------------------------------------------------
+
+begin 12 "Open a second window and a second video. Check that each window holds its own video, open brings the holder forward, and --window picks a window"
+take
+run operator window new --json
+exits 0 "window new"
+holds "window new names the new window, w2, showing home" "$stdout" '.window == "w2" and ([.windows[] | .id] == ["w1", "w2"])'
+state
+holds "state lists two windows, the new one key and home" "$stdout" \
+    '.window == "w2" and .screen == "home" and ([.windows[] | select(.key) | .id] == ["w2"])'
+run listener open "$other_video"
+exits 0 "open $other_video (the listener, no lease)"
+holds "the empty key window, w2, takes it" "$stdout" 'test(" in w2, playing$")' -R
+run operator state --window w2 --json
+holds "w2 holds the second video" "$stdout" '.video.path == $path' --arg path "$other_video"
+run listener open "$video"
+exits 0 "open $video again"
+state
+holds "the first video's window, w1, comes forward: still two windows" "$stdout" \
+    '.window == "w1" and .video.path == $path and (.windows | length) == 2' --arg path "$video"
+run operator player pause --window w2
+exits 0 "player pause --window w2"
+run operator state --window w2 --json
+holds "w2 is paused, and still holds its video" "$stdout" '.player.playing == false and .video.path == $path' --arg path "$other_video"
+run operator player open "$video" --window w2
+exits 1 "player open of w1's video in w2 is refused"
+run operator window close w2
+exits 0 "window close w2"
+run operator window list --json
+holds "one window is left, w1, with the first video" "$stdout" \
+    '[.windows[] | .id] == ["w1"] and .windows[0].video.path == $path' --arg path "$video"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 13 -------------------------------------------------------------------
+
+begin 13 "Open the second video in a second window. Two agents wait, one on each video. Check that a send reaches only its window's listener, and that a third agent takes a window over"
+take
+run operator window new --json
+exits 0 "window new"
+# Window ids are not reused, so the new window is not w2 after step 12.
+second_window="$(jq -r .window "$stdout")"
+run listener open "$other_video"
+exits 0 "open $other_video in the new window, w2"
+first_wait="$out/window-wait-1.json"
+second_wait="$out/window-wait-2.json"
+listener wait --video "$video" --timeout 60 >"$first_wait" 2>"$first_wait.err" &
+first_pid=$!
+claude_listener wait --video "$other_video" --timeout 60 >"$second_wait" 2>"$second_wait.err" &
+second_pid=$!
+window_pids=("$first_pid" "$second_pid")
+# Each window shows its own listener once both waits are open.
+for _ in $(seq 1 50); do
+    operator window list --json >"$logs/window-listeners.json" 2>/dev/null
+    jq -e '[.windows[] | .listener.presence] == ["listening", "listening"]' "$logs/window-listeners.json" >/dev/null 2>&1 && break
+    sleep 0.2
+done
+holds "w1 and w2 each show a listening agent, w2's is Claude Code" "$logs/window-listeners.json" \
+    '[.windows[] | .listener.presence] == ["listening", "listening"] and .windows[1].listener.session == "Claude Code"'
+run operator comment add "Brighter logo here." --window "$second_window"
+exits 0 "comment add --window w2"
+run operator send --window "$second_window"
+exits 0 "send --window w2"
+wait "$second_pid"
+code=$?
+stderr="$second_wait.err"
+exits 0 "w2's listener's wait"
+holds "w2's listener gets the send of the second video" "$second_wait" '.video.path == $path' --arg path "$other_video"
+if kill -0 "$first_pid" 2>/dev/null; then
+    ok "w1's listener still waits: the send was not its"
+else
+    bad "w1's listener's wait ended with w2's send"
+fi
+# Claude Code took the send and hadn't acknowledged it: Codex gets it again.
+run codex_listener wait --video "$other_video" --timeout 0
+exits 0 "a third agent's wait on the second video (Codex)"
+holds "Codex gets the send Claude Code didn't finish" "$stdout" '.video.path == $path' --arg path "$other_video"
+run operator state --window "$second_window" --json
+holds "w2 says Codex took over from Claude Code" "$stdout" \
+    '.listener.session == "Codex" and .listener.tookOverFrom == "Claude Code"'
+run operator state --window w1 --json
+holds "w1's listener is untouched" "$stdout" '.listener.tookOverFrom == null and .listener.waitOpen == true'
+stop "$first_pid"
+window_pids=()
+run operator window close "$second_window"
+exits 0 "window close w2"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 14 -------------------------------------------------------------------
+
+begin 14 "Send with no agent. Check that the Connect view opens with the outbox banner, that an agent's wait delivers the send, that a harness shows its prompt, and that Disconnect lets the agent go"
+take
+# w1's listener of step 13 went: let its grace run out, so nobody is there.
+sleep 6
+run operator comment add "Connect check." --at 3
+exits 0 "comment add (no agent listens)"
+run operator send
+exits 0 "send with no agent"
+state
+holds "the sidebar shows the Connect view, opened by the send" "$stdout" '.sidebar.mode == "connect" and .sidebar.connect.reason == "send"'
+holds "the banner says 1 message waits for an agent" "$stdout" \
+    '.sidebar.connect.banner.kind == "waiting" and .sidebar.connect.banner.messages == 1'
+run listener wait --timeout 0
+exits 0 "wait (an agent connects)"
+state
+holds "the banner says the message was delivered to the agent" "$stdout" \
+    '.sidebar.connect.banner.kind == "delivered" and .sidebar.connect.banner.messages == 1'
+holds "the listener card shows the agent" "$stdout" '.sidebar.connect.phase == "connected" and .sidebar.connect.listener.agent != null'
+holds "an agent connected once: setup needs nothing more" "$stdout" '.setup.agentConnectedOnce == true and .setup.needsFinishing == false'
+run operator connect pick codex --json
+exits 0 "connect pick codex"
+holds "Codex's prompt is in its own form" "$stdout" '.sidebar.connect.harness == "codex" and (.sidebar.connect.prompt | startswith("$havooch-mate listen for my feedback on "))'
+run operator connect disconnect
+exits 0 "connect disconnect"
+state
+holds "nobody listens after Disconnect" "$stdout" '.sidebar.connect.phase == "none" and .sidebar.connect.listener == null'
+run operator connect disconnect
+exits 1 "connect disconnect again (nobody is connected)"
+run operator thread list
+exits 0 "thread list (Back)"
+state
+holds "the sidebar shows the threads again" "$stdout" '.sidebar.mode == "threads" and .sidebar.connect == null'
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 15 -------------------------------------------------------------------
+
+begin 15 "Take the setup tour. Check that it shows its steps with their rings, that close keeps the step and skip starts over, and that Finish setup is gone after step 14's agent"
+take
+run operator tour show --json
+exits 0 "tour show"
+holds "the tour shows step 1 of 5 and rings the setup steps" "$stdout" \
+    '.tour.open == true and .tour.step == "tools" and .tour.stepNumber == 1 and .tour.steps == 5 and .tour.rings == ["setupSteps"]'
+holds "Finish setup shows while the tour does, and counts no first connection: step 14's agent connected" "$stdout" \
+    '.tour.finishSetup == true and .tour.setupItemsLeft <= 2'
+state
+holds "the tools step shows the Connect view" "$stdout" '.sidebar.mode == "connect"'
+run operator tour next --json
+exits 0 "tour next"
+holds "the connect step rings the agent step" "$stdout" '.tour.step == "connect" and .tour.rings == ["agentStep"]'
+run operator tour next --json
+exits 0 "tour next"
+holds "the write step rings the stage and the composer" "$stdout" '.tour.step == "write" and .tour.rings == ["stage", "composer"]'
+run operator tour close --json
+exits 0 "tour close"
+holds "close keeps the step" "$stdout" '.tour.open == false and .tour.step == "write" and .tour.rings == []'
+state
+holds "with the tour closed and an agent connected once, Finish setup is gone" "$stdout" '.tour.finishSetup == false'
+run operator tour show --json
+exits 0 "tour show (again)"
+holds "the tour opens at the step it was left on" "$stdout" '.tour.open == true and .tour.step == "write"'
+run operator tour skip --json
+exits 0 "tour skip"
+holds "skip starts the next tour from the first step" "$stdout" '.tour.open == false and .tour.step == "tools"'
+run operator tour next
+exits 1 "tour next (the tour isn't showing)"
+run operator thread list
+exits 0 "thread list"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 16 -------------------------------------------------------------------
+
+begin 16 "Make the first video a project, with its threads as v1. Add the second video as v2. Check that wait --project gets the project's send with its project block"
+slug="launch-video"
+run claude_listener project new "$slug" --from "$video" --title "Launch video"
+exits 0 "project new $slug --from the first video, with no lease"
+run operator state --window w1 --json
+holds "w1 holds the project, v1, and every thread on a frame is tagged v1" "$stdout" \
+    '.project.slug == $slug and .project.version == 1 and .windows[0].video.project == $slug
+     and ([.threads[] | select(.number > 0) | .version.number] | length > 0 and all(. == 1))' --arg slug "$slug"
+run settings project list --json
+holds "project list reads config.toml with no app: one project, v1 the first video" "$stdout" \
+    '.projects == [{slug: $slug, title: "Launch video", versions: [{number: 1, path: $path, label: null}]}]' \
+    --arg slug "$slug" --arg path "$video"
+run claude_listener project add "$slug" "$other_video" --label "second cut"
+exits 0 "project add $slug, the second video as v2"
+run operator state --window w1 --json
+holds "w1 shows v2, the second video, and v1's threads stay" "$stdout" \
+    '.project.version == 2 and .video.path == $path and ([.threads[] | select(.version.number == 1)] | length > 0)' \
+    --arg path "$other_video"
+take
+run operator comment add "The logo is too small in v2." --at 2 --window w1
+exits 0 "comment add on v2"
+run operator send --window w1
+exits 0 "send on v2"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+# A send an earlier step left unfinished may come first: wait once more for v2's.
+run claude_listener wait --project "$slug" --timeout 10
+if [ "$code" -eq 0 ] && ! jq -e '.project.onScreen == 2' "$stdout" >/dev/null 2>&1; then
+    run claude_listener wait --project "$slug" --timeout 10
+fi
+exits 0 "wait --project $slug"
+holds "the send carries the project, v2 on screen, and its thread's version" "$stdout" \
+    '.project.slug == $slug and .project.onScreen == 2 and (.project.versions | length) == 2
+     and .video.path == $path and ([.threads[] | select(.number > 0) | .version.number] | index(2) != null)' \
+    --arg slug "$slug" --arg path "$other_video"
+finish
+
+# --- step 17 -------------------------------------------------------------------
+
+begin 17 "Show the first-run window. Check that its steps go on and back, that the Connect step shows the demo prompt in the picked harness's form, and that Skip Setup closes it"
+take
+# A demo run never shows it by itself: it shows only on a person's first launch.
+state
+holds "the first-run window doesn't show by itself on demo data" "$stdout" '.firstRun.showing == false'
+run operator first-run show --json
+exits 0 "first-run show"
+holds "it shows Welcome" "$stdout" '.firstRun.showing == true and .firstRun.step == "welcome"'
+run operator first-run next
+exits 0 "first-run next (Get Started)"
+run operator first-run next
+exits 0 "first-run next (Continue)"
+run operator first-run pick codex --json
+exits 0 "first-run pick codex"
+holds "the Connect step shows Codex's demo prompt" "$stdout" \
+    '.firstRun.step == "connect" and .firstRun.harness == "codex" and .firstRun.prompt == "$havooch-mate use Havooch to open the demo video and listen for my feedback"'
+run operator screenshot "$out/first-run-connect.png" --window first-run --hide-agent-indicator
+exits 0 "screenshot of the first-run window"
+run operator first-run back
+exits 0 "first-run back"
+run operator first-run skip
+exits 0 "first-run skip (Skip Setup)"
+state
+holds "the first-run window is closed and done" "$stdout" '.firstRun.showing == false and .firstRun.done == true'
+run operator first-run next
+exits 1 "first-run next with the window closed"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 18 -------------------------------------------------------------------
+
+begin 18 "Add v3 and v4 to the project. Check that the thread list shows v2 to v4 with v4 on screen, that All versions searches, and that picking v1 adds its section until it is removed"
+# Two copies of the first video, so the project has four versions.
+mkdir -p "$out/versions"
+for number in 3 4; do
+    cp "$video" "$out/versions/cut$number.mp4"
+    run claude_listener project add "$slug" "$out/versions/cut$number.mp4"
+    exits 0 "project add $slug, a copy of the first video as v$number"
+done
+take
+run operator thread list --window w1
+exits 0 "thread list"
+run operator state --window w1 --json
+holds "the list shows the last three versions, v4 on screen, and v1 under All versions" "$stdout" \
+    '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.onScreen == 4 and .sidebar.versions.older == [1]
+     and .sidebar.versions.showing == "Showing v2 to v4" and .sidebar.versions.menu == null'
+run operator thread versions --search v1 --window w1 --json
+exits 0 "thread versions --search v1"
+holds "All versions is open with the search, and finds v1" "$stdout" \
+    '.sidebar.versions.menu.search == "v1" and .sidebar.versions.menu.older == [1] and .sidebar.versions.menu.inList == []'
+run operator screenshot "$out/thread-list-all-versions.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of All versions"
+run operator thread version 1 --window w1 --json
+exits 0 "thread version 1"
+holds "v1 joins the list under the last three, picked, and the menu closes" "$stdout" \
+    '.sidebar.versions.sections == [4, 3, 2, 1] and .sidebar.versions.picked == [1] and .sidebar.versions.menu == null
+     and .sidebar.versions.older == []'
+run operator screenshot "$out/thread-list-v1-picked.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the list with v1"
+run operator thread version 3 --remove --window w1
+exits 1 "thread version 3 --remove (v3 is one of the last three)"
+run operator thread version 1 --remove --window w1 --json
+exits 0 "thread version 1 --remove"
+holds "v1 leaves the list" "$stdout" '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.picked == []'
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 19 -------------------------------------------------------------------
+
+begin 19 "Switch the project from v4 to v1 in the header's switcher. Check that the playhead keeps its time, that the field names v1 and the thread list marks its section, that the picker searches, and that a plain video has no switcher"
+take
+run operator player pause --window w1
+exits 0 "player pause"
+run operator player seek 1.5 --window w1
+exits 0 "player seek 1.5 on v4"
+run operator state --window w1 --json
+holds "w1 shows v4: the segments are v2 to v4, and the field says All 4" "$stdout" \
+    '.project.version == 4 and .project.switcher.segments == [2, 3, 4] and .project.switcher.selected == 4
+     and .project.switcher.field == "All 4" and .project.switcher.picker == null'
+run operator version pick v1 --window w1 --json
+exits 0 "version pick v1"
+holds "the picker is open with the search, and finds v1" "$stdout" \
+    '.project.switcher.picker.query == "v1" and .project.switcher.picker.matches == [1] and .project.switcher.picker.highlighted == 1'
+run operator screenshot "$out/version-picker.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the version picker"
+run operator version show 1 --window w1
+exits 0 "version show 1"
+run operator state --window w1 --json
+holds "w1 shows v1 at the same time, the field names it, the picker closed, and the thread list marks v1 on screen" "$stdout" \
+    '.project.version == 1 and .video.path == $path and (.player.time - 1.5 | fabs) < 0.05
+     and .project.switcher.selected == 1 and .project.switcher.field == "v1" and .project.switcher.picker == null
+     and .sidebar.versions.onScreen == 1 and (.sidebar.versions.sections | index(1) != null)' \
+    --arg path "$video"
+run operator screenshot "$out/version-switcher-v1.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the header with v1 in the field"
+run operator version show v4 --window w1
+exits 0 "version show v4"
+run operator window new --json
+exits 0 "window new"
+plain_window=$(value "$stdout" '.window')
+run operator player open "$root/fixtures/showcase/halcyon-teaser.mp4" --window "$plain_window"
+exits 0 "player open a plain video in $plain_window"
+run operator state --window "$plain_window" --json
+holds "a plain video has no project, so no switcher" "$stdout" '.project == null'
+run operator version show 1 --window "$plain_window"
+exits 1 "version show on a plain video"
+run operator window close "$plain_window"
+exits 0 "window close $plain_window"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
+# --- step 20 -------------------------------------------------------------------
+
+begin 20 "Compare v3 and v4 of the project. Check that the popover opens on the previous version and the one on screen, that the other side's version swaps the sides, that both play on one playhead, that a message goes to the side made active, and that compare exit returns to the right side's version"
+take
+run operator player pause --window w1
+exits 0 "player pause"
+run operator player seek 1 --window w1
+exits 0 "player seek 1 on v4"
+run operator compare open --window w1 --json
+exits 0 "compare open"
+holds "the popover opens on v3 and v4, side by side" "$stdout" \
+    '.project.compare.phase == "choosing" and .project.compare.left == 3 and .project.compare.right == 4
+     and .project.compare.layout == "side-by-side" and .project.compare.active == null'
+run operator compare pick left v1 --window w1 --json
+exits 0 "compare pick left v1"
+holds "the left side's picker finds v1" "$stdout" \
+    '.project.compare.picker.side == "left" and .project.compare.picker.matches == [1] and .project.compare.picker.highlighted == 1'
+run operator screenshot "$out/compare-popover.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the compare popover"
+run operator compare set --right 3 --window w1 --json
+exits 0 "compare set --right 3"
+holds "v3 on the right swaps the sides, and the picker closes" "$stdout" \
+    '.project.compare.left == 4 and .project.compare.right == 3 and .project.compare.picker == null'
+run operator compare swap --window w1 --json
+exits 0 "compare swap"
+holds "the swap button puts v3 back on the left" "$stdout" '.project.compare.left == 3 and .project.compare.right == 4'
+run operator compare start --window w1 --json
+exits 0 "compare start"
+holds "the window compares v3 and v4 at the same time; messages go to v4 on the right" "$stdout" \
+    '.project.compare.phase == "comparing" and .project.compare.active == "right" and .project.version == 4
+     and (.player.time - 1 | fabs) < 0.05'
+run operator screenshot "$out/compare-side-by-side.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of side by side"
+run operator compare set --side left --window w1 --json
+exits 0 "compare set --side left"
+holds "the left side is active: v3 is the version on screen" "$stdout" \
+    '.project.compare.active == "left" and .project.version == 3'
+compare_text="The title is cut off on this cut"
+run operator comment add "$compare_text" --window w1 --json
+exits 0 "comment add on the left side"
+run operator state --window w1 --json
+holds "the message is on v3, the left side's version" "$stdout" \
+    '[.threads[] | select(any(.messages[]; .text == $text))][0].version.number == 3' --arg text "$compare_text"
+run operator compare set --layout flip --window w1 --json
+exits 0 "compare set --layout flip"
+holds "Flip shows the active side" "$stdout" '.project.compare.layout == "flip" and .project.compare.showing == "left"'
+run operator screenshot "$out/compare-flip.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of flip"
+run operator compare set --layout slider --slider 0.3 --window w1 --json
+exits 0 "compare set --layout slider --slider 0.3"
+holds "Slider shows the left side on 30% of the picture" "$stdout" \
+    '.project.compare.layout == "slider" and .project.compare.slider == 0.3 and .project.compare.showing == null'
+run operator screenshot "$out/compare-slider.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of slider"
+run operator compare exit --window w1 --json
+exits 0 "compare exit"
+holds "one version again: v4, the right side's" "$stdout" '.project.compare == null and .project.version == 4'
+run operator compare exit --window w1
+exits 0 "compare exit with Compare closed"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 10 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 20 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 10 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 20 steps. Screenshots: %s\n' "$shots"
 exit 0

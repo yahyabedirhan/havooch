@@ -8,7 +8,7 @@ import SwiftUI
 /// open one. All of it is on one surface, the theme's
 /// `window`; hairlines, not background colours, separate the parts.
 struct RootView: View {
-    @Bindable var model: AppModel
+    @Bindable var model: WindowModel
     /// The lease as the header's agent-control icon draws it, and its Stop.
     let lease: AgentControlIcon
     let stopLease: () -> Void
@@ -23,6 +23,23 @@ struct RootView: View {
                 case .player:
                     VStack(spacing: 0) {
                         StageView(model: model)
+                            // The setup tour's panel over the foot of the stage (H4).
+                            .overlay(alignment: .bottomLeading) {
+                                if model.tour.isOpen {
+                                    TourPanel(model: model)
+                                        .padding(.leading, 24)
+                                        .padding(.bottom, 12)
+                                        .transition(
+                                            reduceMotion
+                                                ? .opacity
+                                                : .scale(scale: 0.96, anchor: .bottomLeading).combined(with: .opacity)
+                                        )
+                                }
+                            }
+                            .animation(
+                                reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.86),
+                                value: model.tour.isOpen
+                            )
                         PlayerBar(model: model)
                     }
                 case .home:
@@ -37,6 +54,8 @@ struct RootView: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
             }
         }
+        // The settings notice over the stage and the home screen alike.
+        .overlay(alignment: .top) { ConfigBanner(model: model) }
         // One motion, a spring with no bounce, whatever opens or closes the
         // sidebar: the toggle, a notice, or the operator.
         .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)
@@ -59,7 +78,7 @@ struct RootView: View {
         .toolbar(removing: .title)
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                TitleView(words: HeaderWords(video: model.video?.url, isDemo: model.isDemo), model: model)
+                TitleView(words: HeaderWords(video: model.video?.url, isDemo: model.isDemo, project: model.projectWords), model: model)
             }
             .sharedBackgroundVisibility(.hidden)
             FloatingControls(model: model, lease: lease, stopLease: stopLease, isControlled: isControlled)
@@ -113,7 +132,7 @@ struct RootView: View {
 /// leading edge between `Metrics.sidebarWidthRange`'s bounds. A hairline
 /// on that edge separates it from the stage.
 struct SidebarColumn: View {
-    let model: AppModel
+    let model: WindowModel
     /// The width while the person drags; nil shows the kept width.
     @State private var dragged: CGFloat?
     /// The width when the drag started.
@@ -130,8 +149,11 @@ struct SidebarColumn: View {
         VStack(spacing: 0) {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
-            // One composer for the list and the thread view alike (L41).
-            Composer(model: model)
+            // One composer for the list and the thread view alike (L41);
+            // the Connect view writes nothing.
+            if model.connect == nil {
+                Composer(model: model)
+            }
             SidebarFooter(model: model)
         }
         .frame(width: width)

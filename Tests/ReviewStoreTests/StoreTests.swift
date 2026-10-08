@@ -5,6 +5,7 @@ import ImageIO
 import Foundation
 import ReviewCore
 import ReviewStore
+import Synchronization
 import Testing
 
 /// A temporary folder, removed with `cleanUp()`.
@@ -33,6 +34,13 @@ struct ContentHashTests {
         #expect(ContentHash.of(file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
     }
 
+    @Test("the bundled demo video's hash is the one a send marks as the demo")
+    func demoVideo() {
+        let video = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("fixtures/launch/havooch-demo.mp4")
+        #expect(ContentHash.of(video) == DemoVideo.contentHash)
+    }
+
     @Test("a renamed copy has the same hash, and other content another")
     func renamed() throws {
         let scratch = try Scratch()
@@ -55,6 +63,30 @@ struct ContentHashTests {
     func missing() {
         #expect(ContentHash.of(URL(fileURLWithPath: "/nowhere/a.mp4")) == nil)
     }
+
+    @Test("the cache reads a file once while it stays the same, and again once it's written over")
+    func cached() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        let file = scratch.folder.appendingPathComponent("a.mp4")
+        try Data("abc".utf8).write(to: file)
+        let reads = Mutex(0)
+        let cache = ContentHashCache { url in
+            reads.withLock { $0 += 1 }
+            return ContentHash.of(url)
+        }
+        let first = try #require(cache.of(file))
+        #expect(cache.of(file) == first)
+        #expect(cache.of(scratch.folder.appendingPathComponent("./a.mp4")) == first)
+        #expect(reads.withLock { $0 } == 1)
+
+        try Data("abcd".utf8).write(to: file)
+        let second = try #require(cache.of(file))
+        #expect(second != first)
+        #expect(second == ContentHash.of(file))
+        #expect(reads.withLock { $0 } == 2)
+        #expect(cache.of(URL(fileURLWithPath: "/nowhere/a.mp4")) == nil)
+    }
 }
 #endif
 
@@ -76,7 +108,7 @@ struct ImageFilesTests {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         let id = try #require(ItemID("t-f92cbb2a-1"))
-        let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
+        let file = SupportLayout(root: scratch.folder).keyframe(id, of: .video(contentHash: "abc"))
         try ImageFiles.write(try image(width: 320, height: 180), to: file)
 
         #expect(try Data(contentsOf: file).prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
@@ -102,7 +134,7 @@ struct ImageFilesTests {
         let blocker = scratch.folder.appendingPathComponent("videos")
         try Data().write(to: blocker)
         let id = try #require(ItemID("t-f92cbb2a-1"))
-        let file = SupportLayout(root: scratch.folder).keyframe(id, of: "abc")
+        let file = SupportLayout(root: scratch.folder).keyframe(id, of: .video(contentHash: "abc"))
         #expect(throws: ImageFiles.Failure.self) { try ImageFiles.write(try image(width: 4, height: 4), to: file) }
     }
 }

@@ -1,6 +1,6 @@
 import ReviewCore
 
-extension AppModel {
+extension WindowModel {
     /// The message still in the popover: view state only, never kept. It
     /// has a frame time, and no id and no keyframe until it's queued.
     struct Draft: Equatable {

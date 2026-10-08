@@ -4,6 +4,7 @@ import AppKit
 /// Right move 5 seconds, J and L 10 seconds, Shift+Left, Shift+Right, the
 /// comma and the period move one frame, Up and
 /// Down jump to the marker before and after, C or Return starts a message,
+/// backslash flips Compare's Flip to the other version,
 /// Escape drops a rectangle that's being drawn, else the popover, else goes
 /// back from a thread view to the thread list. They're off while a text
 /// view has the focus, so typing never reaches the player. Cmd+Return sends
@@ -32,6 +33,8 @@ enum Shortcuts {
         /// Space or Return on the control that has the keyboard focus:
         /// presses it, as a click does.
         case pressControl
+        /// Backslash: in Compare's Flip, the other version shows (E11).
+        case flip
     }
 
     /// The action of the key `keyCode` with `modifiers`, if it has one.
@@ -59,6 +62,7 @@ enum Shortcuts {
         case 125: return shift ? nil : .marker(forward: true) // Down
         case 8, 36, 76: return shift ? nil : .startMessage // C, Return, Enter
         case 53: return .cancel // Escape
+        case 42: return shift ? nil : .flip // backslash
         default: return nil
         }
     }
@@ -73,17 +77,19 @@ enum Shortcuts {
         reported || (keyboardNavigation && firstResponderIsControl)
     }
 
-    /// Starts handling the player's keys for `model`, for as long as the
-    /// app runs.
-    static func install(for model: AppModel) {
+    /// Starts handling the player's keys in each of `app`'s windows, for
+    /// as long as the app runs: a key acts on the window it's pressed in.
+    static func install(for app: AppModel) {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let handled = MainActor.assumeIsolated { handle(event, model) }
+            let handled = MainActor.assumeIsolated {
+                app.windows.window(showing: event.window).map { handle(event, $0) } ?? false
+            }
             return handled ? nil : event
         }
     }
 
     /// Whether `event` was a player key and was acted on.
-    private static func handle(_ event: NSEvent, _ model: AppModel) -> Bool {
+    private static func handle(_ event: NSEvent, _ model: WindowModel) -> Bool {
         // While the context popover is open every key is its own: Cmd+Return
         // there must not send the queue with a note that isn't saved yet.
         guard model.video != nil, !model.isContextShown,
@@ -108,6 +114,8 @@ enum Shortcuts {
         // A SwiftUI control is pressed through the model; an AppKit
         // control with the focus (a pop-up button) takes the key itself.
         case .pressControl: return model.pressFocusedControl()
+        // Outside Flip the key stays the window's.
+        case .flip: return model.flipCompare()
         }
         return true
     }

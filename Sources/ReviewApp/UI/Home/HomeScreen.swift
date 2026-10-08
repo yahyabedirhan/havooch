@@ -2,7 +2,7 @@ import ReviewWire
 import SwiftUI
 
 /// What the stage shows: the player with a video open; with none, the home
-/// screen when there are recent videos, else the empty state.
+/// screen when there are recent videos or projects, else the empty state.
 enum StageContent: Equatable {
     case player, home, empty
 
@@ -11,8 +11,8 @@ enum StageContent: Equatable {
     }
 
     /// What the stage of `model` shows now.
-    init(_ model: AppModel) {
-        self.init(hasVideo: model.video != nil, hasRecents: !model.recents.isEmpty)
+    init(_ model: WindowModel) {
+        self.init(hasVideo: model.video != nil, hasRecents: !model.recents.isEmpty || !model.homeProjects.isEmpty)
     }
 
     /// The sidebar shows beside the player only: never on the home screen
@@ -24,12 +24,13 @@ enum StageContent: Equatable {
     var screen: StateReport.Screen { self == .player ? .player : .home }
 }
 
-/// No video is open and there are recent videos: the cat mark and the
-/// app's name, "Open a Video…" and "Try the Demo", then the recent videos
-/// as a gallery of cards, the newest first, as Finder shows files in icon
-/// view. The whole screen takes a dropped video, as the empty state does.
+/// No video is open and there are recent videos or projects: the cat mark
+/// and the app's name, "Open a Video…" and "Try the Demo", then the
+/// projects (story 48), the most recently opened first, then the recent
+/// videos, each as a gallery of cards, the newest first, as Finder shows
+/// files in icon view. The whole screen takes a dropped video, as the empty state does.
 struct HomeScreen: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     /// Adaptive columns of 16:9 cards.
@@ -39,7 +40,8 @@ struct HomeScreen: View {
         ScrollView {
             VStack(spacing: 28) {
                 top
-                gallery
+                if !model.homeProjects.isEmpty { projects }
+                if !model.recents.isEmpty { gallery }
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 36)
@@ -57,7 +59,7 @@ struct HomeScreen: View {
                 .font(.largeTitle.weight(.semibold))
             HStack(spacing: 10) {
                 Button("Open a Video…") { model.openFromPanel() }
-                    .buttonStyle(.borderedProminent)
+                    .filledButton(palette)
                     .keyboardShortcut(.defaultAction)
                 if DemoRun.video() != nil {
                     Button("Try the Demo") { model.tryDemo() }
@@ -65,6 +67,22 @@ struct HomeScreen: View {
                 }
             }
             .padding(.top, 4)
+        }
+    }
+
+    private var projects: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Projects")
+                .font(.headline)
+                .foregroundStyle(palette[.textSecondary])
+                .accessibilityAddTraits(.isHeader)
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 20) {
+                    ForEach(model.homeProjects, id: \.slug) { project in
+                        ProjectCard(model: model, project: project, now: context.date)
+                    }
+                }
+            }
         }
     }
 

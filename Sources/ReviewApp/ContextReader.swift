@@ -46,7 +46,7 @@ enum ContextReader {
 
     /// The context of `review`'s video as it is now: the sidecar where the
     /// video was last opened, and the review's note.
-    static func text(for review: VideoReview) -> String? {
+    static func text(for review: Review) -> String? {
         text(sidecar: sidecar(beside: URL(fileURLWithPath: review.video.path))?.text, note: review.note)
     }
 }

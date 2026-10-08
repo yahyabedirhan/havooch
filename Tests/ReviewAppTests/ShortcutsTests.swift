@@ -31,6 +31,13 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
     }
 
+    @Test("backslash flips Compare's Flip, and is no key while the person types")
+    func flipKey() {
+        #expect(Shortcuts.action(keyCode: 42, modifiers: []) == .flip)
+        #expect(Shortcuts.action(keyCode: 42, modifiers: .shift) == nil)
+        #expect(Shortcuts.action(keyCode: 42, modifiers: [], isTyping: true) == nil)
+    }
+
     /// Return and the keypad's Enter.
     @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app",
           arguments: [36, 76] as [UInt16])
@@ -98,7 +105,7 @@ struct ShortcutsTests {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: support) }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         var pressed: [String] = []
         let notice = UUID(), symbol = UUID()
         #expect(!model.isControlFocused)
@@ -128,7 +135,7 @@ struct ShortcutsTests {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: support) }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         var pressed: [String] = []
         let row = UUID(), stop = UUID()
 

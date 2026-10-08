@@ -5,7 +5,7 @@ import Testing
 @Suite("Unread agent messages")
 struct UnreadTests {
     /// A review with thread 1 sent, so the agent can write on it.
-    private func sentReview() throws -> VideoReview {
+    private func sentReview() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 10, now: now)
         try review.send(at: now)
@@ -66,7 +66,7 @@ struct UnreadTests {
         try review.markSeen(thread(1), at: now.addingTimeInterval(6))
         try review.reply(on: thread(0), text: "Hello", now: now.addingTimeInterval(7))
         let encoder = JSONEncoder()
-        let decoded = try JSONDecoder().decode(VideoReview.self, from: encoder.encode(review))
+        let decoded = try JSONDecoder().decode(Review.self, from: encoder.encode(review))
         #expect(decoded == review)
         #expect(decoded.thread(thread(1))?.isUnread == false)
         #expect(decoded.general.isUnread)
@@ -82,7 +82,7 @@ struct UnreadTests {
         for index in threads.indices { threads[index]["lastSeen"] = nil }
         object["threads"] = threads
         let old = try JSONSerialization.data(withJSONObject: object)
-        let decoded = try JSONDecoder().decode(VideoReview.self, from: old)
+        let decoded = try JSONDecoder().decode(Review.self, from: old)
         #expect(decoded.thread(thread(1))?.isUnread == false)
         #expect(decoded.general.isUnread == false)
     }

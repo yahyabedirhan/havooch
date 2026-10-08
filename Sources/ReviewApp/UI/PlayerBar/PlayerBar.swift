@@ -6,7 +6,7 @@ import SwiftUI
 /// and the speed. It never floats over the video, and it is as tall as the
 /// sidebar's footer beside it, so the two meet on one line.
 struct PlayerBar: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {

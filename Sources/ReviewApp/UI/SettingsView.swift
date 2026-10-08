@@ -3,9 +3,10 @@ import ReviewWire
 import SwiftUI
 
 /// The Settings window (⌘,, L42): the cat mark, the name and the version,
-/// and the theme picker, the same choice as
-/// View › Theme and `havooch theme set`. It takes the pinned theme's
-/// appearance, as the player's window does, and the theme's accent.
+/// the theme picker, the same choice as View › Theme and `havooch theme
+/// set`, and where the settings file is with the verdict of its last
+/// reload (ADR 0002). It takes the pinned theme's appearance, as the
+/// player's window does, and the theme's accent.
 struct SettingsView: View {
     let model: AppModel
 
@@ -33,6 +34,7 @@ struct SettingsView: View {
                     .foregroundStyle(palette[.textSecondary])
                     .fixedSize(horizontal: false, vertical: true)
             }
+            ConfigSection(config: model.config)
         }
         .formStyle(.grouped)
         // One short section: the window fits it, with nothing to scroll.
@@ -67,7 +69,7 @@ struct ThemePicker: View {
                 do throws(AppRefusal) {
                     _ = try model.setTheme(name)
                 } catch {
-                    model.problem = AppModel.Problem(title: "The theme didn't change", reason: error.reason)
+                    model.windows.key?.problem = WindowModel.Problem(title: "The theme didn't change", reason: error.reason)
                 }
             }
         )
@@ -114,6 +116,56 @@ struct SettingsOpener: ViewModifier {
         content.onAppear {
             let action = openSettings
             settings.open = { action() }
+        }
+    }
+}
+
+/// Where the settings file is, and whether its last save applied: each
+/// problem with its line while it didn't, and what the move from an older
+/// build did. A person and their agents edit the file itself.
+private struct ConfigSection: View {
+    let config: ConfigDesk
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Section {
+            LabeledContent("File") {
+                Text(config.location.file.path)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+            LabeledContent("Status") {
+                Label(
+                    config.verdict.accepted ? "Applied" : "Not applied",
+                    systemImage: config.verdict.accepted ? "checkmark.circle" : "exclamationmark.triangle"
+                )
+                .foregroundStyle(config.verdict.accepted ? palette[.textSecondary] : palette[.question])
+            }
+            // Ids from the words: offsets would repeat across the two lists in one section.
+            ForEach(config.verdict.problems, id: \.description) { problem in
+                Text(problem.description)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(config.notes, id: \.self) { note in
+                Text(note)
+                    .font(.callout)
+                    .foregroundStyle(palette[.textSecondary])
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("Settings File")
+        } footer: {
+            Text(
+                config.verdict.accepted
+                    ? "Havooch applies each save at once. Your own themes go in the themes folder beside the file."
+                    : "Havooch keeps the last valid settings until the file reads. Run havooch config check after a fix."
+            )
+            .font(.caption)
+            .foregroundStyle(palette[.textSecondary])
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

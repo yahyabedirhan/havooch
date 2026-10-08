@@ -1,4 +1,5 @@
 import ReviewCore
+import ReviewWire
 import SwiftUI
 
 /// The layer above the picture that takes the mouse. A click plays or
@@ -9,8 +10,16 @@ import SwiftUI
 /// also shows the region of the message in the popover, else the region
 /// chip of the composer at the sidebar's foot (L41).
 struct RegionOverlay: View {
-    let model: AppModel
+    let model: WindowModel
     let geometry: VideoFrameGeometry
+    /// The player of the picture under it, for the size of a rectangle.
+    let engine: PlayerEngine
+    /// While comparing, the side it is on: a click or a drag on it makes
+    /// the side active first (P9), and it shows regions only while active.
+    var side: CompareSide?
+    /// How much of its width, from its leading edge, takes the mouse;
+    /// nil for all of it.
+    var hitWidth: CGFloat?
 
     /// The drag under way, in the stage's points.
     private struct Drag: Equatable {
@@ -24,7 +33,7 @@ struct RegionOverlay: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
-                .contentShape(Rectangle())
+                .contentShape(LeadingPart(width: hitWidth))
                 .gesture(draw)
             // One frame for the rectangle being drawn and the popover's
             // region, so letting go hands the rectangle to the popover in
@@ -42,9 +51,11 @@ struct RegionOverlay: View {
     /// The rectangle to draw: the one being drawn, with its size, else the
     /// region of the message in the popover.
     private var drawn: (rect: CGRect, label: String?)? {
+        // While comparing, only the active side's picture is written on.
+        guard side == nil || side == model.activeSide else { return nil }
         if let drag, model.isDrawingRegion {
             let rect = geometry.rect(from: drag.start, to: drag.current)
-            return (rect, Self.size(of: rect, within: geometry.frame, video: model.engine.videoSize))
+            return (rect, Self.size(of: rect, within: geometry.frame, video: engine.videoSize))
         }
         // With no popover open, the composer's region chip (L41).
         guard let region = model.draft?.region ?? (model.draft == nil ? model.composerRegion : nil) else { return nil }
@@ -65,19 +76,29 @@ struct RegionOverlay: View {
             .onChanged { value in
                 if drag == nil {
                     guard VideoFrameGeometry.isDrag(from: value.startLocation, to: value.location) else { return }
-                    model.beginRegion()
+                    model.beginRegion(on: side)
                 }
                 drag = Drag(start: value.startLocation, current: value.location)
             }
             .onEnded { value in
                 if drag == nil {
-                    model.clickFrame()
+                    model.clickFrame(on: side)
                 } else {
                     // After Escape the model no longer draws, and this opens nothing.
                     model.endRegion(geometry.region(from: value.startLocation, to: value.location))
                 }
                 drag = nil
             }
+    }
+}
+
+/// The leading `width` points of a rectangle, all of it with no width:
+/// the part of a picture that takes the mouse.
+private struct LeadingPart: Shape {
+    var width: CGFloat?
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX, y: rect.minY, width: min(rect.width, max(width ?? rect.width, 0)), height: rect.height))
     }
 }
 

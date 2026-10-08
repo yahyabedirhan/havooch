@@ -57,7 +57,10 @@ public enum ThemeRefusal: Error, Equatable, Sendable {
 /// know is ignored, and a colour that doesn't read counts as missing. A
 /// surface token may be `system` (`ThemeCatalog.system`) in place of a
 /// colour: the native macOS part; on any other token `system` counts as
-/// missing.
+/// missing. One exception: a theme that sets `accent` nearer than
+/// `accentFill` (itself, a theme it extends, or an override) gets
+/// `accentFill` made from that accent (`ThemeColor.filled()`), so its
+/// filled buttons keep its hue and white text still reads on them.
 /// A pure value: the files are read by the store.
 public struct ThemeCatalog: Equatable, Sendable {
     public static let defaultLight = "Default Light"
@@ -69,7 +72,7 @@ public struct ThemeCatalog: Equatable, Sendable {
     public enum Source: String, Equatable, Sendable {
         /// Shipped in the app bundle.
         case builtIn = "built-in"
-        /// A file in the support folder's `Themes/`.
+        /// A file in `themes/` beside `config.toml`.
         case user
     }
 
@@ -143,14 +146,34 @@ public struct ThemeCatalog: Equatable, Sendable {
                 system.insert(token)
             }
         }
+        // Where each token's value came from: its file's place in `files`.
+        var source: [ThemeToken: Int] = [:]
         for token in ThemeToken.allCases {
-            if let value = files.lazy.compactMap({ $0.tokens[token.rawValue].flatMap { Value($0, for: token) } }).first {
+            for (index, file) in files.enumerated() {
+                guard let value = file.tokens[token.rawValue].flatMap({ Value($0, for: token) }) else { continue }
                 set(token, value)
+                source[token] = index
+                break
             }
         }
+        var overridden: Set<ThemeToken> = []
         for (name, text) in overrides {
             guard let token = ThemeToken(rawValue: name), let value = Value(text, for: token) else { continue }
             set(token, value)
+            overridden.insert(token)
+        }
+        // The fill follows the theme's own accent: a theme (or an override)
+        // that sets `accent` nearer than `accentFill` gets a fill made
+        // from that accent, not the fallback's fill in another hue.
+        let accentIsNearer = if overridden.contains(.accentFill) {
+            false
+        } else if overridden.contains(.accent) {
+            true
+        } else {
+            (source[.accent] ?? .max) < (source[.accentFill] ?? .max)
+        }
+        if accentIsNearer, let accent = colors[.accent] {
+            colors[.accentFill] = accent.filled()
         }
         return ResolvedTheme(name: entry.name, kind: entry.file.kind, colors: colors, system: system)
     }

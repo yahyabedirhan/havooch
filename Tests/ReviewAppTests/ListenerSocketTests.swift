@@ -29,7 +29,7 @@ struct ListenerSocketTests {
     /// The model with the fixture open, two messages queued on #1 and #2,
     /// and the server listening in front of it.
     private struct Running {
-        var model: AppModel
+        var model: WindowModel
         var server: ControlServer
         var one: String
         var two: String
@@ -38,10 +38,10 @@ struct ListenerSocketTests {
     }
 
     private func running() async throws -> Running {
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(MessageTests.fixture)
         let server = ControlServer(
-            socket: ControlSocket.url(in: folder), app: model, listeners: { model.listeners },
+            socket: ControlSocket.url(in: folder), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         try server.start()
@@ -90,13 +90,13 @@ struct ListenerSocketTests {
         async let waited = LeaseServerTests.sending {
             ControlClient(socket: socket, holder: holder, transport: UnixSocketTransport()).send(.wait(timeoutSeconds: 30))
         }
-        await eventually { app.model.listeners.outbox.isWaitOpen }
+        await eventually { app.model.listeners().outbox.isWaitOpen }
         #expect(try await presence(app) == "listening")
         #expect(try await command(.send, as: Self.operatorAgent, app).ok)
         let reply = try await waited.get()
         #expect(reply.ok)
         // Taken once the socket wrote the reply.
-        await eventually { app.model.listeners.outbox.inFlight.isEmpty && !app.model.listeners.outbox.taken.isEmpty }
+        await eventually { app.model.listeners().outbox.inFlight.isEmpty && !app.model.listeners().outbox.taken.isEmpty }
         return try object(reply.output)
     }
 
@@ -137,7 +137,7 @@ struct ListenerSocketTests {
 
         // The send's last message finishes it: nothing is taken any more.
         #expect(try await command(.status(messageID: app.second, state: .failed), as: Self.listener, app).ok)
-        #expect(app.model.listeners.outbox.taken.isEmpty)
+        #expect(app.model.listeners().outbox.taken.isEmpty)
         let listener = try #require(try await state(app)["listener"] as? [String: Any])
         #expect(listener["takenSends"] as? Int == 0)
         #expect(listener["session"] as? String == "Mate")
@@ -156,7 +156,7 @@ struct ListenerSocketTests {
             ControlClient(socket: socket, holder: Self.listener, transport: UnixSocketTransport())
                 .send(.ask(thread: one, question: "Which part?", waitSeconds: 30))
         }
-        await eventually { app.model.listeners.outbox.openAsks == 1 }
+        await eventually { app.model.listeners().outbox.openAsks == 1 }
         #expect(app.model.threads[1].openQuestion?.text == "Which part?")
         // A second question on the thread is refused while the first is open.
         #expect(try await command(.ask(thread: one, question: "And?", waitSeconds: 0), as: Self.listener, app).ok == false)
@@ -164,11 +164,11 @@ struct ListenerSocketTests {
         let answered = try await command(.threadAnswer(thread: one, text: "The intro"), as: Self.operatorAgent, app)
         #expect(answered.ok)
         #expect(try await asked.get() == .done("The intro\n"))
-        #expect(app.model.listeners.outbox.openAsks == 0)
+        #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(app.model.threads[1].openQuestion == nil)
         #expect(app.model.threads[1].messages.map(\.kind) == [.message, .question, .answer])
-        #expect(app.model.desk.review?.queue.isEmpty == true)
-        #expect(app.model.listeners.outbox.pending.isEmpty)
+        #expect(app.model.review?.queue.isEmpty == true)
+        #expect(app.model.listeners().outbox.pending.isEmpty)
         // No question is open now: an answer is refused.
         #expect(try await command(.threadAnswer(thread: one, text: "Again"), as: Self.operatorAgent, app).ok == false)
     }
@@ -234,7 +234,7 @@ struct ListenerSocketTests {
         #expect(work(app) == [.done, .sent])
         let listener = try #require(try await state(app)["listener"] as? [String: Any])
         #expect(listener["presence"] as? String == "working")
-        #expect(app.model.listeners.outbox.session?.key == Self.restarted.key)
+        #expect(app.model.listeners().outbox.session?.key == Self.restarted.key)
         #expect(try await command(.ack(sendID: send, text: nil), as: Self.restarted, app).ok)
         #expect(work(app) == [.done, .acknowledged])
     }

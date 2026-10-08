@@ -37,15 +37,15 @@ struct ContextDeliveryTests {
 
     /// The model with a copy of the fixture open as `clip.mp4`, and the
     /// server in front of it.
-    private func app() async throws -> (AppModel, ControlServer) {
+    private func app() async throws -> (WindowModel, ControlServer) {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: video.path) {
             try FileManager.default.copyItem(at: MessageTests.fixture, to: video)
         }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
         try await model.open(video)
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -58,7 +58,7 @@ struct ContextDeliveryTests {
     /// Sends one message and takes it with a `wait`: the
     /// payload's `context`, nil for `null`.
     private func contextOfNextSend(
-        _ model: AppModel, _ server: ControlServer, as holder: Holder = listener
+        _ model: WindowModel, _ server: ControlServer, as holder: Holder = listener
     ) async throws -> String? {
         _ = try await model.addMessage(text: "A message", at: 3)
         _ = try await model.sendQueue()
@@ -159,7 +159,7 @@ struct ContextDeliveryTests {
         // The listener restarts under another key: both sends are in line again.
         #expect(try await contextOfWait(server, as: Self.restarted) == "About the clip")
         #expect(try await contextOfWait(server, as: Self.restarted) == nil)
-        #expect(model.listeners.outbox.session?.key == Self.restarted.key)
+        #expect(model.listeners().outbox.session?.key == Self.restarted.key)
     }
 
     @Test("a payload that couldn't be written takes its context back: the next wait gets the text again")
@@ -224,8 +224,8 @@ struct ContextDeliveryTests {
     @Test("context set with no video open is refused")
     func noVideo() async throws {
         defer { cleanUp() }
-        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path])
-        #expect(throws: AppRefusal("no video is open; open one with `havooch player open <path>`")) {
+        let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
+        #expect(throws: AppRefusal("no video is open in the window; open one with `havooch player open <path>`")) {
             try model.setContextNote("A note")
         }
     }

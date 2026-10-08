@@ -6,10 +6,12 @@ import Foundation
 public struct Holder: Codable, Hashable, Sendable {
     /// What tells one agent from another across its commands: the key it
     /// exports (`HAVOOCH_CONTROL_KEY`), else its session
-    /// (`CLAUDE_CODE_SESSION_ID=…`), else its process (`process:<pid>@<start>`).
+    /// (`CLAUDE_CODE_SESSION_ID=…`, `CODEX_THREAD_ID=…`, `PI_SESSION_ID=…`),
+    /// else its process (`process:<pid>@<start>`).
     public var key: String
-    /// The agent's name as people read it: `Claude Code`, or its process's
-    /// name (`codex`).
+    /// The agent's name as people read it: `Claude Code`, `Codex` or `Pi`
+    /// from its session, else its process's name (`cursor-agent`). The app
+    /// shows the logo of the harness this name says.
     public var name: String
     /// Where it runs: `Herdr pane <id>`, else its working folder.
     public var place: String
@@ -21,9 +23,13 @@ public struct Holder: Codable, Hashable, Sendable {
     }
 
     /// An agent that exports its session id in one of these variables is
-    /// that session, whatever subshell runs the command.
-    public static let sessionVariables: [(variable: String, agent: String)] = [
-        ("CLAUDE_CODE_SESSION_ID", "Claude Code"),
+    /// that session, whatever subshell runs the command. `processes` are the
+    /// names its harness runs as, which settle which session runs the
+    /// command when one harness runs inside another and both are set.
+    public static let sessionVariables: [(variable: String, agent: String, processes: Set<String>)] = [
+        ("CLAUDE_CODE_SESSION_ID", "Claude Code", ["claude"]),
+        ("CODEX_THREAD_ID", "Codex", ["codex"]),
+        ("PI_SESSION_ID", "Pi", ["pi"]),
     ]
 
     /// The shells a command runs through, which never identify an agent:
@@ -37,7 +43,9 @@ public struct Holder: Codable, Hashable, Sendable {
     public static let keyVariable = "HAVOOCH_CONTROL_KEY"
 
     /// The holder of a command run with `variables` in `workingDirectory`:
-    /// the first known session variable that's set, else the nearest
+    /// the known session variable that's set (with more than one set, the
+    /// one whose harness is the nearest ancestor, else the first in
+    /// `sessionVariables`), else the nearest
     /// ancestor of this process that isn't a shell, as its pid and start
     /// time, read from `processes`. When even this process can't be read,
     /// `process:unknown`. `keyVariable`, when set, replaces the key only.
@@ -52,16 +60,30 @@ public struct Holder: Codable, Hashable, Sendable {
 
     /// The holder its session, else its process, makes it.
     private static func automatic(variables: [String: String], place: String, processes: any ProcessTable) -> Holder {
-        for (variable, agent) in sessionVariables {
-            if let session = variables[variable], !session.isEmpty {
-                return Holder(key: "\(variable)=\(session)", name: agent, place: place)
-            }
+        let sessions = sessionVariables.filter { !(variables[$0.variable] ?? "").isEmpty }
+        if let first = sessions.first {
+            let session = sessions.count == 1 ? first : nearestHarness(of: sessions, processes) ?? first
+            return Holder(key: "\(session.variable)=\(variables[session.variable]!)", name: session.agent, place: place)
         }
         guard let agent = ancestor(processes) else {
             return Holder(key: "process:unknown", name: "an unknown agent", place: place)
         }
         let started = Int64((agent.started.timeIntervalSince1970 * 1_000_000).rounded())
         return Holder(key: "process:\(agent.pid)@\(started)", name: agent.name, place: place)
+    }
+
+    /// Of `sessions`, the one whose harness runs as the nearest ancestor of
+    /// `processes.currentPID`; nil when none of them is found.
+    private static func nearestHarness(
+        of sessions: [(variable: String, agent: String, processes: Set<String>)], _ processes: any ProcessTable
+    ) -> (variable: String, agent: String, processes: Set<String>)? {
+        var pid = processes.process(processes.currentPID)?.parent ?? 1
+        for _ in 0..<64 where pid > 1 {
+            guard let process = processes.process(pid) else { return nil }
+            if let session = sessions.first(where: { $0.processes.contains(process.name) }) { return session }
+            pid = process.parent
+        }
+        return nil
     }
 
     /// The nearest ancestor of `processes.currentPID` that isn't a shell;

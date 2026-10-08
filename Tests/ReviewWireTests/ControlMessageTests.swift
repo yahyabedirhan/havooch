@@ -26,10 +26,11 @@ struct ControlMessageTests {
     }
 
     @Test("every request reads back as it was sent", arguments: [
-        ControlRequest.appStatus, .state, .appOpen, .appQuit, .appHome, .appDemo,
+        ControlRequest.appStatus, .state, .appOpen, .appQuit, .appHome, .appDemo, .configDismiss,
         .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
         .screenshot(path: "/tmp/shot.png", appearance: .light, hideAgentIndicator: true),
         .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings), .screenshot(path: "/tmp/about.png", appearance: nil, window: .about),
+        .open(path: "/videos/sample.mp4"),
         .playerOpen(path: "/videos/sample.mp4"), .playerPlay, .playerPause, .playerSeek(seconds: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil), .screenshot(path: "/tmp/shot.png", appearance: .dark),
         .commentAdd(text: "Too fast\nhere", at: nil), .commentAdd(text: "Too fast", at: 12.5),
@@ -42,6 +43,12 @@ struct ControlMessageTests {
         .commentCompose(text: "Overall", general: true),
         .contextSet(text: "Compare with\nthe old cut"), .contextSet(text: ""),
         .send, .wait(timeoutSeconds: nil), .wait(timeoutSeconds: 0), .wait(timeoutSeconds: 600),
+        .wait(timeoutSeconds: 30, video: "/Movies/cut1.mp4"), .wait(timeoutSeconds: nil, project: "launch-video"),
+        .open(path: "/Movies/cut1.mp4", project: "launch-video"),
+        .projectNew(slug: "launch-video", path: "/Movies/cut1.mp4"),
+        .projectNew(slug: "launch-video", path: "/Movies/cut1.mp4", title: "Launch video"),
+        .projectAdd(slug: "launch-video", path: "/Movies/cut2.mp4"),
+        .projectAdd(slug: "launch-video", path: "/Movies/cut2.mp4", label: "tighter intro"),
         .ack(sendID: "s-f92cbb2a-1", text: nil), .ack(sendID: "s-f92cbb2a-1", text: "On it"),
         .status(messageID: "m-f92cbb2a-1", state: .working), .status(messageID: "m-f92cbb2a-1", state: .done),
         .status(messageID: "m-f92cbb2a-1", state: .failed),
@@ -55,10 +62,41 @@ struct ControlMessageTests {
         .threadChoose(thread: "t-f92cbb2a-1", choice: 2), .threadChoose(thread: "1", choice: 1),
         .threadOpen(thread: "3"), .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5)),
         .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
+        .threadVersionsOpen(search: nil), .threadVersionsOpen(search: "v12"), .threadVersionsClose,
+        .threadVersion(number: 12, remove: false), .threadVersion(number: 3, remove: true),
+        .windowList, .windowNew, .windowClose,
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
         #expect(try ControlMessage.decode(message.encoded()) == message)
+    }
+
+    @Test("a request names its window, and reads back with it; with none it goes unsaid", arguments: [
+        ControlRequest.playerPlay, .state, .windowClose, .commentAdd(text: "Too fast", at: 12.5),
+        .screenshot(path: "/tmp/shot.png", appearance: nil),
+    ])
+    func window(request: ControlRequest) throws {
+        let message = ControlMessage(request, holder: Self.holder, window: "w2")
+        #expect(try ControlMessage.decode(message.encoded()) == message)
+        let fields = try #require(try JSONSerialization.jsonObject(with: message.encoded()) as? [String: Any])
+        #expect(fields["window"] as? String == "w2")
+        let keyWindow = try #require(try JSONSerialization.jsonObject(with: ControlMessage(request, holder: Self.holder).encoded()) as? [String: Any])
+        #expect(keyWindow["window"] == nil)
+    }
+
+    @Test("a screenshot's window is Settings, the About panel, or a player window by its id; main is the key window")
+    func screenshotWindow() throws {
+        func decoded(_ window: String) throws -> ControlMessage {
+            try ControlMessage.decode(raw([
+                "version": Version.controlProtocol, "command": "screenshot", "holder": holderFields,
+                "path": "/tmp/shot.png", "window": window,
+            ]))
+        }
+        #expect(try decoded("settings").request == .screenshot(path: "/tmp/shot.png", appearance: nil, window: .settings))
+        #expect(try decoded("settings").window == nil)
+        #expect(try decoded("w3").request == .screenshot(path: "/tmp/shot.png", appearance: nil, window: .main))
+        #expect(try decoded("w3").window == "w3")
+        #expect(try decoded("main").window == nil)
     }
 
     @Test("a region is four numbers with commas between them, and anything else isn't one")
@@ -123,14 +161,14 @@ struct ControlMessageTests {
             more.merging(["version": Version.controlProtocol, "command": command, "holder": holderFields]) { _, new in new }
         }
         #expect(refusal(fields("player.open", [:])) == .unreadable("the control command `player.open` needs its `path`"))
+        #expect(refusal(fields("open", ["path": "cut2.mp4"]))
+            == .unreadable("the control command `open` needs an absolute `path`, not `cut2.mp4`"))
         #expect(refusal(fields("player.open", ["path": "sample.mp4"]))
             == .unreadable("the control command `player.open` needs an absolute `path`, not `sample.mp4`"))
         #expect(refusal(fields("screenshot", ["path": "shot.png"]))
             == .unreadable("the control command `screenshot` needs an absolute `path`, not `shot.png`"))
         #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "appearance": "sepia"]))
             == .unreadable("the control command `screenshot` has no appearance `sepia`; it takes `light` or `dark`"))
-        #expect(refusal(fields("screenshot", ["path": "/tmp/shot.png", "window": "inspector"]))
-            == .unreadable("the control command `screenshot` has no window `inspector`; it takes `main`, `settings` or `about`"))
         #expect(refusal(fields("control.take", ["waitSeconds": -1]))
             == .unreadable("the control command `control.take` needs a `waitSeconds` from 0 to 3600, not -1"))
         #expect(refusal(fields("control.take", ["waitSeconds": 3601])) != nil)
@@ -191,6 +229,9 @@ struct ControlMessageTests {
         #expect(ControlRequest.threadChoose(thread: "1", choice: 1).holdSeconds == 0)
         #expect(ControlRequest.threadShow(thread: "1").role == .operator)
         #expect(ControlRequest.threadList.role == .operator)
+        #expect(ControlRequest.threadVersionsOpen(search: nil).role == .operator)
+        #expect(ControlRequest.threadVersionsClose.role == .operator)
+        #expect(ControlRequest.threadVersion(number: 2, remove: false).role == .operator)
     }
 
     @Test("a listener's wait takes no lease, and may be held for its timeout, or with no limit without one")
@@ -210,7 +251,7 @@ struct ControlMessageTests {
     }
 
     @Test("only operator requests take the lease", arguments: [
-        ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
+        ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .configDismiss, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
         .commentOpen(text: "a"), .commentCompose(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),

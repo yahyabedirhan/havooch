@@ -26,6 +26,12 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch app demo`: the app runs the demo in the same window, as
     /// "Try the Demo" does. A closed window shows.
     case appDemo
+    /// `havooch open <path> [--project <slug>]`: the video at the
+    /// absolute `path` opened for a person, playing, with the app brought
+    /// to the front: in the project `project` when it's set, else in the
+    /// most recently used project that lists it, else as a plain video. No
+    /// lease: opening a file never takes control of the app from the person.
+    case open(path: String, project: String? = nil)
     /// `havooch player open <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
@@ -67,11 +73,14 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch send`: every queued message of the open video sent as
     /// one send, which the listener's `wait` gets.
     case send
-    /// `havooch wait [--timeout <seconds>]`: the next send as its
-    /// JSON payload. The app holds the request until a send is made, up to
-    /// `timeoutSeconds`, or with no limit when it's nil. The sender is the
-    /// listener, present while its `wait` is open.
-    case wait(timeoutSeconds: Int?)
+    /// `havooch wait [--video <path> | --project <slug>] [--timeout
+    /// <seconds>]`: the next send of one review as its JSON payload: the
+    /// review the video at the absolute `video` path opens in, or the
+    /// project `project`'s, else the key window's. The app holds the
+    /// request until a send is made, up to `timeoutSeconds`, or with no
+    /// limit when it's nil. The sender is that review's listener, present
+    /// while its `wait` is open.
+    case wait(timeoutSeconds: Int?, video: String? = nil, project: String? = nil)
     /// `havooch ack <send-id> [<text>]`: the listener has the send.
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
@@ -110,9 +119,20 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch thread list`: the sidebar shows the thread list, as
     /// Back in a thread view shows it.
     case threadList
+    /// `havooch thread versions [--search <text>]`: a project's thread
+    /// list with "All versions" open, its search set to `search`.
+    case threadVersionsOpen(search: String?)
+    /// `havooch thread versions --close`: "All versions" closes.
+    case threadVersionsClose
+    /// `havooch thread version <n> [--remove]`: the version `number` picked
+    /// in "All versions", which adds an older version's section to the
+    /// thread list and scrolls to it; with `remove`, a picked version's
+    /// section leaves the list, as its close button takes it.
+    case threadVersion(number: Int, remove: Bool)
     /// `havooch screenshot <abs.png> [--appearance light|dark]
-    /// [--hide-agent-indicator] [--window main|settings]`: the app's
-    /// `window` written as a PNG at the absolute `path`, in `appearance`
+    /// [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]`: the
+    /// app's `window` written as a PNG at the absolute `path`; for `main`,
+    /// the player window the message's `window` names, else the key one, in `appearance`
     /// when it's set, as the Mac shows it otherwise. The agent-control
     /// indicator shows as the person sees it, unless `hideAgentIndicator`
     /// leaves it out. The Settings window is opened for the capture, as
@@ -125,6 +145,119 @@ public enum ControlRequest: Equatable, Sendable {
     /// the pin cleared for `system`, so the theme follows the system
     /// appearance again.
     case themeSet(name: String)
+    /// `havooch setup status`: what Havooch detects of the setup, read
+    /// from disk again: the command link, each harness and its skill, and
+    /// the install.
+    case setupStatus
+    /// `havooch setup link [--dry-run]`: the `havooch` command linked in
+    /// `~/.local/bin`, as Link does. With `dryRun`, only what it would do.
+    case setupLink(dryRun: Bool = false)
+    /// `havooch setup install [--harness <name>]... [--dry-run]`: the
+    /// `havooch-mate` skill installed globally with `npx skills add`, for
+    /// the `harnesses` named, or for every harness found without it when
+    /// none is, as Install does. It starts the install and answers; `setup
+    /// status` follows its log. With `dryRun`, only the command it would run.
+    case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
+    /// `havooch setup cancel`: the running install stopped, as Cancel does.
+    case setupCancel
+    /// `havooch connect show`: the Connect view in the sidebar, as the
+    /// header's connect button opens it.
+    case connectShow
+    /// `havooch connect pick <harness>`: the harness picked in the Connect
+    /// view, as a click on its logo picks it: its readiness and its prompt
+    /// show.
+    case connectPick(harness: String)
+    /// `havooch connect disconnect`: the window's agent let go, as
+    /// Disconnect on the listener card does. Its open `wait` is refused.
+    case connectDisconnect
+    /// `havooch connect forget`: the agent the last run had is no longer
+    /// waited for, as Forget does while it reconnects.
+    case connectForget
+    /// `havooch tour show`: the setup tour over the stage, as "Finish
+    /// setup" opens it, at the step it was left on.
+    case tourShow
+    /// `havooch tour next`: the tour's next step, as Next or Later on its
+    /// panel; after the last step the tour ends, as Finish does.
+    case tourNext
+    /// `havooch tour skip`: the tour ends, as Skip Tour does; it starts
+    /// from the first step next time.
+    case tourSkip
+    /// `havooch tour close`: the tour's panel goes, as its close button
+    /// does; the tour keeps its step.
+    case tourClose
+    /// `havooch first-run show [<step>]`: the first-run window shows, as
+    /// on the first launch, on `step` (`welcome`, `tools`, `connect`,
+    /// `try-it`) as a click on its progress bar shows it, else where it was.
+    case firstRunShow(step: String? = nil)
+    /// `havooch first-run next`: the first-run window's next step, as
+    /// Get Started, Continue, Continue Anyway and Later go on.
+    case firstRunNext
+    /// `havooch first-run back`: the step before, as Back goes back.
+    case firstRunBack
+    /// `havooch first-run pick <harness>`: the harness picked on the
+    /// Connect step, as a click on its logo picks it: its demo prompt shows.
+    case firstRunPick(harness: String)
+    /// `havooch first-run demo`: the bundled demo video opened for the
+    /// person and the first-run window closed, as Open the Demo does.
+    case firstRunDemo
+    /// `havooch first-run skip`: the first-run window closed, as Skip
+    /// Setup and its close button close it.
+    case firstRunSkip
+    /// `havooch config dismiss`: the settings notice in the window goes,
+    /// as its close button does.
+    case configDismiss
+    /// `havooch window list`: every window, in the order they were made,
+    /// with what each holds and which one is key.
+    case windowList
+    /// `havooch window new`: a new empty window that shows the home
+    /// screen, as File › New Window makes one.
+    case windowNew
+    /// `havooch window close [<id>]`: a window closed, as its close
+    /// button closes it. The window is the message's `window`, else the
+    /// key window.
+    case windowClose
+    /// `havooch project new <slug> --from <path> [--title <title>]`: a
+    /// project in `config.toml` whose v1 is the video at the absolute
+    /// `path`; the video's review moves into it, and its listener keeps
+    /// listening (ADR 0004). No lease: the agent makes it on the person's
+    /// behalf.
+    case projectNew(slug: String, path: String, title: String? = nil)
+    /// `havooch project add <slug> <path> [--label <label>]`: the video at
+    /// the absolute `path` appended to the project as its next version,
+    /// shown in the project's window, which comes forward. No lease.
+    case projectAdd(slug: String, path: String, label: String? = nil)
+    /// `havooch version show <n>`: the project's version `number` (from 1)
+    /// on screen in the window, as a click on its segment or its row in
+    /// the version picker does (E10). The playhead keeps its time.
+    case versionShow(number: Int)
+    /// `havooch version pick [<query>]`: the version picker open under
+    /// the switcher's field, with `query` typed in its search field, as a
+    /// click on the field and typing do. An addition to the contract: the
+    /// picker can be shown, checked and screenshotted without a click.
+    case versionPick(query: String = "")
+    /// `havooch version close`: the version picker closed, as Escape
+    /// closes it.
+    case versionClose
+    /// `havooch compare open`: the compare popover open under the Compare
+    /// button, on the previous version and the one on screen, as a click
+    /// on the button opens it (E11).
+    case compareOpen
+    /// `havooch compare pick <side> [<query>]`: the version picker of one
+    /// side open in the popover, with `query` typed in its search field,
+    /// as a click on the side and typing do.
+    case comparePick(side: CompareSide, query: String = "")
+    /// `havooch compare set`: versions, layout, the side messages go to
+    /// and the slider, in the popover or on the stage.
+    case compareSet(CompareChange)
+    /// `havooch compare swap`: left and right exchanged, as the swap
+    /// button does.
+    case compareSwap
+    /// `havooch compare start`: the window compares the two versions on
+    /// one playhead, as the popover's Show side by side or Compare does.
+    case compareStart
+    /// `havooch compare exit`: back to one version, the right side's, as
+    /// Exit Compare and Escape do; in the popover, Cancel.
+    case compareExit
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -159,15 +292,21 @@ public enum ControlRequest: Equatable, Sendable {
         case light, dark
     }
 
-    /// The window `screenshot` captures: the player's, Settings or the About panel.
+    /// The window `screenshot` captures: a player window (the message's
+    /// `window`), Settings, the About panel or the first-run window.
     public enum Window: String, Equatable, Sendable, CaseIterable {
         case main, settings, about
+        case firstRun = "first-run"
     }
 
     /// Who may send a request.
     public enum Role: Equatable, Sendable {
         /// Anyone, at any time: it changes nothing a person sees.
         case free
+        /// A person, or an agent on a person's behalf: it changes what the
+        /// person sees as their own click would, with no lease and no
+        /// agent-control icon.
+        case person
         /// An agent that drives the UI: one at a time, under the lease.
         case `operator`
         /// The agent that receives sends, beside the person: no lease.
@@ -178,13 +317,22 @@ public enum ControlRequest: Equatable, Sendable {
     /// requests take the lease without a table.
     public var role: Role {
         switch self {
-        case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
-        case .themeSet: .operator
+        case .appStatus, .state, .controlTake, .controlRelease, .themeList, .windowList: .free
+        case .open, .projectNew, .projectAdd: .person
+        case .themeSet, .configDismiss, .windowNew, .windowClose: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator
         case .threadAnswer, .threadChoose, .threadOpen, .threadShow, .threadList: .operator
+        case .threadVersionsOpen, .threadVersionsClose, .threadVersion: .operator
         case .wait, .ack, .status, .reply, .ask: .listener
+        case .setupStatus: .free
+        case .setupLink, .setupInstall, .setupCancel: .operator
+        case .connectShow, .connectPick, .connectDisconnect, .connectForget: .operator
+        case .tourShow, .tourNext, .tourSkip, .tourClose: .operator
+        case .firstRunShow, .firstRunNext, .firstRunBack, .firstRunPick, .firstRunDemo, .firstRunSkip: .operator
+        case .versionShow, .versionPick, .versionClose: .operator
+        case .compareOpen, .comparePick, .compareSet, .compareSwap, .compareStart, .compareExit: .operator
         }
     }
 
@@ -195,7 +343,7 @@ public enum ControlRequest: Equatable, Sendable {
     public var holdSeconds: TimeInterval? {
         switch self {
         case .controlTake(let waitSeconds): TimeInterval(waitSeconds ?? 0)
-        case .wait(let timeoutSeconds): timeoutSeconds.map(TimeInterval.init)
+        case .wait(let timeoutSeconds, _, _): timeoutSeconds.map(TimeInterval.init)
         case .ask(_, _, let waitSeconds, _): waitSeconds.map(TimeInterval.init)
         default: 0
         }

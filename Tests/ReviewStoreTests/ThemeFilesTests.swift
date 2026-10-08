@@ -86,6 +86,23 @@ struct ThemeFilesTests {
         }
     }
 
+    @Test("white text reads on every shipped theme's accentFill at 4.5:1 or more; every theme file with its own accent sets its own fill, and the defaults use #48689d")
+    func filledControlsRead() throws {
+        let files = ThemeFiles.read(Self.shipped).files
+        let catalog = ThemeCatalog(builtIn: files, user: [])
+        for name in catalog.names {
+            let fill = try #require(try catalog.resolve(name)[.accentFill], "\(name) has no accentFill")
+            let ratio = ThemeColor.white.contrast(with: fill)
+            #expect(ratio >= ThemeColor.filledTextContrast, "\(name): white on accentFill \(fill.text) is \(ratio):1")
+        }
+        for file in files where file.tokens["accent"] != nil {
+            #expect(file.tokens["accentFill"] != nil, "\(file.name) sets accent but no accentFill")
+        }
+        for name in [ThemeCatalog.defaultLight, ThemeCatalog.defaultDark] {
+            #expect(try catalog.resolve(name)[.accentFill] == ThemeColor("#48689d"))
+        }
+    }
+
     /// A saturated hue between magenta and rose.
     private static func isPink(_ color: ThemeColor) -> Bool {
         let (r, g, b) = (Double(color.red) / 255, Double(color.green) / 255, Double(color.blue) / 255)
@@ -97,16 +114,16 @@ struct ThemeFilesTests {
         return degrees > 290 && degrees < 350
     }
 
-    @Test("the person's Themes/ folder is read in name order; a file that doesn't read is left out with its reason")
+    @Test("a folder of the person's themes is read in name order; a file that doesn't read is left out with its reason")
     func userFolder() throws {
         let layout = try temporaryLayout()
-        try FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: layout.formerThemesFolder, withIntermediateDirectories: true)
         try Data(##"{"name": "Brown", "kind": "dark", "tokens": {"accent": "#a0522d"}}"##.utf8)
-            .write(to: layout.themesFolder.appendingPathComponent("b.json"))
-        try Data("{ not json".utf8).write(to: layout.themesFolder.appendingPathComponent("a.json"))
-        try Data("ignored".utf8).write(to: layout.themesFolder.appendingPathComponent("notes.txt"))
+            .write(to: layout.formerThemesFolder.appendingPathComponent("b.json"))
+        try Data("{ not json".utf8).write(to: layout.formerThemesFolder.appendingPathComponent("a.json"))
+        try Data("ignored".utf8).write(to: layout.formerThemesFolder.appendingPathComponent("notes.txt"))
 
-        let reading = ThemeFiles.user(layout)
+        let reading = ThemeFiles.read(layout.formerThemesFolder)
         #expect(reading.files.map(\.name) == ["Brown"])
         #expect(reading.found.first?.url.lastPathComponent == "b.json")
         #expect(reading.problems.count == 1)
@@ -131,12 +148,12 @@ struct ThemeFilesTests {
     @Test("a person's theme that still sets a removed surface token loads with no problem, and its other tokens apply")
     func removedTokensStillLoad() throws {
         let layout = try temporaryLayout()
-        try FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: layout.formerThemesFolder, withIntermediateDirectories: true)
         let old = Self.removedSurfaces.map { "\"\($0)\": \"#123456\"" }.joined(separator: ", ")
         try Data(##"{"name": "Old", "kind": "dark", "extends": "Default Dark", "tokens": {\##(old), "accent": "#a0522d"}}"##.utf8)
-            .write(to: layout.themesFolder.appendingPathComponent("old.json"))
+            .write(to: layout.formerThemesFolder.appendingPathComponent("old.json"))
 
-        let reading = ThemeFiles.user(layout)
+        let reading = ThemeFiles.read(layout.formerThemesFolder)
         #expect(reading.problems.isEmpty)
         let catalog = ThemeCatalog(builtIn: ThemeFiles.read(Self.shipped).files, user: reading.files)
         #expect(catalog.problems.isEmpty)
@@ -146,27 +163,30 @@ struct ThemeFilesTests {
         #expect(theme.isComplete)
     }
 
-    @Test("with no settings file the settings are the defaults; they round-trip, with the pin as null while it follows the system")
+    @Test("with no settings file the settings are the defaults; the sidebar width round-trips")
     func settingsRoundTrip() throws {
         let layout = try temporaryLayout()
         #expect(try Settings.load(layout) == Settings())
-
-        try Settings(overrides: ["accent": "#123456"]).save(layout)
-        let text = try String(contentsOf: layout.settingsFile, encoding: .utf8)
-        #expect(text.contains(#""theme" : null"#))
-
-        let pinned = Settings(theme: "Dimmed", overrides: ["accent": "#123456"], sidebarWidth: 360)
-        try pinned.save(layout)
-        #expect(try Settings.load(layout) == pinned)
+        try Settings(sidebarWidth: 360).save(layout)
+        #expect(try Settings.load(layout) == Settings(sidebarWidth: 360))
     }
 
-    @Test("a settings file written by hand may leave keys out; one that doesn't read is refused, not replaced")
-    func handWrittenSettings() throws {
+    @Test("an older build's theme and overrides read once, and a save leaves them out; a file that doesn't read is refused, not replaced")
+    func formerSettings() throws {
         let layout = try temporaryLayout()
-        try Data(##"{"overrides": {"stage": "#000000"}}"##.utf8).write(to: layout.settingsFile)
-        #expect(try Settings.load(layout) == Settings(overrides: ["stage": "#000000"]))
+        #expect(try Settings.former(layout) == nil)
+        try Data(##"{"overrides": {"stage": "#000000"}, "sidebarWidth": 300, "theme": "Dimmed"}"##.utf8).write(to: layout.settingsFile)
+        #expect(try Settings.former(layout) == Settings.Former(theme: "Dimmed", overrides: ["stage": "#000000"]))
+        #expect(try Settings.load(layout) == Settings(sidebarWidth: 300))
+
+        try Data(##"{"overrides": {}, "theme": null}"##.utf8).write(to: layout.settingsFile)
+        #expect(try Settings.former(layout) == Settings.Former())
+
+        try Settings.load(layout).save(layout)
+        #expect(try Settings.former(layout) == nil)
 
         try Data("{ broken".utf8).write(to: layout.settingsFile)
         #expect(throws: Library.Failure.self) { try Settings.load(layout) }
+        #expect(throws: Library.Failure.self) { try Settings.former(layout) }
     }
 }

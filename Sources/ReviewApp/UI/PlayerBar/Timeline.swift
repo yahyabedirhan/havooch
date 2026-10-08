@@ -8,7 +8,7 @@ import SwiftUI
 /// the room. A click on a pin goes to its thread's frame.
 struct Timeline: View {
     /// Told which pin has the keyboard focus, so Space and Return press it.
-    let model: AppModel
+    let model: WindowModel
     let time: Double
     let duration: Double
     /// The threads on a frame, in time order. General has no pin.

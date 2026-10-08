@@ -8,7 +8,7 @@ import SwiftUI
 /// the live line says what the agent does now (`ThreadActivity`). The
 /// composer under it (`Composer`) writes on the thread.
 struct ThreadView: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ReviewThread
 
     var body: some View {
@@ -41,7 +41,7 @@ struct ThreadView: View {
 /// thread view and in the thread popover alike. The thread view offers the
 /// open question's quick replies under it.
 struct Conversation: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ReviewThread
     var offersQuickReplies = false
 
@@ -62,7 +62,7 @@ struct Conversation: View {
 /// that need the person, the thread's number and time in the middle, and
 /// Previous and Next at the trailing end.
 private struct ThreadViewBar: View {
-    let model: AppModel
+    let model: WindowModel
     let thread: ReviewThread
     @Environment(\.palette) private var palette
 

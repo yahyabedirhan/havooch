@@ -25,12 +25,12 @@ struct DemoTests {
     /// The app on the person's folder, moved there as a check's scratch
     /// folder is, or on the launch `environment` names, with the demo
     /// folder under the test's root, and the server in front of it.
-    private func run(environment: [String: String]? = nil) -> (AppModel, ControlServer) {
+    private func run(environment: [String: String]? = nil) -> (WindowModel, ControlServer) {
         let model = AppModel(
             environment: environment ?? [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo
-        )
+        ).makeWindow()
         let server = ControlServer(
-            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model, listeners: { model.listeners },
+            socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: model.app, listeners: { model.app.listeners },
             screenshotter: ControlServerTests.FakeScreenshotter(), quit: {}
         )
         return (model, server)
@@ -47,7 +47,7 @@ struct DemoTests {
 
     private func reviewFile(in support: URL) throws -> URL {
         let hash = try #require(ContentHash.of(MessageTests.fixture))
-        return SupportLayout(root: support).reviewFile(hash)
+        return SupportLayout(root: support).reviewFile(.video(contentHash: hash))
     }
 
     private func exists(_ url: URL) -> Bool {
@@ -69,7 +69,7 @@ struct DemoTests {
         #expect(!model.isDemo)
         #expect(!model.state().app.demo)
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
         #expect(model.isDemo)
         #expect(model.support.path == demo.path)
@@ -82,7 +82,7 @@ struct DemoTests {
     func threadsStayOut() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
         _ = try await model.addMessage(text: "On the demo", at: 2)
 
@@ -95,10 +95,10 @@ struct DemoTests {
     func leave() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         _ = try await model.addMessage(text: "On the demo", at: 2)
 
-        await model.leaveDemo()
+        await model.app.leaveDemo()
 
         #expect(!model.isDemo)
         #expect(model.video == nil)
@@ -116,11 +116,11 @@ struct DemoTests {
     func demoKeepsThreads() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         _ = try await model.addMessage(text: "On the demo", at: 2)
-        await model.leaveDemo()
+        await model.app.leaveDemo()
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
         #expect(model.frameThreads.count == 1)
     }
@@ -129,7 +129,7 @@ struct DemoTests {
     func openDuringDemo() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         let mine = try ownVideo()
 
         model.openForPerson(mine)
@@ -150,10 +150,10 @@ struct DemoTests {
         try await model.open(mine)
         #expect(model.recents.map(\.path) == [mine.standardizedFileURL.path])
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         #expect(model.recents.map(\.path) == [MessageTests.fixture.standardizedFileURL.path])
 
-        await model.leaveDemo()
+        await model.app.leaveDemo()
         #expect(model.recents.map(\.path) == [mine.standardizedFileURL.path])
     }
 
@@ -161,12 +161,13 @@ struct DemoTests {
     func themeStays() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
-        _ = try model.setTheme("Default Dark")
+        _ = try model.app.setTheme("Default Dark")
 
-        #expect(exists(SupportLayout(root: person).settingsFile))
-        #expect(!exists(SupportLayout(root: demo).settingsFile))
+        let pinned = try String(contentsOf: person.appendingPathComponent("config/config.toml"), encoding: .utf8)
+        #expect(pinned.contains("theme = \"Default Dark\""))
+        #expect(!exists(demo.appendingPathComponent("config")))
     }
 
     @Test("the control socket stays on the person's folder, and no demo pointer is recorded")
@@ -174,10 +175,10 @@ struct DemoTests {
         defer { cleanUp() }
         let (model, _) = run()
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
-        #expect(model.launchSupport.path == person.path)
-        #expect(ControlSocket.locate(support: person).path == ControlSocket.url(in: model.launchSupport).path)
+        #expect(model.app.launchSupport.path == person.path)
+        #expect(ControlSocket.locate(support: person).path == ControlSocket.url(in: model.app.launchSupport).path)
         #expect(DemoPointer.recorded(in: person) == nil)
     }
 
@@ -185,7 +186,7 @@ struct DemoTests {
     func listenerFollows() async throws {
         defer { cleanUp() }
         let (model, server) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         _ = try await model.addMessage(text: "On the demo", at: 2)
         let send = try await model.sendQueue()
 
@@ -194,7 +195,7 @@ struct DemoTests {
         #expect(taken.output.contains(send.id))
         #expect(try await listener(server)["takenSends"] as? Int == 1)
 
-        await model.leaveDemo()
+        await model.app.leaveDemo()
 
         #expect(try await listener(server)["takenSends"] as? Int == 0)
         #expect(try await listener(server)["pendingSends"] as? Int == 0)
@@ -204,15 +205,15 @@ struct DemoTests {
     func writtenAfterLeaving() async throws {
         defer { cleanUp() }
         let (model, server) = run()
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         _ = try await model.addMessage(text: "On the demo", at: 2)
         _ = try await model.sendQueue()
         let answer = await server.reply(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.listener, json: true))
         #expect(answer.delivered != nil)
 
-        await model.leaveDemo()
+        await model.app.leaveDemo()
         server.written(answer)
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
         #expect(try await listener(server)["takenSends"] as? Int == 1)
         #expect(try await listener(server)["pendingSends"] as? Int == 0)
@@ -223,7 +224,7 @@ struct DemoTests {
         defer { cleanUp() }
         let (model, _) = run()
 
-        await #expect(throws: AppRefusal.self) { try await model.enterDemo(root.appendingPathComponent("missing.mp4")) }
+        await #expect(throws: AppRefusal.self) { try await model.app.enterDemo(root.appendingPathComponent("missing.mp4"), in: model) }
 
         #expect(!model.isDemo)
         #expect(model.support.path == person.path)
@@ -245,7 +246,7 @@ struct DemoTests {
         }
         await Task.yield()
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
 
         #expect(await opening.value?.contains("switched") == true)
         #expect(model.video?.url == MessageTests.fixture.standardizedFileURL)
@@ -267,11 +268,11 @@ struct DemoTests {
         #expect(model.isDemo)
         #expect(model.state().app.demo)
 
-        try await model.enterDemo(MessageTests.fixture)
+        try await model.app.enterDemo(MessageTests.fixture, in: model)
         #expect(model.support.path == folder.path)
         #expect(model.video != nil)
 
-        await model.leaveDemo()
+        await model.app.leaveDemo()
         #expect(model.isDemo)
         #expect(model.support.path == folder.path)
         #expect(!exists(demo))

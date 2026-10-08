@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 
 /// Loads and saves what the app keeps between runs: the reviews, the
-/// outbox and the recent videos, at the paths its `SupportLayout` gives.
+/// outboxes and the recent videos, at the paths its `SupportLayout` gives.
 /// Every save writes the whole file to a
 /// temporary one and renames it over the old one: a reader, and a run that
 /// ends half way, see the old file or the new one, never a part of one.
@@ -27,31 +27,34 @@ public final class Library {
         }
     }
 
-    /// The content hash of each video with a review on disk, by its first
-    /// eight digits: a listener's command names an id, whose prefix names
-    /// its video.
-    private var index: [String: String] = [:]
-    /// The content hash of each video with a review on disk, by the path
-    /// its review records: `recent.json` named a path only.
+    /// The review on disk with each id prefix: a listener's command names
+    /// an id, whose prefix names its review.
+    private var index: [String: ReviewKey] = [:]
+    /// The content hash of each plain video with a review on disk, by the
+    /// path its review records: `recent.json` named a path only.
     private var paths: [String: String] = [:]
     /// The sends on disk with a message the listener hasn't finished, in
     /// the order they were sent, as the reviews read at launch.
     private var unfinished: [SendRef] = []
-    /// Whether `outbox.json` is a newer build's, which is left as it is.
-    private var outboxIsNewer = false
+    /// The reviews whose outbox file a newer build wrote: each is left as it is.
+    private var newerOutboxes: Set<ReviewKey> = []
 
-    /// Reads every review under `layout` once, for its video and its
-    /// unfinished sends. Nothing is written.
+    /// Reads every review under `layout` once, the plain videos' and the
+    /// projects', for its key and its unfinished sends. Nothing is written.
     public init(layout: SupportLayout) {
         self.layout = layout
         var sent: [(Date, SendRef)] = []
-        let folders = (try? FileManager.default.contentsOfDirectory(at: layout.videosFolder, includingPropertiesForKeys: nil)) ?? []
-        for folder in folders {
-            // A review that doesn't read stays out; opening its video says why.
-            guard let review = try? load(folder.lastPathComponent) else { continue }
+        let fileManager = FileManager.default
+        let videos = (try? fileManager.contentsOfDirectory(at: layout.videosFolder, includingPropertiesForKeys: nil)) ?? []
+        let projects = (try? fileManager.contentsOfDirectory(at: layout.projectsFolder, includingPropertiesForKeys: nil)) ?? []
+        let keys = videos.map { ReviewKey.video(contentHash: $0.lastPathComponent) }
+            + projects.map { ReviewKey.project(slug: $0.lastPathComponent) }
+        for key in keys {
+            // A review that doesn't read stays out; opening it says why.
+            guard let review = try? load(key) else { continue }
             note(review)
             for send in review.sends where !review.isFinished(send.id) {
-                sent.append((send.sentAt, SendRef(sendID: send.id, contentHash: review.video.contentHash)))
+                sent.append((send.sentAt, SendRef(sendID: send.id, review: review.key)))
             }
         }
         unfinished = sent.sorted { $0.0 < $1.0 }.map(\.1)
@@ -59,67 +62,146 @@ public final class Library {
 
     // MARK: - Reviews
 
-    /// The content hash of the video with a review on disk whose first
-    /// eight digits are `prefix`; nil when there's none.
-    public func contentHash(prefix: String) -> String? {
+    /// The review on disk whose ids carry `prefix`; nil when there's none.
+    public func key(prefix: String) -> ReviewKey? {
         index[prefix]
     }
 
-    /// The content hash of the video the thread, message or send `id` is
-    /// on; nil when no review on disk is that video's.
-    public func contentHash(of id: ItemID) -> String? {
-        contentHash(prefix: id.hash8)
+    /// The review on disk the thread, message or send `id` is on; nil
+    /// when no review has its prefix.
+    public func key(of id: ItemID) -> ReviewKey? {
+        key(prefix: id.hash8)
     }
 
-    /// The review kept for the video with `contentHash`; nil when there's
-    /// none yet. Throws when there is a file and it doesn't read, or a
-    /// newer build wrote it: that file must not be written over.
-    public func load(_ contentHash: String) throws(Failure) -> VideoReview? {
-        let file = layout.reviewFile(contentHash)
+    /// Whether a review other than `key` has the id prefix `hash8`.
+    public func isTaken(_ hash8: String, by other: ReviewKey) -> Bool {
+        index[hash8].map { $0 != other } ?? false
+    }
+
+    /// The review kept as `key`; nil when there's none yet. Throws when
+    /// there is a file and it doesn't read, or a newer build wrote it:
+    /// that file must not be written over.
+    public func load(_ key: ReviewKey) throws(Failure) -> Review? {
+        let file = layout.reviewFile(key)
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
-        let kept: Kept<VideoReview> = try read(file)
-        // A folder that was copied or renamed by hand isn't that video's.
-        guard kept.content.video.contentHash == contentHash else {
-            throw Failure(reason: "\(file.path) is the review of another video (\(kept.content.video.contentHash))")
+        let kept: Kept<Review> = try read(file)
+        // A folder that was copied or renamed by hand isn't that review's.
+        guard kept.content.key == key else {
+            throw Failure(reason: "\(file.path) is the review of another video or project (\(Self.name(kept.content.key)))")
         }
         return kept.content
     }
 
-    /// Keeps `review`, replacing its video's file.
-    public func save(_ review: VideoReview) throws(Failure) {
-        try write(Kept(content: review), to: layout.reviewFile(review.video.contentHash))
+    /// Keeps `review`, replacing its file.
+    public func save(_ review: Review) throws(Failure) {
+        try write(Kept(content: review), to: layout.reviewFile(review.key))
         note(review)
     }
 
-    private func note(_ review: VideoReview) {
-        index[review.hash8] = review.video.contentHash
-        paths[review.video.path] = review.video.contentHash
+    /// Moves the review kept as `old` to `review`'s own key (`project new
+    /// --from`): `review` is written first, then the keyframes and crops
+    /// move to its folder, then the old review file goes. The old folder
+    /// keeps the video's transcript. When `review` can't be written,
+    /// nothing changes.
+    public func move(_ review: Review, from old: ReviewKey) throws(Failure) {
+        try save(review)
+        let fileManager = FileManager.default
+        for (from, to) in [(layout.framesFolder(old), layout.framesFolder(review.key)), (layout.cropsFolder(old), layout.cropsFolder(review.key))] {
+            guard let files = try? fileManager.contentsOfDirectory(at: from, includingPropertiesForKeys: nil) else { continue }
+            try? fileManager.createDirectory(at: to, withIntermediateDirectories: true)
+            for file in files {
+                // A picture that can't move stays; the review file says what's kept.
+                try? fileManager.moveItem(at: file, to: to.appendingPathComponent(file.lastPathComponent))
+            }
+            try? fileManager.removeItem(at: from)
+        }
+        try? fileManager.removeItem(at: layout.reviewFile(old))
+        unfinished = unfinished.map { $0.review == old ? SendRef(sendID: $0.sendID, review: review.key) : $0 }
+        if let contentHash = old.contentHash { paths = paths.filter { $0.value != contentHash } }
     }
 
-    // MARK: - The outbox
+    private func note(_ review: Review) {
+        index[review.hash8] = review.key
+        if let contentHash = review.key.contentHash { paths[review.video.path] = contentHash }
+    }
 
-    /// The outbox as the last run left it, made to agree with the reviews
-    /// on disk (`Outbox.reconcile`): with no file, or one that doesn't
-    /// read, every unfinished send is in line again, so no feedback is
-    /// lost with the file.
-    public func loadOutbox() -> Outbox {
+    /// `the video <hash>` or `the project <slug>`.
+    private static func name(_ key: ReviewKey) -> String {
+        switch key {
+        case .video(let contentHash): "the video \(contentHash)"
+        case .project(let slug): "the project \(slug)"
+        }
+    }
+
+    // MARK: - The outboxes
+
+    /// The outbox of the review `key` as the last run left it, made to
+    /// agree with the reviews on disk (`Outbox.reconcile`): with no file,
+    /// or one that doesn't read, every unfinished send of the review is in
+    /// line again, so no feedback is lost with the file.
+    public func loadOutbox(_ key: ReviewKey) -> Outbox {
+        let file = layout.outboxFile(key)
         var outbox = Outbox()
-        if FileManager.default.fileExists(atPath: layout.outboxFile.path) {
+        if FileManager.default.fileExists(atPath: file.path) {
             do throws(Failure) {
-                let kept: Kept<Outbox> = try read(layout.outboxFile)
+                let kept: Kept<Outbox> = try read(file)
                 outbox = kept.content
             } catch {
-                outboxIsNewer = isNewer(layout.outboxFile)
+                if isNewer(file) { newerOutboxes.insert(key) }
             }
         }
-        outbox.reconcile(unfinished: unfinished)
+        outbox.reconcile(unfinished: unfinished.filter(key.holds))
         return outbox
     }
 
-    /// Keeps `outbox`. A newer build's file is left as it is.
-    public func save(_ outbox: Outbox) throws(Failure) {
-        guard !outboxIsNewer else { throw Failure(reason: "\(layout.outboxFile.path) is from a newer version of the app") }
-        try write(Kept(content: outbox), to: layout.outboxFile)
+    /// Keeps `outbox` as the review `key`'s. A newer build's file is left
+    /// as it is.
+    public func save(_ outbox: Outbox, of key: ReviewKey) throws(Failure) {
+        let file = layout.outboxFile(key)
+        guard !newerOutboxes.contains(key) else { throw Failure(reason: "\(file.path) is from a newer version of the app") }
+        try write(Kept(content: outbox), to: file)
+    }
+
+    /// Deletes the outbox file of the review `key`, which became another
+    /// review (`project new --from`) and whose outbox is kept under that
+    /// one's key now. A newer build's file is left as it is.
+    public func removeOutbox(_ key: ReviewKey) {
+        guard !newerOutboxes.contains(key) else { return }
+        try? FileManager.default.removeItem(at: layout.outboxFile(key))
+    }
+
+    /// Splits the one outbox of builds before a listener per review into
+    /// the outbox of each review its sends are on, once: each part keeps
+    /// its sends in line and taken, the listener session and the context
+    /// it had of that review's videos, so the listener that comes back
+    /// takes up where it was. A review that has its own outbox already
+    /// keeps it. The old file is deleted once every part is written. One
+    /// that doesn't read, or a newer build's, is left as it is: each
+    /// review's outbox puts its unfinished sends back in line all the same.
+    public func migrateFormerOutbox() {
+        let file = layout.formerOutboxFile
+        guard FileManager.default.fileExists(atPath: file.path) else { return }
+        let former: Outbox
+        do throws(Failure) {
+            let kept: Kept<Outbox> = try read(file)
+            former = kept.content
+        } catch {
+            return
+        }
+        var keys: [ReviewKey] = []
+        for ref in former.pending + former.taken {
+            let key = ref.review
+            if !keys.contains(key) { keys.append(key) }
+        }
+        for key in keys where !FileManager.default.fileExists(atPath: layout.outboxFile(key).path) {
+            do throws(Failure) {
+                try write(Kept(content: former.part(for: key)), to: layout.outboxFile(key))
+            } catch {
+                // Tried again on the next launch; nothing is lost meanwhile.
+                return
+            }
+        }
+        try? FileManager.default.removeItem(at: file)
     }
 
     // MARK: - Recent videos
@@ -129,6 +211,9 @@ public final class Library {
 
     private struct Recents: Codable {
         var videos: [RecentVideo]
+        /// When each project was last opened, by slug: the most recently
+        /// used project opens a video two projects list (decision C4).
+        var projects: [String: Date]?
     }
 
     /// The last open video, as `recent.json` kept it before the list.
@@ -139,6 +224,8 @@ public final class Library {
     /// The recent videos, the newest first, as the last save left them;
     /// nil until the first read.
     private var recentList: [RecentVideo]?
+    /// When each project was last opened, as the last save left it.
+    private var projectUses: [String: Date] = [:]
     /// Whether `recents.json` is a newer build's, which is left as it is.
     private var recentsAreNewer = false
 
@@ -154,6 +241,7 @@ public final class Library {
             do throws(Failure) {
                 let kept: Kept<Recents> = try read(file)
                 list = Array(kept.content.videos.prefix(Self.recentLimit))
+                projectUses = kept.content.projects ?? [:]
             } catch {
                 recentsAreNewer = isNewer(file)
             }
@@ -196,7 +284,24 @@ public final class Library {
     private func saveRecents(_ list: [RecentVideo]) {
         guard !recentsAreNewer else { return }
         recentList = list
-        try? write(Kept(content: Recents(videos: list)), to: layout.recentsFile)
+        try? write(Kept(content: Recents(videos: list, projects: projectUses.isEmpty ? nil : projectUses)), to: layout.recentsFile)
+    }
+
+    // MARK: - Projects used
+
+    /// When each project was last opened, by slug. Empty when none was,
+    /// or `recents.json` doesn't read.
+    public func projectsUsed() -> [String: Date] {
+        _ = recents()
+        return projectUses
+    }
+
+    /// The project `slug` was opened at `time`. A convenience, as the
+    /// recent videos are: when it can't be written, it's only lost.
+    public func recordProjectOpened(_ slug: String, at time: Date) {
+        let list = recents()
+        projectUses[slug] = time
+        saveRecents(list)
     }
 
     /// The one entry `recent.json` gives, then `recent.json` deleted. Its

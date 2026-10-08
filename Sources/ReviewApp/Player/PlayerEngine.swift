@@ -32,6 +32,9 @@ final class PlayerEngine {
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var rateObserver: (any NSObjectProtocol)?
+    /// Called on each periodic tick of the time, after `time` moved: a
+    /// `PlayerPair` corrects the other player's drift from it.
+    @ObservationIgnored var ticked: (() -> Void)?
 
     /// How long a file gets to become ready to play.
     private static let readyWait = Duration.seconds(10)
@@ -41,7 +44,10 @@ final class PlayerEngine {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(value: 1, timescale: 30), queue: .main
         ) { [weak self] time in
-            MainActor.assumeIsolated { self?.moved(to: time) }
+            MainActor.assumeIsolated {
+                self?.moved(to: time)
+                self?.ticked?()
+            }
         }
         rateObserver = NotificationCenter.default.addObserver(
             forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
@@ -54,17 +60,7 @@ final class PlayerEngine {
     /// play is refused with the reason, and the video that was open stays.
     func load(_ url: URL) async throws(AppRefusal) {
         let asset = AVURLAsset(url: url)
-        let playable: Bool
-        let track: AVAssetTrack?
-        do {
-            playable = try await asset.load(.isPlayable)
-            track = try await asset.loadTracks(withMediaType: .video).first
-        } catch {
-            throw AppRefusal("can't play \(url.path): \(error.localizedDescription)")
-        }
-        guard playable, let track else {
-            throw AppRefusal("can't play \(url.path): it has no video this Mac can play")
-        }
+        let track = try await Self.videoTrack(of: asset, at: url)
         let length: CMTime
         let frameRate: Float
         let shown: CGSize
@@ -103,6 +99,28 @@ final class PlayerEngine {
         time = 0
     }
 
+    /// Refused with the reason when the file at `url` has no video this
+    /// Mac can play, before anything changes: `havooch open` asks first.
+    static func checkPlayable(_ url: URL) async throws(AppRefusal) {
+        _ = try await videoTrack(of: AVURLAsset(url: url), at: url)
+    }
+
+    /// The asset's video track, when the asset plays and has one.
+    private static func videoTrack(of asset: AVURLAsset, at url: URL) async throws(AppRefusal) -> AVAssetTrack {
+        let playable: Bool
+        let track: AVAssetTrack?
+        do {
+            playable = try await asset.load(.isPlayable)
+            track = try await asset.loadTracks(withMediaType: .video).first
+        } catch {
+            throw AppRefusal("can't play \(url.path): \(error.localizedDescription)")
+        }
+        guard playable, let track else {
+            throw AppRefusal("can't play \(url.path): it has no video this Mac can play")
+        }
+        return track
+    }
+
     /// Closes the open video: the player stops and holds nothing.
     func close() {
         player.pause()
@@ -133,6 +151,32 @@ final class PlayerEngine {
             player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         }
         player.play()
+    }
+
+    /// Plays from `seconds` at the host clock's `hostTime`, at `speed`, so
+    /// two players started with one host time play in step (P8). A time
+    /// at or past the end only moves there. Nothing with no video.
+    func play(from seconds: Double, atHostTime hostTime: CMTime) {
+        guard player.currentItem?.status == .readyToPlay else { return }
+        // `setRate(_:time:atHostTime:)` is refused while the player waits
+        // to minimize stalling: a file on disk doesn't stall.
+        player.automaticallyWaitsToMinimizeStalling = false
+        guard seconds < duration - frameDuration / 2 else {
+            player.seek(to: Self.exact(duration), toleranceBefore: .zero, toleranceAfter: .zero)
+            return
+        }
+        player.setRate(Float(speed), time: Self.exact(max(seconds, 0)), atHostTime: hostTime)
+    }
+
+    /// The player is no longer wanted: it stops, holds nothing, and
+    /// stops telling the time. A compare side that goes is retired.
+    func retire() {
+        close()
+        ticked = nil
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        if let rateObserver { NotificationCenter.default.removeObserver(rateObserver) }
+        timeObserver = nil
+        rateObserver = nil
     }
 
     func pause() {

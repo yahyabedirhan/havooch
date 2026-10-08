@@ -1,5 +1,7 @@
 # Settings are a TOML file under ~/.config that agents edit
 
+> 2026-10-08 (#84): two additions while building it. The theme picker and `havooch theme set` stay, so the app has one more targeted write: it sets, replaces or takes out the one `theme` line, and keeps every other line and comment. And when `HAVOOCH_SUPPORT_DIR` moves the support folder, the file and `themes/` move with it, into its `config/` folder, before `XDG_CONFIG_HOME`: a test, a check or a demo run on a scratch folder never reads or writes the person's settings.
+
 Havooch's settings move out of `settings.json` in the support folder into one TOML file, `$XDG_CONFIG_HOME/havooch/config.toml` when that variable holds an absolute path, else `~/.config/havooch/config.toml`. The person and their agents set things on purpose in it, and the projects of ADR 0004 live in it. The design follows Shipyard's configuration (`yahyabedirhan/shipyard` at `d2a967a`, its ADR 0001 and `docs/configuration.md`) and Swift Lab's ADR 0016 (`yahyabedirhan/swift-lab` at `ccb82cb`), which copied it.
 
 ## Decision

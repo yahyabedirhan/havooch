@@ -8,6 +8,7 @@ import Testing
 struct LibraryTests {
     static let hash = String(repeating: "a", count: 64)
     static let other = String(repeating: "b", count: 64)
+    static let key = ReviewKey.video(contentHash: hash)
 
     private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
@@ -27,8 +28,8 @@ struct LibraryTests {
     /// on two threads (one on a region, with a question and its answer and
     /// a reply, done; one working), the acknowledgement on General, a
     /// queued message on a third thread, a popover frame and a note.
-    private func review(_ hash: String = hash, path: String = "/videos/sample.mp4") throws -> VideoReview {
-        var review = VideoReview(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: path, frameRate: 30))
+    private func review(_ hash: String = hash, path: String = "/videos/sample.mp4") throws -> Review {
+        var review = Review(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: path, frameRate: 30))
         let first = try review.write(text: "Too fast here", at: 10, now: at(1_800_000_000)).message.id
         let boxed = try review.write(
             text: "This box", at: 12.5, region: try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25), now: at(1_800_000_000)
@@ -57,11 +58,11 @@ struct LibraryTests {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         let review = try review()
-        #expect(try Library(layout: SupportLayout(root: scratch.folder)).load(Self.hash) == nil)
+        #expect(try Library(layout: SupportLayout(root: scratch.folder)).load(.video(contentHash: Self.hash)) == nil)
 
         try Library(layout: SupportLayout(root: scratch.folder)).save(review)
 
-        let read = try #require(try Library(layout: SupportLayout(root: scratch.folder)).load(Self.hash))
+        let read = try #require(try Library(layout: SupportLayout(root: scratch.folder)).load(.video(contentHash: Self.hash)))
         #expect(read == review)
         #expect(read.threads.map(\.number) == [0, 3, 1, 2])
         #expect(read.threads.map(\.state) == [nil, .queued, .working, .done])
@@ -84,11 +85,11 @@ struct LibraryTests {
         defer { scratch.cleanUp() }
         let library = Library(layout: SupportLayout(root: scratch.folder))
         try library.save(try review())
-        #expect(library.layout.reviewFile(Self.hash).path == scratch.folder.path + "/videos/\(Self.hash)/review.json")
-        let text = try String(contentsOf: library.layout.reviewFile(Self.hash), encoding: .utf8)
+        #expect(library.layout.reviewFile(.video(contentHash: Self.hash)).path == scratch.folder.path + "/videos/\(Self.hash)/review.json")
+        let text = try String(contentsOf: library.layout.reviewFile(.video(contentHash: Self.hash)), encoding: .utf8)
         let object = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         #expect(object["schemaVersion"] as? Int == 1)
-        #expect(Set(object.keys) == ["schemaVersion", "video", "note", "threads", "sends", "counters"])
+        #expect(Set(object.keys) == ["schemaVersion", "video", "note", "threads", "sends", "counters", "hash8"])
         #expect(text.contains("\"sentAt\" : \"2027-01-15T08:00:00.250Z\""))
         #expect(text.contains("\"path\" : \"/videos/sample.mp4\""))
     }
@@ -100,14 +101,14 @@ struct LibraryTests {
         try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
 
         let library = Library(layout: SupportLayout(root: scratch.folder))
-        #expect(library.contentHash(prefix: "aaaaaaaa") == Self.hash)
-        #expect(library.contentHash(of: try item("t", 2)) == Self.hash)
-        #expect(library.contentHash(of: try item("m", 99)) == Self.hash)
-        #expect(library.contentHash(of: try item("s", 1)) == Self.hash)
-        #expect(library.contentHash(of: try item("t", Self.other, 1)) == nil)
+        #expect(library.key(prefix: "aaaaaaaa") == .video(contentHash: Self.hash))
+        #expect(library.key(of: try item("t", 2)) == .video(contentHash: Self.hash))
+        #expect(library.key(of: try item("m", 99)) == .video(contentHash: Self.hash))
+        #expect(library.key(of: try item("s", 1)) == .video(contentHash: Self.hash))
+        #expect(library.key(of: try item("t", Self.other, 1)) == nil)
 
         try library.save(try review(Self.other))
-        #expect(library.contentHash(of: try item("t", Self.other, 1)) == Self.other)
+        #expect(library.key(of: try item("t", Self.other, 1)) == .video(contentHash: Self.other))
     }
 
     @Test("a prototype's review, with comments and batches, doesn't read and is left as it is")
@@ -115,7 +116,7 @@ struct LibraryTests {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         let library = Library(layout: SupportLayout(root: scratch.folder))
-        let file = library.layout.reviewFile(Self.hash)
+        let file = library.layout.reviewFile(.video(contentHash: Self.hash))
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let old = Data("""
         { "video": { "contentHash": "\(Self.hash)", "title": "sample", "duration": 21.233, "path": "/videos/sample.mp4" },
@@ -124,7 +125,7 @@ struct LibraryTests {
         """.utf8)
         try old.write(to: file)
 
-        let failure = #expect(throws: Library.Failure.self) { try library.load(Self.hash) }
+        let failure = #expect(throws: Library.Failure.self) { try library.load(.video(contentHash: Self.hash)) }
         #expect(failure?.reason.contains("doesn't read") == true)
         #expect(try Data(contentsOf: file) == old)
     }
@@ -133,13 +134,13 @@ struct LibraryTests {
     func newerSchema() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        let file = Library(layout: SupportLayout(root: scratch.folder)).layout.reviewFile(Self.hash)
+        let file = Library(layout: SupportLayout(root: scratch.folder)).layout.reviewFile(.video(contentHash: Self.hash))
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let newer = Data("{ \"schemaVersion\": 2, \"video\": { \"contentHash\": \"\(Self.hash)\" }, \"shapes\": [] }".utf8)
         try newer.write(to: file)
 
         let library = Library(layout: SupportLayout(root: scratch.folder))
-        let failure = #expect(throws: Library.Failure.self) { try library.load(Self.hash) }
+        let failure = #expect(throws: Library.Failure.self) { try library.load(.video(contentHash: Self.hash)) }
         #expect(failure?.reason.contains("newer version of the app (schema 2, this one reads 1)") == true)
         #expect(failure?.reason.contains(file.path) == true)
         #expect(try Data(contentsOf: file) == newer)
@@ -150,23 +151,23 @@ struct LibraryTests {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
         try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
-        let file = Library(layout: SupportLayout(root: scratch.folder)).layout.reviewFile(Self.hash)
+        let file = Library(layout: SupportLayout(root: scratch.folder)).layout.reviewFile(.video(contentHash: Self.hash))
         let half = try Data(contentsOf: file).prefix(200)
         try half.write(to: file)
         try Library(layout: SupportLayout(root: scratch.folder)).save(try review(Self.other))
 
         let library = Library(layout: SupportLayout(root: scratch.folder))
-        let failure = #expect(throws: Library.Failure.self) { try library.load(Self.hash) }
+        let failure = #expect(throws: Library.Failure.self) { try library.load(.video(contentHash: Self.hash)) }
         #expect(failure?.reason.contains("doesn't read") == true)
         #expect(try Data(contentsOf: file) == half)
-        #expect(library.contentHash(of: try item("m", 1)) == nil)
-        #expect(library.contentHash(of: try item("m", Self.other, 1)) == Self.other)
+        #expect(library.key(of: try item("m", 1)) == nil)
+        #expect(library.key(of: try item("m", Self.other, 1)) == .video(contentHash: Self.other))
 
         // A folder copied by hand under another video's hash.
-        let copied = library.layout.reviewFile(String(repeating: "c", count: 64))
+        let copied = library.layout.reviewFile(.video(contentHash: String(repeating: "c", count: 64)))
         try FileManager.default.createDirectory(at: copied.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: library.layout.reviewFile(Self.other), to: copied)
-        let wrong = #expect(throws: Library.Failure.self) { try library.load(String(repeating: "c", count: 64)) }
+        try FileManager.default.copyItem(at: library.layout.reviewFile(.video(contentHash: Self.other)), to: copied)
+        let wrong = #expect(throws: Library.Failure.self) { try library.load(.video(contentHash: String(repeating: "c", count: 64))) }
         #expect(wrong?.reason.contains("another video") == true)
     }
 
@@ -182,7 +183,7 @@ struct LibraryTests {
         let library = Library(layout: SupportLayout(root: scratch.folder))
         var review = try review()
         try library.save(review)
-        let file = library.layout.reviewFile(Self.hash)
+        let file = library.layout.reviewFile(.video(contentHash: Self.hash))
         let before = try Data(contentsOf: file)
         let folder = file.deletingLastPathComponent()
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
@@ -200,8 +201,8 @@ struct LibraryTests {
         defer { scratch.cleanUp() }
         let support = scratch.folder.appendingPathComponent("support", isDirectory: true)
         let library = Library(layout: SupportLayout(root: support))
-        #expect(try library.load(Self.hash) == nil)
-        #expect(library.loadOutbox() == Outbox())
+        #expect(try library.load(.video(contentHash: Self.hash)) == nil)
+        #expect(library.loadOutbox(Self.key) == Outbox())
         #expect(library.recents().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: support.path))
     }
@@ -216,78 +217,87 @@ struct LibraryTests {
         try library.save(try review())
         var outbox = Outbox()
         outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
-        try library.save(outbox)
+        try library.save(outbox, of: Self.key)
         library.recordOpened(URL(fileURLWithPath: "/videos/sample.mp4"), contentHash: Self.hash, at: at(1_800_000_000))
 
         #expect(!FileManager.default.fileExists(atPath: real.path))
         let other = Library(layout: SupportLayout(root: real))
-        #expect(try other.load(Self.hash) == nil)
-        #expect(other.contentHash(of: try item("m", 1)) == nil)
-        #expect(other.loadOutbox() == Outbox())
+        #expect(try other.load(.video(contentHash: Self.hash)) == nil)
+        #expect(other.key(of: try item("m", 1)) == nil)
+        #expect(other.loadOutbox(Self.key) == Outbox())
         #expect(other.recents().isEmpty)
-        #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outbox.json", "recents.json"])
+        #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outboxes", "outboxes/video-\(Self.hash).json", "recents.json"])
     }
 
-    // MARK: - The outbox
+    // MARK: - The outboxes
 
-    @Test("the outbox reads back with its line, its taken sends, its session and the context sent")
+    static let otherKey = ReviewKey.video(contentHash: other)
+    static let mate = ListenerSession(key: "listener-1", name: "Mate", place: "/shop")
+
+    /// Two reviews on disk, each with unfinished sends: `s-1` of `hash`,
+    /// and `s-1` and `s-2` of `other`, sent later.
+    private func twoReviews(in folder: URL) throws {
+        try Library(layout: SupportLayout(root: folder)).save(try review())
+        var second = try review(Self.other)
+        try second.send(at: at(1_800_000_100))
+        try Library(layout: SupportLayout(root: folder)).save(second)
+    }
+
+    @Test("a review's outbox reads back with its line, its taken sends, its session and the context sent")
     func outboxRoundTrip() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
-        var second = try review(Self.other)
-        try second.send(at: at(1_800_000_100))
-        try Library(layout: SupportLayout(root: scratch.folder)).save(second)
-        let taken = SendRef(sendID: try item("s", 1), contentHash: Self.hash)
+        try twoReviews(in: scratch.folder)
         let waiting = SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other)
-        let alsoWaiting = SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other)
+        let taken = SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other)
         var outbox = Outbox()
         outbox.enqueue(taken)
         outbox.enqueue(waiting)
-        outbox.enqueue(alsoWaiting)
-        outbox.waitOpened(by: ListenerSession(key: "listener-1", name: "Mate", place: "/shop"), at: at(0))
+        outbox.waitOpened(by: Self.mate, at: at(0))
         #expect(outbox.deliver(at: at(0)) == taken)
-        #expect(outbox.context(for: Self.hash, text: "The topic") == "The topic")
-        try Library(layout: SupportLayout(root: scratch.folder)).save(outbox)
+        #expect(outbox.context(for: Self.other, text: "The topic") == "The topic")
+        try Library(layout: SupportLayout(root: scratch.folder)).save(outbox, of: Self.otherKey)
 
-        let read = Library(layout: SupportLayout(root: scratch.folder)).loadOutbox()
-        // The line keeps its own order, not the order sent.
-        #expect(read.pending == [waiting, alsoWaiting])
+        let read = Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.otherKey)
+        #expect(read.pending == [waiting])
         #expect(read.taken == [taken])
-        #expect(read.session == ListenerSession(key: "listener-1", name: "Mate", place: "/shop"))
+        #expect(read.session == outbox.session)
+        #expect(read.session?.since == at(0))
         #expect(read.contextSent == outbox.contextSent)
-        #expect(!read.isContextDue(for: Self.hash, text: "The topic"))
+        #expect(!read.isContextDue(for: Self.other, text: "The topic"))
         // What belongs to one run isn't kept.
         #expect(!read.isWaitOpen)
         #expect(read.presence(at: at(1)) == .absent)
-        let text = try String(contentsOf: Library(layout: SupportLayout(root: scratch.folder)).layout.outboxFile, encoding: .utf8)
+        let text = try String(contentsOf: SupportLayout(root: scratch.folder).outboxFile(Self.otherKey), encoding: .utf8)
         #expect(text.contains("\"schemaVersion\" : 1"))
+        // The other review's listener has its own line, and none of these sends.
+        let own = Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.key)
+        #expect(own.pending == [SendRef(sendID: try item("s", 1), contentHash: Self.hash)])
+        #expect(own.session == nil)
     }
 
-    @Test("with no outbox file, or one that doesn't read, every unfinished send on disk is in line, in the order sent")
+    @Test("with no outbox file, or one that doesn't read, every unfinished send of the review is in line, in the order sent")
     func outboxRebuilt() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        var later = try review(Self.other)
-        try later.send(at: at(1_900_000_000))
-        try Library(layout: SupportLayout(root: scratch.folder)).save(later)
-        try Library(layout: SupportLayout(root: scratch.folder)).save(try review())
+        try twoReviews(in: scratch.folder)
         let third = String(repeating: "c", count: 64)
         var finished = try review(third)
         try finished.setState(try item("m", third, 1), .failed)
         try Library(layout: SupportLayout(root: scratch.folder)).save(finished)
         let expected = [
-            SendRef(sendID: try item("s", 1), contentHash: Self.hash),
             SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other),
             SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other),
         ]
 
-        #expect(Set(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox().pending.prefix(2)) == Set(expected.prefix(2)))
-        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox().pending.last == expected[2])
-        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox().taken.isEmpty)
+        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.otherKey).pending == expected)
+        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.otherKey).taken.isEmpty)
+        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(.video(contentHash: third)).pending.isEmpty)
 
-        try Data("{ \"pending\": [".utf8).write(to: Library(layout: SupportLayout(root: scratch.folder)).layout.outboxFile)
-        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox().pending.count == 3)
+        let file = SupportLayout(root: scratch.folder).outboxFile(Self.otherKey)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{ \"pending\": [".utf8).write(to: file)
+        #expect(Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.otherKey).pending == expected)
     }
 
     @Test("an outbox from a newer schema is never written over")
@@ -296,13 +306,82 @@ struct LibraryTests {
         defer { scratch.cleanUp() }
         let library = Library(layout: SupportLayout(root: scratch.folder))
         let newer = Data("{ \"schemaVersion\": 9, \"lanes\": [] }".utf8)
-        try newer.write(to: library.layout.outboxFile)
+        let file = library.layout.outboxFile(Self.key)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try newer.write(to: file)
 
-        var outbox = library.loadOutbox()
+        var outbox = library.loadOutbox(Self.key)
         #expect(outbox == Outbox())
         outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
-        #expect(throws: Library.Failure.self) { try library.save(outbox) }
-        #expect(try Data(contentsOf: library.layout.outboxFile) == newer)
+        #expect(throws: Library.Failure.self) { try library.save(outbox, of: Self.key) }
+        #expect(try Data(contentsOf: file) == newer)
+        // Another review's outbox is written as usual.
+        try library.save(Outbox(), of: Self.otherKey)
+    }
+
+    /// The one outbox a build before a listener per review kept, as it
+    /// wrote it: `s-1` of `hash` taken, `s-2` and `s-1` of `other` in
+    /// line, and the context of both videos sent to `mate`.
+    private func formerOutbox() throws -> Outbox {
+        var outbox = Outbox()
+        outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
+        outbox.enqueue(SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other))
+        outbox.enqueue(SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other))
+        outbox.waitOpened(by: Self.mate, at: at(0))
+        _ = outbox.deliver(at: at(0))
+        _ = outbox.context(for: Self.hash, text: "First")
+        _ = outbox.context(for: Self.other, text: "Second")
+        return outbox
+    }
+
+    @Test("the outbox of builds before a listener per review splits once into each review's, with its session and context, and goes")
+    func formerOutboxSplits() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        try twoReviews(in: scratch.folder)
+        let layout = SupportLayout(root: scratch.folder)
+        try Library(layout: layout).save(try formerOutbox(), of: Self.key)
+        try FileManager.default.moveItem(at: layout.outboxFile(Self.key), to: layout.formerOutboxFile)
+
+        Library(layout: layout).migrateFormerOutbox()
+
+        #expect(!FileManager.default.fileExists(atPath: layout.formerOutboxFile.path))
+        let first = Library(layout: layout).loadOutbox(Self.key)
+        #expect(first.taken == [SendRef(sendID: try item("s", 1), contentHash: Self.hash)])
+        #expect(first.pending.isEmpty)
+        #expect(first.session?.key == Self.mate.key)
+        #expect(first.session?.since == at(0))
+        #expect(!first.isContextDue(for: Self.hash, text: "First"))
+        #expect(first.contextSent.keys.sorted() == [Self.hash])
+        let second = Library(layout: layout).loadOutbox(Self.otherKey)
+        // The line keeps its own order, not the order sent.
+        #expect(second.pending == [
+            SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other),
+            SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other),
+        ])
+        #expect(second.taken.isEmpty)
+        #expect(second.session?.key == Self.mate.key)
+        #expect(!second.isContextDue(for: Self.other, text: "Second"))
+
+        // Once: a second run finds nothing to split, and a review's own outbox stays.
+        try Library(layout: layout).save(Outbox(), of: Self.key)
+        Library(layout: layout).migrateFormerOutbox()
+        #expect(Library(layout: layout).loadOutbox(Self.key).taken.isEmpty)
+    }
+
+    @Test("an old outbox that doesn't read stays, and each review's line is rebuilt from the reviews")
+    func formerOutboxUnread() throws {
+        let scratch = try Scratch()
+        defer { scratch.cleanUp() }
+        try twoReviews(in: scratch.folder)
+        let layout = SupportLayout(root: scratch.folder)
+        try Data("{ \"pending\": [".utf8).write(to: layout.formerOutboxFile)
+
+        Library(layout: layout).migrateFormerOutbox()
+
+        #expect(FileManager.default.fileExists(atPath: layout.formerOutboxFile.path))
+        #expect(Library(layout: layout).loadOutbox(Self.otherKey).pending.count == 2)
+        #expect(Library(layout: layout).loadOutbox(Self.key).pending.count == 1)
     }
 
     // MARK: - Recent videos
@@ -391,7 +470,7 @@ struct LibraryTests {
         library.removeRecent(hash(9))
 
         #expect(reread(scratch.folder).recents().map(\.contentHash) == [Self.other])
-        #expect(try reread(scratch.folder).load(Self.hash) == review())
+        #expect(try reread(scratch.folder).load(.video(contentHash: Self.hash)) == review())
     }
 
     @Test("on the first read, the last video of recent.json becomes the one recent video, by its review's hash, and recent.json goes")

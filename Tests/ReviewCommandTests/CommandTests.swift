@@ -50,6 +50,9 @@ struct CommandTests {
         (["send"], .send),
         (["wait"], .wait(timeoutSeconds: nil)),
         (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
+        (["wait", "--video", "cuts/../cut1.mp4", "--timeout", "5"], .wait(timeoutSeconds: 5, video: "/Users/me/shop/cut1.mp4")),
+        (["wait", "--video", "/Movies/cut2.mp4"], .wait(timeoutSeconds: nil, video: "/Movies/cut2.mp4")),
+        (["wait", "--project", "launch-video", "--timeout", "5"], .wait(timeoutSeconds: 5, project: "launch-video")),
         (["ack", "s-f92cbb2a-1"], .ack(sendID: "s-f92cbb2a-1", text: nil)),
         (["ack", "s-f92cbb2a-1", "On it"], .ack(sendID: "s-f92cbb2a-1", text: "On it")),
         (["status", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
@@ -71,6 +74,14 @@ struct CommandTests {
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
         (["thread", "show", "3"], .threadShow(thread: "3")),
         (["thread", "list"], .threadList),
+        (["thread", "versions"], .threadVersionsOpen(search: nil)),
+        (["thread", "versions", "--search", "lower third"], .threadVersionsOpen(search: "lower third")),
+        (["thread", "versions", "--close"], .threadVersionsClose),
+        (["thread", "version", "12"], .threadVersion(number: 12, remove: false)),
+        (["thread", "version", "v12", "--remove"], .threadVersion(number: 12, remove: true)),
+        (["window", "list"], .windowList),
+        (["window", "new"], .windowNew),
+        (["window", "close"], .windowClose),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -78,6 +89,34 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
+    }
+
+    @Test("--window names the window a command acts on; without it the key window", arguments: [
+        (["player", "play", "--window", "w2"], ControlRequest.playerPlay, "w2" as String?),
+        (["--window", "w2", "state"], .state, nil),
+        (["state", "--window", "w2"], .state, "w2"),
+        (["app", "home", "--window", "w3"], .appHome, "w3"),
+        (["comment", "add", "Too fast", "--window", "w2", "--at", "5"], .commentAdd(text: "Too fast", at: 5), "w2"),
+        (["send", "--window", "w2"], .send, "w2"),
+        (["thread", "show", "1", "--window", "w2"], .threadShow(thread: "1"), "w2"),
+        (["window", "close", "w2"], .windowClose, "w2"),
+        (["window", "close", "--window", "w2"], .windowClose, "w2"),
+        (["screenshot", "/tmp/shot.png", "--window", "w2"], .screenshot(path: "/tmp/shot.png", appearance: nil), "w2"),
+        (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil), nil),
+        (["player", "play"], .playerPlay, nil),
+    ])
+    func window(arguments: [String], request: ControlRequest, window: String?) {
+        let run = Run { _, _ in .success(.done("done\n")) }
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        // `--window` before the command's name isn't the command's.
+        if arguments.first == "--window" {
+            #expect(result.exitCode == 64)
+            return
+        }
+        #expect(result == CommandResult(output: "done\n"))
+        #expect(run.transport.requests == [request])
+        #expect(run.transport.sent.map(\.message.window) == [window])
     }
 
     @Test("a request carries the holder, and --json wherever it's written")
@@ -120,11 +159,18 @@ struct CommandTests {
             + "`havooch control take --wait <seconds>` to queue\n")
     }
 
-    @Test("the holder key is HAVOOCH_CONTROL_KEY when set, else the Claude Code session, else the ancestor process", arguments: zip(
-        [["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "holder-a"], ["CLAUDE_CODE_SESSION_ID": "abc"], [:]],
-        ["holder-a", "CLAUDE_CODE_SESSION_ID=abc", "process:100@1700000000000000"]
-    ))
-    func holderKey(variables: [String: String], key: String) {
+    @Test(
+        "the holder key is HAVOOCH_CONTROL_KEY when set, else the Claude Code, Codex or Pi session, else the ancestor process",
+        arguments: [
+            (["CLAUDE_CODE_SESSION_ID": "abc", "HAVOOCH_CONTROL_KEY": "holder-a"], "holder-a", "Claude Code"),
+            (["CLAUDE_CODE_SESSION_ID": "abc"], "CLAUDE_CODE_SESSION_ID=abc", "Claude Code"),
+            (["CODEX_THREAD_ID": "019a-thread"], "CODEX_THREAD_ID=019a-thread", "Codex"),
+            (["CODEX_THREAD_ID": "019a-thread", "HAVOOCH_CONTROL_KEY": "holder-b"], "holder-b", "Codex"),
+            (["PI_SESSION_ID": "pi-1"], "PI_SESSION_ID=pi-1", "Pi"),
+            ([:], "process:100@1700000000000000", "codex"),
+        ] as [([String: String], String, String)]
+    )
+    func holderKey(variables: [String: String], key: String, name: String) {
         struct Processes: ProcessTable {
             var currentPID: Int32 { 300 }
             func process(_ pid: Int32) -> ProcessRecord? {
@@ -143,6 +189,7 @@ struct CommandTests {
         environment.processes = Processes()
         _ = HavoochCLI.run(["control", "take"], environment: environment)
         #expect(run.transport.sent.map(\.message.holder.key) == [key])
+        #expect(run.transport.sent.map(\.message.holder.name) == [name])
     }
 
     @Test("a take that waits in line gets its wait on top of the usual time to answer")
@@ -175,7 +222,10 @@ struct CommandTests {
         ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
-        ["screenshot", "/tmp/shot.png", "--window", "inspector"],
+        ["screenshot", "/tmp/shot.png", "--window", ""], ["screenshot", "/tmp/shot.png", "--window"],
+        ["window"], ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
+        ["window", "close", "w1", "--window", "w2"], ["window", "list", "--window", "w1"], ["player", "play", "--window"],
+        ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
         ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
         ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
@@ -202,6 +252,8 @@ struct CommandTests {
         ["thread", "choose"], ["thread", "choose", "1"], ["thread", "choose", "1", "0"], ["thread", "choose", "1", "first"],
         ["thread", "choose", "1", "2", "3"],
         ["thread", "open"], ["thread", "open", "1", "2"], ["thread", "open", "1", "--frame"], ["thread", "open", "1", "--frame", "1,2"],
+        ["thread", "versions", "12"], ["thread", "versions", "--search"], ["thread", "versions", "--close", "--search", "v1"],
+        ["thread", "version"], ["thread", "version", "0"], ["thread", "version", "twelve"], ["thread", "version", "1", "2"],
     ])
     func usage(arguments: [String]) {
         let run = Run { _, _ in .success(.done("done\n")) }

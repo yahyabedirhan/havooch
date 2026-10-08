@@ -3,7 +3,7 @@ import ReviewStore
 import ReviewTranscript
 
 /// The data a run works on: a support folder and what reads and writes the
-/// reviews in it, the listener's line and the transcripts. `AppModel` holds
+/// reviews in it, the listeners' lines and the transcripts. `AppModel` holds
 /// one and replaces it to switch to the demo folder and back (L27). The
 /// theme is a preference, not review data, so it isn't in it.
 struct DataFolder {
@@ -13,8 +13,8 @@ struct DataFolder {
     let layout: SupportLayout
     /// The reviews in this folder, and the one path for changing them.
     let desk: ReviewDesk
-    /// The listener's side, on this folder's outbox.
-    let listeners: ListenerQueue
+    /// The listeners, one per review, on this folder's outboxes.
+    let listeners: ListenerHub
     /// The transcripts, with speech kept in this folder.
     let transcripts: TranscriptDesk
 
@@ -24,7 +24,7 @@ struct DataFolder {
         self.support = support
         layout = SupportLayout(root: support)
         desk = ReviewDesk(library: Library(layout: layout))
-        listeners = ListenerQueue(desk: desk, layout: layout)
+        listeners = ListenerHub(desk: desk, layout: layout)
         transcripts = TranscriptDesk(layout: layout, speech: speech)
     }
 }

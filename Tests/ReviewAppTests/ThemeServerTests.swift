@@ -18,8 +18,11 @@ extension ControlServerTests.FakeApp {
 
     func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme {
         guard name == "Dimmed" else { throw AppRefusal("no theme \(name); havooch theme list names them") }
-        return StateReport.Theme(active: "Dimmed", kind: "dark", pinned: "Dimmed", appearance: "light", overrides: 0)
+        return StateReport.Theme(active: "Dimmed", kind: "dark", pinned: "Dimmed", appearance: "light")
     }
+
+    /// The fake app has no settings notice to close.
+    func dismissConfigNotice() -> Bool { false }
 }
 
 @Suite("The control server's theme requests")

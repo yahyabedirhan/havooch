@@ -17,7 +17,7 @@ struct SendPayloadTests {
 
     /// #1 at 10 s with a moment and a region message, #2 at 15 s with a
     /// region message, and one message on General, sent as `s-1`.
-    private func firstSend() throws -> (VideoReview, Send) {
+    private func firstSend() throws -> (Review, Send) {
         var review = newReview()
         try review.write(text: "The title is cut off", at: 10, now: now)
         try review.write(text: "This box is too dark", at: 10, region: Self.box, now: now)
@@ -62,16 +62,33 @@ struct SendPayloadTests {
         let (review, sent) = try firstSend()
         let json = try object(SendPayload.assemble(review: review, send: sent, context: nil, images: Self.images).json)
 
-        #expect(Set(json.keys) == ["send", "video", "context", "threads"])
+        #expect(Set(json.keys) == ["send", "video", "project", "context", "threads"])
         #expect(json["context"] is NSNull)
+        // A plain video has no project, and its threads no version.
+        #expect(json["project"] is NSNull)
         #expect(Set(try #require(json["send"] as? [String: Any]).keys) == ["id", "sentAt"])
-        #expect(Set(try #require(json["video"] as? [String: Any]).keys) == ["path", "contentHash", "duration", "title"])
+        #expect(Set(try #require(json["video"] as? [String: Any]).keys) == ["path", "contentHash", "duration", "title", "demo"])
+        #expect(try #require(json["video"] as? [String: Any])["demo"] as? Bool == false)
         let threads = try #require(json["threads"] as? [[String: Any]])
-        #expect(Set(threads[0].keys) == ["id", "number", "time", "keyframePath", "transcript", "history", "messages"])
+        #expect(Set(threads[0].keys) == ["id", "number", "time", "keyframePath", "version", "transcript", "history", "messages"])
+        #expect(threads.allSatisfy { $0["version"] is NSNull })
         #expect(threads[0]["time"] is NSNull && threads[0]["keyframePath"] is NSNull)
         let messages = try #require(threads[1]["messages"] as? [[String: Any]])
         #expect(Set(messages[0].keys) == ["id", "text", "region", "cropPath"])
         #expect(messages[0]["region"] is NSNull && messages[0]["cropPath"] is NSNull)
+    }
+
+    @Test("a send on the bundled demo video, known by its content, is marked demo; any other video isn't")
+    func demoVideo() throws {
+        var demo = Review(video: VideoInfo(
+            contentHash: DemoVideo.contentHash, title: "havooch-demo.mp4", duration: 42, path: "/Applications/Havooch.app/Contents/Resources/Demo/havooch-demo.mp4"
+        ))
+        try demo.write(text: "Make the title bigger", at: 3, now: now)
+        let sent = try demo.send(at: now, transcript: Self.lines("then"))
+        #expect(SendPayload.assemble(review: demo, send: sent, context: nil, images: Self.images).video.demo)
+
+        let (review, other) = try firstSend()
+        #expect(!SendPayload.assemble(review: review, send: other, context: nil, images: Self.images).video.demo)
     }
 
     @Test("a follow-up carries the conversation so far in history: person and agent messages in order, never a queued one")
@@ -138,7 +155,7 @@ struct SendPayloadTests {
         encoder.outputFormatting = .sortedKeys
         let data = try encoder.encode(review)
         #expect(String(decoding: data, as: UTF8.self).contains(#""transcripts":{"t-f92cbb2a-1":"#))
-        let read = try JSONDecoder().decode(VideoReview.self, from: data)
+        let read = try JSONDecoder().decode(Review.self, from: data)
         #expect(read.send(send(1))?.transcripts == sent.transcripts)
     }
 

@@ -16,19 +16,24 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
     public internal(set) var popoverFrame: PopoverFrame?
     /// When the person last opened the thread's view; nil until they do.
     public internal(set) var lastSeen: Date?
+    /// The version of a project the thread was raised on (ADR 0004); nil
+    /// on a plain video, and for General, which is the whole project's.
+    public internal(set) var anchor: VersionAnchor?
 
     public init(
-        id: ThreadID, time: Double?, messages: [Message] = [], popoverFrame: PopoverFrame? = nil, lastSeen: Date? = nil
+        id: ThreadID, time: Double?, messages: [Message] = [], popoverFrame: PopoverFrame? = nil, lastSeen: Date? = nil,
+        anchor: VersionAnchor? = nil
     ) {
         self.id = id
         self.time = time
         self.messages = messages
         self.popoverFrame = popoverFrame
         self.lastSeen = lastSeen
+        self.anchor = anchor
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, time, messages, popoverFrame, lastSeen
+        case id, time, messages, popoverFrame, lastSeen, anchor
     }
 
     /// A thread kept before the last opening was has no `lastSeen` key:
@@ -44,6 +49,7 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
         } else {
             messages.last(where: { $0.author == .agent })?.at
         }
+        anchor = try container.decodeIfPresent(VersionAnchor.self, forKey: .anchor)
     }
 
     /// `lastSeen` is written as `null` until the person opens the thread,
@@ -55,6 +61,7 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(popoverFrame, forKey: .popoverFrame)
         try container.encode(lastSeen, forKey: .lastSeen)
+        try container.encodeIfPresent(anchor, forKey: .anchor)
     }
 
     /// Whether this is the General thread.

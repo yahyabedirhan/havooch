@@ -7,7 +7,7 @@ import SwiftUI
 /// stays open on its thread, where the person answers it (L28). A click
 /// opens the thread it's on.
 struct Notices: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let width: CGFloat = 300
@@ -72,12 +72,20 @@ private struct NoticeCard: View {
         // A native borderless button: the card dims while pressed and
         // takes the focus ring under keyboard navigation.
         .buttonStyle(.borderless)
-        .help(notice.kind == .question ? "Show the question and answer it" : "Show the message")
+        .help(help)
         .accessibilityElement(children: .combine)
     }
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
+    }
+
+    private var help: String {
+        switch notice.kind {
+        case .question: "Show the question and answer it"
+        case .takeover: "Show General"
+        case .acknowledgement, .message: "Show the message"
+        }
     }
 
     /// The symbol an unknown agent's notice shows.
@@ -86,6 +94,7 @@ private struct NoticeCard: View {
         case .acknowledgement: "checkmark"
         case .message: "sparkles"
         case .question: "questionmark"
+        case .takeover: "arrow.left.arrow.right"
         }
     }
 

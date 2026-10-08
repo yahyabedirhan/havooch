@@ -15,13 +15,20 @@ public struct ControlReply: Codable, Equatable, Sendable {
     public var lease: LeaseTerm?
     /// True when the request waited its whole time and has nothing to say.
     public var timedOut: Bool?
+    /// The app's process, on the reply to `open`: the command brings that
+    /// process to the front, since an app in the background may not bring
+    /// itself there (macOS's cooperative activation).
+    public var pid: Int32?
 
-    public init(ok: Bool, output: String = "", error: String = "", lease: LeaseTerm? = nil, timedOut: Bool? = nil) {
+    public init(
+        ok: Bool, output: String = "", error: String = "", lease: LeaseTerm? = nil, timedOut: Bool? = nil, pid: Int32? = nil
+    ) {
         self.ok = ok
         self.output = output
         self.error = error
         self.lease = lease
         self.timedOut = timedOut
+        self.pid = pid
     }
 
     /// Done: `output` printed as it is.

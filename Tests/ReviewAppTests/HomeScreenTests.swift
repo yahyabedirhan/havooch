@@ -48,13 +48,13 @@ struct HomeScreenTests {
     @Test("a first launch shows the empty state, and a launch after a video was opened shows the home screen")
     func launchShowsHome() async throws {
         defer { cleanUp() }
-        let first = AppModel(environment: environment)
+        let first = AppModel(environment: environment).makeWindow()
         #expect(StageContent(first) == .empty)
         try await first.open(MessageTests.fixture)
         #expect(StageContent(first) == .player)
         first.savePosition()
 
-        let next = AppModel(environment: environment)
+        let next = AppModel(environment: environment).makeWindow()
         #expect(next.video == nil)
         #expect(StageContent(next) == .home)
         next.removeRecent(try #require(next.recents.first).contentHash)
@@ -82,10 +82,10 @@ struct HomeScreenTests {
     @Test("a click on an available card opens its video")
     func openAvailable() async throws {
         defer { cleanUp() }
-        let first = AppModel(environment: environment)
+        let first = AppModel(environment: environment).makeWindow()
         try await first.open(MessageTests.fixture)
 
-        let model = AppModel(environment: environment)
+        let model = AppModel(environment: environment).makeWindow()
         let recent = try #require(model.recents.first)
         #expect(recent.available)
         model.openRecent(recent)
@@ -97,7 +97,7 @@ struct HomeScreenTests {
     @Test("a click on an unavailable card does nothing; its trash button removes it")
     func unavailableCard() {
         defer { cleanUp() }
-        let model = AppModel(environment: environment)
+        let model = AppModel(environment: environment).makeWindow()
         model.desk.library.recordOpened(URL(fileURLWithPath: "/nowhere/gone.mp4"), contentHash: "gone", at: Date())
         #expect(model.recents.first?.available == false)
         #expect(StageContent(model) == .home)
@@ -115,7 +115,7 @@ struct HomeScreenTests {
     @Test("a thumbnail is made once for a video and a position, and kept in memory")
     func thumbnails() async throws {
         defer { cleanUp() }
-        let model = AppModel(environment: environment)
+        let model = AppModel(environment: environment).makeWindow()
         try await model.open(MessageTests.fixture)
         try await model.seek(to: 2)
         model.savePosition()

@@ -28,22 +28,22 @@ enum AppCommands {
             arguments, _ throws(UsageError) in
             try arguments.none()
             return .send(.appHome)
-        },
-        Command(name: "app demo", synopsis: "app demo", summary: "run the demo in the same window, as \"Try the Demo\" does") {
+        }.onAWindow(),
+        Command(name: "app demo", synopsis: "app demo", summary: "run the demo in the window, as \"Try the Demo\" does") {
             arguments, _ throws(UsageError) in
             try arguments.none()
             return .send(.appDemo)
-        },
+        }.onAWindow(),
         Command(name: "app quit", synopsis: "app quit", summary: "quit the app, and wait until it's gone") {
             arguments, _ throws(UsageError) in
             try arguments.none()
             return .appQuit
         },
-        Command(name: "state", synopsis: "state", summary: "everything the app shows: the video, the player") {
+        Command(name: "state", synopsis: "state", summary: "everything the app shows: the window's video and player, and every window") {
             arguments, _ throws(UsageError) in
             try arguments.none()
             return .send(.state)
-        },
+        }.onAWindow(),
     ]
 
     /// What running an `app` command needs.

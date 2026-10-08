@@ -1,55 +1,87 @@
 import Foundation
 
-/// The person's settings, kept in `settings.json` in the support folder:
+/// App state the window keeps between runs, in `settings.json` in the
+/// support folder:
 ///
-///     {
-///       "overrides": { "accent": "#c08a5b" },
-///       "sidebarWidth": 360,
-///       "theme": "Dimmed"
-///     }
+///     { "agentConnectedOnce": true, "firstRunDone": true, "sidebarWidth": 360 }
 ///
-/// `theme` is the pinned theme; `null` follows the system appearance.
-/// `overrides` maps a token name to a colour, applied on top of the active
-/// theme. The person may edit the file by hand: every key may be left out.
+/// Not settings a person sets on purpose: those are in `config.toml`
+/// (ADR 0002). Builds before it kept the pinned theme and token overrides
+/// here too; `Former` reads them once, for the move into `config.toml`, and
+/// the next save leaves them out.
 public struct Settings: Codable, Equatable, Sendable {
-    public var theme: String?
-    public var overrides: [String: String]
     public var sidebarWidth: Double?
+    /// Whether an agent's `wait` ever opened on this data: the connect
+    /// button's dot leaves for good once one has (P11).
+    public var agentConnectedOnce: Bool?
+    /// Whether the first-run window showed on this data: it shows by
+    /// itself on the first launch only (H1).
+    public var firstRunDone: Bool?
 
-    public init(theme: String? = nil, overrides: [String: String] = [:], sidebarWidth: Double? = nil) {
-        self.theme = theme
-        self.overrides = overrides
+    public init(sidebarWidth: Double? = nil, agentConnectedOnce: Bool? = nil, firstRunDone: Bool? = nil) {
         self.sidebarWidth = sidebarWidth
+        self.agentConnectedOnce = agentConnectedOnce
+        self.firstRunDone = firstRunDone
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case theme, overrides, sidebarWidth
+    /// What builds before `config.toml` kept in `settings.json`: the pinned
+    /// theme (`null` followed the system) and the token overrides.
+    public struct Former: Equatable, Sendable {
+        public var theme: String?
+        public var overrides: [String: String]
+
+        public init(theme: String? = nil, overrides: [String: String] = [:]) {
+            self.theme = theme
+            self.overrides = overrides
+        }
     }
 
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        theme = try container.decodeIfPresent(String.self, forKey: .theme)
-        overrides = try container.decodeIfPresent([String: String].self, forKey: .overrides) ?? [:]
-        sidebarWidth = try container.decodeIfPresent(Double.self, forKey: .sidebarWidth)
-    }
+    private struct FormerKeys: Decodable {
+        var theme: String??
+        var overrides: [String: String]?
 
-    /// `theme` is written as `null` while it follows the system, so the
-    /// person sees the key to set.
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(theme, forKey: .theme)
-        try container.encode(overrides, forKey: .overrides)
-        try container.encodeIfPresent(sidebarWidth, forKey: .sidebarWidth)
+        private enum CodingKeys: String, CodingKey { case theme, overrides }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // Present as null is not absent: the file still has the key to retire.
+            theme = container.contains(.theme) ? .some(try container.decodeIfPresent(String.self, forKey: .theme)) : nil
+            overrides = try container.decodeIfPresent([String: String].self, forKey: .overrides)
+        }
     }
 
     /// The settings in `layout`'s `settings.json`; the defaults when there
     /// is no file. Throws when there is one and it doesn't read: it must
     /// not be written over.
     public static func load(_ layout: SupportLayout) throws(Library.Failure) -> Settings {
-        let file = layout.settingsFile
-        guard FileManager.default.fileExists(atPath: file.path) else { return Settings() }
+        guard let data = try read(layout) else { return Settings() }
         do {
-            return try JSONDecoder().decode(Settings.self, from: try Data(contentsOf: file))
+            return try JSONDecoder().decode(Settings.self, from: data)
+        } catch {
+            throw Library.Failure(reason: "\(layout.settingsFile.path) doesn't read (\(error.localizedDescription)); it's left as it is")
+        }
+    }
+
+    /// The theme and the overrides an older build left in `layout`'s
+    /// `settings.json`; nil when it has neither key, or there is no file.
+    /// Throws when the file doesn't read.
+    public static func former(_ layout: SupportLayout) throws(Library.Failure) -> Former? {
+        guard let data = try read(layout) else { return nil }
+        let keys: FormerKeys
+        do {
+            keys = try JSONDecoder().decode(FormerKeys.self, from: data)
+        } catch {
+            throw Library.Failure(reason: "\(layout.settingsFile.path) doesn't read (\(error.localizedDescription)); it's left as it is")
+        }
+        guard keys.theme != nil || keys.overrides != nil else { return nil }
+        return Former(theme: keys.theme ?? nil, overrides: keys.overrides ?? [:])
+    }
+
+    private static func read(_ layout: SupportLayout) throws(Library.Failure) -> Data? {
+        let file = layout.settingsFile
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        do {
+            return try Data(contentsOf: file)
         } catch {
             throw Library.Failure(reason: "\(file.path) doesn't read (\(error.localizedDescription)); it's left as it is")
         }

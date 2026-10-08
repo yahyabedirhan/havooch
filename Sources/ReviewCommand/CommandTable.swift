@@ -4,7 +4,7 @@ import ReviewWire
 /// What a command line asks for.
 enum Invocation: Equatable, Sendable {
     /// A request the running app answers.
-    case send(ControlRequest)
+    case send(ControlRequest, window: String? = nil)
     /// `app status`: answered without the app when it isn't running.
     case appStatus
     /// `app open`: launch the app unless it runs on the data asked for, on
@@ -12,9 +12,26 @@ enum Invocation: Equatable, Sendable {
     case appOpen(demo: URL?)
     /// `app quit`: ask the app to quit, then wait until it's gone.
     case appQuit
-    /// `wait`: hold a request until a send is made, for `timeout` seconds
-    /// or with no limit, connecting again while the app isn't running.
-    case wait(timeout: Int?)
+    /// `open <path> [--project <slug>]`: the video at the absolute `file`
+    /// opened in front, in the project `project` when it's set, with the
+    /// app launched first when it doesn't run.
+    case open(URL, project: String? = nil)
+    /// `wait`: hold a request until a send of the review the video at the
+    /// absolute `video` path opens in, or of the project `project`, else
+    /// of the key window's, is made, for `timeout` seconds or with no
+    /// limit, connecting again while the app isn't running.
+    case wait(timeout: Int?, video: URL? = nil, project: String? = nil)
+    /// `project new`: through the app, launched in the background when it
+    /// doesn't run.
+    case projectNew(slug: String, video: URL, title: String?)
+    /// `project add`: through the app, launched in front when it doesn't run.
+    case projectAdd(slug: String, video: URL, label: String?)
+    /// `project list`: answered without the app.
+    case projectList
+    /// `config path`: answered without the app.
+    case configPath
+    /// `config check`: answered without the app.
+    case configCheck
 }
 
 /// Arguments that don't read, as one line.
@@ -105,13 +122,30 @@ struct Command: Sendable {
     /// The `--flags` it takes, each with no value.
     var flags: Set<String> = []
     var parse: @Sendable (Arguments, CommandEnvironment) throws(UsageError) -> Invocation
+    /// Whether it acts on one window and takes `--window <id>`, the key
+    /// window without it.
+    var takesWindow = false
+
+    /// The option that names the window a command acts on.
+    static let windowOption = "--window"
+
+    /// The same command, acting on the window `--window` names.
+    func onAWindow() -> Command {
+        var command = self
+        command.takesWindow = true
+        return command
+    }
 }
 
 /// The commands of `havooch`, by name. A new command is a `Command` in
 /// one of the lists below. `--json` is accepted on every command.
 public enum CommandTable {
-    static let commands: [Command] = AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
-        + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
+    static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands
+        + PlayerCommands.commands.map { $0.onAWindow() } + CommentCommands.commands.map { $0.onAWindow() }
+        + [ScreenshotCommand.command] + WindowCommands.commands + ListenerCommands.commands + ThemeCommands.commands
+        + SetupCommands.commands + ConnectCommands.commands.map { $0.onAWindow() }
+        + TourCommands.commands.map { $0.onAWindow() } + FirstRunCommands.commands + ConfigCommands.commands + ProjectCommands.commands
+        + CompareCommands.commands.map { $0.onAWindow() }
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {
@@ -135,6 +169,9 @@ public enum CommandTable {
 
             \(lines.joined(separator: "\n"))
 
+            --window <id> names the window a command acts on, as `window list` shows it;
+            without it, the key window. It goes with app home, app demo, state, screenshot,
+            the player, comment, context, send, thread, connect, tour and window close commands.
             --json prints machine output on every command.
             --version prints the version of Havooch this command comes with.
             Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.

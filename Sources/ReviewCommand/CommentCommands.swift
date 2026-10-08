@@ -109,6 +109,26 @@ enum CommentCommands {
             try arguments.none()
             return .send(.threadList)
         },
+        Command(
+            name: "thread versions", synopsis: "thread versions [--search <text>] [--close]",
+            summary: "open All versions over a project's thread list, as a click on it does; --search types in its search field (a number, v12, or words of a label); --close closes it",
+            valuedOptions: ["--search"], flags: ["--close"]
+        ) { arguments, _ throws(UsageError) in
+            try arguments.none()
+            guard arguments.flags.contains("--close") else { return .send(.threadVersionsOpen(search: arguments.options["--search"])) }
+            if arguments.options["--search"] != nil { throw UsageError("`--close` takes no `--search`") }
+            return .send(.threadVersionsClose)
+        },
+        Command(
+            name: "thread version", synopsis: "thread version <n> [--remove]",
+            summary: "pick version <n> in All versions, as a click on it does: an older version's section joins the thread list under the last three, and the list scrolls to it; --remove takes a picked version's section out, as its close button does",
+            flags: ["--remove"]
+        ) { arguments, _ throws(UsageError) in
+            let word = try arguments.one("<n>")
+            let digits = word.hasPrefix("v") ? String(word.dropFirst()) : word
+            guard let number = Int(digits), number >= 1 else { throw UsageError("`\(word)` isn't a version; write its number, 1 or more (`12` or `v12`)") }
+            return .send(.threadVersion(number: number, remove: arguments.flags.contains("--remove")))
+        },
     ]
 
     /// The `--region x,y,w,h` written, if any.

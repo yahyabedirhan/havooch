@@ -11,7 +11,7 @@ import SwiftUI
 /// grows with the words up to `maxHeight`. Return writes, Shift+Return
 /// adds a line, Cmd+Return sends the queue with the words.
 struct Composer: View {
-    let model: AppModel
+    let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -19,6 +19,8 @@ struct Composer: View {
             VStack(alignment: .leading, spacing: 6) {
                 targetLine(target)
                 field(target)
+                    // The tour's write step rings the field (H4).
+                    .coachRing(model.tourRings(.composer), radius: 8)
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -85,7 +87,7 @@ struct Composer: View {
 
 /// The chip of the region that goes with the words, with its remove button.
 private struct RegionChip: View {
-    let model: AppModel
+    let model: WindowModel
     let region: Region
     let remove: () -> Void
     @Environment(\.palette) private var palette

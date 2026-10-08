@@ -123,6 +123,14 @@ extension View {
     func popoverSurface(_ palette: Palette) -> some View {
         modifier(PopoverSurface(palette: palette))
     }
+
+    /// A filled button: the native prominent button on the theme's
+    /// `accentFill`, which white text reads on (ADR 0006). The one way a
+    /// view makes a prominent button; `accent`, the window's tint, stays
+    /// for selections, rings and pins.
+    func filledButton(_ palette: Palette) -> some View {
+        buttonStyle(.borderedProminent).tint(palette[.accentFill])
+    }
 }
 
 private struct PopoverSurface: ViewModifier {

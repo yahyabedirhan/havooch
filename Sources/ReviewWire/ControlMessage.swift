@@ -15,11 +15,15 @@ public struct ControlMessage: Equatable, Sendable {
     public var holder: Holder
     /// Whether the answer's `output` is JSON, not lines.
     public var json: Bool
+    /// `--window <id>`: the window the request acts on, as `window list`
+    /// names it (`w2`); nil for the key window.
+    public var window: String?
 
-    public init(_ request: ControlRequest, holder: Holder, json: Bool = false) {
+    public init(_ request: ControlRequest, holder: Holder, json: Bool = false, window: String? = nil) {
         self.request = request
         self.holder = holder
         self.json = json
+        self.window = window
     }
 
     /// The message as one JSON object.
@@ -34,6 +38,9 @@ public struct ControlMessage: Equatable, Sendable {
         case .appQuit: wire = Wire(command: "app.quit")
         case .appHome: wire = Wire(command: "app.home")
         case .appDemo: wire = Wire(command: "app.demo")
+        case .open(let path, let project):
+            wire = Wire(command: "open", path: path)
+            wire.project = project
         case .playerOpen(let path): wire = Wire(command: "player.open", path: path)
         case .playerPlay: wire = Wire(command: "player.play")
         case .playerPause: wire = Wire(command: "player.pause")
@@ -43,8 +50,8 @@ public struct ControlMessage: Equatable, Sendable {
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
-            // The player's window is the default and goes unsaid.
-            wire.window = window == .main ? nil : window.rawValue
+            // A player window goes by its id, or unsaid for the key one.
+            wire.window = window == .main ? self.window : window.rawValue
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
         case .commentOpen(let text, let region): wire = Wire(command: "comment.open", text: text, region: region)
@@ -54,7 +61,9 @@ public struct ControlMessage: Equatable, Sendable {
         case .commentDelete(let id): wire = Wire(command: "comment.delete", id: id)
         case .contextSet(let text): wire = Wire(command: "context.set", text: text)
         case .send: wire = Wire(command: "send")
-        case .wait(let timeoutSeconds): wire = Wire(command: "wait", timeoutSeconds: timeoutSeconds)
+        case .wait(let timeoutSeconds, let video, let project):
+            wire = Wire(command: "wait", path: video, timeoutSeconds: timeoutSeconds)
+            wire.project = project
         case .ack(let sendID, let text): wire = Wire(command: "ack", id: sendID, text: text)
         case .status(let messageID, let state, let text):
             wire = Wire(command: "status", id: messageID, text: text, state: state.rawValue)
@@ -68,9 +77,70 @@ public struct ControlMessage: Equatable, Sendable {
         case .threadOpen(let thread, let frame): wire = Wire(command: "thread.open", thread: thread, frame: frame)
         case .threadShow(let thread): wire = Wire(command: "thread.show", thread: thread)
         case .threadList: wire = Wire(command: "thread.list")
+        case .threadVersionsOpen(let search): wire = Wire(command: "thread.versions.open", text: search)
+        case .threadVersionsClose: wire = Wire(command: "thread.versions.close")
+        case .threadVersion(let number, let remove):
+            wire = Wire(command: "thread.version")
+            wire.number = number
+            wire.remove = remove ? true : nil
         case .themeList: wire = Wire(command: "theme.list")
         case .themeSet(let name): wire = Wire(command: "theme.set", name: name)
+        case .setupStatus: wire = Wire(command: "setup.status")
+        case .setupLink(let dryRun):
+            wire = Wire(command: "setup.link")
+            wire.dryRun = dryRun ? true : nil
+        case .setupInstall(let harnesses, let dryRun):
+            wire = Wire(command: "setup.install")
+            wire.harnesses = harnesses.isEmpty ? nil : harnesses
+            wire.dryRun = dryRun ? true : nil
+        case .setupCancel: wire = Wire(command: "setup.cancel")
+        case .connectShow: wire = Wire(command: "connect.show")
+        case .connectPick(let harness): wire = Wire(command: "connect.pick", name: harness)
+        case .connectDisconnect: wire = Wire(command: "connect.disconnect")
+        case .connectForget: wire = Wire(command: "connect.forget")
+        case .tourShow: wire = Wire(command: "tour.show")
+        case .tourNext: wire = Wire(command: "tour.next")
+        case .tourSkip: wire = Wire(command: "tour.skip")
+        case .tourClose: wire = Wire(command: "tour.close")
+        case .firstRunShow(let step): wire = Wire(command: "firstRun.show", name: step)
+        case .firstRunNext: wire = Wire(command: "firstRun.next")
+        case .firstRunBack: wire = Wire(command: "firstRun.back")
+        case .firstRunPick(let harness): wire = Wire(command: "firstRun.pick", name: harness)
+        case .firstRunDemo: wire = Wire(command: "firstRun.demo")
+        case .firstRunSkip: wire = Wire(command: "firstRun.skip")
+        case .configDismiss: wire = Wire(command: "config.dismiss")
+        case .windowList: wire = Wire(command: "window.list")
+        case .windowNew: wire = Wire(command: "window.new")
+        case .windowClose: wire = Wire(command: "window.close")
+        case .projectNew(let slug, let path, let title):
+            wire = Wire(command: "project.new", path: path)
+            wire.project = slug
+            wire.title = title
+        case .projectAdd(let slug, let path, let label):
+            wire = Wire(command: "project.add", path: path)
+            wire.project = slug
+            wire.label = label
+        case .versionShow(let number):
+            wire = Wire(command: "version.show")
+            wire.number = number
+        case .versionPick(let query): wire = Wire(command: "version.pick", text: query)
+        case .versionClose: wire = Wire(command: "version.close")
+        case .compareOpen: wire = Wire(command: "compare.open")
+        case .comparePick(let side, let query):
+            wire = Wire(command: "compare.pick", text: query)
+            wire.side = side.rawValue
+        case .compareSet(let change):
+            wire = Wire(command: "compare.set")
+            wire.left = change.left
+            wire.right = change.right
+            wire.layout = change.layout?.rawValue
+            wire.side = change.side?.rawValue
+            wire.slider = change.slider
+        case .compareSwap: wire = Wire(command: "compare.swap")
+        case .compareStart: wire = Wire(command: "compare.start")
+        case .compareExit: wire = Wire(command: "compare.exit")
         }
+        if case .screenshot = request {} else { wire.window = window }
         wire.holder = holder
         wire.json = json
         let encoder = JSONEncoder()
@@ -95,7 +165,13 @@ public struct ControlMessage: Equatable, Sendable {
         guard let holder = wire.holder else {
             throw .unreadable("the control command `\(wire.command)` needs its `holder`")
         }
-        return ControlMessage(try request(wire), holder: holder, json: wire.json ?? false)
+        let request = try request(wire)
+        // A screenshot's `window` names Settings, the About panel, or a player window.
+        var window = wire.window
+        if case .screenshot(_, _, _, let which) = request, which != .main || window == ControlRequest.Window.main.rawValue {
+            window = nil
+        }
+        return ControlMessage(request, holder: holder, json: wire.json ?? false, window: window)
     }
 
     /// The request `wire` names, with the fields its command needs.
@@ -115,6 +191,7 @@ public struct ControlMessage: Equatable, Sendable {
         case "app.quit": return .appQuit
         case "app.home": return .appHome
         case "app.demo": return .appDemo
+        case "open": return .open(path: try absolute(wire), project: wire.project)
         case "player.open": return .playerOpen(path: try absolute(wire))
         case "player.play": return .playerPlay
         case "player.pause": return .playerPause
@@ -132,13 +209,8 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            var window = ControlRequest.Window.main
-            if let name = wire.window {
-                guard let known = ControlRequest.Window(rawValue: name) else {
-                    throw .unreadable("the control command `screenshot` has no window `\(name)`; it takes `main`, `settings` or `about`")
-                }
-                window = known
-            }
+            // Any other name is a player window's id, which the app looks up.
+            let window = wire.window.flatMap(ControlRequest.Window.init(rawValue:)) ?? .main
             return .screenshot(
                 path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false, window: window
             )
@@ -164,7 +236,10 @@ public struct ControlMessage: Equatable, Sendable {
                     "the control command `wait` needs a `timeoutSeconds` from 0 to \(ControlRequest.longestListen), not \(seconds)"
                 )
             }
-            return .wait(timeoutSeconds: wire.timeoutSeconds)
+            if wire.path != nil, wire.project != nil {
+                throw .unreadable("the control command `wait` takes a `path` or a `project`, not both")
+            }
+            return .wait(timeoutSeconds: wire.timeoutSeconds, video: wire.path == nil ? nil : try absolute(wire), project: wire.project)
         case "ack":
             return .ack(sendID: try field(wire.id, "id", of: wire), text: wire.text)
         case "status":
@@ -197,10 +272,84 @@ public struct ControlMessage: Equatable, Sendable {
             return .threadOpen(thread: try field(wire.thread, "thread", of: wire), frame: wire.frame)
         case "thread.show": return .threadShow(thread: try field(wire.thread, "thread", of: wire))
         case "thread.list": return .threadList
+        case "thread.versions.open": return .threadVersionsOpen(search: wire.text)
+        case "thread.versions.close": return .threadVersionsClose
+        case "thread.version":
+            guard let number = wire.number, number >= 1 else {
+                throw .unreadable("the control command `thread.version` needs its `number`, 1 or more")
+            }
+            return .threadVersion(number: number, remove: wire.remove ?? false)
         case "theme.list": return .themeList
         case "theme.set": return .themeSet(name: try field(wire.name, "name", of: wire))
+        case "setup.status": return .setupStatus
+        case "setup.link": return .setupLink(dryRun: wire.dryRun ?? false)
+        case "setup.install": return .setupInstall(harnesses: wire.harnesses ?? [], dryRun: wire.dryRun ?? false)
+        case "setup.cancel": return .setupCancel
+        case "connect.show": return .connectShow
+        case "connect.pick": return .connectPick(harness: try field(wire.name, "name", of: wire))
+        case "connect.disconnect": return .connectDisconnect
+        case "connect.forget": return .connectForget
+        case "tour.show": return .tourShow
+        case "tour.next": return .tourNext
+        case "tour.skip": return .tourSkip
+        case "tour.close": return .tourClose
+        case "firstRun.show": return .firstRunShow(step: wire.name)
+        case "firstRun.next": return .firstRunNext
+        case "firstRun.back": return .firstRunBack
+        case "firstRun.pick": return .firstRunPick(harness: try field(wire.name, "name", of: wire))
+        case "firstRun.demo": return .firstRunDemo
+        case "firstRun.skip": return .firstRunSkip
+        case "config.dismiss": return .configDismiss
+        case "window.list": return .windowList
+        case "window.new": return .windowNew
+        case "window.close": return .windowClose
+        case "project.new":
+            return .projectNew(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), title: wire.title)
+        case "project.add":
+            return .projectAdd(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), label: wire.label)
+        case "version.show":
+            guard let number = wire.number, number >= 1 else {
+                throw .unreadable("the control command `version.show` needs its `number`, 1 or more")
+            }
+            return .versionShow(number: number)
+        case "version.pick": return .versionPick(query: wire.text ?? "")
+        case "version.close": return .versionClose
+        case "compare.open": return .compareOpen
+        case "compare.pick": return .comparePick(side: try side(field(wire.side, "side", of: wire), of: wire), query: wire.text ?? "")
+        case "compare.set": return .compareSet(try change(of: wire))
+        case "compare.swap": return .compareSwap
+        case "compare.start": return .compareStart
+        case "compare.exit": return .compareExit
         default: throw .unknownCommand(wire.command)
         }
+    }
+
+    /// The side `name` names.
+    private static func side(_ name: String, of wire: Wire) throws(ControlProtocolError) -> CompareSide {
+        guard let side = CompareSide(rawValue: name) else {
+            throw .unreadable("the control command `\(wire.command)` names no side `\(name)`; it is `left` or `right`")
+        }
+        return side
+    }
+
+    /// `compare.set`'s change: at least one field, each one readable.
+    private static func change(of wire: Wire) throws(ControlProtocolError) -> CompareChange {
+        var change = CompareChange(left: wire.left, right: wire.right, slider: wire.slider)
+        for number in [wire.left, wire.right].compactMap(\.self) where number < 1 {
+            throw .unreadable("the control command `compare.set` needs versions of 1 or more, not \(number)")
+        }
+        if let name = wire.layout {
+            guard let layout = CompareLayout(rawValue: name) else {
+                throw .unreadable("the control command `compare.set` names no layout `\(name)`")
+            }
+            change.layout = layout
+        }
+        if let name = wire.side { change.side = try side(name, of: wire) }
+        if let slider = wire.slider, !(0...1).contains(slider) {
+            throw .unreadable("the control command `compare.set` needs a slider from 0 to 1, not \(slider)")
+        }
+        guard !change.isEmpty else { throw .unreadable("the control command `compare.set` changes nothing") }
+        return change
     }
 
     /// A field the command needs.
@@ -238,7 +387,8 @@ public struct ControlMessage: Equatable, Sendable {
         var appearance: String?
         var waitSeconds: Int?
         var hideAgentIndicator: Bool?
-        /// `screenshot --window`: the window captured, when not the player's.
+        /// `--window`: the player window a request acts on, by its id; for
+        /// `screenshot`, also `settings` or `about`.
         var window: String?
         var id: String?
         var text: String?
@@ -256,5 +406,31 @@ public struct ControlMessage: Equatable, Sendable {
         var choices: [String]?
         /// `thread choose`: the number (from 1) of the choice pressed.
         var choice: Int?
+        /// `setup link` and `setup install --dry-run`: say what it would
+        /// do, and do nothing.
+        var dryRun: Bool?
+        /// `setup install --harness`: the harnesses named; left out with none.
+        var harnesses: [String]?
+        /// A project's slug: `open --project`, `wait --project`, and the
+        /// project `project new` and `project add` name.
+        var project: String?
+        /// `project new --title`: the project's title.
+        var title: String?
+        /// `project add --label`: the version's label.
+        var label: String?
+        /// `thread version <n>` and `version show <n>`: the version's
+        /// number, from 1.
+        var number: Int?
+        /// `thread version --remove`: the picked version leaves the list.
+        var remove: Bool?
+        /// `compare pick` and `compare set --side`: a side, `left` or `right`.
+        var side: String?
+        /// `compare set --left` and `--right`: a side's version, from 1.
+        var left: Int?
+        var right: Int?
+        /// `compare set --layout`: `side-by-side`, `flip` or `slider`.
+        var layout: String?
+        /// `compare set --slider`: the left side's share of the width.
+        var slider: Double?
     }
 }

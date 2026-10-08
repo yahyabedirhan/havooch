@@ -43,8 +43,14 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
 
     // Accent.
 
-    /// The app's accent: the scrubber, a selection, Send.
+    /// The app's accent: the scrubber, a selection, a ring, a pin. No text
+    /// sits on it.
     case accent
+    /// The fill of a filled control (Send, Open a Video…, Save), with white
+    /// text on it at `ThemeColor.filledTextContrast` or more. A theme that
+    /// sets its own `accent` but no `accentFill` gets one made from that
+    /// accent (`ThemeColor.filled()`).
+    case accentFill
     /// The agent-control icon while an agent holds the lease.
     case control
     /// A hairline between two parts of the one surface: the stage and the

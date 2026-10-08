@@ -166,10 +166,10 @@ What changes, in short:
 +.agents/skills/havooch-mate/references/first-demo.md   the beginner demo, read only for the bundled sample (H3)
  Sources/
 +  ReviewConfig/
-+    ConfigLocation.swift               $XDG_CONFIG_HOME/havooch or ~/.config/havooch; config.toml, themes/
++    ConfigLocation.swift               <support>/config with HAVOOCH_SUPPORT_DIR, else $XDG_CONFIG_HOME/havooch or ~/.config/havooch; config.toml, themes/
 +    ConfigFile.swift                   the decoded file: version, theme, [[projects]]; read → (config | problems with lines)
 +    ProjectEntry.swift                 slug, title, versions [{path, label}]; versionNumber(of path)
-+    ConfigWriter.swift                 targeted writes: header for a missing file, append [[projects]], append a version
++    ConfigWriter.swift                 targeted writes: header for a missing file, the theme line, append [[projects]], append a version
 +    ConfigVerdict.swift                {accepted, checked, configModified, problems, warnings} as config-status.json
 +  ReviewSetup/
 +    HarnessCatalog.swift               per harness: skills folders, presence hints, the -a name, the prompt form
@@ -200,7 +200,7 @@ What changes, in short:
                                           appstate.json (recents, last listener per review, first run done, agent connected once)
      Settings.swift                     shrinks to the sidebar width; theme moves to config (one-time migration, P7)
    ReviewApp/
-     HavoochApp.swift                   WindowGroup(for: WindowTarget?) in place of the one Window; first-run window; Open With
+     HavoochApp.swift                   WindowGroup(for: WindowTarget) in place of the one Window; first-run window; Open With
      AppModel.swift                     app-wide: open, resolveTarget, project new/add, config, theme, setup, first run
 +    Windows/
 +      WindowTarget.swift               .video(hash, path) | .project(slug); Codable, Hashable (the scene value)
@@ -235,7 +235,7 @@ What changes, in short:
 ### ReviewConfig
 
 - `ConfigFile.read(data) -> Result<ConfigFile, [Problem]>`. A problem has a line and a message. Unknown keys are warnings, not problems (Swift Lab's rule).
-- `ConfigWriter` never rewrites the whole file: it inserts text at a position, so comments survive. Operations: `header()` for a missing file; `appendProject(slug, title, firstVersion)`; `appendVersion(slug, path, label)` (rewrites only that project's `versions` array).
+- `ConfigWriter` never rewrites the whole file: it inserts text at a position, so comments survive. Operations: `header()` for a missing file; `settingTheme(name)` (the one `theme` line, built in #84); `appendProject(slug, title, firstVersion)`; `appendVersion(slug, path, label)` (rewrites only that project's `versions` array).
 - `ProjectEntry.versionNumber(of path) -> Int?` (position + 1). `projects(listing path) -> [ProjectEntry]`.
 
 ### ReviewSetup
@@ -263,7 +263,7 @@ What changes, in short:
 
 ### ReviewApp: windows
 
-- `WindowGroup(for: WindowTarget?.self)` gives one scene per value; `nil` is the empty window. `WindowRegistry` keeps target → `WindowModel` and opens or focuses through SwiftUI's `openWindow(value:)`.
+- `WindowGroup(for: WindowTarget.self)` gives one scene per value; its binding is nil for the empty window. `WindowRegistry` keeps target → `WindowModel` and opens or focuses through SwiftUI's `openWindow(value:)`.
 - `AppModel.open(url, project:)`: resolve the target (C4), then `WindowRegistry.show(target)`: focus the window that holds it, else reuse the key window if it is empty, else make a new one. Then `NSApp.activate`.
 - Operator commands take `--window <id>` (from `window list`); without it they act on the key window.
 
@@ -300,7 +300,8 @@ AppModel.projectNew(slug, from url, title?)
   ConfigWriter.appendProject(slug, title, url.path) → ConfigDesk applies the new file
   ReviewDesk.adopt(.video(hash) → .project(slug), anchor url.path)   moves review folder, keeps hash8
   ListenerHub.rekey(.video(hash) → .project(slug))                   the listener keeps listening
-  WindowRegistry.retarget(.video(hash) → .project(slug))             the window now shows the switcher
+  WindowModel.moveIntoProject(slug)                                  the window holding the video now holds the project
+  (another project lists the video already → the new project starts fresh, nothing moves; E4)
 
 AppModel.projectAdd(slug, url, label?)
   reject unknown slug, missing file
@@ -345,7 +346,7 @@ listener (Claude Code, wait --video cut1.mp4) gets the send; message asks to tig
 skill: first change request → havooch project new launch-video --from cut1.mp4
   AppModel.projectNew
     config.toml += [[projects]] slug launch-video, versions = [{ path = ".../cut1.mp4" }]
-    ReviewDesk.adopt: videos/<hash>/ → projects/launch-video/; threads anchored to cut1.mp4 (v1); hash8 kept
+    ReviewDesk.adopt: videos/<hash>/ → projects/launch-video/ (the transcript stays); threads anchored to cut1.mp4 (v1); hash8 kept
     ListenerHub.rekey: the listener's queue is now launch-video's; its open wait stays open
     w1 retargeted → header shows "v1"
 agent renders cut2.mp4 → havooch project add launch-video cut2.mp4 --label "tighter intro"
