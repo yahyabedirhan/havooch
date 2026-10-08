@@ -44,32 +44,31 @@ struct CommentPopover: View {
     private var answers: Bool { thread?.openQuestion != nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            header
-            if let thread, !thread.messages.isEmpty {
-                PopoverConversation(model: model, thread: thread, fills: size != nil)
-            }
-            MessageField(text: text, placeholder: placeholder, commit: { model.commitDraft() }, cancel: { model.escape() })
-                .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
-            HStack(spacing: 8) {
-                KeyHint(key: "↩", does: answers ? "answer" : "queue")
-                KeyHint(key: "⌘↩", does: "send")
-                KeyHint(key: "esc", does: "discard")
-                Spacer(minLength: 4)
-                Button(answers ? "Answer" : "Queue") { model.commitDraft() }
-                    .filledButton(palette)
-                    .pressedByKeys(in: model) { model.commitDraft() }
-                    .controlSize(.mini)
-                    .disabled(!WindowModel.hasWords(draft.text))
-                if resize != nil {
-                    // Room for the grip in the corner.
-                    Spacer().frame(width: 6)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                header
+                if let thread, !thread.messages.isEmpty {
+                    PopoverConversation(model: model, thread: thread, fills: size != nil)
                 }
+                MessageField(
+                    text: text, placeholder: placeholder, wellFocus: answers ? .question : .accent,
+                    commit: { model.commitDraft() }, cancel: { model.escape() }
+                )
+                .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58)
             }
+            .padding([.horizontal, .top], Self.padding)
+            // 10 pt from the field to the band.
+            .padding(.bottom, 10)
+            footer
+                .padding(.horizontal, Self.padding)
+                .padding(.vertical, 6)
+                // The band runs on into the notch.
+                .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
+                .background { FooterBand() }
         }
-        .padding(Self.padding)
-        .padding(.bottom, notch == nil ? 0 : Self.notchHeight)
         .frame(width: size?.width ?? Self.width, height: size?.height)
+        // The band's lower corners and the notch follow the box's outline.
+        .clipShape(Bubble(notch: notch, notchHeight: Self.notchHeight))
         .overlay(alignment: .bottomTrailing) {
             if let resize {
                 ResizeGrip()
@@ -80,6 +79,38 @@ struct CommentPopover: View {
         .popoverChrome(Bubble(notch: notch, notchHeight: Self.notchHeight), surface: palette.surface(.popover), border: palette[.popoverBorder])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(thread.map { "Thread \($0.number)" } ?? (draft.region == nil ? "New message" : "New message on a region"))
+    }
+
+    /// The toolbar band's row: the key hints on the left, and on the right
+    /// one `SplitButton`, Queue (or Answer) with an arrow holding Send Now
+    /// and Discard. Each runs what its key runs: Return through the field,
+    /// Cmd+Return and Escape through the player's keys, so no item binds
+    /// Return or a bare Escape, which a text input method needs mid-word.
+    private var footer: some View {
+        HStack(spacing: 6) {
+            KeyHints(commitWord: answers ? "answer" : "queue")
+            Spacer(minLength: 4)
+            SplitButton(
+                answers ? "Answer" : "Queue",
+                help: answers ? "Answer at once (Return). The arrow discards." : "Queue (Return). The arrow sends now or discards.",
+                isEnabled: WindowModel.hasWords(draft.text)
+            ) {
+                model.commitDraft()
+            } menu: {
+                Button("Send Now") { model.send() }
+                    // Shown in the menu; the player's keys take Cmd+Return first.
+                    .keyboardShortcut(.return, modifiers: .command)
+                    // An answer goes at once, so there's nothing to send now.
+                    .disabled(answers || !model.canSend)
+                Divider()
+                Button("Discard") { model.closePopover(.discard) }
+            }
+            .pressedByKeys(in: model)
+            if resize != nil {
+                // Room for the grip in the corner.
+                Spacer().frame(width: 8)
+            }
+        }
     }
 
     /// `#3 · 0:12`, the kind of message before it and the × after it.
@@ -183,7 +214,29 @@ struct CommentPopover: View {
     }
 }
 
-/// A key and what it does, under the field.
+/// The dotted key hints: `↩ queue · ⌘↩ send · esc discard`.
+private struct KeyHints: View {
+    let commitWord: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 5) {
+            KeyHint(key: "↩", does: commitWord)
+            dot
+            KeyHint(key: "⌘↩", does: "send")
+            dot
+            KeyHint(key: "esc", does: "discard")
+        }
+        .fixedSize()
+    }
+
+    private var dot: some View {
+        Text("·").font(.caption2).foregroundStyle(palette[.textTertiary])
+    }
+}
+
+/// A key and what it does: the key a step darker than its word, both
+/// small, so the hints are there to be found, not read (D 1.7).
 private struct KeyHint: View {
     let key: String
     let does: String
@@ -191,14 +244,23 @@ private struct KeyHint: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text(key)
-                .font(.caption2.weight(.medium))
-            Text(does)
-                .font(.caption2)
+            Text(key).font(.caption2.weight(.medium)).foregroundStyle(palette[.textSecondary])
+            Text(does).font(.caption2).foregroundStyle(palette[.textTertiary])
         }
-        // Quiet: the hints are there to be found, not read (D 1.7).
-        .foregroundStyle(palette[.textTertiary])
-        .fixedSize()
+    }
+}
+
+/// The footer's toolbar band: the `well`, laid twice so it reads on a light
+/// popover too, edge to edge under a hairline.
+private struct FooterBand: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack {
+            palette[.well]
+            palette[.well]
+        }
+        .overlay(alignment: .top) { Hairline(axis: .horizontal) }
     }
 }
 

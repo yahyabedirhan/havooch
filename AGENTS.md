@@ -43,6 +43,8 @@ Never use an em dash, an en dash or a spaced hyphen as punctuation in app copy. 
 
 Never emphasise a box with a one-sided coloured edge: no left stripe, and no right, top or bottom stripe either. Use a full soft fill, an icon, or text weight and colour.
 
+A primary action with secondary choices uses `SplitButton` (`Sources/ReviewApp/UI/SplitButton.swift`): one filled control with a menu arrow. Never build a split button inline or copy it.
+
 ## Releases
 
 A `v<version>` tag publishes the GitHub Release, the cask in `yahyabedirhan/homebrew-tap` and the skill in `yahyabedirhan/havooch-mate`. The cask and the skill are maintained here. Never edit their copies in those repositories. Read `docs/decisions/release-publishing.md` before changing the release workflow, the cask, the skill's install source or the scripts that publish them.
