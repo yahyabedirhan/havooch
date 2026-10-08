@@ -37,6 +37,8 @@ struct RootView: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing))
             }
         }
+        // The settings notice over the stage and the home screen alike.
+        .overlay(alignment: .top) { ConfigBanner(model: model) }
         // One motion, a spring with no bounce, whatever opens or closes the
         // sidebar: the toggle, a notice, or the operator.
         .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)

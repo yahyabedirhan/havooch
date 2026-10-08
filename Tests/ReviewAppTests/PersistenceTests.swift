@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReviewApp
+import ReviewConfig
 import ReviewCore
 import ReviewLease
 import ReviewStore
@@ -174,22 +175,33 @@ struct PersistenceTests {
         #expect(unread(again) == [false, false])
     }
 
-    @Test("a launch opens nothing, says nothing and writes nothing, with or without a last video")
+    /// What a run wrote in the support folder, but the settings file and
+    /// its verdict: with `HAVOOCH_SUPPORT_DIR` set, `config.toml` is made
+    /// in its `config/` on launch (ADR 0002).
+    private func dataFiles(in folder: URL? = nil) throws -> [String] {
+        let folder = folder ?? support
+        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
+        return try FileManager.default.subpathsOfDirectory(atPath: folder.path)
+            .filter { $0 != ConfigVerdict.fileName && $0 != "config" && !$0.hasPrefix("config/") }
+            .sorted()
+    }
+
+    @Test("a launch opens nothing, says nothing and writes nothing but its settings file, with or without a last video")
     func launchOpensNothing() async throws {
         defer { cleanUp() }
         let (empty, _) = await run()
         #expect(empty.video == nil)
-        #expect(!FileManager.default.fileExists(atPath: support.path))
+        #expect(try dataFiles() == [])
 
         let video = try copy(to: "videos")
         try await empty.open(video)
         // A video with no message yet has no review file.
-        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])
+        #expect(try dataFiles() == ["recents.json"])
 
         let (again, _) = await run()
         #expect(again.video == nil)
         #expect(again.problem == nil)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: support.path) == ["recents.json"])
+        #expect(try dataFiles() == ["recents.json"])
     }
 
     // MARK: - Recent videos
@@ -236,7 +248,7 @@ struct PersistenceTests {
         defer { cleanUp() }
         let (model, _) = await run()
         model.savePosition()
-        #expect(!FileManager.default.fileExists(atPath: support.path))
+        #expect(try dataFiles() == [])
 
         try await model.open(MessageTests.fixture)
         await model.engine.seek(to: 2.5)
@@ -366,8 +378,7 @@ struct PersistenceTests {
         #expect(await listen(.status(messageID: ids.first, state: .done), realServer).error.contains("no message"))
         #expect(await listen(.wait(timeoutSeconds: 0), realServer).timedOut == true)
         // The real folder holds nothing of the demo's.
-        let files = try FileManager.default.subpathsOfDirectory(atPath: support.path)
-        #expect(files.sorted() == ["outbox.json", "recents.json"])
+        #expect(try dataFiles() == ["outbox.json", "recents.json"])
 
         let (again, _) = await run(on: demo, reopening: true)
         #expect(states(again).count == 3)

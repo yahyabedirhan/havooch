@@ -144,6 +144,9 @@ public enum ControlRequest: Equatable, Sendable {
     case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
     /// `havooch setup cancel`: the running install stopped, as Cancel does.
     case setupCancel
+    /// `havooch config dismiss`: the settings notice in the window goes,
+    /// as its close button does.
+    case configDismiss
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -203,7 +206,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease, .themeList: .free
         case .open: .person
-        case .themeSet: .operator
+        case .themeSet, .configDismiss: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .contextSet: .operator
         case .commentAdd, .commentOpen, .commentCompose, .commentEdit, .commentDelete, .send: .operator

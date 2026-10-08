@@ -80,6 +80,7 @@ public struct ControlMessage: Equatable, Sendable {
             wire.harnesses = harnesses.isEmpty ? nil : harnesses
             wire.dryRun = dryRun ? true : nil
         case .setupCancel: wire = Wire(command: "setup.cancel")
+        case .configDismiss: wire = Wire(command: "config.dismiss")
         }
         wire.holder = holder
         wire.json = json
@@ -214,6 +215,7 @@ public struct ControlMessage: Equatable, Sendable {
         case "setup.link": return .setupLink(dryRun: wire.dryRun ?? false)
         case "setup.install": return .setupInstall(harnesses: wire.harnesses ?? [], dryRun: wire.dryRun ?? false)
         case "setup.cancel": return .setupCancel
+        case "config.dismiss": return .configDismiss
         default: throw .unknownCommand(wire.command)
         }
     }

@@ -19,7 +19,7 @@ You are the **listener**: you take each send, do what each message asks in this 
 
 Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`havooch --help` prints the usage).
 
-You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, and the free `state --json` and `app status`. Every other command drives the player and takes control of the app from the person.
+You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the free `state --json` and `app status`, and `config path` and `config check`, which need no app. Every other command drives the player and takes control of the app from the person.
 
 The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else your harness's session: `$CLAUDE_CODE_SESSION_ID` (Claude Code), `$CODEX_THREAD_ID` (Codex) or `$PI_SESSION_ID` (Pi). Any other harness is known by its process. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
@@ -108,6 +108,18 @@ When the answer is one of a few short readings, give each one as a choice: `havo
 A thread holds one open question: a second `ask` on it is refused until the person answers the first. A `reply` does not close a question.
 
 Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `havooch state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the open video only. With no answer there, reply with what you still need to know and mark the message `failed`.
+
+## Settings
+
+When the person asks you to change a Havooch setting, edit `config.toml` yourself: `havooch config path` prints where it is. Change only the lines you mean to change, and keep every comment. The file's `#:schema` line names its JSON Schema, which `taplo check` applies.
+
+| Key | What it sets |
+|---|---|
+| `version` | The format version: `1`. A file that sets any key needs it. |
+| `theme` | The pinned theme by name, as `havooch theme list` prints it. Leave it out to follow the Mac's appearance. The person's own themes are files in `themes/` beside `config.toml`. |
+| `[[projects]]` | A project: `slug`, an optional `title`, and `versions`, a list of `{ path, label }` tables, v1 first. |
+
+The app applies each save at once. After a save, run `havooch config check`: exit `0` means the file reads, and exit `1` lists each problem with its line. The app keeps the last valid settings while the file has a problem. Its own verdict on the last save is in `config-status.json`, whose path `state --json` gives as `config.status`. App state (recent videos, playheads, the sidebar width, reviews) is not in the file.
 
 ## Refusals
 

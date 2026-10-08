@@ -72,7 +72,7 @@ public struct ThemeCatalog: Equatable, Sendable {
     public enum Source: String, Equatable, Sendable {
         /// Shipped in the app bundle.
         case builtIn = "built-in"
-        /// A file in the support folder's `Themes/`.
+        /// A file in `themes/` beside `config.toml`.
         case user
     }
 

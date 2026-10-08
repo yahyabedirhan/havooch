@@ -165,8 +165,9 @@ struct DemoTests {
 
         _ = try model.setTheme("Default Dark")
 
-        #expect(exists(SupportLayout(root: person).settingsFile))
-        #expect(!exists(SupportLayout(root: demo).settingsFile))
+        let pinned = try String(contentsOf: person.appendingPathComponent("config/config.toml"), encoding: .utf8)
+        #expect(pinned.contains("theme = \"Default Dark\""))
+        #expect(!exists(demo.appendingPathComponent("config")))
     }
 
     @Test("the control socket stays on the person's folder, and no demo pointer is recorded")

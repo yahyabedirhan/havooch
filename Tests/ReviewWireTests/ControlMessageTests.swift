@@ -26,7 +26,7 @@ struct ControlMessageTests {
     }
 
     @Test("every request reads back as it was sent", arguments: [
-        ControlRequest.appStatus, .state, .appOpen, .appQuit, .appHome, .appDemo,
+        ControlRequest.appStatus, .state, .appOpen, .appQuit, .appHome, .appDemo, .configDismiss,
         .controlTake(waitSeconds: nil), .controlTake(waitSeconds: 30), .controlRelease,
         .screenshot(path: "/tmp/shot.png", appearance: .light, hideAgentIndicator: true),
         .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings), .screenshot(path: "/tmp/about.png", appearance: nil, window: .about),
@@ -213,7 +213,7 @@ struct ControlMessageTests {
     }
 
     @Test("only operator requests take the lease", arguments: [
-        ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
+        ControlRequest.appOpen, .appQuit, .appHome, .appDemo, .configDismiss, .playerOpen(path: "/a.mp4"), .playerPlay, .playerPause,
         .playerSeek(seconds: 1), .screenshot(path: "/a.png", appearance: nil),
         .commentAdd(text: "a", at: nil), .commentEdit(id: "m-1", text: "a"), .commentDelete(id: "m-1"),
         .commentOpen(text: "a"), .commentCompose(text: "a"), .contextSet(text: "a"), .threadOpen(thread: "1"),

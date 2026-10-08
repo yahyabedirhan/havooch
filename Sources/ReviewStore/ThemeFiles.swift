@@ -3,7 +3,7 @@ import ReviewCore
 
 /// Reads theme files into `ThemeFile` values: the built-in ones shipped in
 /// the app bundle (`Contents/Resources/Themes/`, from `Packaging/Themes/`),
-/// and the person's own in the support folder's `Themes/`. A file that
+/// and the person's own in `themes/` beside `config.toml`. A file that
 /// doesn't read is skipped, with its reason.
 public enum ThemeFiles {
     /// A theme file that read, and where it is.
@@ -40,11 +40,6 @@ public enum ThemeFiles {
             }
         }
         return reading
-    }
-
-    /// The person's themes, in `layout`'s `Themes/`.
-    public static func user(_ layout: SupportLayout) -> Reading {
-        read(layout.themesFolder)
     }
 
     /// The theme files directly in `folder`, sorted by name.

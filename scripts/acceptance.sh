@@ -92,6 +92,10 @@ operator_key="${HAVOOCH_CONTROL_KEY:-acceptance-operator-$run_id}"
 listener_key="${HAVOOCH_LISTENER_KEY:-acceptance-listener-$run_id}"
 operator() { HAVOOCH_CONTROL_KEY="$operator_key" "$cli" "$@"; }
 listener() { HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@"; }
+# The settings commands read config.toml themselves, with no app: on the
+# demo's support folder, so they read its config/config.toml and never the
+# person's ~/.config/havooch.
+settings() { HAVOOCH_SUPPORT_DIR="$demo" "$cli" "$@"; }
 
 # The thread list's rule (spec 0.2.0, L38), over a thread of `state --json`:
 # Needs you (the last question has no answer after it), With agent (a
@@ -612,7 +616,7 @@ finish
 
 # --- step 8 --------------------------------------------------------------------
 
-begin 8 "Run theme set with Dimmed, then with Default Dark. Check state --json"
+begin 8 "Run theme set with Dimmed, then with Default Dark. Check state --json and config check"
 run operator theme set Dimmed
 exits 0 "theme set Dimmed"
 state
@@ -624,6 +628,17 @@ state
 holds "Default Dark is active and pinned, a dark theme" "$stdout" \
     '.theme.active == "Default Dark" and .theme.pinned == "Default Dark" and .theme.kind == "dark"'
 holds "filled buttons use Default Dark's accentFill, which white text reads on" "$stdout" '.theme.accentFill == "#48689d"'
+holds "the pin is in the demo's config.toml, which the app accepted" "$stdout" \
+    '.config.path == $path and .config.accepted == true' --arg path "$demo/config/config.toml"
+run settings config check --json
+exits 0 "config check"
+holds "config check reads the demo's config.toml and accepts it" "$stdout" \
+    '.config == $path and .accepted == true' --arg path "$demo/config/config.toml"
+if grep -q '^theme = "Default Dark"$' "$demo/config/config.toml" 2>/dev/null; then
+    ok "config.toml has the line theme = \"Default Dark\""
+else
+    bad "config.toml has the line theme = \"Default Dark\""
+fi
 finish
 
 # --- step 9 --------------------------------------------------------------------

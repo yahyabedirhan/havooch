@@ -4,54 +4,51 @@ import Observation
 import ReviewCore
 import ReviewStore
 
-/// The active theme: the catalog of built-in and user themes, the pin and
-/// the overrides from `settings.json`, and the system appearance. It
-/// watches the theme files and the settings, and resolves the theme again
-/// when one changes, so a person who edits a theme file sees it at once.
+/// The active theme: the catalog of built-in and user themes, the pin
+/// `config.toml` names (`ConfigDesk`), and the system appearance. It
+/// watches the person's theme files, and resolves the theme again when one
+/// changes or the settings file pins another, so a person who edits a
+/// theme file sees it at once.
 @Observable
 final class ThemeDesk {
     /// The theme every view draws with.
     private(set) var theme: ResolvedTheme
     private(set) var catalog: ThemeCatalog
-    private(set) var settings: Settings
     /// The system appearance, which picks Default Light or Default Dark
     /// while no theme is pinned.
     private(set) var appearance: ThemeKind
-    /// Why `settings.json` didn't read; nil while it reads or isn't there.
-    /// A pin isn't written over a file that doesn't read.
-    private(set) var settingsProblem: String?
 
     /// The word `theme set` takes to unpin.
     static let system = "system"
 
-    @ObservationIgnored private let layout: SupportLayout
+    /// The settings file, which names the pinned theme.
+    @ObservationIgnored let config: ConfigDesk
+    /// The person's own themes: `themes/` beside `config.toml`.
+    @ObservationIgnored private let userFolder: URL
     @ObservationIgnored private let builtInFolder: URL?
     /// Where each theme was read from, by name, for `theme list`.
     @ObservationIgnored private var paths: [String: URL] = [:]
     @ObservationIgnored private var watchers: [any DispatchSourceFileSystemObject] = []
     @ObservationIgnored private var pendingReload: Task<Void, Never>?
     @ObservationIgnored private var appearanceObservation: NSKeyValueObservation?
-    /// Why each theme file or `settings.json` left out was left out.
+    /// Why each theme file left out was left out, and a pin no theme has.
     @ObservationIgnored private(set) var problems: [String] = []
     /// The problems already written to standard error, so each shows once.
     @ObservationIgnored private var reported: Set<String> = []
-    /// `settings.json` as the last reload found it: a change in the support
-    /// folder reloads only when this differs, so the outbox's and the
-    /// reviews' saves there don't.
-    @ObservationIgnored private var settingsStamp: FileStamp?
-    /// How many times the themes and the settings were read.
+    /// How many times the themes were read.
     @ObservationIgnored private(set) var reloads = 0
 
-    /// Reads the themes and the settings once. Nothing is watched until
-    /// `startWatching`.
-    init(layout: SupportLayout, builtIn builtInFolder: URL? = ThemeDesk.builtInFolder, appearance: ThemeKind = .light) {
-        self.layout = layout
+    /// Reads the themes once, and again each time `config` applies other
+    /// settings. Theme files are not watched until `startWatching`.
+    init(config: ConfigDesk, builtIn builtInFolder: URL? = ThemeDesk.builtInFolder, appearance: ThemeKind = .light) {
+        self.config = config
+        userFolder = config.location.themesFolder
         self.builtInFolder = builtInFolder
         self.appearance = appearance
         catalog = ThemeCatalog(builtIn: [], user: [])
-        settings = Settings()
         theme = ResolvedTheme(name: "", kind: appearance, colors: [:])
         reload()
+        config.applied.append { [weak self] in self?.reload() }
     }
 
     /// The built-in themes: in the app bundle's resources, or in the
@@ -69,34 +66,28 @@ final class ThemeDesk {
     /// The name of the pinned theme as it is in the catalog; nil while the
     /// theme follows the system, or the pinned theme is gone.
     var pinned: String? {
-        settings.theme.flatMap { catalog.entry(named: $0)?.name }
+        config.config.theme.flatMap { catalog.entry(named: $0)?.name }
     }
 
     // MARK: - Changes
 
-    /// Reads the theme files and the settings again and resolves the
-    /// active theme. A theme or a settings file that doesn't read is left
-    /// out, with a line on standard error.
+    /// Reads the theme files again and resolves the active theme. A theme
+    /// that doesn't read is left out, and a pin no theme has follows the
+    /// system, each with a line on standard error.
     func reload() {
         reloads += 1
-        settingsStamp = FileStamp(layout.settingsFile)
         let builtIn = builtInFolder.map(ThemeFiles.read) ?? ThemeFiles.Reading()
-        let user = ThemeFiles.user(layout)
+        let user = ThemeFiles.read(userFolder)
         let catalog = ThemeCatalog(builtIn: builtIn.files, user: user.files)
-        var settings = self.settings
-        var settingsProblem: String?
-        do throws(Library.Failure) {
-            settings = try Settings.load(layout)
-        } catch {
-            settingsProblem = error.reason
-        }
         var paths: [String: URL] = [:]
         for found in builtIn.found + user.found { paths[found.file.name.lowercased()] = found.url }
         self.paths = paths
         if catalog != self.catalog { self.catalog = catalog }
-        if settings != self.settings { self.settings = settings }
-        if settingsProblem != self.settingsProblem { self.settingsProblem = settingsProblem }
-        problems = builtIn.problems + user.problems + catalog.problems + [settingsProblem].compactMap(\.self)
+        let unknownPin = config.config.theme.flatMap { name in
+            catalog.entry(named: name) == nil
+                ? "config.toml pins the theme \(name), which no theme file has; the theme follows the system" : nil
+        }
+        problems = builtIn.problems + user.problems + catalog.problems + [unknownPin].compactMap(\.self)
         report(problems)
         resolve()
     }
@@ -108,45 +99,24 @@ final class ThemeDesk {
         resolve()
     }
 
-    /// Pins the theme called `name`, or unpins for `system`, and keeps the
-    /// choice in `settings.json`. Returns the name of the theme now active.
+    /// Pins the theme called `name`, or unpins for `system`: the `theme`
+    /// line of `config.toml` is written, and nothing else in it. Returns
+    /// the name of the theme now active. Refused for a theme the catalog
+    /// doesn't have, and while `config.toml` has a problem.
     @discardableResult
     func set(_ name: String) throws(AppRefusal) -> String {
-        var next = settings
-        if name.lowercased() == Self.system {
-            next.theme = nil
-        } else {
+        var pin: String?
+        if name.lowercased() != Self.system {
             guard let entry = catalog.entry(named: name) else { throw AppRefusal(ThemeRefusal.unknown(name).line) }
-            next.theme = entry.name
+            pin = entry.name
         }
-        if let settingsProblem { throw AppRefusal(settingsProblem) }
-        do throws(Library.Failure) {
-            try next.save(layout)
-        } catch {
-            throw AppRefusal(error.reason)
-        }
-        reload()
+        try config.setTheme(pin)
         return theme.name
     }
 
-    /// Keeps the sidebar's `width` in `settings.json`, beside the theme.
-    /// A settings file that doesn't read is left as it is.
-    func keepSidebarWidth(_ width: Double) throws(AppRefusal) {
-        if let settingsProblem { throw AppRefusal(settingsProblem) }
-        var next = settings
-        next.sidebarWidth = width
-        do throws(Library.Failure) {
-            try next.save(layout)
-        } catch {
-            throw AppRefusal(error.reason)
-        }
-        settings = next
-    }
-
     private func resolve() {
-        let name = catalog.active(pinned: settings.theme, appearance: appearance)
-        let resolved = (try? catalog.resolve(name, overrides: settings.overrides))
-            ?? ResolvedTheme(name: name, kind: appearance, colors: [:])
+        let name = catalog.active(pinned: config.config.theme, appearance: appearance)
+        let resolved = (try? catalog.resolve(name)) ?? ResolvedTheme(name: name, kind: appearance, colors: [:])
         if resolved != theme { theme = resolved }
     }
 
@@ -171,13 +141,11 @@ final class ThemeDesk {
         }
     }
 
-    /// Watches `Themes/` and each file in it, and `settings.json`: a change
-    /// reloads the themes a moment later. The support folder is watched for
-    /// a `settings.json` that comes or is replaced, and nothing else in it.
-    /// The folder `Themes/` is made, so a person finds where their themes
-    /// go.
+    /// Watches `themes/` and each file in it: a change reloads the themes a
+    /// moment later. The folder is made, so a person finds where their
+    /// themes go. `config.toml` is `ConfigDesk`'s to watch.
     func startWatching() {
-        try? FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: userFolder, withIntermediateDirectories: true)
         rearm()
     }
 
@@ -194,29 +162,18 @@ final class ThemeDesk {
     /// made again after each reload.
     private func rearm() {
         for watcher in watchers { watcher.cancel() }
-        let targets = [layout.themesFolder, layout.settingsFile] + ThemeFiles.jsonFiles(in: layout.themesFolder)
+        let targets = [userFolder] + ThemeFiles.jsonFiles(in: userFolder)
         watchers = targets.compactMap { watch($0) }
-        // The outbox and every review are saved in the support folder too:
-        // only a `settings.json` other than the one last read is a change.
-        let settings = layout.settingsFile
-        let root = watch(layout.root) { [weak self] in
-            self.map { FileStamp(settings) != $0.settingsStamp } ?? false
-        }
-        if let root { watchers.append(root) }
     }
 
-    private func watch(
-        _ url: URL, when isChange: @escaping @MainActor () -> Bool = { true }
-    ) -> (any DispatchSourceFileSystemObject)? {
+    private func watch(_ url: URL) -> (any DispatchSourceFileSystemObject)? {
         let descriptor = open(url.path, O_EVTONLY)
         guard descriptor >= 0 else { return nil }
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: [.write, .extend, .delete, .rename, .attrib], queue: .main
         )
         source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                if isChange() { self?.changed() }
-            }
+            MainActor.assumeIsolated { self?.changed() }
         }
         source.setCancelHandler { close(descriptor) }
         source.resume()
@@ -241,7 +198,7 @@ final class ThemeDesk {
     var report: StateReport.Theme {
         StateReport.Theme(
             active: theme.name, kind: theme.kind.rawValue, pinned: pinned, appearance: appearance.rawValue,
-            overrides: settings.overrides.count, accentFill: theme[.accentFill]?.text
+            accentFill: theme[.accentFill]?.text
         )
     }
 
@@ -257,22 +214,6 @@ final class ThemeDesk {
             },
             problems: problems
         )
-    }
-}
-
-/// A file as far as a watch needs it: which file it is and when it was
-/// last written. Nil for a file that isn't there.
-private struct FileStamp: Equatable {
-    var number: Int
-    var modified: Date
-
-    init?(_ url: URL) {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let number = attributes[.systemFileNumber] as? Int,
-              let modified = attributes[.modificationDate] as? Date
-        else { return nil }
-        self.number = number
-        self.modified = modified
     }
 }
 

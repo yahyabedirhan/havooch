@@ -37,7 +37,7 @@ The winning prototype code is in [2026-10-08-lab/](2026-10-08-lab/), copied from
 
 | # | Decision |
 |---|---|
-| D1 | Settings move to one TOML file, `~/.config/havooch/config.toml` (or under `$XDG_CONFIG_HOME`), following Shipyard and Swift Lab (Swift Lab ADR 0016): `#:schema` and a JSON Schema, `version = 1`, kebab-case keys, live reload, the last valid file kept on an error, a verdict in `config-status.json`, `havooch config check`, and only targeted writes by the app. |
+| D1 | Settings move to one TOML file, `~/.config/havooch/config.toml` (or under `$XDG_CONFIG_HOME`), following Shipyard and Swift Lab (Swift Lab ADR 0016): `#:schema` and a JSON Schema, `version = 1`, kebab-case keys, live reload, the last valid file kept on an error, a verdict in `config-status.json`, `havooch config check`, and only targeted writes by the app. Built in #84 with two additions: the `theme` line is one more targeted write, for the theme picker and `theme set`; with `HAVOOCH_SUPPORT_DIR` set, the file and `themes/` are in that folder's `config/`. |
 | D2 | `theme` moves into the file. Theme colours stay in their own files, in `~/.config/havooch/themes/`, and the file names one. Token overrides leave settings: a person writes a theme that extends another. |
 | D3 | App state stays in the support folder, never in the file: recent videos, playheads, the sidebar width, reviews, content hashes, the last listener. |
 

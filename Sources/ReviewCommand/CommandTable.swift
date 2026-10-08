@@ -18,6 +18,10 @@ enum Invocation: Equatable, Sendable {
     /// `wait`: hold a request until a send is made, for `timeout` seconds
     /// or with no limit, connecting again while the app isn't running.
     case wait(timeout: Int?)
+    /// `config path`: answered without the app.
+    case configPath
+    /// `config check`: answered without the app.
+    case configCheck
 }
 
 /// Arguments that don't read, as one line.
@@ -116,6 +120,7 @@ public enum CommandTable {
     static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands + PlayerCommands.commands
         + CommentCommands.commands + [ScreenshotCommand.command] + ListenerCommands.commands + ThemeCommands.commands
         + SetupCommands.commands
+        + ConfigCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

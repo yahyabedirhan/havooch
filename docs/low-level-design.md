@@ -16,6 +16,7 @@ agent side (no app rules, no UI; builds and tests on Linux)
   ReviewWire        the control protocol: request, reply, socket framing, socket and support folder locations, the app identity and version
   ReviewCommand     the command table of `havooch`: parse, send one request, print the reply, pick the exit code
   ReviewCLI         main.swift only
+  ReviewConfig      config.toml (ADR 0002): where it is, reading it with each problem on its line, the verdict, targeted writes. TOMLDecoder.
 
 app side
   ReviewCore        threads, messages, regions, states, the send, the send payload, the outbox, theme resolution. Pure logic, given the time.
@@ -25,7 +26,7 @@ app side
                     Link, the skill install, the prompt per harness; file system and processes behind seams (L52)
   ReviewApp         the SwiftUI app: player, stage, popovers, sidebar, header, control server, listener queue. macOS only.
 
-havooch (CLI)   → ReviewLease + ReviewWire + ReviewCommand
+havooch (CLI)   → ReviewLease + ReviewWire + ReviewCommand + ReviewConfig
 Havooch.app     → everything
 ```
 
@@ -34,7 +35,8 @@ person ──keys, mouse──▶ ReviewApp UI ──────────┐
                                                ├─▶ AppModel ──▶ PlayerEngine (AVPlayer)
 operator ──▶ havooch ──▶ SocketListener ──▶ ControlServer      ├─▶ ReviewDesk ──▶ VideoReview (Core) ──▶ Library (Store)
              (lease)          (control.sock)    (decode, lease,     ├─▶ ListenerQueue ──▶ Outbox (Core)
-                                                 dispatch)          └─▶ ThemeDesk ──▶ ThemeCatalog (Core), ThemeFiles (Store)
+                                                 dispatch)          ├─▶ ThemeDesk ──▶ ThemeCatalog (Core), ThemeFiles (Store)
+                                                                    └─▶ ConfigDesk ──▶ ConfigLocation, ConfigFile (ReviewConfig)
 listener ──▶ havooch wait / ack / status / reply / ask ──▶ ControlServer ──▶ ListenerQueue, ReviewDesk
              (no lease)
 ```
@@ -53,6 +55,7 @@ The person and the operator reach the same `AppModel` methods, so a UI action an
 | change where a file is kept | `Sources/ReviewStore/SupportLayout.swift` |
 | add a colour token or a built-in theme | `Sources/ReviewCore/Theme/ThemeToken.swift`, `Packaging/Themes/` |
 | change what setup detects, or a harness's prompt | `Sources/ReviewSetup/SetupProbe.swift`, `HarnessCatalog.swift` |
+| add or change a `config.toml` key | `Sources/ReviewConfig/ConfigFile.swift`, `ConfigReader.swift`, `schema/config.schema.json`, the skill's Settings table (L53) |
 | add a known agent harness or its logo | `Sources/ReviewCore/KnownAgent.swift`, `assets/images/agent-logos/`, `make agent-logos`, `Packaging/AgentLogos/NOTICE.md` |
 | follow a command from the shell to the player | [Trace 1](#trace-1-a-cli-command-comment-add-on-a-region) |
 | follow a send from Cmd+Enter to `wait`, and a follow-up | [Trace 2](#trace-2-a-send-from-cmdenter-to-wait-then-a-follow-up) |
@@ -73,7 +76,7 @@ The 92 user stories of the spec are the requirements. They group into these capa
 8. **Sidebar**: the thread list, grouped by who must act next, and the thread view of one thread with Back, Previous and Next; message bubbles with crops, one composer at the sidebar's foot, resizable. (35 to 44, 65; 0.2.0: L38 to L41)
 9. **Agent**: the listener gets each send through `wait`, grouped by thread, acknowledges, replies, sets each message's state and asks on a thread; an answer to a question goes at once. Notices name the thread. (45 to 49, 71 to 81)
 10. **Header and presence**: the file name, the folder, the floating group (agent-control icon, Context, sidebar toggle), the footer with presence, queued count and Send. (50 to 58)
-11. **Themes**: every colour is a token; built-in and user themes, light and dark, follow the system or a pinned one, per-token overrides, reload on change. (59 to 64)
+11. **Themes**: every colour is a token; built-in and user themes, light and dark, follow the system or a pinned one, reload on change; the pin in `config.toml` and the person's themes beside it, per-token overrides gone (L53). (59 to 64)
 12. **Persist** threads, messages, states, popover frames and the theme per video, keyed by content. (66, 67)
 13. **Context and transcript**: the context sidecar plus the in-app note, given once per listener session; the transcript from voiceover, subtitles or speech in the background. (68 to 70)
 14. **Agent control**: every action through the CLI under the lease; `state --json`; screenshots in light and dark; demo mode. (82 to 89)
@@ -138,7 +141,8 @@ Entities (hold changing state or enforce rules):
 | `Outbox` | pending and taken sends, the listener session, the context already sent, presence | ReviewCore |
 | `ListenerQueue` | the open `wait` and `ask`s, payload assembly | ReviewApp |
 | `ThemeCatalog` | the known themes and how a theme resolves to every token | ReviewCore |
-| `ThemeDesk` | the active theme, the pin, the overrides, the file watch | ReviewApp |
+| `ThemeDesk` | the active theme, the pin `config.toml` names, the watch of the person's theme files | ReviewApp |
+| `ConfigDesk` | `config.toml` as the app runs it: the last valid settings, the verdict, the watch, the theme write, the one-time move from `settings.json` (L53) | ReviewApp |
 | `Library` | loading and saving the store's JSON files | ReviewStore |
 | `ControlLease` | who holds the lease, the line of waiters, the bars | ReviewLease |
 | `ControlServer` | the one lease instance, dispatch of decoded requests | ReviewApp |
@@ -207,10 +211,12 @@ What changed from proto-2, in short:
 -   ReviewApp/UI/Theme.swift, LeaseBanner.swift, Rail/, Timeline/
 +   ReviewApp/UI/Palette.swift, Metrics.swift, Header/, PlayerBar/, Sidebar/
 + Packaging/Themes/                                                         built-in theme files
++ Sources/ReviewConfig/, schema/config.schema.json, Package.resolved         config.toml (L53)
 ```
 
 ```text
-Package.swift                      targets below; macOS 26; no dependencies; ReviewApp and its tests under #if os(macOS)
+Package.swift                      targets below; macOS 26; one dependency, TOMLDecoder, for ReviewConfig (L53); ReviewApp and its tests under #if os(macOS)
+schema/config.schema.json          the JSON Schema config.toml names on its #:schema line; ReviewConfigTests keeps it equal to the reader (L53)
 Makefile                           test, build, bundle, install, acceptance, agent-logos, identity, clean; reads VERSION from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle)
 Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
@@ -258,11 +264,22 @@ Sources/
     CommentCommands.swift          comment add | open | compose | edit | delete, send, thread answer | choose | open | show | list, context set
     ThemeCommands.swift            theme list | set
     SetupCommands.swift            setup status | link [--dry-run] | install [--harness]... [--dry-run] | cancel (L52)
+    ConfigCommands.swift           config path | check: read config.toml with no app and no lease; config dismiss closes the settings notice (L53)
     ScreenshotCommand.swift        screenshot <abs.png> [--appearance] [--hide-agent-indicator] [--window main|settings|about] (L42)
     ListenerCommands.swift         wait, ack, status, reply, ask
     AppLauncher.swift              starts the app through Launch Services, in the background or in front, and brings a process to the front; the AppLaunching seam
   ReviewCLI/
     main.swift                     exit(HavoochCLI.run(...))
+  ReviewConfig/                    config.toml (ADR 0002, L53), after Swift Lab's LabConfig (ADR 0016)
+    ConfigLocation.swift           the folder: <support>/config/ with HAVOOCH_SUPPORT_DIR, else $XDG_CONFIG_HOME/havooch/, else ~/.config/havooch/;
+                                   config.toml and themes/ in it; ~ expansion
+    ConfigFile.swift               the settings as decoded (theme, projects); decode(text) → settings and warnings, or problems with lines;
+                                   the header; ConfigIssue, ConfigProblems
+    ConfigReader.swift             walks the parsed file key by key; unknown keys are warnings with the nearest known key
+    TOMLSourceMap.swift            the line of each key, from Swift Lab's
+    ProjectEntry.swift             one [[projects]] table: slug, title, versions [{path, label}]; versionNumber(of:)
+    ConfigVerdict.swift            {accepted, checked, config, configModified, problems, warnings}; config-status.json; read and check
+    ConfigWriter.swift             the targeted writes: the header for a missing file, the theme line (set, replace, remove)
   ReviewCore/
     ItemID.swift                   t-<hash8>-<n>, m-<hash8>-<n>, s-<hash8>-<n>: parse, make, the hash prefix;
                                    ThreadID, MessageID, SendID; ThreadRef (a full id or a bare number, L5)
@@ -293,7 +310,7 @@ Sources/
     ImageFiles.swift               writing and removing a PNG at a layout path; a small copy for a row
     TranscriptFiles.swift          the finished speech transcript: load and save
     ThemeFiles.swift               read the built-in and the user theme files into ThemeFile values, with each file's path
-    Settings.swift                 the pinned theme, the overrides, the sidebar width; settings.json load and save
+    Settings.swift                 the sidebar width (app state) in settings.json; Former, an older build's theme and overrides, read once (L53)
   ReviewSetup/                     (L52)
     HarnessCatalog.swift           per harness: user skills folders, presence hints, the -a name, the prompt form; PromptTarget
     SetupProbe.swift               Detection (detected | notDetected | cannotKnow), HarnessSetup, SetupReport; the probe
@@ -309,7 +326,8 @@ Sources/
     ReviewDesk.swift               change a review, save it, publish it
     ListenerQueue.swift            open waits and asks; delivery; payload assembly; presence; the listener's answers
     TranscriptDesk.swift           the videos opened in this run; the window's lines, read at send time
-    ThemeDesk.swift                the active theme, pin and overrides; watches Themes/ and settings.json; AppModel's theme actions
+    ThemeDesk.swift                the active theme and the pin config.toml names; watches themes/; AppModel's theme actions
+    ConfigDesk.swift               config.toml in the app: reload, verdict to config-status.json, theme write, the move from settings.json; ConfigWatcher (L53)
     SetupDesk.swift                the latest probe, Link and its failure, the running install and its log; AppModel's setup actions (L52)
     ContextReader.swift            the sidecar context file plus the note
     DataFolder.swift               the data a run is on: support folder, SupportLayout, ReviewDesk, ListenerQueue, TranscriptDesk (L27)
@@ -334,6 +352,7 @@ Sources/
                                    hairline on its leading edge; `Hairline`, one pixel of `separator`
       Palette.swift                the resolved tokens as SwiftUI colours, a `system` surface as the native one (L37), in the environment; the only way a view gets a colour; `filledButton`, every prominent button on `accentFill` (L50)
       Metrics.swift                measures: bar height (= footer height), paddings, sidebar limits; StateLook, a state's glyph and name
+      ConfigBanner.swift           the settings notice at the top of the window: what the move did, or a save's problems; its close button (L53)
       SettingsView.swift           the Settings window (⌘,) with the cat mark, the name and version, and the theme picker View › Theme shares; `SettingsWindow` opens and finds it for app control (L42)
       MessageEditor.swift          the one text view messages are written in, its keys, and `MessageField`'s look with the system focus ring (L42)
       EmptyState.swift             `ContentUnavailableView` with the cat mark, "Open a Video…" and "Try the Demo"; `videoDropTarget`, the drop target and its
@@ -623,8 +642,9 @@ Unchanged from proto-2: the `Transcriber` protocol (`transcript(of:)`, `prepare`
   demo.json                              the demo pointer; only in the normal folder (ReviewWire)
   outbox.json                            the Outbox
   recents.json                           the 10 recent videos, the newest first: path, content hash, opened time, last position
-  settings.json                          pinned theme or null, token overrides, sidebar width
-  Themes/<any name>.json                 user themes
+  settings.json                          the sidebar width (app state); an older build's theme and overrides, until the move (L53)
+  config-status.json                     the verdict on config.toml after the app's last reload (L53)
+  config/                                with HAVOOCH_SUPPORT_DIR only: config.toml and themes/ (L53)
   videos/<contentHash>/
     review.json                          one VideoReview: video, note, threads, sends, counters, schemaVersion
     transcript.json                      the finished speech transcript
@@ -650,8 +670,8 @@ public struct SupportLayout: Sendable {
 - The recent videos: `recents()`, `recordOpened(url, contentHash:, at:)`, `savePosition(seconds, of:)` and `removeRecent(contentHash)`. At most `recentLimit` (10) entries, the newest first. Opening a video on the list moves it to the front with its new path and keeps its position; the match is by content hash. Removing an entry leaves its review on disk. The list is read once and kept in memory. On the first read with no `recents.json` and a `recent.json`, the old path becomes the one entry, with the hash of the review that records that path, else of the file itself (no entry when neither is there), and the file's modification time as its opened time; then `recent.json` is deleted. A `recents.json` from a newer schema is never written over.
 - Every save is atomic, pretty-printed, sorted keys, ISO 8601 with milliseconds, with `schemaVersion`. `review.json` starts at schema 1 again for this product (L9); the prototypes' files are never read, since they live in other support folders.
 - A file from a newer schema, or one that does not read, is never written over (proto-2 D140).
-- `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); `ThemeFiles.user(layout)` reads `Themes/`. A file that does not read is skipped with its reason.
-- `Settings` is `{ theme: String?, overrides: [String: String], sidebarWidth: Double? }`, with its own `load(layout)` and `save(layout)` beside `Library`: a file the person edits by hand has no `schemaVersion`, and every key may be left out. A missing file is the defaults. A file that does not read is never written over: `theme set` is refused until it reads.
+- `ThemeFiles.read(folder)` reads the built-in themes from `Contents/Resources/Themes/` in the app (`Packaging/Themes/` in tests and in a build that is not bundled); the person's are read from `themes/` beside `config.toml` (`ConfigLocation.themesFolder`). A file that does not read is skipped with its reason.
+- `Settings` is `{ sidebarWidth: Double? }`, app state, with its own `load(layout)` and `save(layout)` beside `Library`. A missing file is the defaults. A file that does not read is never written over. `Settings.former(layout)` reads the `theme` and `overrides` an older build left in it, for the one-time move into `config.toml` (L53); the next save leaves them out.
 
 ### ReviewSetup
 
@@ -689,7 +709,7 @@ What Havooch can say of the person's setup, and the two actions that change it (
 | `composerTarget`, `composerText`, `composerRegion` | the composer at the sidebar's foot (L41): `ComposerTarget.resolve` (pure) from the thread shown, the General toggle, the thread of the frame on the stage and the drawn region; the text is the target's draft in `composerDrafts`, one per thread and one for a new thread | |
 | `writeComposer()`, `submitComposer()` | Return in the composer: an answer at once with an open question (D 2.16), else queued on the target (a new thread at the frame, the frame's thread, General, the thread shown), with the region chip when it fits; the draft, the chip and the General toggle are spent; the player stays. `sendQueue` takes the words too; `send()` answers first | empty text; no video |
 | `compose(text, region?, general)` | `comment compose` (L41): the words, a region chip on the player's frame and the General toggle in the composer, which takes the keys | no video |
-| `keepSidebarWidth(width)` | the end of a drag on the sidebar's edge: the width, inside `Metrics.sidebarWidthRange`, goes to `settings.json` through `ThemeDesk.keepSidebarWidth`; `sidebarWidth` reads it back, the default 340 without one | |
+| `keepSidebarWidth(width)` | the end of a drag on the sidebar's edge: the width, inside `Metrics.sidebarWidthRange`, goes to `settings.json` on the folder the run started on (`AppModel.keptSidebarWidth`); `sidebarWidth` reads it back, the default 340 without one | |
 | `movePopover(id, frame)` | the end of a drag or a resize: saves the `PopoverFrame` | |
 | `send()` | answer with the composer's words when it answers, queue the open draft's text and the composer's, then `ReviewDesk.change { $0.send(…) }`, then `ListenerQueue.enqueue`; does nothing while a send is under way | nothing queued (`send` exits 1) |
 | `answer(thread, text)` | `thread answer` and the field: through `ReviewDesk`, then `ListenerQueue.answered` | no open question |
@@ -702,7 +722,7 @@ What Havooch can say of the person's setup, and the two actions that change it (
 - `ReviewDesk.change(hash) { … }` is proto-2's one path for a change: load or take from memory, run, save, publish when open; a refusal or a failed save changes nothing.
 - `ListenerQueue` is proto-2's with sends: `enqueue`, `wait(by:timeout:connection:)` → `Outcome` (`send(ref, payload)`, `ranOut`, `replaced`, `gone`), `written`, `undelivered`, `isDelivered`, `connectionClosed`, `ack`, `status`, `reply`, `ask`, `answered`. A send is marked `taken` only once its reply was written (proto-1's in-flight rule): until then it is kept out of every other `wait`. `ack`, `reply` and `ask` hand a `Notice` to `AppModel`; `status` raises none. `status working` with a text sets the thread's live line (`Activity`: thread, message, text, time; #47), the latest one per thread and kept in memory only; `done` or `failed` on its message, an empty text, and a new listener session clear it. `activities(at:)` and `activity(on:at:)` give nothing while the presence is absent, and `state` reports them, newest first, as `listener.activity`.
 - `Notice` is `thread` (id and number), `agent`, `kind`, `words`, `expires` (5 s for every kind, a question too: the question stays open on its thread, L28). Its title is `#3 · Claude Code: …`, General's `General · Claude Code: …` (D 4.10). A click calls `openThread`, or shows General's thread view.
-- `ThemeDesk` holds the `ThemeCatalog`, the `Settings` and the system appearance, and publishes the `ResolvedTheme`. The system appearance is `NSApp.effectiveAppearance`, observed, so a screenshot in the other appearance shows that appearance's default theme. `DispatchSource`s on `Themes/`, each theme file and `settings.json` reload the themes 150 ms after a change (D 5.6); the watches are made again after each reload, since an editor that saves by replacing a file makes a new one. One more on the support folder catches a `settings.json` that appears for the first time or is replaced: it reloads only when the file's number or modification date differs from the last reload's, so the outbox's and the reviews' saves there read nothing. `startWatching` makes `Themes/`, so a person finds where their themes go. A theme or settings problem is written to standard error once. `Palette` turns the resolved tokens into `Color`s, reaches every view through the environment (`@Environment(\.palette)`), and is the only colour source a view has (D 5.1); a test in `ReviewAppTests` fails on a raw colour anywhere in `Sources/ReviewApp`, and in `Palette.swift` on anything but a colour from numbers or a `system` surface (L37). The letterbox is a token too. While a theme is pinned, the window takes its kind's appearance, so the title bar and the system's controls match; with no pin it inherits the app's. `RootView` sets it with `preferredColorScheme`, never on the `NSWindow` itself: SwiftUI sets the window's appearance on each update from that preference, and an AppKit view that set it as well fought SwiftUI in an endless update loop when a light theme was pinned under a dark system. The View menu's Theme picker and the Settings window's (`ThemePicker`, L42) pin a theme or follow the system, as `theme set` does.
+- `ThemeDesk` holds the `ThemeCatalog`, the `ConfigDesk` whose `config.toml` names the pin, and the system appearance, and publishes the `ResolvedTheme`; it reads the themes again each time `ConfigDesk` applies other settings (L53). The system appearance is `NSApp.effectiveAppearance`, observed, so a screenshot in the other appearance shows that appearance's default theme. `DispatchSource`s on `themes/` beside `config.toml` and each theme file reload the themes 150 ms after a change (D 5.6); the watches are made again after each reload, since an editor that saves by replacing a file makes a new one. `startWatching` makes `themes/`, so a person finds where their themes go. A theme problem, or a pin no theme has, is written to standard error once and listed by `theme list`. `Palette` turns the resolved tokens into `Color`s, reaches every view through the environment (`@Environment(\.palette)`), and is the only colour source a view has (D 5.1); a test in `ReviewAppTests` fails on a raw colour anywhere in `Sources/ReviewApp`, and in `Palette.swift` on anything but a colour from numbers or a `system` surface (L37). The letterbox is a token too. While a theme is pinned, the window takes its kind's appearance, so the title bar and the system's controls match; with no pin it inherits the app's. `RootView` sets it with `preferredColorScheme`, never on the `NSWindow` itself: SwiftUI sets the window's appearance on each update from that preference, and an AppKit view that set it as well fought SwiftUI in an endless update loop when a light theme was pinned under a dark system. The View menu's Theme picker and the Settings window's (`ThemePicker`, L42) pin a theme or follow the system, as `theme set` does.
 - `SetupDesk` (L52), app-wide on `AppModel.setup`, reads `HOME` and `SHELL` from the app's environment, and finds this bundle's `Contents/Helpers/havooch` (none in a build that isn't bundled). It probes at launch, on `applicationDidBecomeActive`, after Link and after an install ends, and on `setup status`; it never polls (P10). `link()` keeps a failure (`linkFailure`) for the view and refuses with the `ln -sf` line. `startInstall(for:)` refuses while one runs, for a name no harness has, and with nothing to install for; it keeps the install as `InstallRun` (`running`, `done`, `failed`, `cancelled`, `noNode`, the exit status, the last 500 log lines) after it ends. The runner's lines reach the main actor in order through an `AsyncStream`. `cancelInstall()` cancels the install's task and answers once it has ended. `state --json` reports it all as `setup` (`StateReport.Setup`), with each harness's prompt for the open video, and `state` prints one `setup:` line. The Connect view (#89) reads the same desk.
 - `SocketListener` (D A.8, proto-1) accepts on `control.sock` (mode 0600) off the main actor, reads one request per connection, awaits `ControlServer.reply(to:)` in a task, and writes one space every 2 s while the answer is pending. A heartbeat that cannot be written tells the server the client hung up (`connectionClosed`), which ends a held `wait` or `ask` as `gone`. It then writes the reply; a reply that was written goes to the server as `written` (a send it carried is taken), and one that cannot be written as `undelivered` (L16). The heartbeat replaces proto-2's look at the connection every 0.5 s.
 - `ControlServer` only decodes, checks the lease, dispatches and keeps the queued `take`s. It owns the one `ControlLease` and settles it on a timer. It depends on the `AppControlling` protocol, which `AppModel` implements and the tests fake.
@@ -715,7 +735,9 @@ What Havooch can say of the person's setup, and the two actions that change it (
   "screen":   "player",
   "lease":    { "holder": {…}, "taken": "…", "ends": "…", "secondsLeft": 48, "waiting": 0 },
   "listener": { "presence": "listening", "waitOpen": true, "session": "Claude Code", "pendingSends": 0, "takenSends": 0, "activity": [] },
-  "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "overrides": 0, "accentFill": "#48689d" },
+  "theme":    { "active": "Default Dark", "kind": "dark", "pinned": null, "appearance": "dark", "accentFill": "#48689d" },
+  "config":   { "path": "/abs/demo/config/config.toml", "themes": "/abs/demo/config/themes", "status": "/abs/demo/config-status.json",
+                "accepted": true, "problems": [], "warnings": [], "notes": [], "notice": null },
   "video":    { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4", "contextNote": "" },
   "player":   { "time": 10.017, "playing": false },
   "transcript": { "source": "voiceover", "complete": true, "lines": 3, "problem": null },
@@ -965,6 +987,9 @@ the listener restarts as session L2 while s-2 is taken and m-9 is working
 | CLI parsing, output, exit codes | `ReviewCommandTests` |
 | joining, thread numbers, states, thread state, send, transcript kept, requeue, payload shape, outbox, context once per session | `ReviewCoreTests` |
 | theme resolution: extends, fallback, overrides, loops, the defaults define every token; `accentFill` made from a nearer `accent`; white on every shipped theme's `accentFill` at 4.5:1 | `ReviewCoreTests`, `ReviewStoreTests` (the shipped files) |
+| `config.toml`: reading, problems on their lines, warnings, the location, the theme write keeping comments, the verdict, the schema equal to the reader | `ReviewConfigTests` |
+| `config path`, `config check` with no app | `ReviewCommandTests` (`ConfigCommandTests`) |
+| live reload, the last valid settings kept, `config-status.json`, the move from `settings.json`, app state kept out | `ReviewAppTests` (`ConfigDeskTests`, `ThemeDeskTests`) |
 | the window cut, the source order | `ReviewTranscriptTests` |
 | paths, round trips, the hash-prefix index | `ReviewStoreTests` |
 | popover close rules, frame time, the send through `AppModel` | `ReviewAppTests` on the fixture |
@@ -1007,7 +1032,7 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L9 | Store files start at `schemaVersion` 1 again. The prototypes' data is never migrated. | Different support folders; the spec asks for no migration. |
 | L10 | The agent-control icon shows in screenshots by default, as the person sees the window. `screenshot --hide-agent-indicator` leaves it out. | The maintainer's decision, which replaces proto-2's D28 (the icon left out unless `--with-control-icon`). The option is an addition to the contract. |
 | L11 | Theme resolution lives in `ReviewCore/Theme/`, theme files in `ReviewStore`, the watch and the `Palette` in the app. The built-in themes are JSON files in `Packaging/Themes/`, copied into the bundle's resources. | The spec keeps eight targets and wants the resolution unit-tested without the app, on Linux. Plain files in the bundle avoid SwiftPM resource bundles and are examples for user themes. |
-| L12 | Settings live in `settings.json`: the pinned theme (`null` follows the system), the overrides, the sidebar width. `theme set system` unpins. The app watches it beside `Themes/`. | The contract has one `theme set`; one word must return to the default (D 5.4). Overrides are edited in the file, so the file must reload. |
+| L12 | Settings live in `settings.json`: the pinned theme (`null` follows the system), the overrides, the sidebar width. `theme set system` unpins. The app watches it beside `Themes/`. Replaced by L53. | The contract has one `theme set`; one word must return to the default (D 5.4). Overrides are edited in the file, so the file must reload. |
 | L13 | Thread state with no person message (General with only agent messages) is no state; General has no pin. | D 3.9 defines state from person messages only. General has no keyframe to pin. |
 | L14 | The open popover's field answers at once when the thread has an open question, else it queues. | D 2.16 and D 3.6 for one field, with no second control. |
 | L15 | (Replaced by L46.) No unread marks. A notice and the thread's state carry the news. | The spec names none. proto-2's unread set was in memory only. |
@@ -1048,3 +1073,4 @@ Refused for now: more than one listener or window, undo, an Allow button, system
 | L50 | Filled controls (ADR 0006, ticket #81). `ThemeToken.accentFill` is the fill of every prominent button; `accent` stays for lines, selections, rings and pins, and is still the window's tint. Views make a prominent button only through `View.filledButton(palette)` in `Palette.swift` (`.borderedProminent` tinted `accentFill`); a source test in `ReviewAppTests` (`ThemeDeskTests`) fails on `.borderedProminent` anywhere else. Its callers: Send, both "Open a Video…", the comment popover's Queue and Answer, the message editor's Save and the context note's Save. Answer was tinted `question`, which white text does not read on, so it is on `accentFill` too; the field's `question` border and the "Answer" key hint still mark an answer. Every shipped theme with its own `accent` sets `accentFill`: Default Light and Default Dark `#48689d` (Dimmed inherits it), the VS Code themes a deeper shade of their own accent. A theme that sets `accent` nearer than `accentFill` gets `accent.filled()`, so a theme written before this token keeps its hue and passes. `state` reports the active fill as `theme.accentFill`. | ADR 0006, decision I4: white text read at about 1.9:1 on Default Dark's light accent. A test in `ReviewStoreTests` checks white on every shipped theme's `accentFill` for 4.5:1, so a new theme cannot break it. |
 | L51 | `havooch open <path>` (#82, decisions C1 and C2, target design Trace 1 and P6). A new request role, **person**: a request a person's click would make, which takes no lease, so the agent-control icon never shows for it; its one request is `open(path)` (wire `open`, protocol version stays 3 as in L49). The command (`OpenCommand`) refuses a path with no file before anything else. It asks the running app; when none answers it launches the app through `AppLaunching.launch(environment: [:], inFront: true)`, looks every 0.05 s with `app status` until the app answers (10 s at most), then asks for the open once, so a slow first look never opens the file twice. A launch in front never waits for or quits a running copy of the app, so the person's app survives. In the app, `ControlServer` calls `AppModel.openInFront`, which checks the file plays first (an in-app demo and the open video stay when it doesn't), leaves an in-app demo, opens, plays and calls `bringToFront`. macOS's cooperative activation keeps an app in the background from activating itself on a socket request, so the reply carries the app's `pid` (`ControlReply.pid`) and the command brings that process to the front (`AppLaunching.bringToFront(pid:)`, `NSRunningApplication.activate()`): by process, since the installed app and a build share the bundle id. When that fails the command still exits 0, with a note on standard error. `state` reports `app.active`. `ContentHashCache` keeps each content hash by path, size and modification time for the run, so opening a file again skips reading it whole. `player open` stays the operator's leased open, paused. The cold path launches the app and then asks it over the socket; the Launch Services open-document event (Finder's Open With, a Dock drop, `open -a`) is #83's. | C1: opening a file never takes control from the person. C2: 1 s warm, measured at 0.13 s to 0.47 s on this machine with the fixtures. A launch with the file as an open-document event would need the app to tell the command whether the file played; asking over the socket once the app answers gives the command the app's own refusal and exit code. |
 | L52 | Setup detection and the skill install (effort `projects-and-onboarding`, ticket #88). A new module, `ReviewSetup` (target design P1), holds the probe, the catalog, Link and the install, with the file system (`SetupFileSystem`) and processes (`ProcessRunner`) behind seams, so its tests and the app's run on fakes and never touch the person's home or run `npx`. The app does the work and the CLI asks it, like the theme commands: `setup status` (free; reads the disk again), `setup link`, `setup install` and `setup cancel` (operator, under the lease), each with `--dry-run` where it changes the machine. `setup install` starts the install and answers; `setup status` and `state --json` follow its log. With no `--harness`, it installs for the harnesses found without the skill; with none such it is refused, naming the way to install anyway. Link replaces only a link: a plain file at `~/.local/bin/havooch` stays, and the failure gives the `ln -sf` line for the person to decide. `HOME` and `SHELL` come from the app's environment, so a check can point both at scratch places. The protocol version stays 3: an older app refuses the new commands in words (as L49). | ADR 0005; decisions G3, G4, G9, G10; target design, ReviewSetup and P10. One way in for the person and the agent (ADR 0001). A start-and-follow install keeps every request short, as the lease and the heartbeat expect. |
+| L53 | Settings move to `config.toml` (ADR 0002, decisions D1 to D3, P7; ticket #84). A new module, `ReviewConfig`, reads it with TOMLDecoder, the package's first dependency, after Swift Lab's `LabConfig` (ADR 0016) and Shipyard's reader: keys `version`, `theme` and `[[projects]]` (`slug`, `title`, `versions = [{ path, label }]`); a problem rejects the file with its line, an unknown key is a warning with the nearest known key. `schema/config.schema.json` is named on the file's `#:schema` line, and a test keeps it equal to the reader. The folder is `<support>/config/` when `HAVOOCH_SUPPORT_DIR` moves the support folder, else `$XDG_CONFIG_HOME/havooch/`, else `~/.config/havooch/` (`ConfigLocation`), so a test, a check or a demo run never reads or writes the person's settings. `ConfigDesk` makes a missing file from the commented header at launch, watches the file (its folder and the file, debounced 200 ms, after Swift Lab's watcher), applies a save that reads at once, keeps the last valid settings for one that doesn't, and writes the verdict to `config-status.json` in the support folder after every reload. The person sees a new set of problems as a notice at the top of the window ("config.toml wasn't applied", each problem with its line; `ConfigDesk.notice`, drawn by `UI/ConfigBanner.swift`), never a modal alert, which would hold the main actor and the control socket until a click; its close button and `havooch config dismiss` (operator, `config.dismiss`) close it, and a file that reads again takes it away. The Settings window shows the file's path, Applied or Not applied, and each problem. `theme set`, View › Theme and the Settings picker write only the `theme` line (`ConfigWriter.settingTheme`: replace its value and keep a comment after it, insert it after the last top-level key, or take it out for `system`), in place, under a lock, and only when the result reads back as the same settings with only the theme changed; a file with a problem is never written. On the first launch the move from an older build happens once: `settings.json`'s `theme` goes into the file unless the file pins one, `Themes/` moves to `themes/` beside it, token overrides are dropped with a note, and `settings.json` keeps only the sidebar width (app state). While the file has a problem, `settings.json` waits for a later launch. The notes show once in the same notice and stay in `state --json` (`config.notes`) and Settings. `havooch config path` and `config check` read the file with no app and no lease; `check` exits 1 with each problem and its line, and `--json` prints the verdict. `state --json` reports `config` (path, themes, status, accepted, problems, warnings, notes, and `notice`: kind, title, lines, or null); `theme.overrides` is gone. Projects are read and checked, but nothing uses them yet. | ADR 0002 lists three targeted writes; the theme picker and `theme set` stay, so the theme line is a fourth, as Swift Lab's "Reset to default" added one line. `HAVOOCH_SUPPORT_DIR` already isolates every check and test (AGENTS.md); without the moved folder rule, every `AppModel` in a test would write the person's `~/.config/havooch`. |

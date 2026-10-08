@@ -6,6 +6,10 @@ import PackageDescription
 // rules (ReviewCore, ReviewStore), and builds and tests without the app. Only
 // ReviewApp is macOS UI code: every other module builds and tests on Linux. A
 // module and a type never share a name.
+//
+// ReviewConfig reads `config.toml` (ADR 0002) with TOMLDecoder, the
+// package's one dependency, as Swift Lab's LabConfig does (Swift Lab ADR
+// 0016): Swift has no TOML parser. Only ReviewConfig links it.
 let package = Package(
     name: "Havooch",
     platforms: [.macOS(.v26)],
@@ -15,15 +19,24 @@ let package = Package(
         // `.build`. `make bundle` puts the command in `Contents/Helpers`.
         .executable(name: "havooch", targets: ["ReviewCLI"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/dduan/TOMLDecoder", from: "0.4.5"),
+    ],
     targets: [
         // Who holds app control and the lease's rules as a pure value, given
         // the time on each call. It depends on nothing.
         .target(name: "ReviewLease", path: "Sources/ReviewLease"),
         // The control protocol, the socket framing and the app identity.
         .target(name: "ReviewWire", dependencies: ["ReviewLease"], path: "Sources/ReviewWire"),
+        // `config.toml`: where it is, its reading with each problem on its
+        // line, the verdict, the schema's header and the targeted writes.
+        .target(
+            name: "ReviewConfig", dependencies: [.product(name: "TOMLDecoder", package: "TOMLDecoder")], path: "Sources/ReviewConfig"
+        ),
         // The command table of `havooch`, a library so it tests
-        // without a process.
-        .target(name: "ReviewCommand", dependencies: ["ReviewWire", "ReviewLease"], path: "Sources/ReviewCommand"),
+        // without a process. It reads `config.toml` itself for `config
+        // path` and `config check`, which need no app.
+        .target(name: "ReviewCommand", dependencies: ["ReviewWire", "ReviewLease", "ReviewConfig"], path: "Sources/ReviewCommand"),
         .executableTarget(name: "ReviewCLI", dependencies: ["ReviewCommand"], path: "Sources/ReviewCLI"),
         // The review's rules: comments, the queue, the states, the payload
         // and the outbox. Pure logic, given the time on each call.
@@ -45,8 +58,12 @@ let package = Package(
         .testTarget(name: "ReviewWireTests", dependencies: ["ReviewWire", "ReviewLease"], path: "Tests/ReviewWireTests"),
         .testTarget(name: "ReviewLeaseTests", dependencies: ["ReviewLease"], path: "Tests/ReviewLeaseTests"),
         .testTarget(
+            name: "ReviewConfigTests", dependencies: ["ReviewConfig", .product(name: "TOMLDecoder", package: "TOMLDecoder")],
+            path: "Tests/ReviewConfigTests"
+        ),
+        .testTarget(
             name: "ReviewCommandTests",
-            dependencies: ["ReviewWire", "ReviewLease", "ReviewCommand"],
+            dependencies: ["ReviewWire", "ReviewLease", "ReviewCommand", "ReviewConfig"],
             path: "Tests/ReviewCommandTests"
         ),
     ]
@@ -59,13 +76,13 @@ package.products.append(.executable(name: "HavoochApp", targets: ["ReviewApp"]))
 package.targets += [
     .executableTarget(
         name: "ReviewApp",
-        dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup"],
+        dependencies: ["ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup", "ReviewConfig"],
         path: "Sources/ReviewApp",
         swiftSettings: [.defaultIsolation(MainActor.self)]
     ),
     .testTarget(
         name: "ReviewAppTests",
-        dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup"],
+        dependencies: ["ReviewApp", "ReviewWire", "ReviewLease", "ReviewCore", "ReviewTranscript", "ReviewStore", "ReviewSetup", "ReviewConfig"],
         path: "Tests/ReviewAppTests",
         swiftSettings: [.defaultIsolation(MainActor.self)]
     ),

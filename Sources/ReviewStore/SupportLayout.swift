@@ -9,12 +9,16 @@ import ReviewCore
 ///
 ///     <root>/outbox.json                              the sends in line for the listener
 ///     <root>/recents.json                             the 10 recent videos, the newest first, with their last position
-///     <root>/settings.json                            the pinned theme, token overrides, sidebar width
-///     <root>/Themes/<any name>.json                   the person's own themes
+///     <root>/settings.json                            the sidebar width (app state)
+///     <root>/config-status.json                       the verdict on config.toml after the app's last reload
 ///     <root>/videos/<contentHash>/review.json         one video's review
 ///     <root>/videos/<contentHash>/transcript.json     its transcribed speech
 ///     <root>/videos/<contentHash>/frames/<id>.png     a thread's keyframe
 ///     <root>/videos/<contentHash>/crops/<id>.png      a region message's crop
+///
+/// The settings a person sets on purpose and their own themes are not
+/// here: they are in `config.toml` and `themes/` beside it (ADR 0002,
+/// `ReviewConfig.ConfigLocation`).
 ///
 /// A video's folder is named after the hash of its content, so a renamed or
 /// moved file finds its review again. The socket and the demo pointer are
@@ -32,7 +36,9 @@ public struct SupportLayout: Equatable, Sendable {
     /// once into `recentsFile`, then deleted.
     public var formerRecentFile: URL { root.appendingPathComponent("recent.json") }
     public var settingsFile: URL { root.appendingPathComponent("settings.json") }
-    public var themesFolder: URL { root.appendingPathComponent("Themes", isDirectory: true) }
+    /// Where builds before `config.toml` kept the person's themes: moved
+    /// once into the themes folder beside `config.toml`.
+    public var formerThemesFolder: URL { root.appendingPathComponent("Themes", isDirectory: true) }
     public var videosFolder: URL { root.appendingPathComponent("videos", isDirectory: true) }
 
     /// The folder of everything kept about the video with `contentHash`.

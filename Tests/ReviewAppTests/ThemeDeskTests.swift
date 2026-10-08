@@ -1,14 +1,16 @@
 import Foundation
 @testable import ReviewApp
+import ReviewConfig
 import ReviewCore
 import ReviewLease
 import ReviewStore
 import ReviewWire
 import Testing
 
-/// The theme as the app runs it: the built-in themes, the person's own,
-/// the pin and the overrides in `settings.json`, the reload on a change,
-/// and `theme list`, `theme set` and `state` over the control server.
+/// The theme as the app runs it: the built-in themes, the person's own in
+/// `themes/` beside `config.toml`, the pin in `config.toml`, the reload on
+/// a change, and `theme list`, `theme set` and `state` over the control
+/// server.
 @Suite("Themes in the app", .serialized)
 struct ThemeDeskTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -16,6 +18,8 @@ struct ThemeDeskTests {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     var layout: SupportLayout { SupportLayout(root: root.appendingPathComponent("support", isDirectory: true)) }
+    /// Where `HAVOOCH_SUPPORT_DIR` puts the settings: the support folder's `config/`.
+    var location: ConfigLocation { ConfigLocation(folder: layout.root.appendingPathComponent("config"), home: root) }
 
     private func cleanUp() {
         try? FileManager.default.removeItem(at: root)
@@ -39,8 +43,12 @@ struct ThemeDeskTests {
     }
 
     private func writeTheme(_ json: String, as name: String) throws {
-        try FileManager.default.createDirectory(at: layout.themesFolder, withIntermediateDirectories: true)
-        try Data(json.utf8).write(to: layout.themesFolder.appendingPathComponent(name))
+        try FileManager.default.createDirectory(at: location.themesFolder, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: location.themesFolder.appendingPathComponent(name))
+    }
+
+    private func configText() throws -> String {
+        try String(contentsOf: location.file, encoding: .utf8)
     }
 
     private func eventually(_ condition: () -> Bool) async {
@@ -61,7 +69,7 @@ struct ThemeDeskTests {
         #expect(model.themes.theme.kind == .dark)
     }
 
-    @Test("theme set pins a theme for every appearance, keeps it across a restart, and theme set system unpins")
+    @Test("theme set pins a theme for every appearance in config.toml's theme line, keeps it across a restart, and theme set system unpins")
     func pinAndUnpin() async throws {
         defer { cleanUp() }
         let (model, server) = model()
@@ -79,13 +87,17 @@ struct ThemeDeskTests {
         #expect(theme["pinned"] as? String == "Dimmed")
         #expect(theme["appearance"] as? String == "light")
 
-        // A new run reads the pin from settings.json.
+        // Only the theme line is written: the header's comments stay.
+        #expect(try configText() == ConfigFile.header.replacingOccurrences(of: "version = 1\n", with: "version = 1\ntheme = \"Dimmed\"\n"))
+        #expect(!FileManager.default.fileExists(atPath: layout.settingsFile.path))
+
+        // A new run reads the pin from config.toml.
         let (again, againServer) = self.model()
         #expect(again.themes.theme.name == "Dimmed")
 
         #expect(await send(.themeSet(name: "system"), againServer) == .done("theme follows the system (Default Light)\n"))
         #expect(again.themes.pinned == nil)
-        #expect(try Settings.load(layout).theme == nil)
+        #expect(try configText() == ConfigFile.header)
     }
 
     @Test("an unknown theme is refused, and nothing changes")
@@ -95,7 +107,7 @@ struct ThemeDeskTests {
         let reply = await send(.themeSet(name: "Purple"), server)
         #expect(reply == .refused("no theme Purple; havooch theme list names them"))
         #expect(model.themes.theme.name == "Default Light")
-        #expect(!FileManager.default.fileExists(atPath: layout.settingsFile.path))
+        #expect(try configText() == ConfigFile.header)
     }
 
     @Test("theme list names the built-in and the user themes, marks the active one, and a user theme replaces a built-in of its name")
@@ -124,23 +136,23 @@ struct ThemeDeskTests {
         #expect((try object(reply.output)["problems"] as? [String])?.count == 1)
     }
 
-    @Test("overrides in settings.json apply on top of the active theme")
-    func overrides() throws {
+    @Test("a pin no theme has follows the system, with a problem in theme list")
+    func unknownPin() async throws {
         defer { cleanUp() }
-        try Settings(theme: "Dimmed", overrides: ["accent": "#123456", "nonsense": "#ffffff"]).save(layout)
-        let (model, _) = model()
-        #expect(model.themes.theme.name == "Dimmed")
-        #expect(model.themes.theme[.accent] == ThemeColor("#123456"))
-        #expect(model.themes.report.overrides == 2)
-        // The fill follows the overridden accent, so white text still reads on it.
-        #expect(model.themes.theme[.accentFill] == ThemeColor("#123456"))
-        #expect(model.themes.report.accentFill == "#123456")
+        try location.createIfMissing()
+        try Data("version = 1\ntheme = \"Purple\"\n".utf8).write(to: location.file)
+        let (model, server) = model()
+        #expect(model.themes.theme.name == "Default Light")
+        #expect(model.themes.pinned == nil)
+        let list = await send(.themeList, server)
+        #expect(list.output.contains("left out: config.toml pins the theme Purple, which no theme file has"))
     }
 
     @Test("state reports the fill of filled controls: the theme's accentFill, which white text reads on")
     func reportsTheFill() throws {
         defer { cleanUp() }
-        try Settings(theme: "Default Dark").save(layout)
+        try location.createIfMissing()
+        try Data("version = 1\ntheme = \"Default Dark\"\n".utf8).write(to: location.file)
         let (model, _) = model()
         #expect(model.themes.report.accentFill == "#48689d")
         let data = try JSONEncoder().encode(model.themes.report)
@@ -172,23 +184,27 @@ struct ThemeDeskTests {
         #expect(filled >= 6)
     }
 
-    @Test("a theme file written while the app runs is read at once, and so is a change to settings.json")
+    @Test("a theme file written while the app runs is read at once, and so is a pin saved in config.toml")
     func reloadsOnChange() async throws {
         defer { cleanUp() }
         let (model, _) = model()
         model.themes.startWatching()
-        defer { model.themes.stopWatching() }
+        model.config.startWatching()
+        defer {
+            model.themes.stopWatching()
+            model.config.stopWatching()
+        }
 
         try writeTheme(##"{"name": "Brown", "kind": "dark", "tokens": {"accent": "#c08a5b"}}"##, as: "brown.json")
         await eventually { model.themes.catalog.entry(named: "Brown") != nil }
         #expect(model.themes.catalog.entry(named: "Brown") != nil)
 
-        try Settings(theme: "Brown").save(layout)
+        try Data("version = 1\ntheme = \"Brown\"\n".utf8).write(to: location.file, options: .atomic)
         await eventually { model.themes.theme.name == "Brown" }
         #expect(model.themes.theme[.accent] == ThemeColor("#c08a5b"))
 
         // Edited in place, as an editor that doesn't replace the file saves it.
-        let file = layout.themesFolder.appendingPathComponent("brown.json")
+        let file = location.themesFolder.appendingPathComponent("brown.json")
         let handle = try FileHandle(forWritingTo: file)
         try handle.truncate(atOffset: 0)
         try handle.write(contentsOf: Data(##"{"name": "Brown", "kind": "dark", "tokens": {"accent": "#a0522d"}}"##.utf8))
@@ -202,12 +218,16 @@ struct ThemeDeskTests {
         #expect(model.themes.theme.name == "Default Light")
     }
 
-    @Test("a save of the outbox in the support folder doesn't read the themes again; a new settings.json does")
+    @Test("a save of the outbox in the support folder doesn't read the themes again; a new pin in config.toml does")
     func ignoresOtherFiles() async throws {
         defer { cleanUp() }
         let (model, _) = model()
         model.themes.startWatching()
-        defer { model.themes.stopWatching() }
+        model.config.startWatching()
+        defer {
+            model.themes.stopWatching()
+            model.config.stopWatching()
+        }
         let before = model.themes.reloads
 
         // Replaced, as the outbox is saved, then written in place.
@@ -216,7 +236,7 @@ struct ThemeDeskTests {
         try? await Task.sleep(for: .milliseconds(500))
         #expect(model.themes.reloads == before)
 
-        try Settings(theme: "Default Dark").save(layout)
+        try Data("version = 1\ntheme = \"Default Dark\"\n".utf8).write(to: location.file, options: .atomic)
         await eventually { model.themes.theme.name == "Default Dark" }
         #expect(model.themes.reloads > before)
     }

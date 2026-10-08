@@ -1,4 +1,5 @@
 import Foundation
+import ReviewConfig
 
 /// The theme as `state`, `theme list` and `theme set` report it.
 extension StateReport {
@@ -12,8 +13,6 @@ extension StateReport {
         var pinned: String?
         /// The system appearance: `light` or `dark`.
         var appearance: String
-        /// How many token overrides `settings.json` has.
-        var overrides: Int
         /// The fill of filled controls as `#rrggbb`, which white text reads
         /// on (ADR 0006); `null` only without the built-in themes.
         var accentFill: String? = nil
@@ -24,20 +23,17 @@ extension StateReport {
             try container.encode(kind, forKey: .kind)
             try container.encode(pinned, forKey: .pinned)
             try container.encode(appearance, forKey: .appearance)
-            try container.encode(overrides, forKey: .overrides)
             try container.encode(accentFill, forKey: .accentFill)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case active, kind, pinned, appearance, overrides, accentFill
+            case active, kind, pinned, appearance, accentFill
         }
 
-        /// `theme: Dimmed (dark), pinned, 2 overrides`, or `theme: Default
-        /// Light (light), follows the system`.
+        /// `theme: Dimmed (dark), pinned`, or `theme: Default Light
+        /// (light), follows the system`.
         var line: String {
-            let choice = pinned == nil ? "follows the system" : "pinned"
-            let overrideWords = overrides == 0 ? "" : ", \(overrides) override\(overrides == 1 ? "" : "s")"
-            return "theme: \(active) (\(kind)), \(choice)\(overrideWords)"
+            "theme: \(active) (\(kind)), \(pinned == nil ? "follows the system" : "pinned")"
         }
 
         /// What `theme set` prints.
@@ -89,6 +85,58 @@ extension StateReport {
             }
             let left = problems.map { "left out: \($0)" }
             return (rows + left).joined(separator: "\n") + "\n"
+        }
+    }
+}
+
+/// The settings file as `state` reports it.
+extension StateReport {
+    nonisolated struct Config: Encodable, Equatable {
+        /// `config.toml`.
+        var path: String
+        /// The person's own themes, beside it.
+        var themes: String
+        /// `config-status.json`, the verdict of the last reload.
+        var status: String
+        /// Whether the last reload read the file. While it is false the app
+        /// runs with the last settings that read.
+        var accepted: Bool
+        var problems: [ConfigIssue]
+        var warnings: [ConfigIssue]
+        /// What the move from `settings.json` did, for the person.
+        var notes: [String]
+        /// The notice in the window; `null` while none is up.
+        var notice: Notice?
+
+        struct Notice: Encodable, Equatable {
+            /// `moved` or `rejected`.
+            var kind: String
+            var title: String
+            var lines: [String]
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(path, forKey: .path)
+            try container.encode(themes, forKey: .themes)
+            try container.encode(status, forKey: .status)
+            try container.encode(accepted, forKey: .accepted)
+            try container.encode(problems, forKey: .problems)
+            try container.encode(warnings, forKey: .warnings)
+            try container.encode(notes, forKey: .notes)
+            try container.encode(notice, forKey: .notice)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case path, themes, status, accepted, problems, warnings, notes, notice
+        }
+
+        /// `config: /…/config.toml, applied`, or `config: /…/config.toml,
+        /// not applied` and a line per problem.
+        var lines: String {
+            let head = "config: \(path), \(accepted ? "applied" : "not applied, the last valid settings stay")"
+            return ([head] + problems.map { "  problem, \($0.description)" } + warnings.map { "  warning, \($0.description)" })
+                .joined(separator: "\n")
         }
     }
 }

@@ -166,10 +166,10 @@ What changes, in short:
 +.agents/skills/havooch-mate/references/first-demo.md   the beginner demo, read only for the bundled sample (H3)
  Sources/
 +  ReviewConfig/
-+    ConfigLocation.swift               $XDG_CONFIG_HOME/havooch or ~/.config/havooch; config.toml, themes/
++    ConfigLocation.swift               <support>/config with HAVOOCH_SUPPORT_DIR, else $XDG_CONFIG_HOME/havooch or ~/.config/havooch; config.toml, themes/
 +    ConfigFile.swift                   the decoded file: version, theme, [[projects]]; read → (config | problems with lines)
 +    ProjectEntry.swift                 slug, title, versions [{path, label}]; versionNumber(of path)
-+    ConfigWriter.swift                 targeted writes: header for a missing file, append [[projects]], append a version
++    ConfigWriter.swift                 targeted writes: header for a missing file, the theme line, append [[projects]], append a version
 +    ConfigVerdict.swift                {accepted, checked, configModified, problems, warnings} as config-status.json
 +  ReviewSetup/
 +    HarnessCatalog.swift               per harness: skills folders, presence hints, the -a name, the prompt form
@@ -235,7 +235,7 @@ What changes, in short:
 ### ReviewConfig
 
 - `ConfigFile.read(data) -> Result<ConfigFile, [Problem]>`. A problem has a line and a message. Unknown keys are warnings, not problems (Swift Lab's rule).
-- `ConfigWriter` never rewrites the whole file: it inserts text at a position, so comments survive. Operations: `header()` for a missing file; `appendProject(slug, title, firstVersion)`; `appendVersion(slug, path, label)` (rewrites only that project's `versions` array).
+- `ConfigWriter` never rewrites the whole file: it inserts text at a position, so comments survive. Operations: `header()` for a missing file; `settingTheme(name)` (the one `theme` line, built in #84); `appendProject(slug, title, firstVersion)`; `appendVersion(slug, path, label)` (rewrites only that project's `versions` array).
 - `ProjectEntry.versionNumber(of path) -> Int?` (position + 1). `projects(listing path) -> [ProjectEntry]`.
 
 ### ReviewSetup

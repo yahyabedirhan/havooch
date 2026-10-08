@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/yahyabedirhan/havooch/main/schema/config.schema.json",
+  "title": "Havooch settings",
+  "description": "config.toml for Havooch, the video player for giving feedback to agents. The file lives in $XDG_CONFIG_HOME/havooch/ (default ~/.config/havooch/); with HAVOOCH_SUPPORT_DIR set, in its config/ folder. Every key takes its default when it is missing, and Havooch rejects a file that sets any key without version = 1. Havooch applies each save at once, keeps the last valid settings when a save has a problem, and writes its verdict to config-status.json in its support folder; `havooch config check` gives the same verdict without the app. An unknown key is a warning in the app and an error here.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The format version. Only 1 exists. Havooch needs it in a file that sets any other key.",
+      "type": "integer",
+      "enum": [1],
+      "default": 1
+    },
+    "theme": {
+      "description": "The pinned theme, by its name, as `havooch theme list` prints it: a built-in theme or one of yours in themes/ beside this file. Leave it out to follow the Mac's light or dark appearance. `havooch theme set` writes this key.",
+      "type": "string",
+      "minLength": 1
+    },
+    "projects": {
+      "description": "The projects: the versions of one video each, in order. An agent makes one with `havooch project new` and adds a version with `havooch project add`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slug"],
+        "properties": {
+          "slug": {
+            "description": "The project's name in commands: lowercase letters, digits and single hyphens, 1 to 64 characters, unique in the file.",
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "maxLength": 64
+          },
+          "title": {
+            "description": "The name people read. Leave it out to show the slug.",
+            "type": "string",
+            "minLength": 1
+          },
+          "versions": {
+            "description": "The versions, v1 first. The videos stay where they are.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path"],
+              "properties": {
+                "path": {
+                  "description": "The video file: an absolute path, or one that starts with ~/ for the home folder.",
+                  "type": "string",
+                  "pattern": "^(~|~/.*|/.*)$"
+                },
+                "label": {
+                  "description": "A few words on what changed in this version.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import ReviewConfig
 import ReviewCore
 import ReviewLease
 import ReviewStore
@@ -39,12 +40,21 @@ final class AppModel: AppControlling {
     var listeners: ListenerQueue { data.listeners }
     /// The transcripts of the videos opened on this data in this run.
     var transcripts: TranscriptDesk { data.transcripts }
-    /// The active theme, the pin and the overrides: on the folder the run
-    /// started on, also during an in-app demo.
+    /// `config.toml`: the settings a person or an agent sets on purpose,
+    /// beside the folder the run started on (`ConfigLocation`), also during
+    /// an in-app demo.
+    let config: ConfigDesk
+    /// The active theme and the pin `config.toml` names.
     let themes: ThemeDesk
     /// What Havooch detects of the person's setup, Link and the skill
     /// install: app-wide, whatever data the run is on.
     let setup: SetupDesk
+    /// The sidebar's width the person left, in `settings.json` on the
+    /// folder the run started on: app state, not a setting.
+    private(set) var keptSidebarWidth: Double?
+    /// Whether `settings.json` read at launch: one that doesn't is never
+    /// written over.
+    @ObservationIgnored private let settingsRead: Bool
     /// Where the run keeps its data now: the person's own, or a demo's.
     var support: URL { data.support }
     /// The folder the run started on: the person's, or the one
@@ -157,9 +167,26 @@ final class AppModel: AppControlling {
         self.demoVideo = demoVideo
         self.speech = speech
         data = DataFolder(support: launchSupport, speech: speech)
-        themes = ThemeDesk(layout: SupportLayout(root: launchSupport))
+        let launchLayout = SupportLayout(root: launchSupport)
+        config = ConfigDesk(
+            location: ConfigLocation(variables: environment, movedSupport: SupportFolder.moved(environment: environment)),
+            layout: launchLayout
+        )
+        themes = ThemeDesk(config: config)
         self.setup = setup ?? SetupDesk(environment: environment)
+        do throws(Library.Failure) {
+            keptSidebarWidth = try Settings.load(launchLayout).sidebarWidth
+            settingsRead = true
+        } catch {
+            settingsRead = false
+        }
         listenToAgent()
+    }
+
+    /// The settings notice's close button and `config dismiss`.
+    @discardableResult
+    func dismissConfigNotice() -> Bool {
+        config.dismissNotice()
     }
 
     /// What the agent says on the data the run is on shows as a notice.
@@ -671,6 +698,7 @@ final class AppModel: AppControlling {
         report.transcript = transcript
         report.theme = themes.report
         report.setup = setupReport
+        report.config = config.report
         report.sidebar = sidebarReport
         report.recents = recents
         report.screen = StageContent(hasVideo: video != nil, hasRecents: !report.recents.isEmpty).screen
@@ -1353,7 +1381,7 @@ final class AppModel: AppControlling {
 
     /// The sidebar's width: the kept one, inside the limits, else the
     /// default.
-    var sidebarWidth: CGFloat { Self.sidebarWidth(kept: themes.settings.sidebarWidth) }
+    var sidebarWidth: CGFloat { Self.sidebarWidth(kept: keptSidebarWidth) }
 
     /// `kept` inside `Metrics.sidebarWidthRange`; the default with none.
     static func sidebarWidth(kept: Double?) -> CGFloat {
@@ -1367,11 +1395,11 @@ final class AppModel: AppControlling {
     func keepSidebarWidth(_ width: CGFloat) {
         let width = Self.sidebarWidth(kept: Double(width.rounded()))
         guard width != sidebarWidth else { return }
-        do throws(AppRefusal) {
-            try themes.keepSidebarWidth(Double(width))
-        } catch {
-            // A width is a comfort, not the person's work: it's only lost.
-        }
+        keptSidebarWidth = Double(width)
+        // A settings file that doesn't read is left as it is: a width is a
+        // comfort, not the person's work, so it's only lost.
+        guard settingsRead else { return }
+        try? Settings(sidebarWidth: Double(width)).save(SupportLayout(root: launchSupport))
     }
 
     /// Up and Down: the pin before or after the player's time.

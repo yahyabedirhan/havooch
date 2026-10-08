@@ -127,7 +127,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do throws(SocketListener.Failure) {
             try server.start()
             self.server = server
-            // A theme file or settings.json edited by hand shows at once.
+            // A save of config.toml applies at once, and a theme file
+            // edited by hand shows at once.
+            model.config.startWatching()
             model.themes.startWatching()
             // A launch opens no video: the window shows home.
         } catch {

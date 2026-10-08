@@ -77,6 +77,9 @@ protocol AppControlling: AnyObject {
     func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
     /// Stops the running install, as Cancel does, once it has stopped.
     func cancelInstall() async throws(AppRefusal) -> StateReport.Setup.Install
+    /// Closes the settings notice, as its close button does; false when
+    /// none was up.
+    func dismissConfigNotice() -> Bool
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -374,6 +377,9 @@ final class ControlServer {
             case .setupCancel:
                 let install = try await app.cancelInstall()
                 return done(install.line, Output(install: install), json)
+            case .configDismiss:
+                let closed = app.dismissConfigNotice()
+                return done(closed ? "the settings notice is closed" : "no settings notice was up", Output(dismissed: closed), json)
             }
         } catch {
             return Answer(reply: .refused(error.reason))
@@ -401,6 +407,7 @@ final class ControlServer {
         var composer: StateReport.Sidebar.Composer?
         var setup: StateReport.Setup?
         var install: StateReport.Setup.Install?
+        var dismissed: Bool?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {
