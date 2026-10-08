@@ -13,6 +13,16 @@ extension View {
     ) -> some View {
         modifier(KeyPress(model: model, reportsFocus: isFocused, action: action))
     }
+
+    /// As above in a player window; outside one (the first-run window)
+    /// the player takes no keys, so the control's own keys work as they are.
+    @ViewBuilder func pressedByKeys(in model: WindowModel?, action: @escaping () -> Void) -> some View {
+        if let model {
+            pressedByKeys(in: model, action: action)
+        } else {
+            self
+        }
+    }
 }
 
 /// Reports the control's keyboard focus to the model (`pressedByKeys`).

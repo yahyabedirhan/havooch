@@ -118,15 +118,9 @@ extension WindowModel {
     }
 
     /// The harness the agent step shows: the one the person picked, else
-    /// the first whose skill and app are detected, else the first whose
-    /// skill is, else the first found, else the first of all.
+    /// the one setup suggests (`SetupDesk.suggestedHarness`).
     var connectHarness: Harness {
-        if let pickedHarness { return pickedHarness }
-        let harnesses = app.setup.report.harnesses
-        let pick = harnesses.first { $0.skill == .detected && $0.presence == .detected }
-            ?? harnesses.first { $0.skill == .detected }
-            ?? harnesses.first { $0.presence == .detected }
-        return pick?.harness ?? HarnessCatalog.all[0]
+        pickedHarness ?? app.setup.suggestedHarness
     }
 
     /// A click on a harness in the picker, and `connect pick <harness>`:
@@ -150,9 +144,7 @@ extension WindowModel {
 
     /// What Havooch detects of `harness`'s setup.
     func readiness(of harness: Harness) -> Readiness {
-        guard let setup = app.setup.report.harnesses.first(where: { $0.harness == harness }) else { return .harnessNotDetected }
-        if setup.skill == .detected { return .ready }
-        return setup.presence == .detected ? .skillNotDetected : .harnessNotDetected
+        app.setup.readiness(of: harness)
     }
 
     /// What the copied prompt names (ADR 0003): the window's project as
@@ -256,6 +248,15 @@ extension WindowModel {
         }
         return report
     }
+}
+
+/// The Connect view's setup steps act on the window: its own problem
+/// line, its harness and the prompt for its video.
+extension WindowModel: SetupSteering {
+    var setup: SetupDesk { app.setup }
+    var steppedHarness: Harness { connectHarness }
+    func pastePrompt(for harness: Harness) -> String? { prompt(for: harness) }
+    var keysWindow: WindowModel? { self }
 }
 
 extension AppModel {

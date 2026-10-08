@@ -63,6 +63,9 @@ protocol AppControlling: AnyObject {
     /// Closes the settings notice, as its close button does; false when
     /// none was up.
     func dismissConfigNotice() -> Bool
+    /// Acts in the first-run window as the person's click does; the line
+    /// the command prints, and the window as `state` reports it.
+    func firstRun(_ action: FirstRunAction) async throws(AppRefusal) -> (line: String, firstRun: StateReport.FirstRun)
 }
 
 /// One window as the control server drives it: the actions an operator
@@ -514,6 +517,18 @@ final class ControlServer {
                 // The command brings this process to the front, as for `open`.
                 answer.reply.pid = ProcessInfo.processInfo.processIdentifier
                 return answer
+            case .firstRunShow(let step):
+                return firstRunDone(try await app.firstRun(.show(step: step)), json)
+            case .firstRunNext:
+                return firstRunDone(try await app.firstRun(.next), json)
+            case .firstRunBack:
+                return firstRunDone(try await app.firstRun(.back), json)
+            case .firstRunPick(let harness):
+                return firstRunDone(try await app.firstRun(.pick(harness: harness)), json)
+            case .firstRunDemo:
+                return firstRunDone(try await app.firstRun(.demo), json)
+            case .firstRunSkip:
+                return firstRunDone(try await app.firstRun(.skip), json)
             case .configDismiss:
                 let closed = app.dismissConfigNotice()
                 return done(closed ? "the settings notice is closed" : "no settings notice was up", Output(dismissed: closed), json)
@@ -550,6 +565,7 @@ final class ControlServer {
         var setup: StateReport.Setup?
         var install: StateReport.Setup.Install?
         var dismissed: Bool?
+        var firstRun: StateReport.FirstRun?
 
         /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {
@@ -565,6 +581,11 @@ final class ControlServer {
         case .id(let id): "#\(id.number)"
         case nil: nil
         }
+    }
+
+    /// A first-run action's answer: its line, or with `--json` the window.
+    private func firstRunDone(_ answer: (line: String, firstRun: StateReport.FirstRun), _ json: Bool) -> Answer {
+        done(answer.line, Output(firstRun: answer.firstRun), json)
     }
 
     /// What the Connect view says of a harness's readiness, as words.

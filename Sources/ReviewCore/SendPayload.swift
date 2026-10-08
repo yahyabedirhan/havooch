@@ -11,7 +11,8 @@ import Foundation
 /// never left out.
 ///
 ///     { "send":    { "id": "s-f92cbb2a-2", "sentAt": "2026-10-05T19:02:11Z" },
-///       "video":   { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4" },
+///       "video":   { "path": "/abs/sample.mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4",
+///                    "demo": false },
 ///       "project": { "slug": "launch-video", "title": "Launch video", "onScreen": 2,
 ///                    "versions": [ { "number": 1, "path": "/abs/cut1.mp4", "label": null }, … ] },
 ///       "context": null,
@@ -35,6 +36,27 @@ public struct SendPayload: Codable, Equatable, Sendable {
         public var duration: Double
         /// The file's name with its extension.
         public var title: String
+        /// Whether the video is the demo bundled in the app, by its content
+        /// (`DemoVideo`): the skill then guides a beginner (H3, P12).
+        public var demo: Bool
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            path = try container.decode(String.self, forKey: .path)
+            contentHash = try container.decode(String.self, forKey: .contentHash)
+            duration = try container.decode(Double.self, forKey: .duration)
+            title = try container.decode(String.self, forKey: .title)
+            // A payload from a build before the flag isn't the demo's.
+            demo = try container.decodeIfPresent(Bool.self, forKey: .demo) ?? false
+        }
+
+        init(path: String, contentHash: String, duration: Double, title: String) {
+            self.path = path
+            self.contentHash = contentHash
+            self.duration = duration
+            self.title = title
+            demo = contentHash == DemoVideo.contentHash
+        }
     }
 
     /// One line of the transcript, with its times in seconds.

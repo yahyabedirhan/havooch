@@ -2,15 +2,15 @@ import Foundation
 import ReviewWire
 
 /// `havooch screenshot <abs.png> [--appearance light|dark]
-/// [--hide-agent-indicator] [--window main|settings|about|<id>]`: a window
+/// [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]`: a window
 /// as a PNG: the key window, or the window `--window <id>` names. The path
 /// is absolute, as the contract says. The agent-control indicator shows as the person sees it; `--hide-agent-indicator` leaves
 /// it out. `--window settings` captures the Settings window instead, and
-/// `--window about` the About panel.
+/// `--window about` the About panel, `--window first-run` the first-run window.
 enum ScreenshotCommand {
     static let command = Command(
-        name: "screenshot", synopsis: "screenshot <abs.png> [--appearance light|dark] [--hide-agent-indicator] [--window main|settings|about|<id>]",
-        summary: "save a window (the key one, or --window <id>), Settings or the About panel as a PNG, with the agent-control indicator unless hidden",
+        name: "screenshot", synopsis: "screenshot <abs.png> [--appearance light|dark] [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]",
+        summary: "save a window (the key one, or --window <id>), Settings, the About panel or the first-run window as a PNG, with the agent-control indicator unless hidden",
         valuedOptions: ["--appearance", "--window"], flags: ["--hide-agent-indicator"]
     ) { arguments, _ throws(UsageError) in
         let path = try arguments.one("<abs.png>")
@@ -23,10 +23,10 @@ enum ScreenshotCommand {
             }
             appearance = known
         }
-        // `main`, `settings` or `about`, or a player window by its id (`w2`).
+        // `main`, `settings`, `about` or `first-run`, or a player window by its id (`w2`).
         let name = arguments.options["--window"]
         let window = name.flatMap(ControlRequest.Window.init(rawValue:)) ?? .main
-        if let name, name.isEmpty { throw UsageError("`--window` needs main, settings, about or a window id") }
+        if let name, name.isEmpty { throw UsageError("`--window` needs main, settings, about, first-run or a window id") }
         return .send(
             .screenshot(
                 path: URL(fileURLWithPath: path).standardizedFileURL.path, appearance: appearance,

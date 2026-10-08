@@ -96,6 +96,12 @@ public struct ControlMessage: Equatable, Sendable {
         case .tourNext: wire = Wire(command: "tour.next")
         case .tourSkip: wire = Wire(command: "tour.skip")
         case .tourClose: wire = Wire(command: "tour.close")
+        case .firstRunShow(let step): wire = Wire(command: "firstRun.show", name: step)
+        case .firstRunNext: wire = Wire(command: "firstRun.next")
+        case .firstRunBack: wire = Wire(command: "firstRun.back")
+        case .firstRunPick(let harness): wire = Wire(command: "firstRun.pick", name: harness)
+        case .firstRunDemo: wire = Wire(command: "firstRun.demo")
+        case .firstRunSkip: wire = Wire(command: "firstRun.skip")
         case .configDismiss: wire = Wire(command: "config.dismiss")
         case .windowList: wire = Wire(command: "window.list")
         case .windowNew: wire = Wire(command: "window.new")
@@ -255,6 +261,12 @@ public struct ControlMessage: Equatable, Sendable {
         case "tour.next": return .tourNext
         case "tour.skip": return .tourSkip
         case "tour.close": return .tourClose
+        case "firstRun.show": return .firstRunShow(step: wire.name)
+        case "firstRun.next": return .firstRunNext
+        case "firstRun.back": return .firstRunBack
+        case "firstRun.pick": return .firstRunPick(harness: try field(wire.name, "name", of: wire))
+        case "firstRun.demo": return .firstRunDemo
+        case "firstRun.skip": return .firstRunSkip
         case "config.dismiss": return .configDismiss
         case "window.list": return .windowList
         case "window.new": return .windowNew

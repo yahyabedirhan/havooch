@@ -41,6 +41,16 @@ public struct Harness: Hashable, Sendable {
         case .sentence: return "Use the \(HarnessCatalog.skill) skill to \(request)"
         }
     }
+
+    /// The first-run window's prompt (H2): the person's own agent opens
+    /// the demo video bundled in the app and listens to it. It assumes the
+    /// skill is there, as `prompt(for:)` does.
+    public var demoPrompt: String {
+        switch promptForm {
+        case .invocation(let word): "\(word) use Havooch to open the demo video and listen for my feedback"
+        case .sentence: "Use the \(HarnessCatalog.skill) skill to open the demo video in Havooch and listen for my feedback"
+        }
+    }
 }
 
 /// What a prompt names: the window's video by its file name, or a project

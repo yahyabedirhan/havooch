@@ -5,12 +5,12 @@ import SwiftUI
 /// `~/.local/bin`, and done reads "Linked". A failed link shows the line
 /// to run in a terminal. Only a detected link counts (ADR 0005).
 struct CommandLineStep: View {
-    let model: WindowModel
+    let model: any SetupSteering
     let open: Bool
     let toggle: () -> Void
     @Environment(\.palette) private var palette
 
-    private var setup: SetupDesk { model.app.setup }
+    private var setup: SetupDesk { model.setup }
 
     var body: some View {
         let linked = setup.isLinked
@@ -30,13 +30,13 @@ struct CommandLineStep: View {
                 CopyBox(text: failure.fallback)
                 Button("Try Again") { model.linkCommandLine() }
                     .controlSize(.small)
-                    .pressedByKeys(in: model) { model.linkCommandLine() }
+                    .pressedByKeys(in: model.keysWindow) { model.linkCommandLine() }
             } else {
                 StepDetail(text: "Agents control Havooch through the havooch command. Link puts it in ~/.local/bin.")
                 Button("Link") { model.linkCommandLine() }
                     .filledButton(palette)
                     .controlSize(.small)
-                    .pressedByKeys(in: model) { model.linkCommandLine() }
+                    .pressedByKeys(in: model.keysWindow) { model.linkCommandLine() }
             }
         }
     }
@@ -53,7 +53,7 @@ struct CommandLineStep: View {
 /// log and Cancel, and the command for one repository. A ✓ only for what
 /// is detected; anything else is a neutral "Not detected" (G9).
 struct SkillStep: View {
-    let model: WindowModel
+    let model: any SetupSteering
     let open: Bool
     var isLast = false
     let toggle: () -> Void
@@ -61,7 +61,7 @@ struct SkillStep: View {
     @State private var repoOpen = false
     @Environment(\.palette) private var palette
 
-    private var setup: SetupDesk { model.app.setup }
+    private var setup: SetupDesk { model.setup }
     private var lacking: [Harness] { setup.report.harnessesLackingSkill }
     private var isRunning: Bool { setup.install?.state == .running }
 
@@ -113,7 +113,7 @@ struct SkillStep: View {
                     .help(line)
                 Button("Cancel") { model.cancelSkillInstall() }
                     .controlSize(.small)
-                    .pressedByKeys(in: model) { model.cancelSkillInstall() }
+                    .pressedByKeys(in: model.keysWindow) { model.cancelSkillInstall() }
             }
         case .noNode:
             Text("npx isn't on your PATH").font(.caption.weight(.semibold)).foregroundStyle(palette[.textPrimary])
@@ -121,7 +121,7 @@ struct SkillStep: View {
             CopyBox(text: SkillInstall(for: install?.install.harnesses ?? lacking).commandLine)
             Button("Check Again") { model.installSkill(for: install?.install.harnesses ?? lacking) }
                 .controlSize(.small)
-                .pressedByKeys(in: model) { model.installSkill(for: install?.install.harnesses ?? lacking) }
+                .pressedByKeys(in: model.keysWindow) { model.installSkill(for: install?.install.harnesses ?? lacking) }
         default:
             if let install, install.state == .cancelled { StepNote(text: "Cancelled.") }
             if let install, install.state == .failed {
@@ -133,7 +133,7 @@ struct SkillStep: View {
                     Button("Install for \(Self.list(lacking.map(\.name)))") { model.installSkill(for: lacking) }
                         .filledButton(palette)
                         .controlSize(.small)
-                        .pressedByKeys(in: model) { model.installSkill(for: lacking) }
+                        .pressedByKeys(in: model.keysWindow) { model.installSkill(for: lacking) }
                 }
                 Button(repoOpen ? "Hide repo command" : "In one repo…") { repoOpen.toggle() }
                     .buttonStyle(.borderless)

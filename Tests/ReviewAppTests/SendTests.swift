@@ -92,7 +92,7 @@ struct SendDeliveryTests {
         #expect(ISO8601DateFormatter().date(from: try #require(sendPart["sentAt"])) != nil)
         #expect(payload["video"] as? [String: AnyHashable] == [
             "path": MessageTests.fixture.standardizedFileURL.path, "contentHash": try #require(model.video?.contentHash),
-            "duration": 21.233, "title": "sample.mp4",
+            "duration": 21.233, "title": "sample.mp4", "demo": false,
         ])
         // The fixture's sidecar, on this session's first send.
         #expect(payload["context"] as? String == ContextReader.sidecar(beside: MessageTests.fixture)?.text)

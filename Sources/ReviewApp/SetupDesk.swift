@@ -79,6 +79,24 @@ final class SetupDesk {
     /// Whether both setup steps are detected.
     var isDetected: Bool { isLinked && isSkillDetected }
 
+    /// The harness a picker shows before the person picks one: the first
+    /// whose skill and app are detected, else the first whose skill is,
+    /// else the first found, else the first of all.
+    var suggestedHarness: Harness {
+        let harnesses = report.harnesses
+        let pick = harnesses.first { $0.skill == .detected && $0.presence == .detected }
+            ?? harnesses.first { $0.skill == .detected }
+            ?? harnesses.first { $0.presence == .detected }
+        return pick?.harness ?? HarnessCatalog.all[0]
+    }
+
+    /// What Havooch detects of `harness`'s setup.
+    func readiness(of harness: Harness) -> Readiness {
+        guard let setup = report.harnesses.first(where: { $0.harness == harness }) else { return .harnessNotDetected }
+        if setup.skill == .detected { return .ready }
+        return setup.presence == .detected ? .skillNotDetected : .harnessNotDetected
+    }
+
     /// Reads the disk again.
     func probe() {
         report = SetupProbe(fileSystem: fileSystem, home: home).probe()

@@ -41,6 +41,11 @@ final class AppModel: AppControlling {
     /// `settings.json`: setup then counts as working, whatever was
     /// detected (P11, ADR 0005).
     private(set) var agentConnectedOnce = false
+    /// Whether the first-run window has shown on the person's data, kept
+    /// in `settings.json`: it shows by itself on the first launch only (H1).
+    private(set) var firstRunDone = false
+    /// The first-run window: Welcome, Tools, Connect, Try it (H1).
+    let firstRun: FirstRun
     /// Whether `settings.json` read at launch: one that doesn't is never
     /// written over.
     @ObservationIgnored private let settingsRead: Bool
@@ -110,10 +115,12 @@ final class AppModel: AppControlling {
         )
         themes = ThemeDesk(config: config)
         self.setup = setup ?? SetupDesk(environment: environment)
+        firstRun = FirstRun(setup: self.setup)
         do throws(Library.Failure) {
             let settings = try Settings.load(launchLayout)
             keptSidebarWidth = settings.sidebarWidth
             agentConnectedOnce = settings.agentConnectedOnce ?? false
+            firstRunDone = settings.firstRunDone ?? false
             settingsRead = true
         } catch {
             settingsRead = false
@@ -303,6 +310,7 @@ final class AppModel: AppControlling {
             )
             report.theme = themes.report
             report.setup = setupReport
+            report.firstRun = firstRunReport
             report.config = config.report
             report.recents = recents
             report.projects = homeProjects
@@ -688,7 +696,20 @@ final class AppModel: AppControlling {
     /// the person's work, so they're only lost.
     private func saveSettings() {
         guard settingsRead else { return }
-        try? Settings(sidebarWidth: keptSidebarWidth, agentConnectedOnce: agentConnectedOnce ? true : nil)
-            .save(SupportLayout(root: launchSupport))
+        try? Settings(
+            sidebarWidth: keptSidebarWidth, agentConnectedOnce: agentConnectedOnce ? true : nil, firstRunDone: firstRunDone ? true : nil
+        )
+        .save(SupportLayout(root: launchSupport))
     }
+
+    /// The first-run window showed: it never shows by itself again.
+    func markFirstRunDone() {
+        guard !firstRunDone else { return }
+        firstRunDone = true
+        saveSettings()
+    }
+
+    /// Whether `settings.json` read at launch, so what is kept in it can be
+    /// kept: the first run shows by itself only then.
+    var keepsSettings: Bool { settingsRead }
 }

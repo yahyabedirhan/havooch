@@ -117,6 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.
     let settings = SettingsWindow()
+    /// The first-run window, shown on the first launch and by `first-run show`.
+    private(set) lazy var firstRunWindow = FirstRunWindow(app: model)
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?
 
@@ -132,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The socket stays on the folder the run started on, also during
             // an in-app demo; the listener's requests go to the data the run is on.
             socket: ControlSocket.url(in: model.launchSupport), app: model, listeners: { [model] in model.listeners },
-            screenshotter: Screenshotter(indicator: lease, settings: settings),
+            screenshotter: Screenshotter(indicator: lease, settings: settings, firstRun: firstRunWindow),
             // A relaunch (`app open --demo` on a running app) hands the operator's lease over.
             lease: ControlLease(environment: ProcessInfo.processInfo.environment, at: Date()),
             indicator: lease,
@@ -145,7 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // edited by hand shows at once.
             model.config.startWatching()
             model.themes.startWatching()
-            // A launch opens no video: its one window shows home.
+            // A launch opens no video: its one window shows home. The first
+            // launch shows the first-run window in front of it (H1).
+            let firstRun = firstRunWindow
+            model.firstRun.present = { [weak firstRun] showing in firstRun?.present(showing) }
+            model.showFirstRunOnFirstLaunch()
         } catch {
             // Another copy already runs on this data: one app per support folder.
             FileHandle.standardError.write(Data("\(AppIdentity.appName): \(error.description)\n".utf8))

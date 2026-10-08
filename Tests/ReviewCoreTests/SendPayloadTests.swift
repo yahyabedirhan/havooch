@@ -67,7 +67,8 @@ struct SendPayloadTests {
         // A plain video has no project, and its threads no version.
         #expect(json["project"] is NSNull)
         #expect(Set(try #require(json["send"] as? [String: Any]).keys) == ["id", "sentAt"])
-        #expect(Set(try #require(json["video"] as? [String: Any]).keys) == ["path", "contentHash", "duration", "title"])
+        #expect(Set(try #require(json["video"] as? [String: Any]).keys) == ["path", "contentHash", "duration", "title", "demo"])
+        #expect(try #require(json["video"] as? [String: Any])["demo"] as? Bool == false)
         let threads = try #require(json["threads"] as? [[String: Any]])
         #expect(Set(threads[0].keys) == ["id", "number", "time", "keyframePath", "version", "transcript", "history", "messages"])
         #expect(threads.allSatisfy { $0["version"] is NSNull })
@@ -75,6 +76,19 @@ struct SendPayloadTests {
         let messages = try #require(threads[1]["messages"] as? [[String: Any]])
         #expect(Set(messages[0].keys) == ["id", "text", "region", "cropPath"])
         #expect(messages[0]["region"] is NSNull && messages[0]["cropPath"] is NSNull)
+    }
+
+    @Test("a send on the bundled demo video, known by its content, is marked demo; any other video isn't")
+    func demoVideo() throws {
+        var demo = Review(video: VideoInfo(
+            contentHash: DemoVideo.contentHash, title: "havooch-demo.mp4", duration: 42, path: "/Applications/Havooch.app/Contents/Resources/Demo/havooch-demo.mp4"
+        ))
+        try demo.write(text: "Make the title bigger", at: 3, now: now)
+        let sent = try demo.send(at: now, transcript: Self.lines("then"))
+        #expect(SendPayload.assemble(review: demo, send: sent, context: nil, images: Self.images).video.demo)
+
+        let (review, other) = try firstSend()
+        #expect(!SendPayload.assemble(review: review, send: other, context: nil, images: Self.images).video.demo)
     }
 
     @Test("a follow-up carries the conversation so far in history: person and agent messages in order, never a queued one")

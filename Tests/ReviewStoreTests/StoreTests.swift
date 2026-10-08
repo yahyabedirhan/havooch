@@ -34,6 +34,13 @@ struct ContentHashTests {
         #expect(ContentHash.of(file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
     }
 
+    @Test("the bundled demo video's hash is the one a send marks as the demo")
+    func demoVideo() {
+        let video = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("fixtures/launch/havooch-demo.mp4")
+        #expect(ContentHash.of(video) == DemoVideo.contentHash)
+    }
+
     @Test("a renamed copy has the same hash, and other content another")
     func renamed() throws {
         let scratch = try Scratch()

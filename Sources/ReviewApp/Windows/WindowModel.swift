@@ -739,6 +739,7 @@ final class WindowModel: WindowControlling {
         report.listener = listener?.report(at: Date()) ?? .absent
         report.theme = themes.report
         report.setup = app.setupReport(for: self)
+        report.firstRun = app.firstRunReport
         report.config = app.config.report
         report.sidebar = sidebarReport
         report.tour = tourReport

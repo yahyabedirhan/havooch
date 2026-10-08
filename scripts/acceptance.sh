@@ -55,7 +55,7 @@
 # when `app status --json` does not say "demo": true. It leaves the demo app
 # running and gives the lease up when it ends.
 #
-# Exit codes: 0 all 16 steps passed, 1 a step failed, 3 the app is not on
+# Exit codes: 0 all 17 steps passed, 1 a step failed, 3 the app is not on
 # demo data, 4 every step passed but a composer check is pending, 69
 # something the script needs is missing.
 
@@ -970,11 +970,44 @@ holds "the send carries the project, v2 on screen, and its thread's version" "$s
     --arg slug "$slug" --arg path "$other_video"
 finish
 
+# --- step 17 -------------------------------------------------------------------
+
+begin 17 "Show the first-run window. Check that its steps go on and back, that the Connect step shows the demo prompt in the picked harness's form, and that Skip Setup closes it"
+take
+# A demo run never shows it by itself: it shows only on a person's first launch.
+state
+holds "the first-run window doesn't show by itself on demo data" "$stdout" '.firstRun.showing == false'
+run operator first-run show --json
+exits 0 "first-run show"
+holds "it shows Welcome" "$stdout" '.firstRun.showing == true and .firstRun.step == "welcome"'
+run operator first-run next
+exits 0 "first-run next (Get Started)"
+run operator first-run next
+exits 0 "first-run next (Continue)"
+run operator first-run pick codex --json
+exits 0 "first-run pick codex"
+holds "the Connect step shows Codex's demo prompt" "$stdout" \
+    '.firstRun.step == "connect" and .firstRun.harness == "codex" and .firstRun.prompt == "$havooch-mate use Havooch to open the demo video and listen for my feedback"'
+run operator screenshot "$out/first-run-connect.png" --window first-run --hide-agent-indicator
+exits 0 "screenshot of the first-run window"
+run operator first-run back
+exits 0 "first-run back"
+run operator first-run skip
+exits 0 "first-run skip (Skip Setup)"
+state
+holds "the first-run window is closed and done" "$stdout" '.firstRun.showing == false and .firstRun.done == true'
+run operator first-run next
+exits 1 "first-run next with the window closed"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 16 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 17 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 16 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 17 steps. Screenshots: %s\n' "$shots"
 exit 0

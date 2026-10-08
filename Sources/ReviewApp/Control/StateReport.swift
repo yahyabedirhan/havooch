@@ -683,6 +683,9 @@ nonisolated struct StateReport: Encodable, Equatable {
     /// What Havooch detects of the setup, and the skill install; the app's
     /// model fills it in.
     var setup: Setup?
+    /// The first-run window: whether it shows, its step and its demo
+    /// prompt; the app's model fills it in.
+    var firstRun: FirstRun?
     /// The settings file and the verdict of its last reload; the app's
     /// model fills it in.
     var config: Config?
@@ -741,7 +744,7 @@ nonisolated struct StateReport: Encodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case app, screen, lease, listener, video, player, popover, threads, queue, sends
-        case transcript, theme, config, sidebar, tour, recents, setup, window, windows, project, projects
+        case transcript, theme, config, sidebar, tour, recents, setup, window, windows, project, projects, firstRun
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -754,6 +757,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         try container.encode(listener, forKey: .listener)
         try container.encode(theme, forKey: .theme)
         try container.encode(setup, forKey: .setup)
+        try container.encode(firstRun, forKey: .firstRun)
         try container.encode(config, forKey: .config)
         try container.encode(video, forKey: .video)
         try container.encode(project, forKey: .project)
@@ -785,7 +789,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         transcript: \(transcript?.line ?? "none")
         \(leaseLine)
         \(listenerLine)
-        \(theme.map { $0.line + "\n" } ?? "")\(config.map { $0.lines + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")threads: \(threadLines)
+        \(theme.map { $0.line + "\n" } ?? "")\(config.map { $0.lines + "\n" } ?? "")\(setup.map { $0.line + "\n" } ?? "")\(firstRun.map { $0.line + "\n" } ?? "")threads: \(threadLines)
         recents: \(recentLines)
         projects: \(projectLines)
         \(Self.windowLines(windows))

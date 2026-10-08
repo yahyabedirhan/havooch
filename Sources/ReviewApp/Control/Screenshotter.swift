@@ -29,10 +29,13 @@ final class Screenshotter: Screenshotting {
     private let indicator: AgentControlIcon
     /// Opens and finds the Settings window, for `--window settings`.
     private let settings: SettingsWindow
+    /// The first-run window, for `--window first-run` while it shows.
+    private let firstRun: FirstRunWindow
 
-    init(indicator: AgentControlIcon, settings: SettingsWindow) {
+    init(indicator: AgentControlIcon, settings: SettingsWindow, firstRun: FirstRunWindow) {
         self.indicator = indicator
         self.settings = settings
+        self.firstRun = firstRun
     }
 
     /// The capture before this one. Captures take turns: each one changes
@@ -80,6 +83,13 @@ final class Screenshotter: Screenshotting {
             opened = AboutPanel.window == nil
             try await AboutPanel.showForCapture()
             found = AboutPanel.window
+        case .firstRun:
+            // It shows only when the person or `first-run show` opened it.
+            opened = false
+            guard let window = firstRun.window else {
+                throw AppRefusal("the first-run window isn't open; havooch first-run show opens it")
+            }
+            found = window
         }
         defer { if opened { found?.close() } }
         guard let window = found else {

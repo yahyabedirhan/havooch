@@ -120,7 +120,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// Back in a thread view shows it.
     case threadList
     /// `havooch screenshot <abs.png> [--appearance light|dark]
-    /// [--hide-agent-indicator] [--window main|settings|about|<id>]`: the
+    /// [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]`: the
     /// app's `window` written as a PNG at the absolute `path`; for `main`,
     /// the player window the message's `window` names, else the key one, in `appearance`
     /// when it's set, as the Mac shows it otherwise. The agent-control
@@ -175,6 +175,24 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch tour close`: the tour's panel goes, as its close button
     /// does; the tour keeps its step.
     case tourClose
+    /// `havooch first-run show [<step>]`: the first-run window shows, as
+    /// on the first launch, on `step` (`welcome`, `tools`, `connect`,
+    /// `try-it`) as a click on its progress bar shows it, else where it was.
+    case firstRunShow(step: String? = nil)
+    /// `havooch first-run next`: the first-run window's next step, as
+    /// Get Started, Continue, Continue Anyway and Later go on.
+    case firstRunNext
+    /// `havooch first-run back`: the step before, as Back goes back.
+    case firstRunBack
+    /// `havooch first-run pick <harness>`: the harness picked on the
+    /// Connect step, as a click on its logo picks it: its demo prompt shows.
+    case firstRunPick(harness: String)
+    /// `havooch first-run demo`: the bundled demo video opened for the
+    /// person and the first-run window closed, as Open the Demo does.
+    case firstRunDemo
+    /// `havooch first-run skip`: the first-run window closed, as Skip
+    /// Setup and its close button close it.
+    case firstRunSkip
     /// `havooch config dismiss`: the settings notice in the window goes,
     /// as its close button does.
     case configDismiss
@@ -233,9 +251,10 @@ public enum ControlRequest: Equatable, Sendable {
     }
 
     /// The window `screenshot` captures: a player window (the message's
-    /// `window`), Settings or the About panel.
+    /// `window`), Settings, the About panel or the first-run window.
     public enum Window: String, Equatable, Sendable, CaseIterable {
         case main, settings, about
+        case firstRun = "first-run"
     }
 
     /// Who may send a request.
@@ -268,6 +287,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .setupLink, .setupInstall, .setupCancel: .operator
         case .connectShow, .connectPick, .connectDisconnect, .connectForget: .operator
         case .tourShow, .tourNext, .tourSkip, .tourClose: .operator
+        case .firstRunShow, .firstRunNext, .firstRunBack, .firstRunPick, .firstRunDemo, .firstRunSkip: .operator
         }
     }
 

@@ -16,7 +16,7 @@ struct AgentStep: View {
             statusColor: palette[.textTertiary], isLast: true, open: true
         ) {
             HarnessPicker(model: model)
-            HarnessReadiness(model: model, harness: model.connectHarness)
+            HarnessReadiness(model: model, harness: model.steppedHarness)
             HStack(spacing: 5) {
                 Image(systemName: "antenna.radiowaves.left.and.right.slash").symbolRenderingMode(.hierarchical)
                 Text("No agent is listening. It shows here once it does.")
@@ -30,13 +30,13 @@ struct AgentStep: View {
 /// The harnesses' logos in a row; the picked one on a soft fill. A harness
 /// Havooch didn't find is dimmed, and can still be picked (ADR 0005).
 struct HarnessPicker: View {
-    let model: WindowModel
+    let model: any SetupSteering
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let picked = model.connectHarness
+        let picked = model.steppedHarness
         HStack(spacing: 2) {
-            ForEach(model.app.setup.report.harnesses, id: \.harness.installName) { entry in
+            ForEach(model.setup.report.harnesses, id: \.harness.installName) { entry in
                 let harness = entry.harness
                 let selected = harness == picked
                 let found = entry.presence == .detected
@@ -54,7 +54,7 @@ struct HarnessPicker: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .pressedByKeys(in: model) { model.pick(harness) }
+                .pressedByKeys(in: model.keysWindow) { model.pick(harness) }
                 .help(found ? harness.name : "\(harness.name): not detected on this Mac")
                 .accessibilityLabel(harness.name)
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -72,13 +72,13 @@ struct HarnessPicker: View {
 /// with the skill detected; else a neutral line, the install offered, and
 /// the prompt at full size all the same.
 struct HarnessReadiness: View {
-    let model: WindowModel
+    let model: any SetupSteering
     let harness: Harness
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let prompt = model.prompt(for: harness) ?? ""
-        switch model.readiness(of: harness) {
+        let prompt = model.pastePrompt(for: harness) ?? ""
+        switch model.setup.readiness(of: harness) {
         case .ready:
             line("checkmark.circle.fill", palette[.stateDone], "Ready. The skill is installed for \(harness.name).")
             StepDetail(text: "Paste this in \(harness.name), in your project, to start a session that listens:")
@@ -86,12 +86,12 @@ struct HarnessReadiness: View {
         case .skillNotDetected:
             line("questionmark.circle", palette[.textSecondary], "Havooch couldn't detect the skill for \(harness.name).")
             StepDetail(text: "If it's installed another way, paste the prompt and your agent will take it from there. If not, install it first:")
-            let installing = model.app.setup.install?.state == .running
+            let installing = model.setup.install?.state == .running
             Button(installing ? "Installing…" : "Install for \(harness.name)") { model.installSkill(for: [harness]) }
                 .filledButton(palette)
                 .controlSize(.small)
                 .disabled(installing)
-                .pressedByKeys(in: model) { model.installSkill(for: [harness]) }
+                .pressedByKeys(in: model.keysWindow) { model.installSkill(for: [harness]) }
             pastePrompt(prompt)
         case .harnessNotDetected:
             line("questionmark.circle", palette[.textSecondary], "Havooch couldn't detect \(harness.name) on this Mac.")

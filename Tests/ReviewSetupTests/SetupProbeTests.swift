@@ -196,6 +196,17 @@ struct HarnessCatalogTests {
         #expect(HarnessCatalog.harness(of: agent)?.prompt(for: .video(fileName: "cut2.mp4")) == prompt)
     }
 
+    @Test("the demo prompt asks to open the demo video and listen, in each harness's form", arguments: [
+        (KnownAgent.claude, "/havooch-mate use Havooch to open the demo video and listen for my feedback"),
+        (.codex, "$havooch-mate use Havooch to open the demo video and listen for my feedback"),
+        (.cursor, "/havooch-mate use Havooch to open the demo video and listen for my feedback"),
+        (.pi, "/skill:havooch-mate use Havooch to open the demo video and listen for my feedback"),
+        (.opencode, "Use the havooch-mate skill to open the demo video in Havooch and listen for my feedback"),
+    ])
+    func demoPrompts(agent: KnownAgent, prompt: String) {
+        #expect(HarnessCatalog.harness(of: agent)?.demoPrompt == prompt)
+    }
+
     @Test("a project's prompt names it as project <slug>")
     func projectPrompt() {
         #expect(HarnessCatalog.harness(of: .codex)?.prompt(for: .project(slug: "launch-video"))

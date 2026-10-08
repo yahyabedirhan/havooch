@@ -19,7 +19,7 @@ You are the **listener**: you take each send, do what each message asks in this 
 
 Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`havooch --help` prints the usage).
 
-You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the project commands `project new` and `project add` (see [Projects](#projects)), the free `state --json`, `window list --json` and `app status`, and `config path`, `config check` and `project list`, which need no app. Every other command drives the player and takes control of the app from the person.
+You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the project commands `project new` and `project add` (see [Projects](#projects)), the free `state --json`, `window list --json` and `app status`, `config path`, `config check` and `project list`, which need no app, and `open <path>`, which opens a video for the person. Every other command drives the player and takes control of the app from the person.
 
 The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else your harness's session: `$CLAUDE_CODE_SESSION_ID` (Claude Code), `$CODEX_THREAD_ID` (Codex) or `$PI_SESSION_ID` (Pi). Any other harness is known by its process. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
@@ -29,8 +29,9 @@ Each player window holds one plain video or one project, and has its own listene
 
 1. When the person names a project, the target is `--project <slug>`.
 2. When the person gives a path, the target is `--video <path>`.
-3. Else run `havooch window list --json` and find the window whose `video.title` is that file name. When its `video.project` is set, the target is `--project <that slug>`; else it is `--video <its video.path>`.
-4. Else, with no name or no match, ask the person which video to listen to.
+3. When the person asks you to open the demo video, the path is `Contents/Resources/Demo/havooch-demo.mp4` in the app bundle that holds the command. Run `havooch open <path>`, then listen to it with `--video <path>`.
+4. Else run `havooch window list --json` and find the window whose `video.title` is that file name. When its `video.project` is set, the target is `--project <that slug>`; else it is `--video <its video.path>`.
+5. Else, with no name or no match, ask the person which video to listen to.
 
 Pass your target on every `wait`. Another agent can listen to another window at the same time.
 
@@ -72,7 +73,7 @@ The text of `status <message id> working "<text>"` is the **activity**, a live l
 ```json
 {
   "send":    { "id": "s-f92cbb2a-2", "sentAt": "…" },
-  "video":   { "path": "/abs/….mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4" },
+  "video":   { "path": "/abs/….mp4", "contentHash": "…", "duration": 21.233, "title": "sample.mp4", "demo": false },
   "project": { "slug": "launch-video", "title": "Launch video", "onScreen": 2,
                "versions": [ { "number": 1, "path": "/abs/cut1.mp4", "label": null }, … ] },
   "context": "…",
@@ -94,6 +95,7 @@ The text of `status <message id> working "<text>"` is the **activity**, a live l
 - `history[]` is the thread's conversation before this send, oldest first: the person's earlier messages and your own replies, questions (`kind` `question`) and the person's answers (`kind` `answer`). A message with history is a **follow-up**: read the history before you decide what it asks. "Still wrong" or "the other one" points at your last reply on the thread; the commit named there is where to start.
 - `transcript[]` holds the narration from 15 s before to 15 s after `time`, cut when the person sent. It says what the video claimed at that moment. It can be empty.
 - `project` is `null` for a plain video. In a project, `video` is the version on screen when the person sent (`onScreen`), and `versions[]` lists every version, v1 first. Each thread's `version` is the version it was raised on: its `keyframePath`, `time` and `transcript` are of that version's file. A `number` of `null` means its path left the project's list. "Still wrong" on a thread of an older version points at what that version showed.
+- `video.demo` is `true` only on the demo video bundled in the app. Then the person is new to Havooch: read [references/first-demo.md](references/first-demo.md) before you work the send, and follow it for every send on that video.
 - `context` is the video's topic, its source repos and the person's own note. It comes on the first send of your session, and again when it changes. `null` means that what you got earlier in this session for this `video.contentHash` still holds.
 
 A send can come a second time: when a new listener session starts, the app sends again each send the last session took and did not finish, with its unfinished messages only. Run `git log --grep "<message id>"` before you work a message; when a commit already did it, reply with that commit and mark it `done`.
