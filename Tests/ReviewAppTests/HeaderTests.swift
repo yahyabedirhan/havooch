@@ -37,6 +37,14 @@ struct HeaderTests {
         #expect(HeaderWords(video: nil, isDemo: true).subtitle == "Demo")
     }
 
+    @Test("the title shows while a video is open, and not on the home or empty screen, which show the mark and the name large")
+    func titleOnlyWithAVideo() {
+        #expect(HeaderWords(video: URL(fileURLWithPath: "/Users/me/Movies/sample.mp4"), isDemo: false).isShown)
+        #expect(HeaderWords(video: URL(fileURLWithPath: "/Users/me/Movies/sample.mp4"), isDemo: false, project: .init(title: "Launch", version: "v2")).isShown)
+        #expect(!HeaderWords(video: nil, isDemo: false).isShown)
+        #expect(!HeaderWords(video: nil, isDemo: true).isShown)
+    }
+
     @Test("shortening keeps short text, and the home folder alone is ~")
     func shortening() {
         #expect(HeaderWords.shortened("~/Movies", to: 56) == "~/Movies")
