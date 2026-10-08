@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use Havooch, or build on its code or its ideas, please cite it as below."
+type: software
+title: "Havooch"
+abstract: "A native macOS video player that lets you give feedback to your coding agents: pause a video, point at its frame, comment, and the agent answers beside the video."
+authors:
+  - family-names: "Pak"
+    given-names: "Yahya Bedirhan"
+repository-code: "https://github.com/yahyabedirhan/havooch"
+url: "https://github.com/yahyabedirhan/havooch"
+license: MIT
+keywords:
+  - macos
+  - video player
+  - coding agents
+  - feedback

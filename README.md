@@ -75,3 +75,5 @@ make install   # build, replace /Applications/Havooch.app and open it
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+If you use Havooch, or build on its code or its ideas, please cite it. GitHub's **Cite this repository** button gives you the reference, from [`CITATION.cff`](CITATION.cff).
