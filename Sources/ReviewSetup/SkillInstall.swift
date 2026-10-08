@@ -58,14 +58,31 @@ public struct SkillInstall: Equatable, Sendable {
     /// The line that finds `npx` in the login shell.
     static let findNode = "command -v npx"
 
-    /// Looks for `npx`, then runs the install, each line it writes handed to
-    /// `line`. Cancelling the awaiting task stops it.
+    /// The CLI's spinner redraws one line in place with no newline, so a
+    /// pipe gets nothing whole until the step ends. As CI it writes each
+    /// step once, on its own line, and without colour.
+    static let plainOutput = "env CI=true NO_COLOR=1 "
+
+    /// Looks for `npx`, then runs the install, each readable line it writes
+    /// handed to `line`. Cancelling the awaiting task stops it.
     public func run(with runner: any ProcessRunner, line: @escaping @Sendable (String) -> Void) async -> Outcome {
         let found = await runner.run(shell, arguments: ["-l", "-c", Self.findNode]) { _ in }
         if Task.isCancelled { return .cancelled }
         guard found == 0 else { return .noNode }
-        let status = await runner.run(shell, arguments: ["-l", "-c", "exec " + commandLine], line: line)
+        let status = await runner.run(shell, arguments: ["-l", "-c", "exec " + Self.plainOutput + commandLine]) { written in
+            Self.readable(written).map(line)
+        }
         return Task.isCancelled ? .cancelled : .finished(status: status)
+    }
+
+    /// The line without its terminal escape codes and edge spaces; nil when
+    /// nothing is left to read, or only the CLI's guide bar.
+    static func readable(_ written: String) -> String? {
+        let text = written
+            .replacing(/\u{1B}\[[0-9;?]*[ -\/]*[@-~]/, with: "")
+            .replacing(/\u{1B}\][^\u{07}\u{1B}]*(\u{07}|\u{1B}\\)/, with: "")
+            .trimmingCharacters(in: .whitespaces)
+        return text.isEmpty || text == "│" ? nil : text
     }
 }
 
