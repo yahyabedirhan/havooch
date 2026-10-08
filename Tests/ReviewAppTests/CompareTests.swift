@@ -194,6 +194,9 @@ struct CompareTests {
         #expect(abs(pair.left.time - 1.5) < 0.05)
         #expect(abs(pair.right.time - 1.5) < 0.05)
         #expect(!window.canCompare)
+        // Only the active side is heard.
+        #expect(!pair.right.player.isMuted)
+        #expect(pair.left.player.isMuted)
 
         // One playhead: a seek moves both, play plays both, pause pauses both.
         try await window.seek(to: 0.5)
@@ -226,6 +229,7 @@ struct CompareTests {
         let exited = await ask(.compareExit, server)
         #expect(exited.output == "Compare is closed: v2 on screen in w1\n")
         #expect(!window.isComparing)
+        #expect(!window.engine.player.isMuted)
         #expect(window.companion == nil)
         #expect(window.versionNumber == 2)
         #expect(abs(window.engine.time - time) < 0.05)
@@ -248,6 +252,9 @@ struct CompareTests {
         window.beginRegion(on: .left)
         #expect(window.activeSide == .left)
         #expect(window.versionNumber == 1)
+        // The sound follows the active side.
+        #expect(window.pair?.left.player.isMuted == false)
+        #expect(window.pair?.right.player.isMuted == true)
         window.endRegion(try Region(x: 0.1, y: 0.1, w: 0.3, h: 0.3))
         window.draft?.text = "Crop the title"
         // A click on the right side: the words are queued on v1, where they were written.
@@ -328,11 +335,16 @@ struct CompareTests {
         #expect(await ask(.compareSet(CompareChange(right: 2)), server).ok)
         #expect(window.versionNumber == 2)
         #expect(window.video?.url == Self.launch)
+        // A side's new player is heard only when its side is active.
+        #expect(window.pair?.right.player.isMuted == false)
+        #expect(window.pair?.left.player.isMuted == true)
         // v1 on the right swaps the sides; v2 stays active, now on the left.
         #expect(await ask(.compareSet(CompareChange(right: 1)), server).ok)
         #expect((window.compare?.number(.left), window.compare?.number(.right)) == (2, 1))
         #expect(window.activeSide == .left)
         #expect(window.versionNumber == 2)
+        #expect(window.pair?.left.player.isMuted == false)
+        #expect(window.pair?.right.player.isMuted == true)
 
         // version show of a side's version makes that side active.
         #expect(await ask(.versionShow(number: 1), server).ok)

@@ -7,13 +7,17 @@ import ReviewWire
 /// one host time, pause together, seek together and run at one speed.
 /// The lead is the side the window's player bar shows; on each of its
 /// periodic ticks the other side's drift is corrected. A side shorter
-/// than the lead stops at its own end.
+/// than the lead stops at its own end. Only the lead is heard: the other
+/// side plays muted, and the mute follows the lead when it changes.
 @Observable
 final class PlayerPair {
     private(set) var left: PlayerEngine
     private(set) var right: PlayerEngine
-    /// The side the other follows: the window's active side.
-    var lead: CompareSide
+    /// The side the other follows, and the one heard: the window's active
+    /// side.
+    var lead: CompareSide {
+        didSet { hearLead() }
+    }
 
     /// How far the following side may drift before it is put back in
     /// step, in seconds: about one frame at 30 frames a second.
@@ -33,6 +37,7 @@ final class PlayerPair {
         self.right = right
         self.lead = lead
         listen()
+        hearLead()
     }
 
     /// The player of `side`.
@@ -63,7 +68,9 @@ final class PlayerPair {
         let old = self.engine(side)
         old.ticked = nil
         if side == .left { left = engine } else { right = engine }
+        old.player.isMuted = false
         listen()
+        hearLead()
         return old
     }
 
@@ -106,13 +113,21 @@ final class PlayerPair {
         right.speed = speed
     }
 
-    /// The pair ends: the players stop following each other, and wait to
-    /// minimize stalling again, as a lone player does.
+    /// The pair ends: the players stop following each other, are both
+    /// heard, and wait to minimize stalling again, as a lone player does.
     func end() {
         for engine in [left, right] {
             engine.ticked = nil
+            engine.player.isMuted = false
             engine.player.automaticallyWaitsToMinimizeStalling = true
         }
+    }
+
+    /// Only the lead is heard; the other side plays muted, so two
+    /// soundtracks never play over each other.
+    private func hearLead() {
+        engine(lead).player.isMuted = false
+        engine(lead.other).player.isMuted = true
     }
 
     /// Each side's ticks reach `tick`; only the lead's correct.
