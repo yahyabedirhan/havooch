@@ -49,9 +49,10 @@ struct CommandLineStep: View {
 }
 
 /// Step 2, the `/havooch-mate` skill (G4): a row per harness with what is
-/// detected, one Install for every harness found without it, with its live
-/// log and Cancel, and the command for one repository. A ✓ only for what
-/// is detected; anything else is a neutral "Not detected" (G9).
+/// detected, the install command for every harness found without it in a
+/// `RunBox` with Run Command, its live log and Cancel, and the command for
+/// one repository. A ✓ only for what is detected; anything else is a
+/// neutral "Not detected" (G9).
 struct SkillStep: View {
     let model: any SetupSteering
     let open: Bool
@@ -99,50 +100,38 @@ struct SkillStep: View {
 
     @ViewBuilder private var action: some View {
         let install = setup.install
-        switch install?.state {
-        case .running:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                let line = install?.log.last ?? install?.install.commandLine ?? ""
-                Text(line)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(palette[.textSecondary])
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .help(line)
-                Button("Cancel") { model.cancelSkillInstall() }
-                    .controlSize(.small)
-                    .pressedByKeys(in: model.keysWindow) { model.cancelSkillInstall() }
-            }
-        case .noNode:
+        if install?.state == .noNode {
             Text("npx isn't on your PATH").font(.caption.weight(.semibold)).foregroundStyle(palette[.textPrimary])
             StepDetail(text: "Installing the skill needs Node. Install Node from nodejs.org, or run this where npx works:")
             CopyBox(text: SkillInstall(for: install?.install.harnesses ?? lacking).commandLine)
             Button("Check Again") { model.installSkill(for: install?.install.harnesses ?? lacking) }
                 .controlSize(.small)
                 .pressedByKeys(in: model.keysWindow) { model.installSkill(for: install?.install.harnesses ?? lacking) }
-        default:
+        } else {
             if let install, install.state == .cancelled { StepNote(text: "Cancelled.") }
             if let install, install.state == .failed {
                 StepNote(text: "The install stopped with exit status \(install.exitStatus.map(String.init) ?? "unknown")"
                     + (install.log.last.map { ": \($0)" } ?? "."))
             }
-            HStack(spacing: 10) {
-                if !lacking.isEmpty {
-                    Button("Install for \(Self.list(lacking.map(\.name)))") { model.installSkill(for: lacking) }
-                        .filledButton(palette)
-                        .controlSize(.small)
-                        .pressedByKeys(in: model.keysWindow) { model.installSkill(for: lacking) }
-                }
+            // While it runs, the box shows the install that runs; else the one Run Command starts.
+            let harnesses = isRunning ? install?.install.harnesses ?? lacking : lacking
+            if !harnesses.isEmpty {
+                StepDetail(text: "Run Command installs it for \(Self.list(harnesses.map(\.name))) in your login shell:")
+                RunBox(
+                    text: SkillInstall(for: harnesses).commandLine, running: isRunning, log: install?.log.last ?? "",
+                    keysWindow: model.keysWindow, run: { model.installSkill(for: lacking) },
+                    cancel: { model.cancelSkillInstall() }
+                )
+            }
+            if !isRunning {
                 Button(repoOpen ? "Hide repo command" : "In one repo…") { repoOpen.toggle() }
                     .buttonStyle(.borderless)
                     .font(.caption)
                     .foregroundStyle(palette[.accent])
-            }
-            if repoOpen {
-                StepDetail(text: "Run this in your repo's folder. Only agents working there get the skill.")
-                CopyBox(text: SkillInstall(for: lacking).repositoryCommandLine)
+                if repoOpen {
+                    StepDetail(text: "Run this in your repo's folder. Only agents working there get the skill.")
+                    CopyBox(text: SkillInstall(for: lacking).repositoryCommandLine)
+                }
             }
         }
     }

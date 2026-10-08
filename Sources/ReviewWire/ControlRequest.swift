@@ -155,7 +155,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch setup install [--harness <name>]... [--dry-run]`: the
     /// `havooch-mate` skill installed globally with `npx skills add`, for
     /// the `harnesses` named, or for every harness found without it when
-    /// none is, as Install does. It starts the install and answers; `setup
+    /// none is, as Run Command does. It starts the install and answers; `setup
     /// status` follows its log. With `dryRun`, only the command it would run.
     case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
     /// `havooch setup cancel`: the running install stopped, as Cancel does.

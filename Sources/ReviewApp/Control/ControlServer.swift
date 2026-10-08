@@ -55,7 +55,7 @@ protocol AppControlling: AnyObject {
     /// with `dryRun` says what it would do; the line says which.
     func linkCommand(dryRun: Bool) throws(AppRefusal) -> (line: String, setup: StateReport.Setup)
     /// Starts installing the skill for the harnesses `harnesses` name, or
-    /// every harness found without it, as Install does; with `dryRun` only
+    /// every harness found without it, as Run Command does; with `dryRun` only
     /// plans it.
     func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
     /// Stops the running install, as Cancel does, once it has stopped.

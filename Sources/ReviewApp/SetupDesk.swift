@@ -259,7 +259,7 @@ extension AppModel {
         return ("linked \(commandLine.path) to \(commandLine.destination ?? setup.command ?? "")", setupReport)
     }
 
-    /// Starts the skill install, as Install does, or with `dryRun` plans it.
+    /// Starts the skill install, as Run Command does, or with `dryRun` plans it.
     func installSkill(harnesses names: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install {
         if dryRun { return StateReport.Setup.Install(try setup.plan(for: names), state: "planned") }
         return StateReport.Setup.Install(try setup.startInstall(for: names))
