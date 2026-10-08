@@ -9,8 +9,9 @@
 #   --app-dir <dir>   where the app goes (default /Applications)
 #   --bin-dir <dir>   where the command's link goes (default /usr/local/bin
 #                     when writable, else ~/.local/bin)
-#   --repo <o/r>      the GitHub repository of the releases and the skill
-#                     (default $HAVOOCH_REPO, else yahyabedirhan/havooch)
+#   --repo <o/r>      the GitHub repository of the releases (default
+#                     $HAVOOCH_REPO, else yahyabedirhan/havooch); the skill
+#                     comes from <o/r>-mate, a repository of the skill alone
 #   --from <zip>      install this release zip instead of downloading one; a
 #                     <zip>.sha256 beside it is checked
 #   --no-skill        don't install (or remove) the mate skill
@@ -37,7 +38,7 @@ usage() {
     # Run from a file, the header above is the help; piped into bash, $0 is
     # bash itself.
     if [ -f "$0" ] && [ "$(head -c 2 "$0")" = "#!" ] && [ "$(basename "$0")" = "install.sh" ]; then
-        sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
     else
         say "usage: install.sh [--app-dir <dir>] [--bin-dir <dir>] [--repo <owner/repo>] [--from <zip>] [--no-skill] [--uninstall]"
     fi
@@ -71,11 +72,6 @@ trap 'rm -rf "$work"' EXIT
 # The bundle id of the app at $1, or nothing.
 bundle_id() {
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null || true
-}
-
-# The app's version, from its Info.plist, or nothing.
-bundle_version() {
-    /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$1/Contents/Info.plist" 2>/dev/null || true
 }
 
 # The one regular file in the app's Contents/Helpers, by name, or nothing.
@@ -250,21 +246,15 @@ on_path "$bin_dir" || say "note: $bin_dir isn't on your PATH; add it in your she
 
 if [ "$skill" -eq 1 ]; then
     skill_name="$command_name-mate"
-    # The skill's archive in the release of the installed app's version, as
-    # the app installs it: the skills CLI downloads an archive, but clones a
-    # whole repository.
-    app_version="$(bundle_version "$source_app")"
-    if [ -n "$app_version" ]; then
-        skill_source="https://github.com/$repo/releases/download/v$app_version/$skill_name.tar.gz"
-    else
-        skill_source="https://github.com/$repo/releases/latest/download/$skill_name.tar.gz"
-    fi
+    # A repository of the skill alone, which each release writes into: the
+    # skills CLI clones a repository source, and the app's own is large.
+    skill_repo="$repo-mate"
     if ! command -v npx >/dev/null 2>&1; then
-        say "skipped the $skill_name skill: npx isn't installed (install Node.js, then: npx skills add $skill_source --skill $skill_name --global)"
-    elif npx_skills add "$skill_source" --skill "$skill_name" --global --yes; then
+        say "skipped the $skill_name skill: npx isn't installed (install Node.js, then: npx skills add $skill_repo --skill $skill_name --global)"
+    elif npx_skills add "$skill_repo" --skill "$skill_name" --global --yes; then
         say "installed the $skill_name skill"
     else
-        say "couldn't install the $skill_name skill; try: npx skills add $skill_source --skill $skill_name --global"
+        say "couldn't install the $skill_name skill; try: npx skills add $skill_repo --skill $skill_name --global"
     fi
 fi
 

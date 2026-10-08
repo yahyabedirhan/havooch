@@ -1,6 +1,5 @@
 import Foundation
 import ReviewSetup
-import ReviewWire
 import Synchronization
 import Testing
 
@@ -8,19 +7,12 @@ import Testing
 struct SkillInstallTests {
     static let codex = HarnessCatalog.harness(named: "codex")!
     static let pi = HarnessCatalog.harness(named: "pi")!
-    /// The skill's archive in this app's own release.
-    static let archive = "https://github.com/yahyabedirhan/havooch/releases/download/v\(Version.app)/havooch-mate.tar.gz"
-
-    @Test("the skill comes from the archive in the release of the app's own version")
-    func source() {
-        #expect(HarnessCatalog.source == Self.archive)
-    }
 
     @Test("the command is npx skills add for the skill, global, with -a for each harness")
     func commandLine() {
         let install = SkillInstall(for: [Self.codex, Self.pi])
-        #expect(install.commandLine == "npx skills add \(Self.archive) --skill havooch-mate -g -y -a codex -a pi")
-        #expect(install.repositoryCommandLine == "npx skills add \(Self.archive) --skill havooch-mate -y -a codex -a pi")
+        #expect(install.commandLine == "npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -g -y -a codex -a pi")
+        #expect(install.repositoryCommandLine == "npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -y -a codex -a pi")
     }
 
     @Test("it finds npx in the login shell, runs the install there and streams its lines")
@@ -35,7 +27,7 @@ struct SkillInstallTests {
         #expect(outcome == .finished(status: 0))
         #expect(runner.calls == [
             .init(executable: "/bin/zsh", arguments: ["-l", "-c", "command -v npx"]),
-            .init(executable: "/bin/zsh", arguments: ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add \(Self.archive) --skill havooch-mate -g -y -a codex"]),
+            .init(executable: "/bin/zsh", arguments: ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -g -y -a codex"]),
         ])
         // The search for npx isn't the install's log.
         #expect(lines.withLock { $0 } == ["Installing havooch-mate", "Done"])

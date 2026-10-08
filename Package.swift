@@ -48,13 +48,13 @@ let package = Package(
         // What Havooch can detect of the person's setup (the command link,
         // the skill per harness, the harnesses), the skill install and the
         // prompt per harness. The file system and the processes are seams.
-        .target(name: "ReviewSetup", dependencies: ["ReviewCore", "ReviewWire"], path: "Sources/ReviewSetup"),
+        .target(name: "ReviewSetup", dependencies: ["ReviewCore"], path: "Sources/ReviewSetup"),
         .testTarget(name: "ReviewTranscriptTests", dependencies: ["ReviewTranscript"], path: "Tests/ReviewTranscriptTests"),
         .testTarget(name: "ReviewCoreTests", dependencies: ["ReviewCore"], path: "Tests/ReviewCoreTests"),
         .testTarget(
             name: "ReviewStoreTests", dependencies: ["ReviewCore", "ReviewTranscript", "ReviewStore"], path: "Tests/ReviewStoreTests"
         ),
-        .testTarget(name: "ReviewSetupTests", dependencies: ["ReviewCore", "ReviewSetup", "ReviewWire"], path: "Tests/ReviewSetupTests"),
+        .testTarget(name: "ReviewSetupTests", dependencies: ["ReviewCore", "ReviewSetup"], path: "Tests/ReviewSetupTests"),
         .testTarget(name: "ReviewWireTests", dependencies: ["ReviewWire", "ReviewLease"], path: "Tests/ReviewWireTests"),
         .testTarget(name: "ReviewLeaseTests", dependencies: ["ReviewLease"], path: "Tests/ReviewLeaseTests"),
         .testTarget(
