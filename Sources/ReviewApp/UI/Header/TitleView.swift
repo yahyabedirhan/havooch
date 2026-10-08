@@ -29,6 +29,10 @@ struct HeaderWords: Equatable {
     /// Whether the window holds a project: the title's icon is the
     /// project's, and the switcher follows the title.
     var isProject = false
+    /// Whether the header shows the title at all: only while a video is
+    /// open. The home and empty screens show the mark and the app's name
+    /// large in their middle.
+    var isShown: Bool
 
     /// The longest subtitle, in characters, before its middle is cut out.
     static let subtitleLimit = 56
@@ -44,6 +48,7 @@ struct HeaderWords: Equatable {
     ///   - home: the home folder, written as `~`.
     init(video: URL?, isDemo: Bool, project: Project? = nil, home: String = NSHomeDirectory()) {
         title = video?.lastPathComponent ?? AppIdentity.appName
+        isShown = video != nil
         let folder = video.map { $0.deletingLastPathComponent().path }
         fullPath = folder
         if let project, video != nil {
@@ -79,7 +84,8 @@ struct HeaderWords: Equatable {
 }
 
 /// The header's title, at the window's leading edge beside the traffic
-/// lights: the cat mark, which goes home, a video icon and the file name,
+/// lights, while a video is open: the cat mark, which goes home, a video
+/// icon and the file name,
 /// and under it a folder icon and the folder, with the full path on hover.
 /// In a project: the project's title with the version switcher after it,
 /// and under it the version on screen, then the folder.
@@ -90,19 +96,21 @@ struct TitleView: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                model.goHomeForPerson()
-            } label: {
-                HavoochMark(size: 22)
+        if words.isShown {
+            HStack(spacing: 8) {
+                Button {
+                    model.goHomeForPerson()
+                } label: {
+                    HavoochMark(size: 22)
+                }
+                .buttonStyle(.plain)
+                .pressedByKeys(in: model) { model.goHomeForPerson() }
+                .help("Home")
+                .accessibilityLabel("Home")
+                lines
             }
-            .buttonStyle(.plain)
-            .pressedByKeys(in: model) { model.goHomeForPerson() }
-            .help("Home")
-            .accessibilityLabel("Home")
-            lines
+            .padding(.leading, 4)
         }
-        .padding(.leading, 4)
     }
 
     /// The file name, and under it the folder; in a project, the title

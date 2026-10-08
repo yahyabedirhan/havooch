@@ -3,9 +3,11 @@ import SwiftUI
 
 /// The cat mark: the head of Havuç, the app's logo (logo v2,
 /// `assets/images/logo/v2-havuc/`), as the vector PDFs `make logo` draws
-/// into `Packaging/Logo/`. At 32 points and under it's the small cut, made
-/// to read at 16 pixels: no nose, mouth or catchlights. Decoration: the
-/// app's name beside it says what it is.
+/// into `Packaging/Logo/`. At 24 points and under it's the small cut:
+/// cropped tight, with bigger eyes and a bolder face, so the catchlights,
+/// the nose and the mouth still read at 16 points. From 32 points it's the
+/// full mark. The app icon follows the same rule. Decoration: the app's
+/// name beside it says what it is.
 struct HavoochMark: View {
     let size: CGFloat
 
@@ -30,7 +32,7 @@ struct HavoochMark: View {
 /// tree's `Packaging/Logo/` for a build that isn't bundled.
 enum HavoochMarkImage {
     /// The largest size, in points, that shows the small cut.
-    static let smallCutLimit: CGFloat = 32
+    static let smallCutLimit: CGFloat = 24
 
     static let folder: URL? = {
         let bundled = Bundle.main.resourceURL?.appendingPathComponent("Logo", isDirectory: true)
