@@ -188,6 +188,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    /// Finder's Open With, a drop on the Dock icon and `open -a Havooch
+    /// <file>`: the same open as `havooch open` (decision C3).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        model.openFromFinder(urls.filter(\.isFileURL))
+    }
+
     /// A click on the Dock icon with no window open: a new empty window
     /// that shows home. With a window open, or minimized, the app comes
     /// forward as usual.

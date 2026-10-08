@@ -126,4 +126,110 @@ struct OpenInFrontTests {
         #expect(server.lease.current(at: Date())?.holder == Self.agent)
         #expect(ControlRequest.playerOpen(path: cut.path).role == .operator)
     }
+
+    // MARK: - Finder's Open With, a drop on the Dock icon and open -a
+
+    /// The app on the person's folder with no window, as a launch leaves it
+    /// before its first scene appears, counting each time it's brought to
+    /// the front.
+    private func launch() -> (AppModel, Fronts) {
+        let app = AppModel(
+            environment: [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo,
+            demoVideo: MessageTests.fixture
+        )
+        let fronts = Fronts()
+        app.bringToFront = { _ in fronts.count += 1 }
+        return (app, fronts)
+    }
+
+    @Test("a file from Finder opens as havooch open does: in the empty key window, playing and in front")
+    func finderOpensInFront() async throws {
+        defer { cleanUp() }
+        let (app, fronts) = launch()
+        app.windows.openScene = { _ in }
+        let home = app.sceneAppeared(target: nil)
+        let cut = try video("cut2.mp4")
+
+        await app.openFromFinder([cut])?.value
+        #expect(app.windows.windows.count == 1)
+        #expect(home.video?.url == cut.standardizedFileURL)
+        #expect(home.engine.isPlaying)
+        #expect(fronts.count == 1)
+    }
+
+    @Test("files from Finder at launch wait for the first scene, then open in it")
+    func finderFilesWaitForTheLaunchScene() async throws {
+        defer { cleanUp() }
+        let (app, fronts) = launch()
+        let cut = try video("cut2.mp4")
+
+        #expect(app.openFromFinder([cut]) == nil)
+        #expect(app.windows.windows.isEmpty)
+        #expect(fronts.count == 0)
+
+        app.windows.openScene = { _ in }
+        let first = app.sceneAppeared(target: nil)
+        await app.openFromFinder([])?.value
+        #expect(app.windows.windows.count == 1)
+        #expect(first.video?.url == cut.standardizedFileURL)
+        #expect(first.engine.isPlaying)
+        #expect(fronts.count == 1)
+    }
+
+    @Test("several files from Finder open one after another: the first in the empty window, the next in a new window")
+    func finderOpensSeveralFiles() async throws {
+        defer { cleanUp() }
+        let (app, fronts) = launch()
+        var opened: [WindowTarget?] = []
+        app.windows.openScene = { opened.append($0) }
+        let home = app.sceneAppeared(target: nil)
+        let one = try video("cut1.mp4")
+        let two = WindowTests.launch.standardizedFileURL
+
+        await app.openFromFinder([one, two])?.value
+        #expect(app.windows.windows.count == 2)
+        #expect(home.video?.url == one.standardizedFileURL)
+        let second = try #require(app.windows.windows.last)
+        #expect(second.video?.url == two.standardizedFileURL)
+        #expect(opened == [second.target])
+        #expect(app.windows.key === second)
+        #expect(fronts.count == 2)
+
+        // The same file again brings the window that holds it forward.
+        await app.openFromFinder([one])?.value
+        #expect(app.windows.windows.count == 2)
+        #expect(app.windows.key === home)
+    }
+
+    @Test("a file from Finder that doesn't play shows why in the key window, which stays as it was")
+    func finderRefusalShowsInTheWindow() async throws {
+        defer { cleanUp() }
+        let (app, fronts) = launch()
+        app.windows.openScene = { _ in }
+        let home = app.sceneAppeared(target: nil)
+        let bad = try notAVideo()
+
+        await app.openFromFinder([bad])?.value
+        #expect(home.video == nil)
+        #expect(home.problem?.title == "The video didn't open")
+        #expect(home.problem?.reason.hasPrefix("can't play \(bad.path)") == true)
+        #expect(app.windows.windows.count == 1)
+        #expect(fronts.count == 0)
+    }
+
+    @Test("the bundle declares movies with role Viewer and rank Alternate, so it never asks to be the default player")
+    func declaresMoviesAsAnAlternateViewer() throws {
+        let plist = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Packaging/Info.plist")
+        let info = try #require(
+            PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any]
+        )
+        let types = try #require(info["CFBundleDocumentTypes"] as? [[String: Any]])
+        #expect(types.count == 1)
+        let movie = try #require(types.first)
+        #expect(movie["LSItemContentTypes"] as? [String] == ["public.movie"])
+        #expect(movie["CFBundleTypeRole"] as? String == "Viewer")
+        #expect(movie["LSHandlerRank"] as? String == "Alternate")
+    }
 }

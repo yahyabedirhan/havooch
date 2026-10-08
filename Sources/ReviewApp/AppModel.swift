@@ -72,6 +72,11 @@ final class AppModel: AppControlling {
     /// The recent videos' thumbnails, made as their cards first show and
     /// kept in memory for this run.
     let thumbnails = Thumbnails()
+    /// Files Finder handed over before the launch's first scene appeared:
+    /// they open as it appears.
+    @ObservationIgnored private var filesWaiting: [URL] = []
+    /// The latest files from Finder opening, so the next ones wait for them.
+    @ObservationIgnored private var finderOpens: Task<Void, Never>?
     /// The notifications that tell which window is key and which closed.
     @ObservationIgnored private var watching: [any NSObjectProtocol] = []
 
@@ -153,9 +158,16 @@ final class AppModel: AppControlling {
     }
 
     /// A window's scene appeared with `target`: the window made for it,
-    /// else a new empty one.
+    /// else a new empty one. Files Finder handed over before any scene
+    /// could open (a launch by Open With) open now (`openFromFinder`).
     func sceneAppeared(target: WindowTarget?) -> WindowModel {
-        windows.place(target) ?? makeWindow()
+        let window = windows.place(target) ?? makeWindow()
+        if !filesWaiting.isEmpty, windows.openScene != nil {
+            let files = filesWaiting
+            filesWaiting = []
+            openFromFinder(files)
+        }
+        return window
     }
 
     /// `nsWindow` shows `window` now.
@@ -267,7 +279,7 @@ final class AppModel: AppControlling {
 
     // MARK: - Opening a video for the person
 
-    /// `havooch open` (and Open With, once it's routed here): opens `url`
+    /// `havooch open`, and Finder's Open With (`openFromFinder`): opens `url`
     /// for the person, playing, in front. The window that holds the video
     /// comes forward; else the key window takes it when it's empty; else a
     /// new window does. A file that doesn't play is refused before anything
@@ -287,6 +299,38 @@ final class AppModel: AppControlling {
         focus(window)
         bringToFront(window)
         return window
+    }
+
+    /// Finder's Open With, a drop on the Dock icon and `open -a Havooch
+    /// <file>` (decision C3): each file opens as `havooch open` opens it
+    /// (`openInFront`), one after the other, so the first fills an empty
+    /// key window and the next ones open in new windows. A file that
+    /// doesn't play shows why in the key window, or in a new one with
+    /// none. Before the launch's first scene appears no window can show,
+    /// so the files wait for it (`sceneAppeared`). Returns the opens, for
+    /// tests to wait on; nil while the files wait.
+    @discardableResult
+    func openFromFinder(_ urls: [URL]) -> Task<Void, Never>? {
+        guard windows.openScene != nil else {
+            filesWaiting += urls
+            return nil
+        }
+        // Opens one after another, also across two handovers in a row.
+        let previous = finderOpens
+        let opens = Task {
+            await previous?.value
+            for url in urls {
+                do throws(AppRefusal) {
+                    try await openInFront(url)
+                } catch {
+                    (windows.key ?? newWindow()).problem = WindowModel.Problem(
+                        title: "The video didn't open", reason: error.reason
+                    )
+                }
+            }
+        }
+        finderOpens = opens
+        return opens
     }
 
     /// The Open panel, a drop and a recent video's card in `window` (nil
