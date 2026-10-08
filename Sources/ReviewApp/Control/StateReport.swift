@@ -169,6 +169,9 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// left the list.
         var version: Int?
         var versions: [Version]
+        /// The header's version switcher (E10), in a window's `state`;
+        /// left out elsewhere, such as in `project new`'s answer.
+        var switcher: Switcher?
 
         init(_ outline: ProjectOutline, onScreen path: String?) {
             slug = outline.slug
@@ -183,15 +186,86 @@ nonisolated struct StateReport: Encodable, Equatable {
             try container.encode(title, forKey: .title)
             try container.encode(version, forKey: .version)
             try container.encode(versions, forKey: .versions)
+            try container.encodeIfPresent(switcher, forKey: .switcher)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case slug, title, version, versions
+            case slug, title, version, versions, switcher
         }
 
-        /// `project: launch-video "Launch video", v2 of 2`.
+        /// `project: launch-video "Launch video", v2 of 2`, then the
+        /// switcher's line when there is one.
         var line: String {
             "project: \(slug) \"\(title)\", " + (version.map { "v\($0)" } ?? "a removed version") + " of \(versions.count)"
+                + (switcher.map { "\n" + $0.line } ?? "")
+        }
+    }
+
+    /// The version switcher of a project's window (E10, version-switcher
+    /// V5): the versions shown as segments, the one on screen, the field
+    /// for the older ones and the picker it opens.
+    struct Switcher: Encodable, Equatable {
+        /// The numbers of the last three versions, oldest first.
+        var segments: [Int]
+        /// The number of the version on screen; `null` for a removed one.
+        var selected: Int?
+        /// The field's words, `All 50` or the older version on screen
+        /// (`v12`); `null` for a project of three versions or fewer.
+        var field: String?
+        /// The picker under the field; `null` while it is closed.
+        var picker: Picker?
+
+        /// The open picker: what is typed in its search field, its rows,
+        /// newest first, and the one Return opens.
+        struct Picker: Encodable, Equatable {
+            var query: String
+            var matches: [Int]
+            var highlighted: Int?
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(query, forKey: .query)
+                try container.encode(matches, forKey: .matches)
+                try container.encode(highlighted, forKey: .highlighted)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case query, matches, highlighted
+            }
+        }
+
+        init(_ versions: VersionSwitch, picker: VersionPicker?) {
+            segments = versions.recent.map(\.number)
+            selected = versions.current
+            field = versions.field
+            self.picker = picker.map { picker in
+                let matches = versions.matches(picker.query)
+                return Picker(query: picker.query, matches: matches.map(\.number), highlighted: picker.highlight(in: matches))
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(segments, forKey: .segments)
+            try container.encode(selected, forKey: .selected)
+            try container.encode(field, forKey: .field)
+            try container.encode(picker, forKey: .picker)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case segments, selected, field, picker
+        }
+
+        /// `switcher: v48 [v49] v50, All 50`, then the open picker:
+        /// `  picker "4": 5 matches, v49 highlighted`.
+        var line: String {
+            let marks = segments.map { $0 == selected ? "[v\($0)]" : "v\($0)" }.joined(separator: " ")
+            let shownField = field.map { selected != nil && !segments.contains(selected ?? 0) ? ", [\($0)]" : ", \($0)" } ?? ""
+            let open = picker.map { picker in
+                "\n  picker \"\(picker.query)\": \(picker.matches.count) match\(picker.matches.count == 1 ? "" : "es")"
+                    + (picker.highlighted.map { ", v\($0) highlighted" } ?? "")
+            } ?? ""
+            return "switcher: \(marks)\(shownField)\(open)"
         }
     }
 

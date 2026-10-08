@@ -18,6 +18,10 @@
 # Step 18 adds the thread list by version (#94): with four versions the list
 # shows the last three, v4 on screen; All versions searches and an older
 # version picked from it gets its section, until --remove takes it out.
+# Step 19 adds the version switcher (#93): `version show` moves the project
+# from v4 to v1 with the playhead at the same time, the field names v1 and
+# the thread list marks its section, the picker searches, and a plain video
+# has no switcher.
 #
 #   make install && make acceptance        (or: scripts/acceptance.sh)
 #
@@ -1046,11 +1050,57 @@ exits 0 "control release"
 holds_lease=0
 finish
 
+# --- step 19 -------------------------------------------------------------------
+
+begin 19 "Switch the project from v4 to v1 in the header's switcher. Check that the playhead keeps its time, that the field names v1 and the thread list marks its section, that the picker searches, and that a plain video has no switcher"
+take
+run operator player pause --window w1
+exits 0 "player pause"
+run operator player seek 1.5 --window w1
+exits 0 "player seek 1.5 on v4"
+run operator state --window w1 --json
+holds "w1 shows v4: the segments are v2 to v4, and the field says All 4" "$stdout" \
+    '.project.version == 4 and .project.switcher.segments == [2, 3, 4] and .project.switcher.selected == 4
+     and .project.switcher.field == "All 4" and .project.switcher.picker == null'
+run operator version pick v1 --window w1 --json
+exits 0 "version pick v1"
+holds "the picker is open with the search, and finds v1" "$stdout" \
+    '.project.switcher.picker.query == "v1" and .project.switcher.picker.matches == [1] and .project.switcher.picker.highlighted == 1'
+run operator screenshot "$out/version-picker.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the version picker"
+run operator version show 1 --window w1
+exits 0 "version show 1"
+run operator state --window w1 --json
+holds "w1 shows v1 at the same time, the field names it, the picker closed, and the thread list marks v1 on screen" "$stdout" \
+    '.project.version == 1 and .video.path == $path and (.player.time - 1.5 | fabs) < 0.05
+     and .project.switcher.selected == 1 and .project.switcher.field == "v1" and .project.switcher.picker == null
+     and .sidebar.versions.onScreen == 1 and (.sidebar.versions.sections | index(1) != null)' \
+    --arg path "$video"
+run operator screenshot "$out/version-switcher-v1.png" --window w1 --hide-agent-indicator
+exits 0 "screenshot of the header with v1 in the field"
+run operator version show v4 --window w1
+exits 0 "version show v4"
+run operator window new --json
+exits 0 "window new"
+plain_window=$(value "$stdout" '.window')
+run operator player open "$root/fixtures/showcase/halcyon-teaser.mp4" --window "$plain_window"
+exits 0 "player open a plain video in $plain_window"
+run operator state --window "$plain_window" --json
+holds "a plain video has no project, so no switcher" "$stdout" '.project == null'
+run operator version show 1 --window "$plain_window"
+exits 1 "version show on a plain video"
+run operator window close "$plain_window"
+exits 0 "window close $plain_window"
+run operator control release
+exits 0 "control release"
+holds_lease=0
+finish
+
 if [ "${#composer_pending[@]}" -gt 0 ]; then
-    printf '\nPASS: all 18 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
+    printf '\nPASS: all 19 steps, with %s composer checks PENDING (the composer of #42):\n' "${#composer_pending[@]}"
     printf '  %s\n' "${composer_pending[@]}"
     printf 'Screenshots: %s\n' "$shots"
     exit 4
 fi
-printf '\nPASS: all 18 steps. Screenshots: %s\n' "$shots"
+printf '\nPASS: all 19 steps. Screenshots: %s\n' "$shots"
 exit 0

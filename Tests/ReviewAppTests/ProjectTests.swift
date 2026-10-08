@@ -107,7 +107,8 @@ struct ProjectTests {
         #expect(held["project"] as? String == "launch-video")
         #expect(held["version"] as? Int == 1)
         #expect(((state["threads"] as? [[String: Any]])?[1]["version"] as? [String: Any])?["number"] as? Int == 1)
-        #expect(window.projectLine == "Launch video, v1")
+        #expect(window.projectWords?.title == "Launch video")
+        #expect(window.projectWords?.version.hasPrefix("v1") == true)
         // The copied prompt names the project, so the agent listens to it.
         #expect(window.promptTarget == .project(slug: "launch-video"))
 
@@ -164,7 +165,7 @@ struct ProjectTests {
         #expect(window.threads.map(\.number) == [0, 1, 2])
         #expect(window.threads.compactMap(window.versionTag(of:)) == [.removed, .number(1)])
         #expect(window.state().threads[1].version == StateReport.Version(number: nil, path: Self.cut1.path, label: nil))
-        #expect(window.projectLine == "launch-video, a removed version")
+        #expect(window.projectWords == HeaderWords.Project(title: "launch-video", version: "a removed version"))
         // Words still go on it, on the whole frame.
         #expect(try await window.addMessage(text: "Still too fast", at: nil, thread: "1").thread.number == 1)
         app.listeners.stop()

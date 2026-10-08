@@ -120,6 +120,11 @@ public struct ControlMessage: Equatable, Sendable {
             wire = Wire(command: "project.add", path: path)
             wire.project = slug
             wire.label = label
+        case .versionShow(let number):
+            wire = Wire(command: "version.show")
+            wire.number = number
+        case .versionPick(let query): wire = Wire(command: "version.pick", text: query)
+        case .versionClose: wire = Wire(command: "version.close")
         }
         if case .screenshot = request {} else { wire.window = window }
         wire.holder = holder
@@ -288,6 +293,13 @@ public struct ControlMessage: Equatable, Sendable {
             return .projectNew(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), title: wire.title)
         case "project.add":
             return .projectAdd(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), label: wire.label)
+        case "version.show":
+            guard let number = wire.number, number >= 1 else {
+                throw .unreadable("the control command `version.show` needs its `number`, 1 or more")
+            }
+            return .versionShow(number: number)
+        case "version.pick": return .versionPick(query: wire.text ?? "")
+        case "version.close": return .versionClose
         default: throw .unknownCommand(wire.command)
         }
     }
@@ -358,7 +370,8 @@ public struct ControlMessage: Equatable, Sendable {
         var title: String?
         /// `project add --label`: the version's label.
         var label: String?
-        /// `thread version <n>`: the version's number, from 1.
+        /// `thread version <n>` and `version show <n>`: the version's
+        /// number, from 1.
         var number: Int?
         /// `thread version --remove`: the picked version leaves the list.
         var remove: Bool?

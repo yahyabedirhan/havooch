@@ -226,6 +226,18 @@ public enum ControlRequest: Equatable, Sendable {
     /// the absolute `path` appended to the project as its next version,
     /// shown in the project's window, which comes forward. No lease.
     case projectAdd(slug: String, path: String, label: String? = nil)
+    /// `havooch version show <n>`: the project's version `number` (from 1)
+    /// on screen in the window, as a click on its segment or its row in
+    /// the version picker does (E10). The playhead keeps its time.
+    case versionShow(number: Int)
+    /// `havooch version pick [<query>]`: the version picker open under
+    /// the switcher's field, with `query` typed in its search field, as a
+    /// click on the field and typing do. An addition to the contract: the
+    /// picker can be shown, checked and screenshotted without a click.
+    case versionPick(query: String = "")
+    /// `havooch version close`: the version picker closed, as Escape
+    /// closes it.
+    case versionClose
 
     /// The four numbers of `--region x,y,w,h` as they were written. The
     /// app decides whether they're a region of the frame.
@@ -299,6 +311,7 @@ public enum ControlRequest: Equatable, Sendable {
         case .connectShow, .connectPick, .connectDisconnect, .connectForget: .operator
         case .tourShow, .tourNext, .tourSkip, .tourClose: .operator
         case .firstRunShow, .firstRunNext, .firstRunBack, .firstRunPick, .firstRunDemo, .firstRunSkip: .operator
+        case .versionShow, .versionPick, .versionClose: .operator
         }
     }
 

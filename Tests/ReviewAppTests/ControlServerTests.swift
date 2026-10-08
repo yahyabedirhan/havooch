@@ -281,6 +281,20 @@ struct ControlServerTests {
             return tour
         }
 
+        func switchVersion(to number: Int) async throws(AppRefusal) {
+            try record("version show \(number)")
+        }
+
+        func openVersionPicker(query: String) throws(AppRefusal) -> VersionSwitch {
+            try record("version pick \(query)")
+            return VersionSwitch(versions: [], current: nil)
+        }
+
+        func closeVersionPicker() -> Bool {
+            calls.append("version close")
+            return false
+        }
+
         private func record(_ call: String) throws(AppRefusal) {
             calls.append(call)
             if let refusal { throw refusal }

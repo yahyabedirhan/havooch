@@ -101,14 +101,42 @@ final class WindowModel: WindowControlling {
         return projectOutline?.number(of: onScreen.path)
     }
 
-    /// The project and the version on screen as the header says them:
-    /// `Launch video, v2`, or `Launch video, a removed version`; nil on a
-    /// plain video.
-    var projectLine: String? {
+    /// The project and the version on screen as the header says them
+    /// (version-switcher V5): the title, and `v2 · tighter intro`, or `a
+    /// removed version`; nil on a plain video.
+    var projectWords: HeaderWords.Project? {
         guard let project else { return nil }
         let title = projectOutline?.title ?? project
-        return "\(title), " + (versionNumber.map { "v\($0)" } ?? "a removed version")
+        return HeaderWords.Project(title: title, version: versionSwitch?.onScreen?.line ?? "a removed version")
     }
+
+    /// The version switcher of the header (E10): every version of the
+    /// project with its threads and when its file was made, and the one on
+    /// screen; nil on a plain video and for a project `config.toml` no
+    /// longer has.
+    var versionSwitch: VersionSwitch? {
+        guard let outline = projectOutline else { return nil }
+        let now = Date()
+        let entries = outline.versions.enumerated().map { index, version in
+            VersionSwitch.Entry(
+                number: index + 1, label: version.label,
+                threads: threads.count { !$0.isGeneral && $0.anchor?.path == version.path },
+                made: Self.madeDate(of: version.path).map { VersionSwitch.made($0, now: now) }
+            )
+        }
+        return VersionSwitch(versions: entries, current: versionNumber)
+    }
+
+    /// When the file at `path` was made, else last changed; nil when it
+    /// can't be read.
+    private static func madeDate(of path: String) -> Date? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        return attributes?[.creationDate] as? Date ?? attributes?[.modificationDate] as? Date
+    }
+
+    /// The version picker under the switcher's field while it is open
+    /// (E10); nil while it is closed.
+    private(set) var versionPicker: VersionPicker?
 
     /// The tag of `thread` in a project (`v1`, or a removed version); nil
     /// on a plain video and for General.
@@ -300,11 +328,14 @@ final class WindowModel: WindowControlling {
         // listener may have answered on one of its threads meanwhile.
         var review = data.desk.review(of: key) ?? found
         let sameReview = reviewKey == key
+        let otherVersion = sameReview && project != nil && video?.url != url
         video = OpenVideo(url: url, title: title, contentHash: contentHash)
         self.project = project
-        // Another version of the same project keeps what the agent said.
+        // The same review keeps what the agent said; another version of
+        // the same project keeps the sidebar too: its threads are the
+        // project's (E6).
         let kept = sameReview ? notices : []
-        forgetVideoViews()
+        forgetVideoViews(keepingReview: otherVersion)
         notices = kept
         sidecar = ContextReader.sidecar(beside: url)
         let frameRate = 1 / engine.frameDuration
@@ -354,6 +385,95 @@ final class WindowModel: WindowControlling {
         try await open(URL(fileURLWithPath: version.path), project: slug)
     }
 
+    /// A segment, a row of the version picker and `version show` (E10):
+    /// the project's version `number` comes on screen, and the playhead
+    /// keeps its time, inside the new version's length, playing on when it
+    /// played. The picker closes. Refused on a plain video, with no video,
+    /// and outside the project's list.
+    func switchVersion(to number: Int) async throws(AppRefusal) {
+        try needVideo()
+        guard let project else {
+            throw AppRefusal("this window holds a plain video, which has no versions; `project new` makes it a project")
+        }
+        versionPicker = nil
+        guard number != versionNumber else { return }
+        let time = engine.time
+        let wasPlaying = engine.isPlaying
+        try await showVersion(number, of: project)
+        await engine.seek(to: min(time, engine.duration))
+        if wasPlaying { engine.play() }
+    }
+
+    /// A click on a segment or a row of the picker, and Return in the
+    /// picker: `switchVersion`, with the person told why when it fails.
+    func showVersionForPerson(_ number: Int) {
+        Task {
+            do throws(AppRefusal) {
+                try await switchVersion(to: number)
+            } catch {
+                problem = Problem(title: "The version didn't open", reason: error.reason)
+            }
+        }
+    }
+
+    /// `version pick` (E10): the version picker open under the switcher's
+    /// field with `query` in its search field, the first row highlighted.
+    /// Refused on a plain video, and for a project of three versions or
+    /// fewer, whose versions are all segments.
+    func openVersionPicker(query: String = "") throws(AppRefusal) -> VersionSwitch {
+        try needVideo()
+        guard project != nil, let versions = versionSwitch else {
+            throw AppRefusal("this window holds a plain video, which has no versions; `project new` makes it a project")
+        }
+        guard versions.hasOlder else {
+            throw AppRefusal(
+                "the project has \(versions.versions.count) version\(versions.versions.count == 1 ? "" : "s"), "
+                    + "each one a segment; the picker is for a project of more than \(VersionSwitch.recentCount)"
+            )
+        }
+        versionPicker = VersionPicker(query: query)
+        return versions
+    }
+
+    /// A click on the switcher's field: the picker opens, or closes.
+    func toggleVersionPicker() {
+        if versionPicker != nil {
+            closeVersionPicker()
+        } else {
+            _ = try? openVersionPicker()
+        }
+    }
+
+    /// Escape in the picker, a click outside it and `version close`: the
+    /// picker closes. False when it was closed.
+    @discardableResult
+    func closeVersionPicker() -> Bool {
+        guard versionPicker != nil else { return false }
+        versionPicker = nil
+        return true
+    }
+
+    /// Typing in the picker's search field: the rows filter, and the
+    /// highlight goes back to the first.
+    func typeVersionQuery(_ query: String) {
+        guard versionPicker != nil else { return }
+        versionPicker = VersionPicker(query: query)
+    }
+
+    /// Up and Down in the picker: the highlight moves by `steps` rows.
+    func moveVersionHighlight(by steps: Int) {
+        guard let picker = versionPicker, let versions = versionSwitch else { return }
+        versionPicker = picker.moved(by: steps, in: versions.matches(picker.query))
+    }
+
+    /// Return in the picker: the highlighted version comes on screen.
+    func openHighlightedVersion() {
+        guard let picker = versionPicker, let versions = versionSwitch,
+              let number = picker.highlight(in: versions.matches(picker.query))
+        else { return }
+        showVersionForPerson(number)
+    }
+
     /// Puts the version `thread` was raised on on screen when another
     /// version of the project is: true when the thread's frame is on
     /// screen now. False for a removed version, which has no file to show:
@@ -396,18 +516,24 @@ final class WindowModel: WindowControlling {
 
     /// What the window showed on the video that was open goes: the
     /// popover, the picked and shown threads, the drawn region, the
-    /// composer's words and the notices.
-    private func forgetVideoViews() {
+    /// composer's words and the notices. With `keepingReview` (another
+    /// version of the same project comes on screen) only what was on the
+    /// old version's frame goes: the popover, the drawn region and the
+    /// version picker. The sidebar keeps its view and the composer its
+    /// words, since the threads are the project's (E6), and the notices stay.
+    private func forgetVideoViews(keepingReview: Bool = false) {
         draft = nil
+        isDrawingRegion = false
+        drawnRegion = nil
+        isContextShown = false
+        versionPicker = nil
+        guard !keepingReview else { return }
         selection = nil
         shown = nil
         connect = nil
-        isDrawingRegion = false
         composerDrafts = [:]
         isComposerGeneral = false
-        drawnRegion = nil
         notices = []
-        isContextShown = false
     }
 
     /// "Try the Demo": the bundled launch video on demo data, in this
@@ -741,6 +867,7 @@ final class WindowModel: WindowControlling {
             sends: review.map { review in sends.map { StateReport.Send($0, in: review) } } ?? []
         )
         report.project = outline.map { StateReport.Project($0, onScreen: video?.url.path) }
+        report.project?.switcher = versionSwitch.map { StateReport.Switcher($0, picker: versionPicker) }
         report.projects = app.homeProjects
         report.transcript = transcript
         report.listener = listener?.report(at: Date()) ?? .absent
@@ -1047,12 +1174,13 @@ final class WindowModel: WindowControlling {
         if let region { startDraft(region: region) }
     }
 
-    /// Escape: drops the rectangle being drawn, else the popover's words
-    /// with its region, else closes "All versions", else goes back from a
-    /// thread view or the Connect view to the thread list. False when there
-    /// was none of them.
+    /// Escape: closes the version picker, else drops the rectangle being
+    /// drawn, else the popover's words with its region, else closes "All
+    /// versions", else goes back from a thread view or the Connect view to
+    /// the thread list. False when there was none of them.
     @discardableResult
     func escape() -> Bool {
+        if closeVersionPicker() { return true }
         if isDrawingRegion {
             isDrawingRegion = false
             return true

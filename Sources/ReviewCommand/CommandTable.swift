@@ -145,6 +145,7 @@ public enum CommandTable {
         + [ScreenshotCommand.command] + WindowCommands.commands + ListenerCommands.commands + ThemeCommands.commands
         + SetupCommands.commands + ConnectCommands.commands.map { $0.onAWindow() }
         + TourCommands.commands.map { $0.onAWindow() } + FirstRunCommands.commands + ConfigCommands.commands + ProjectCommands.commands
+        + CompareCommands.commands.map { $0.onAWindow() }
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {

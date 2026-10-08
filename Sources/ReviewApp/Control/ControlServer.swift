@@ -142,6 +142,14 @@ protocol WindowControlling: AnyObject {
     func skipTour() throws(AppRefusal) -> StateReport.Tour
     /// Closes the tour's panel, as its close button does; it keeps its step.
     func closeTour() throws(AppRefusal) -> StateReport.Tour
+    /// Shows the project's version `number`, as its segment does; the
+    /// playhead keeps its time.
+    func switchVersion(to number: Int) async throws(AppRefusal)
+    /// Opens the version picker with `query` typed, as a click on the
+    /// switcher's field and typing do.
+    func openVersionPicker(query: String) throws(AppRefusal) -> VersionSwitch
+    /// Closes the version picker, as Escape does; false when it was closed.
+    func closeVersionPicker() -> Bool
 }
 
 /// App control's server: it decodes each request, checks the lease and
@@ -519,6 +527,31 @@ final class ControlServer {
             case .tourClose:
                 let tour = try inWindow().closeTour()
                 return done(tour.line, Output(tour: tour), json)
+            case .versionShow(let number):
+                let shown = try inWindow()
+                try await shown.switchVersion(to: number)
+                let state = shown.state()
+                let version = state.project?.version.map { "v\($0)" } ?? "v\(number)"
+                return done(
+                    "\(version) on screen in \(shown.id) at \(TimeCode.text(state.player.time))",
+                    Output(window: shown.id, video: state.video, player: state.player, project: state.project), json
+                )
+            case .versionPick(let query):
+                let shown = try inWindow()
+                _ = try shown.openVersionPicker(query: query)
+                let state = shown.state()
+                let picker = state.project?.switcher?.picker
+                let count = picker?.matches.count ?? 0
+                let line = "the version picker is open: \(count) of \(state.project?.versions.count ?? 0) versions match"
+                    + (query.isEmpty ? "" : " `\(query)`") + (picker?.highlighted.map { ", v\($0) highlighted" } ?? "")
+                return done(line, Output(window: shown.id, project: state.project), json)
+            case .versionClose:
+                let shown = try inWindow()
+                let closed = shown.closeVersionPicker()
+                return done(
+                    closed ? "the version picker is closed" : "the version picker wasn't open",
+                    Output(window: shown.id, project: shown.state().project, dismissed: closed), json
+                )
             case .projectNew(let slug, let path, let title):
                 let made = try await app.projectNew(slug, from: URL(fileURLWithPath: path), title: title)
                 let listed = made.versions.count
