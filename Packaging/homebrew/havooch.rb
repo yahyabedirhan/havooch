@@ -13,7 +13,9 @@
 # - Third-party taps aren't held to that check, but `--no-quarantine` is
 #   disabled (Homebrew 5.1.0, https://github.com/Homebrew/brew/pull/21629), so
 #   brew quarantines the app and the person passes Gatekeeper once by hand:
-#   the caveat below says how.
+#   the caveat below says how. The `binary` below is a link to the command
+#   inside that app, so Gatekeeper stops the first run of `havooch` too, not
+#   only the first launch of the app.
 # - Clearing the quarantine in the cask itself (`xattr` in a postflight) is
 #   what Homebrew asks taps not to do, and third-party cask flight blocks are
 #   deprecated until 2027-12-11 (https://brew.sh/2026/09/13/homebrew-7.0.0/).
@@ -47,8 +49,10 @@ cask "havooch" do
   ]
 
   caveats <<~EOS
-    Havooch is ad-hoc signed and not notarized by Apple. On its first launch
-    macOS may say it can't check the app for malicious software. Then:
+    Havooch is ad-hoc signed and not notarized by Apple. The first time you
+    open Havooch or run `havooch` (the command is a link into the app), macOS
+    says "Havooch Not Opened": it can't check the app for malicious software.
+    Allow it once:
       1. Open System Settings > Privacy & Security.
       2. Next to the message about Havooch, click Open Anyway, then confirm.
     Or clear the quarantine flag yourself:
