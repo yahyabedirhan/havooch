@@ -228,6 +228,11 @@ public enum ControlRequest: Equatable, Sendable {
     /// button closes it. The window is the message's `window`, else the
     /// key window.
     case windowClose
+    /// `havooch window resize <width>`: the key or named window's content
+    /// width in points, constrained by the window's content minimum.
+    case windowResize(width: Int)
+    /// `havooch sidebar show|hide`: the current window's sidebar visibility.
+    case sidebarVisibility(show: Bool)
     /// `havooch project new <slug> --from <path> [--title <title>]`: a
     /// project in `config.toml` whose v1 is the video at the absolute
     /// `path`; the video's review moves into it, and its listener keeps
@@ -331,7 +336,7 @@ public enum ControlRequest: Equatable, Sendable {
         switch self {
         case .appStatus, .state, .controlTake, .controlRelease, .themeList, .windowList: .free
         case .open, .projectNew, .projectAdd: .person
-        case .themeSet, .configDismiss, .windowNew, .windowClose: .operator
+        case .themeSet, .configDismiss, .windowNew, .windowClose, .windowResize, .sidebarVisibility: .operator
         case .appOpen, .appQuit, .appHome, .appDemo, .playerOpen, .playerPlay, .playerPause, .playerSeek, .screenshot: .operator
         case .playerMute, .playerUnmute, .playerVolume, .playerSound: .operator
         case .contextSet: .operator

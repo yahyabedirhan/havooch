@@ -190,6 +190,8 @@ The command ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Hom
 | Setup | `setup`, `connect`, `first-run`, `tour` | Link the command, install the skill, and drive the Connect view, the first-run window and the tour. |
 | App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data, and with `HAVOOCH_MUTED=1` set, muted. `player volume`, `player mute`, `player unmute` and `player sound [--close]` drive the sound and its panel. |
 
+`window resize <width>` sets the key window's content width in points. Use `--window <id>` to name another window. The window stops at the width its content needs. `sidebar show` and `sidebar hide` use the same visibility control as the header button.
+
 `havooch --help` lists every command, and `havooch --version` prints the version.
 
 ## Uninstall

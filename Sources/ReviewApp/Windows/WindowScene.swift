@@ -32,7 +32,7 @@ struct WindowScene: View {
                         if target != held { target = held }
                     }
             } else {
-                Color.clear.frame(minWidth: 760, minHeight: 480)
+                Color.clear.frame(minWidth: Metrics.stageMinimumWidth, minHeight: Metrics.windowMinimumHeight)
             }
         }
         .onAppear {

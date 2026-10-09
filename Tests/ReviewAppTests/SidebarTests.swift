@@ -40,6 +40,14 @@ struct SidebarTests {
         try #require(ItemID(text))
     }
 
+    @Test("the window keeps the stage and the sidebar whole as the sidebar shrinks to its minimum")
+    func narrowWindowMinimumWidth() {
+        #expect(Metrics.windowMinimumWidth(sidebarShown: false) == 480)
+        #expect(Metrics.windowMinimumWidth(sidebarShown: true) == 780)
+        #expect(Metrics.sidebarWidth(preferred: 340, windowWidth: 820) == 340)
+        #expect(Metrics.sidebarWidth(preferred: 340, windowWidth: 780) == 300)
+    }
+
     @Test("General comes first, even with nothing on it, then the threads in time order, not in the order written")
     func order() async throws {
         defer { cleanUp() }

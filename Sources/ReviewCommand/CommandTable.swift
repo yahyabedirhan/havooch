@@ -142,7 +142,7 @@ struct Command: Sendable {
 public enum CommandTable {
     static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands
         + PlayerCommands.commands.map { $0.onAWindow() } + CommentCommands.commands.map { $0.onAWindow() }
-        + [ScreenshotCommand.command] + WindowCommands.commands + ListenerCommands.commands + ThemeCommands.commands
+        + [ScreenshotCommand.command] + WindowCommands.commands + SidebarCommands.commands + ListenerCommands.commands + ThemeCommands.commands
         + SetupCommands.commands + ConnectCommands.commands.map { $0.onAWindow() }
         + TourCommands.commands.map { $0.onAWindow() } + FirstRunCommands.commands + ConfigCommands.commands + ProjectCommands.commands
         + CompareCommands.commands.map { $0.onAWindow() }
@@ -171,7 +171,7 @@ public enum CommandTable {
 
             --window <id> names the window a command acts on, as `window list` shows it;
             without it, the key window. It goes with app home, app demo, state, screenshot,
-            the player, comment, context, send, thread, connect, tour and window close commands.
+            the player, comment, context, send, thread, connect, tour, window close and window resize, and sidebar commands.
             --json prints machine output on every command.
             --version prints the version of Havooch this command comes with.
             Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.

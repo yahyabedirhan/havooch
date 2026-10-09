@@ -87,6 +87,15 @@ struct ControlServerTests {
             return windowList()[0]
         }
 
+        func resize(width: Int) async throws(AppRefusal) -> Int {
+            try record("resize window to \(width)")
+            return width
+        }
+
+        func setSidebarVisible(_ visible: Bool) {
+            calls.append(visible ? "sidebar shown" : "sidebar hidden")
+        }
+
         private func change<Result>(_ call: String, _ change: (inout Review) throws(ReviewRefusal) -> Result) throws(AppRefusal) -> Result {
             try record(call)
             do throws(ReviewRefusal) {
@@ -839,6 +848,21 @@ struct ControlServerTests {
         #expect(await answer(.screenshot(path: "/tmp/shot.png", appearance: nil)).reply == .done("/tmp/shot.png\n"))
         #expect(await answer(.screenshot(path: "/tmp/set.png", appearance: .light, window: .settings)).reply == .done("/tmp/set.png\n"))
         #expect(screenshotter.calls == ["/tmp/shot.png dark", "/tmp/shot.png as is", "/tmp/set.png light of settings"])
+    }
+
+    @Test("window resize asks the selected window for its content width")
+    func resizeWindow() async throws {
+        #expect(await answer(.windowResize(width: 780)).reply == .done("window width 780 pt\n"))
+        #expect(app.calls.last == "resize window to 780")
+        let report = try object(await answer(.windowResize(width: 780), json: true).reply.output)
+        #expect(report["width"] as? Int == 780)
+    }
+
+    @Test("sidebar visibility commands go through the selected window")
+    func sidebarVisibility() async {
+        #expect(await answer(.sidebarVisibility(show: true)).reply == .done("sidebar shown\n"))
+        #expect(await answer(.sidebarVisibility(show: false)).reply == .done("sidebar hidden\n"))
+        #expect(app.calls.suffix(2) == ["sidebar shown", "sidebar hidden"])
     }
 
     @Test("app quit answers first, and says the app quits")

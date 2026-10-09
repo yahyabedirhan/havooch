@@ -118,6 +118,8 @@ public struct ControlMessage: Equatable, Sendable {
         case .windowList: wire = Wire(command: "window.list")
         case .windowNew: wire = Wire(command: "window.new")
         case .windowClose: wire = Wire(command: "window.close")
+        case .windowResize(let width): wire = Wire(command: "window.resize", width: width)
+        case .sidebarVisibility(let show): wire = Wire(command: show ? "sidebar.show" : "sidebar.hide")
         case .projectNew(let slug, let path, let title):
             wire = Wire(command: "project.new", path: path)
             wire.project = slug
@@ -321,6 +323,13 @@ public struct ControlMessage: Equatable, Sendable {
         case "window.list": return .windowList
         case "window.new": return .windowNew
         case "window.close": return .windowClose
+        case "window.resize":
+            guard let width = wire.width, width > 0 else {
+                throw .unreadable("the control command `window.resize` needs its `width`, a positive number of points")
+            }
+            return .windowResize(width: width)
+        case "sidebar.show": return .sidebarVisibility(show: true)
+        case "sidebar.hide": return .sidebarVisibility(show: false)
         case "project.new":
             return .projectNew(slug: try field(wire.project, "project", of: wire), path: try absolute(wire), title: wire.title)
         case "project.add":
@@ -441,6 +450,8 @@ public struct ControlMessage: Equatable, Sendable {
         /// `thread version <n>` and `version show <n>`: the version's
         /// number, from 1.
         var number: Int?
+        /// `window resize`: the content width in points.
+        var width: Int?
         /// `thread version --remove`: the picked version leaves the list.
         var remove: Bool?
         /// `compare pick` and `compare set --side`: a side, `left` or `right`.

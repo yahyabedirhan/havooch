@@ -89,6 +89,9 @@ struct CommandTests {
         (["window", "list"], .windowList),
         (["window", "new"], .windowNew),
         (["window", "close"], .windowClose),
+        (["window", "resize", "780"], .windowResize(width: 780)),
+        (["sidebar", "show"], .sidebarVisibility(show: true)),
+        (["sidebar", "hide"], .sidebarVisibility(show: false)),
     ])
     func sends(arguments: [String], request: ControlRequest) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -108,6 +111,7 @@ struct CommandTests {
         (["thread", "show", "1", "--window", "w2"], .threadShow(thread: "1"), "w2"),
         (["window", "close", "w2"], .windowClose, "w2"),
         (["window", "close", "--window", "w2"], .windowClose, "w2"),
+        (["window", "resize", "780", "--window", "w2"], .windowResize(width: 780), "w2"),
         (["screenshot", "/tmp/shot.png", "--window", "w2"], .screenshot(path: "/tmp/shot.png", appearance: nil), "w2"),
         (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil), nil),
         (["player", "play"], .playerPlay, nil),

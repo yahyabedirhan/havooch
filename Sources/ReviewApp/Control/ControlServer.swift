@@ -86,6 +86,10 @@ protocol WindowControlling: AnyObject {
     var id: String { get }
     /// The AppKit window that shows it, for a screenshot; nil off screen.
     var nsWindow: NSWindow? { get }
+    /// Sets the content width, subject to the view's minimum.
+    func resize(width: Int) async throws(AppRefusal) -> Int
+    /// Shows or hides the sidebar, as the header's control does.
+    func setSidebarVisible(_ visible: Bool)
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
     /// Goes home, as a click on the Havooch mark does: the video closes
@@ -411,6 +415,12 @@ final class ControlServer {
             case .windowClose:
                 let closed = try app.closeWindow(window)
                 return done("\(closed.id) closed", Output(window: closed.id, windows: app.windowList()), json)
+            case .windowResize(let width):
+                let resized = try await inWindow().resize(width: width)
+                return done("window width \(resized) pt", Output(width: resized), json)
+            case .sidebarVisibility(let show):
+                try inWindow().setSidebarVisible(show)
+                return done(show ? "sidebar shown\n" : "sidebar hidden\n")
             case .commentAdd(let text, let at, let rectangle, let thread):
                 let region = try Self.region(rectangle)
                 let added = try await inWindow().addMessage(text: text, at: at, region: region, thread: thread)
@@ -677,6 +687,7 @@ final class ControlServer {
         var sound: StateReport.Sound?
         var project: StateReport.Project?
         var path: String?
+        var width: Int?
         var quit: Bool?
         var lease: ControlLease.Status?
         var released: Bool?

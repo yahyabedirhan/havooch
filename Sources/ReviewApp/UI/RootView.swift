@@ -17,53 +17,62 @@ struct RootView: View {
 
     var body: some View {
         let palette = Palette(theme: model.themes.theme)
-        HStack(spacing: 0) {
-            Group {
-                switch StageContent(model) {
-                case .player:
-                    VStack(spacing: 0) {
-                        StageView(model: model)
-                            // The setup tour's panel over the foot of the stage (H4).
-                            .overlay(alignment: .bottomLeading) {
-                                if model.tour.isOpen {
-                                    TourPanel(model: model)
-                                        .padding(.leading, 24)
-                                        .padding(.bottom, 12)
-                                        .transition(
-                                            reduceMotion
-                                                ? .opacity
-                                                : .scale(scale: 0.96, anchor: .bottomLeading).combined(with: .opacity)
-                                        )
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                Group {
+                    switch StageContent(model) {
+                    case .player:
+                        VStack(spacing: 0) {
+                            StageView(model: model)
+                                // The setup tour's panel over the foot of the stage (H4).
+                                .overlay(alignment: .bottomLeading) {
+                                    if model.tour.isOpen {
+                                        TourPanel(model: model)
+                                            .padding(.leading, 24)
+                                            .padding(.bottom, 12)
+                                            .transition(
+                                                reduceMotion
+                                                    ? .opacity
+                                                    : .scale(scale: 0.96, anchor: .bottomLeading).combined(with: .opacity)
+                                            )
+                                    }
                                 }
-                            }
-                            .animation(
-                                reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.86),
-                                value: model.tour.isOpen
-                            )
-                        PlayerBar(model: model)
+                                .animation(
+                                    reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.86),
+                                    value: model.tour.isOpen
+                                )
+                            PlayerBar(model: model)
+                        }
+                        // The sound panel over the foot of the stage, pointing
+                        // at the bar's speaker: inside the views that take its clicks.
+                        .overlay(alignment: .topLeading) { SoundPanel(model: model) }
+                        .coordinateSpace(.named(SoundPanel.space))
+                    case .home:
+                        HomeScreen(model: model)
+                    case .empty:
+                        EmptyState(model: model)
                     }
-                    // The sound panel over the foot of the stage, pointing
-                    // at the bar's speaker: inside the views that take its clicks.
-                    .overlay(alignment: .topLeading) { SoundPanel(model: model) }
-                    .coordinateSpace(.named(SoundPanel.space))
-                case .home:
-                    HomeScreen(model: model)
-                case .empty:
-                    EmptyState(model: model)
+                }
+                .frame(minWidth: Metrics.stageMinimumWidth, maxWidth: .infinity)
+                if sidebarShown {
+                    SidebarColumn(
+                        model: model,
+                        preferredWidth: Metrics.sidebarWidth(preferred: model.sidebarWidth, windowWidth: geometry.size.width),
+                        maximumWidth: Metrics.sidebarMaximumWidth(windowWidth: geometry.size.width)
+                    )
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
                 }
             }
-            .frame(minWidth: 480, maxWidth: .infinity)
-            if sidebarShown {
-                SidebarColumn(model: model)
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-            }
+            // The settings notice over the stage and the home screen alike.
+            .overlay(alignment: .top) { ConfigBanner(model: model) }
+            // One motion, a spring with no bounce, whatever opens or closes the
+            // sidebar: the toggle, a notice, or the operator.
+            .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)
         }
-        // The settings notice over the stage and the home screen alike.
-        .overlay(alignment: .top) { ConfigBanner(model: model) }
-        // One motion, a spring with no bounce, whatever opens or closes the
-        // sidebar: the toggle, a notice, or the operator.
-        .animation(SidebarColumn.animation(reduceMotion: reduceMotion), value: sidebarShown)
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(
+            minWidth: Metrics.windowMinimumWidth(sidebarShown: sidebarShown),
+            minHeight: Metrics.windowMinimumHeight
+        )
         // The theme's accent in place of the system's, for a selection and
         // a prominent button.
         .tint(palette[.accent])
@@ -137,6 +146,8 @@ struct RootView: View {
 /// on that edge separates it from the stage.
 struct SidebarColumn: View {
     let model: WindowModel
+    let preferredWidth: CGFloat
+    let maximumWidth: CGFloat
     /// The width while the person drags; nil shows the kept width.
     @State private var dragged: CGFloat?
     /// The width when the drag started.
@@ -163,7 +174,7 @@ struct SidebarColumn: View {
         .overlay(alignment: .leading) { resizeHandle }
     }
 
-    private var width: CGFloat { dragged ?? model.sidebarWidth }
+    private var width: CGFloat { min(dragged ?? preferredWidth, maximumWidth) }
 
     /// A thin strip on the leading edge that drags the width. The width is
     /// kept in the settings when the drag ends (D 5.10).
@@ -177,7 +188,7 @@ struct SidebarColumn: View {
                     .onChanged { drag in
                         let start = dragStart ?? width
                         dragStart = start
-                        let range = Metrics.sidebarWidthRange
+                        let range = Metrics.sidebarWidthRange.lowerBound...maximumWidth
                         dragged = min(max(start - drag.translation.width, range.lowerBound), range.upperBound)
                     }
                     .onEnded { _ in
