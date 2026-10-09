@@ -1,10 +1,10 @@
 import ReviewCore
 import SwiftUI
 
-/// The sidebar's thread list (L38): the title "Threads" with a summary
+/// The sidebar's thread list: the title "Threads" with a summary
 /// line, then, for a plain video, the threads in their groups
 /// (`ThreadGroup`) under headers that stay at the top while the list
-/// scrolls; for a project, the threads by version (`VersionList`, E9). A
+/// scrolls; for a project, the threads by version (`VersionList`). A
 /// click on a row shows the thread's view.
 struct ThreadList: View {
     let model: WindowModel
@@ -63,7 +63,7 @@ struct ThreadList: View {
     }
 
     /// Under General while no frame has a thread: how one starts. The
-    /// compact form of the native empty state (L43): a symbol, a headline
+    /// compact form of the native empty state: a symbol, a headline
     /// and a callout, since `ContentUnavailableView`'s large title is too
     /// heavy for a narrow sidebar under a row.
     private var empty: some View {
@@ -116,7 +116,7 @@ struct ThreadRows: View {
             .overlay(alignment: .top) {
                 if index > 0 { rowHairline }
             }
-            // The tour's reply step rings the answered thread (H4),
+            // The tour's reply step rings the answered thread,
             // closer than elsewhere: the list's margin is 8 points.
             .coachRing(isRinged, radius: 10, padding: CoachRing.tightPadding)
             // A lazy stack draws a row it made once again only when its

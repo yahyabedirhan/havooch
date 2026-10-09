@@ -209,7 +209,7 @@ struct PersistenceTests {
 
     /// What a run wrote in the support folder, but the settings file and
     /// its verdict: with `HAVOOCH_SUPPORT_DIR` set, `config.toml` is made
-    /// in its `config/` on launch (ADR 0002).
+    /// in its `config/` on launch.
     private func dataFiles(in folder: URL? = nil) throws -> [String] {
         let folder = folder ?? support
         guard FileManager.default.fileExists(atPath: folder.path) else { return [] }

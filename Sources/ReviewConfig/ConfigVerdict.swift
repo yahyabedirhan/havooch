@@ -1,6 +1,6 @@
 import Foundation
 
-/// The verdict on `config.toml` (ADR 0002): whether it reads, and each
+/// The verdict on `config.toml`: whether it reads, and each
 /// problem with its line when it does not. `havooch config check` prints
 /// it; the app writes it to `config-status.json` in its support folder
 /// after each reload, for agents, who edit the file but don't see the app.

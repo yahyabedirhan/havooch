@@ -2,7 +2,7 @@ import AVFoundation
 import Observation
 import ReviewWire
 
-/// Two players on one clock (E11, L63): the left and the right version of
+/// Two players on one clock: the left and the right version of
 /// a comparison. They start together with `setRate(_:time:atHostTime:)` on
 /// one host time, pause together, seek together and run at one speed.
 /// The lead is the side the window's player bar shows; on each of its

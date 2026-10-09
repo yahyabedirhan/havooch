@@ -48,7 +48,7 @@ struct MessageEditor: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
-        // As `NSTextView.scrollableTextView()` builds it, with the text
+        // As `NSTextView.scrollableTextView` builds it, with the text
         // view that reports its focus.
         let size = scroll.contentSize
         let view = FocusTextView(frame: NSRect(origin: .zero, size: size))
@@ -154,8 +154,8 @@ final class FocusTextView: NSTextView {
 
 /// The editor with its placeholder, in the field look every place shares:
 /// the field colour with a hairline at rest, and the system focus ring
-/// while it has the focus in the key window (L42). With `wellFocus` it has
-/// the comment popover's softer look (L69): the `well` colour, and a
+/// while it has the focus in the key window. With `wellFocus` it has
+/// the comment popover's softer look: the `well` colour, and a
 /// hairline that turns that token at half strength in place of the ring.
 struct MessageField: View {
     @Binding var text: String

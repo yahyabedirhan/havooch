@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// No video is open: the native empty state, with "Open a Video" and "Try
-/// the Demo" (D 5.11, L42). The whole stage takes a dropped video; a
+/// the Demo". The whole stage takes a dropped video; a
 /// dashed outline over it shows while a file is dragged over it. The demo
 /// is the launch video bundled in the app, on demo data (`DemoRun`); a
 /// build with no bundled demo leaves the button out.

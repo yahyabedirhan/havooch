@@ -6,7 +6,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The version switcher's words and numbers (E10, version-switcher V5),
+/// The version switcher's words and numbers (version-switcher V5),
 /// pure: the last three versions as segments, the field for older ones,
 /// the picker's search and its highlight.
 @Suite("The version switcher")
@@ -121,7 +121,7 @@ struct VersionSwitchTests {
     }
 }
 
-/// The version switcher in a window (E10), through the app model and its
+/// The version switcher in a window, through the app model and its
 /// control server with no scene and no socket: `version show` keeps the
 /// playhead's time, the field names an older version, the picker opens
 /// with a search, and a plain video has no switcher.

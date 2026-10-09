@@ -1,9 +1,9 @@
 import Foundation
 import ReviewWire
 
-/// `havooch tour show | next | skip | close`: the setup tour's own actions
-/// (H4), each the operator's, as the person's clicks on "Finish setup" and
-/// on the tour's panel are. Write an Example is `comment compose`.
+/// `havooch tour show | next | skip | close`: the operator can use the
+/// same tour actions as the person uses with "Finish setup" and the tour
+/// panel. Write an Example is `comment compose`.
 enum TourCommands {
     static let commands: [Command] = [
         Command(

@@ -2,11 +2,11 @@ import ReviewCore
 import SwiftUI
 
 /// Where a thread's popover sits on the stage once the person moved or
-/// resized it (D 2.8, D 2.10). The thread keeps the rectangle in 0 to 1 of
+/// resized it. The thread keeps the rectangle in 0 to 1 of
 /// the video area, so it lands in the same place at any window size; on
 /// screen it is never smaller than it can be used at, nor outside the area.
 /// The person resizes it from each edge and each corner, as a window
-/// (`Drag`, `ResizeRules`, L70).
+/// (`Drag`, `ResizeRules`).
 enum ThreadPopover {
     /// The smallest the person can make the popover: the header, a few
     /// lines of the conversation, the field and the band with its split
@@ -52,7 +52,7 @@ enum ThreadPopover {
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
-    /// The size rules a thread's popover resizes by (L70): the header, a
+    /// The size rules a thread's popover resizes by: the header, a
     /// line of the conversation, the field and the band always show.
     static let rules = ResizeRules(minimum: minimumSize, maximum: CGSize(width: 640, height: 560))
 
@@ -82,7 +82,7 @@ enum ThreadPopover {
     }
 }
 
-/// The size rules a popover resizes by, as a window does (L70): a moved
+/// The size rules a popover resizes by, as a window does: a moved
 /// edge follows the pointer, the edge across from it stays, and the size
 /// stays between `minimum` and `maximum`.
 struct ResizeRules: Equatable {
@@ -168,7 +168,7 @@ private struct ResizeSides: OptionSet {
     }
 }
 
-/// A thread's conversation in its popover, above the field (D 2.7): the
+/// A thread's conversation in its popover, above the field: the
 /// sidebar's `Conversation`, in the order written, the newest at the
 /// foot. One message style in both places, and both read the same thread,
 /// so a message written in either shows in both.

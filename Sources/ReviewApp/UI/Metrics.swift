@@ -11,7 +11,7 @@ enum Metrics {
     static let gutter: CGFloat = 12
     static let stageCorner: CGFloat = 12
     /// The height of the player bar under the stage and of the sidebar's
-    /// footer, so the two meet on one line across the window (D 4.9).
+    /// footer, so the two meet on one line across the window.
     static let barHeight: CGFloat = 52
     /// The space between a bar's content and the window's edge.
     static let barPadding: CGFloat = 16

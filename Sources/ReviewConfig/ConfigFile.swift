@@ -1,7 +1,7 @@
 import Foundation
 import TOMLDecoder
 
-/// What `config.toml` sets (ADR 0002): the things a person or an agent sets
+/// What `config.toml` sets: the things a person or an agent sets
 /// on purpose. App state (recent videos, playheads, the sidebar width,
 /// reviews) stays in the support folder.
 ///
@@ -25,7 +25,7 @@ public struct ConfigFile: Equatable, Sendable {
 
     /// The pinned theme, by name; nil follows the Mac's appearance.
     public var theme: String?
-    /// The projects, in the file's order (ADR 0004).
+    /// The projects, in the file's order.
     public var projects: [ProjectEntry]
 
     public init(theme: String? = nil, projects: [ProjectEntry] = []) {

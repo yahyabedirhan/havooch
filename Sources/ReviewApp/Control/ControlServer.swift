@@ -167,7 +167,7 @@ protocol WindowControlling: AnyObject {
     /// Closes the version picker, as Escape does; false when it was closed.
     func closeVersionPicker() -> Bool
     /// Opens the compare popover on the previous version and the one on
-    /// screen, as the Compare button does (E11).
+    /// screen, as the Compare button does.
     func openCompare() throws(AppRefusal)
     /// Opens one side's version picker in the popover with `query` typed.
     func pickCompareSide(_ side: CompareSide, query: String) throws(AppRefusal)
@@ -212,7 +212,7 @@ final class ControlServer {
     private let app: any AppControlling
     /// The listeners on the data the app is on now, one per review: the open `wait`s
     /// and the sends in line. Asked at each request, since an in-app demo
-    /// switches the app's data (L27).
+    /// switches the app's data.
     private let currentListeners: @MainActor () -> ListenerHub
     /// The listener's side on the data the app is on now.
     private var listeners: ListenerHub { currentListeners() }

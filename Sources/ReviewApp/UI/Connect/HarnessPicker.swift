@@ -1,10 +1,10 @@
 import ReviewSetup
 import SwiftUI
 
-/// Step 3, your agent (G5, G9): a harness picker, what Havooch detects of
+/// Step 3, your agent: a harness picker, what Havooch detects of
 /// the picked harness, and its prompt to copy, which stays primary
 /// whatever is detected. Copying it is not a state: there is no "waiting
-/// for you" (G6). The step says nobody listens until an agent does.
+/// for you". The step says nobody listens until an agent does.
 struct AgentStep: View {
     let model: WindowModel
     let isActive: Bool
@@ -28,7 +28,7 @@ struct AgentStep: View {
 }
 
 /// The harnesses' logos in a row; the picked one on a soft fill. A harness
-/// Havooch didn't find is dimmed, and can still be picked (ADR 0005).
+/// Havooch didn't find is dimmed, and can still be picked.
 struct HarnessPicker: View {
     let model: any SetupSteering
     @Environment(\.palette) private var palette
@@ -68,7 +68,7 @@ struct HarnessPicker: View {
     }
 }
 
-/// What Havooch detects of the picked harness, and its prompt (G9): ready
+/// What Havooch detects of the picked harness, and its prompt: ready
 /// with the skill detected; else a neutral line, the install offered (its
 /// command in a `RunBox` when the harness is found, to copy when it isn't),
 /// and the prompt at full size all the same.

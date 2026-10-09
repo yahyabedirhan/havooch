@@ -5,7 +5,7 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// A project's thread list by version (decision E9, thread-list V5),
+/// A project's thread list by version (thread-list V5),
 /// through the app model and its control server: `state` reports the
 /// sections, the older versions and their open threads; `thread versions`
 /// opens "All versions" with its search; `thread version <n>` adds an older

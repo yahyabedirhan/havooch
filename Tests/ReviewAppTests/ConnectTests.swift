@@ -6,7 +6,7 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The Connect view (G1 to G11): its three entry points, the outbox banner
+/// The Connect view: its three entry points, the outbox banner
 /// after Send with no agent, the picked harness's readiness and prompt,
 /// the listener card's Disconnect, reconnecting after a relaunch with
 /// Forget, and the connect button's dot. The app model and its control
@@ -90,7 +90,7 @@ struct ConnectTests {
         #expect(answer.reply.ok)
         #expect(window.outboxBanner == .delivered(messages: 3, to: "Claude Code"))
         #expect(window.outboxBanner?.text == "Delivered 3 messages to Claude Code")
-        // Connected: the listener card, and setup counts as working (L57).
+        // Connected: the listener card, and setup counts as working.
         #expect(window.sidebarReport.connect?.phase == "connected")
         #expect(window.sidebarReport.connect?.listener?.agent == "Claude Code")
         #expect(window.sidebarReport.connect?.listener?.place == "/Users/me/shop")

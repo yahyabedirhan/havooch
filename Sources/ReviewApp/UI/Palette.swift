@@ -71,14 +71,14 @@ struct Palette: Equatable {
         }
     }
 
-    /// The system's keyboard focus ring, around a focused field (L42). It
+    /// The system's keyboard focus ring, around a focused field. It
     /// follows the Mac's accent colour, as every app's ring does.
     var focusRing: Color {
         Color(nsColor: .keyboardFocusIndicatorColor)
     }
 
     /// Text and glyphs on `accentFill`: white, which every theme's fill
-    /// reads at `ThemeColor.filledTextContrast` or more with (ADR 0006), as
+    /// reads at `ThemeColor.filledTextContrast` or more. It matches text
     /// on a native prominent button. For a filled control drawn by hand
     /// (`SplitButton`).
     var textOnFill: Color {
@@ -139,7 +139,7 @@ extension View {
     }
 
     /// A filled button: the native prominent button on the theme's
-    /// `accentFill`, which white text reads on (ADR 0006). The one way a
+    /// `accentFill`, which white text reads on. The one way a
     /// view makes a prominent button; `accent`, the window's tint, stays
     /// for selections, rings and pins.
     func filledButton(_ palette: Palette) -> some View {

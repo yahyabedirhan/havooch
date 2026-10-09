@@ -1,12 +1,12 @@
 import ReviewWire
 import SwiftUI
 
-/// The stage while the window compares two versions (E11, compare-control
+/// The stage while the window compares two versions (compare-control
 /// V4's comparison window), over the `PlayerPair`: side by side, two
 /// pictures; Flip, one picture and the bar that flips it; Slider, the
 /// right side under the left one, wiped at the handle. Each picture is
 /// labelled with its side and version; the active side's label is
-/// filled, since new messages go to it (L63). A click or a drag on the
+/// filled, since new messages go to it. A click or a drag on the
 /// other side makes it active.
 struct CompareStage: View {
     let model: WindowModel

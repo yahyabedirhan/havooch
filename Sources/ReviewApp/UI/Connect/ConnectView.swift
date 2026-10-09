@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Connect view (G1, G2): the sidebar's view for connecting an agent,
+/// The Connect view: the sidebar's view for connecting an agent,
 /// in place of the threads, with Back. From connect-flow V6 and
 /// connect-view V2 (`docs/prototypes/2026-10-08-lab/agent-onboarding/`):
 /// numbered steps, 1 the `havooch` command line, 2 the `/havooch-mate`
@@ -72,7 +72,7 @@ struct ConnectView: View {
                                 model: model, open: skillOpen, isLast: listening, toggle: { skillPinned = !skillOpen }
                             )
                         }
-                        // The tour's tools step rings the two setup steps (H4).
+                        // The tour's tools step rings the two setup steps.
                         .coachRing(model.tourRings(.setupSteps), radius: 6)
                     }
                     if !listening {
@@ -114,7 +114,7 @@ struct ConnectView: View {
     }
 }
 
-/// The banner over the steps after Send with no agent (G8): the messages
+/// The banner over the steps after Send with no agent: the messages
 /// wait, then they were delivered.
 struct OutboxBannerLine: View {
     let banner: OutboxBanner
@@ -250,7 +250,7 @@ struct Step<Content: View>: View {
 }
 
 /// A one-line label with a code name on a soft chip: "`havooch` command
-/// line" (G2).
+/// line".
 struct CodeLabel: View {
     /// The code name, in monospace: `havooch`, `/havooch-mate`.
     var code: String?

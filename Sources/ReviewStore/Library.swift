@@ -212,7 +212,7 @@ public final class Library {
     private struct Recents: Codable {
         var videos: [RecentVideo]
         /// When each project was last opened, by slug: the most recently
-        /// used project opens a video two projects list (decision C4).
+        /// used project opens a video two projects list.
         var projects: [String: Date]?
     }
 

@@ -1,8 +1,7 @@
 import Foundation
 
-/// What Havooch can say of a setup step or a harness. There is no
-/// "missing": what isn't detected may be set up in a way Havooch can't see
-/// (ADR 0005).
+/// What Havooch can say about a setup step or harness. An undetected item
+/// may be set up in a way Havooch cannot see, so there is no "missing" state.
 public enum Detection: String, Equatable, Sendable, CaseIterable {
     /// Havooch found it.
     case detected

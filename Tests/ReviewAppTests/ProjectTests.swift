@@ -8,7 +8,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// Projects (ADR 0004, decisions C4 and E1 to E8, L59), through the
+/// Projects, through the
 /// app model and its control server with no scene and no socket: `project
 /// new` moves a plain video's review into a project and keeps its listener;
 /// `project add` shows the next version; threads are anchored to their

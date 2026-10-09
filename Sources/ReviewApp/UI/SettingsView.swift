@@ -2,10 +2,10 @@ import AppKit
 import ReviewWire
 import SwiftUI
 
-/// The Settings window (⌘,, L42): the cat mark, the name and the version,
+/// The Settings window (⌘,): the cat mark, the name and the version,
 /// the theme picker, the same choice as View › Theme and `havooch theme
 /// set`, and where the settings file is with the verdict of its last
-/// reload (ADR 0002). It takes the pinned theme's appearance, as the
+/// reload. It takes the pinned theme's appearance, as the
 /// player's window does, and the theme's accent.
 struct SettingsView: View {
     let model: AppModel

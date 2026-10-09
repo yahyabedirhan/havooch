@@ -65,7 +65,7 @@ final class Thumbnails {
     }
 
     /// The frame of the video at `path` at `seconds`, for the compare
-    /// popover's sides and its pickers' rows (E11); nil until it is made.
+    /// popover's sides and its pickers' rows; nil until it is made.
     func still(of path: String, at seconds: Double) -> NSImage? {
         images[Self.key(still: path, at: seconds)]
     }
