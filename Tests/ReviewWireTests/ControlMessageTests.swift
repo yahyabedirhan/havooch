@@ -65,7 +65,7 @@ struct ControlMessageTests {
         .threadShow(thread: "t-f92cbb2a-1"), .threadShow(thread: "0"), .threadList,
         .threadVersionsOpen(search: nil), .threadVersionsOpen(search: "v12"), .threadVersionsClose,
         .threadVersion(number: 12, remove: false), .threadVersion(number: 3, remove: true),
-        .windowList, .windowNew, .windowClose,
+        .windowList, .windowNew, .windowClose, .windowResize(width: 780), .sidebarVisibility(show: true), .sidebarVisibility(show: false),
     ], [false, true])
     func roundTrip(request: ControlRequest, json: Bool) throws {
         let message = ControlMessage(request, holder: Self.holder, json: json)
@@ -73,7 +73,7 @@ struct ControlMessageTests {
     }
 
     @Test("a request names its window, and reads back with it; with none it goes unsaid", arguments: [
-        ControlRequest.playerPlay, .state, .windowClose, .commentAdd(text: "Too fast", at: 12.5),
+        ControlRequest.playerPlay, .state, .windowClose, .windowResize(width: 780), .sidebarVisibility(show: false), .commentAdd(text: "Too fast", at: 12.5),
         .screenshot(path: "/tmp/shot.png", appearance: nil),
     ])
     func window(request: ControlRequest) throws {

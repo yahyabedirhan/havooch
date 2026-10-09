@@ -260,6 +260,8 @@ struct WindowTests {
         #expect(first.engine.isPlaying)
         #expect(await send(.playerPlay, server, window: "w9") == .refused("no window `w9`; the windows are w1, w2"))
 
+        #expect(await send(.windowResize(width: 780), server, window: "w1") == .refused("window `w1` is not on screen"))
+
         // state names its window and lists them all.
         let state = try object(await send(.state, server, window: "w1", json: true).output)
         #expect(state["window"] as? String == "w1")
@@ -277,6 +279,8 @@ struct WindowTests {
         #expect(ControlRequest.windowList.role == .free)
         #expect(ControlRequest.windowNew.role == .operator)
         #expect(ControlRequest.windowClose.role == .operator)
+        #expect(ControlRequest.windowResize(width: 780).role == .operator)
+        #expect(ControlRequest.sidebarVisibility(show: false).role == .operator)
     }
 
     @Test("a scene takes the window made for it, else a new empty one")

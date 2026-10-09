@@ -688,6 +688,21 @@ final class WindowModel: WindowControlling {
     /// The recent videos' thumbnails, the app's.
     var thumbnails: Thumbnails { app.thumbnails }
 
+    func resize(width: Int) async throws(AppRefusal) -> Int {
+        guard width > 0 else { throw AppRefusal("the window width must be positive") }
+        guard let nsWindow else { throw AppRefusal("window `\(id)` is not on screen") }
+        let height = nsWindow.contentView?.bounds.height ?? nsWindow.contentRect(forFrameRect: nsWindow.frame).height
+        nsWindow.setContentSize(NSSize(width: CGFloat(width), height: height))
+        await Task.yield()
+        nsWindow.contentView?.layoutSubtreeIfNeeded()
+        let actualWidth = nsWindow.frame.width
+        return Int(actualWidth.rounded())
+    }
+
+    func setSidebarVisible(_ visible: Bool) {
+        isSidebarVisible = visible
+    }
+
     func play() throws(AppRefusal) {
         try needVideo()
         closePopover(.momentChanged)
