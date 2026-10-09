@@ -34,7 +34,7 @@ enum Shortcuts {
         /// Space or Return on the control that has the keyboard focus:
         /// presses it, as a click does.
         case pressControl
-        /// Backslash: in Compare's Flip, the other version shows (E11).
+        /// Backslash: in Compare's Flip, the other version shows.
         case flip
         /// M: mutes, or brings back the last level when muted.
         case toggleMute

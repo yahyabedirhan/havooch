@@ -1,7 +1,7 @@
 import Foundation
 import ReviewCore
 
-/// The thread list's groups (L38), by who must act next, in this order. A
+/// The thread list's groups, by who must act next, in this order. A
 /// thread is in the first group it matches.
 nonisolated enum ThreadGroup: CaseIterable, Equatable, Sendable {
     /// The agent asked a question that waits for the person's answer.
@@ -67,8 +67,8 @@ nonisolated enum ThreadGroup: CaseIterable, Equatable, Sendable {
     }
 }
 
-/// The line under the thread list's title (L38): how many threads, in a
-/// project how many versions (E9), how many need the person and how many
+/// The line under the thread list's title: how many threads, in a
+/// project how many versions, how many need the person and how many
 /// messages are queued: `6 threads · 3 versions · 1 needs you · 2 queued`.
 /// A count of none is left out.
 enum ThreadListSummary {

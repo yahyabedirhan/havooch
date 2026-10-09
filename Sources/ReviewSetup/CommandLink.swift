@@ -2,7 +2,7 @@ import Foundation
 
 /// The `havooch` command linked into `~/.local/bin`: whether the link is
 /// there, making it, and the `ln -sf` line to copy when Havooch can't.
-/// Havooch never claims the agent's PATH reaches the folder (ADR 0005).
+/// Havooch never claims the agent's PATH reaches the folder.
 public struct CommandLink: Sendable {
     public var fileSystem: any SetupFileSystem
     public var home: String

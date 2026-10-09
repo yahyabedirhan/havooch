@@ -2,7 +2,7 @@ import Foundation
 import ReviewWire
 
 /// `havooch first-run show [<step>] | next | back | pick <harness> | demo
-/// | skip`: the first-run window (H1), which shows by itself on the first
+/// | skip`: the first-run window, which shows by itself on the first
 /// launch only. Each is the operator's, as the person's clicks are. Link,
 /// Run Command and Cancel on its Tools step are `setup link`, `setup install`
 /// and `setup cancel`; copying the demo prompt changes nothing in the app:

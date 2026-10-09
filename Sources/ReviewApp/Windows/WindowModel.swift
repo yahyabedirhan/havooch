@@ -9,7 +9,7 @@ import ReviewTranscript
 import ReviewWire
 import UniformTypeIdentifiers
 
-/// One window (ADR 0003): which video or project it holds, the message being written,
+/// One window: which video or project it holds, the message being written,
 /// the selected thread, and every action a person or an operator can take
 /// in it. Each window has its own player, popover, sidebar, queue and
 /// notices; the data, the theme and the recent videos are the app's
@@ -53,7 +53,7 @@ final class WindowModel: WindowControlling {
         guard let video else { return nil }
         return project.map { .project(slug: $0) } ?? .video(contentHash: video.contentHash)
     }
-    /// The window's listener (ADR 0003): its review's sends in line and
+    /// The window's listener: its review's sends in line and
     /// whether an agent is there for them; nil with no video.
     var listener: ListenerQueue? { reviewKey.map(data.listeners.queue(for:)) }
     /// The transcripts of the videos opened on this data in this run.
@@ -71,7 +71,7 @@ final class WindowModel: WindowControlling {
     /// The video on screen: a plain video, or the project's version on
     /// screen.
     private(set) var video: OpenVideo?
-    /// The slug of the project the window holds (ADR 0004); nil for a
+    /// The slug of the project the window holds; nil for a
     /// plain video, and with none.
     private(set) var project: String? {
         didSet {
@@ -110,14 +110,14 @@ final class WindowModel: WindowControlling {
     var projectWords: HeaderWords.Project? {
         guard let project else { return nil }
         let title = projectOutline?.title ?? project
-        // While comparing, the line under the title names both (E11).
+        // While comparing, the line under the title names both.
         if let compare, isComparing {
             return HeaderWords.Project(title: title, version: "Comparing v\(compare.number(.left)) and v\(compare.number(.right))")
         }
         return HeaderWords.Project(title: title, version: versionSwitch?.onScreen?.line ?? "a removed version")
     }
 
-    /// The version switcher of the header (E10): every version of the
+    /// The version switcher of the header: every version of the
     /// project with its threads and when its file was made, and the one on
     /// screen; nil on a plain video and for a project `config.toml` no
     /// longer has.
@@ -141,8 +141,8 @@ final class WindowModel: WindowControlling {
         return attributes?[.creationDate] as? Date ?? attributes?[.modificationDate] as? Date
     }
 
-    /// The version picker under the switcher's field while it is open
-    /// (E10); nil while it is closed.
+    /// The version picker under the switcher's field while open. Nil while
+    /// it is closed.
     private(set) var versionPicker: VersionPicker?
 
     /// The tag of `thread` in a project (`v1`, or a removed version); nil
@@ -156,8 +156,8 @@ final class WindowModel: WindowControlling {
     /// The thread whose pin is picked out.
     private(set) var selection: ThreadID?
     /// The thread the sidebar shows in its thread view; nil while it
-    /// shows the thread list (L38). Showing a thread's view marks its
-    /// agent messages read (L46).
+    /// shows the thread list. Showing a thread's view marks its
+    /// agent messages read.
     private(set) var shown: ThreadID? {
         didSet {
             guard let shown else { return }
@@ -167,12 +167,12 @@ final class WindowModel: WindowControlling {
         }
     }
     /// The Connect view in the sidebar, over the threads, and what opened
-    /// it; nil while the sidebar shows the threads (G1).
+    /// it; nil while the sidebar shows the threads.
     var connect: ConnectEntry?
     /// The harness the person picked in the Connect view; nil follows the
     /// setup (`connectHarness`).
     var pickedHarness: Harness?
-    /// The setup tour over the stage (H4): whether it shows, and its step.
+    /// The setup tour over the stage: whether it shows, and its step.
     var tour = TourState()
     /// The controls that have the keyboard focus under keyboard navigation
     /// (`focusControl(_:press:)`), the last to take it at the end: Space
@@ -194,7 +194,7 @@ final class WindowModel: WindowControlling {
     /// What the agent just said, shown on the stage: the newest last.
     private(set) var notices: [Notice] = []
 
-    /// The composer's drafts (L41): one per target thread, and one for a
+    /// The composer's drafts: one per target thread, and one for a
     /// new thread, in memory only.
     private(set) var composerDrafts: [ComposerTarget.DraftKey: String] = [:]
     /// Whether the composer in the thread list writes to General.
@@ -270,16 +270,16 @@ final class WindowModel: WindowControlling {
     // MARK: - Actions, for the person and the operator alike
 
     /// Opens `url` in this window, on the data the run is on when it's
-    /// asked: as a version of the project `project` when it's set (ADR
-    /// 0004), else as a plain video. Refused when the run switches to other
+    /// asked: as a version of the project `project` when it's set, else as
+    /// a plain video. Refused when the run switches to other
     /// data (the demo, or back) before it's open, so a video never lands on
     /// data it wasn't opened for, and when another window holds the video
-    /// or the project: no two windows hold one (ADR 0003).
+    /// or the project: no two windows hold one.
     func open(_ url: URL, project: String?) async throws(AppRefusal) {
         try await open(url, resolving: false, project: project)
     }
 
-    /// Opens `url` in this window in the review it opens in (decision C4):
+    /// Opens `url` in this window in the review it opens in:
     /// the most recently opened project that lists it, else the plain
     /// video. `player open`, the demo and tests open this way.
     func open(_ url: URL) async throws(AppRefusal) {
@@ -306,7 +306,7 @@ final class WindowModel: WindowControlling {
         // queued on the video they were written on, before it goes.
         closePopover(.momentChanged)
         await committing?.value
-        // One version comes on screen: a comparison ends first (E11).
+        // One version comes on screen: a comparison ends first.
         if isComparing { exitCompare() }
         try needData(data, for: url)
         let found = try data.desk.review(for: VideoInfo(contentHash: contentHash, title: title, duration: 0, path: url.path), in: key)
@@ -343,7 +343,7 @@ final class WindowModel: WindowControlling {
         self.project = project
         // The same review keeps what the agent said; another version of
         // the same project keeps the sidebar too: its threads are the
-        // project's (E6).
+        // project's.
         let kept = sameReview ? notices : []
         forgetVideoViews(keepingReview: otherVersion)
         notices = kept
@@ -397,7 +397,7 @@ final class WindowModel: WindowControlling {
         try await open(URL(fileURLWithPath: version.path), project: slug)
     }
 
-    /// A segment, a row of the version picker and `version show` (E10):
+    /// A segment, a row of the version picker and `version show`:
     /// the project's version `number` comes on screen, and the playhead
     /// keeps its time, inside the new version's length, playing on when it
     /// played. The picker closes. Refused on a plain video, with no video,
@@ -433,7 +433,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// `version pick` (E10): the version picker open under the switcher's
+    /// `version pick`: the version picker open under the switcher's
     /// field with `query` in its search field, the first row highlighted.
     /// Refused on a plain video, and for a project of three versions or
     /// fewer, whose versions are all segments.
@@ -545,7 +545,7 @@ final class WindowModel: WindowControlling {
     /// version of the same project comes on screen) only what was on the
     /// old version's frame goes: the popover, the drawn region and the
     /// version picker. The sidebar keeps its view and the composer its
-    /// words, since the threads are the project's (E6), and the notices stay.
+    /// words, since the threads are the project's, and the notices stay.
     private func forgetVideoViews(keepingReview: Bool = false) {
         draft = nil
         isDrawingRegion = false
@@ -844,7 +844,7 @@ final class WindowModel: WindowControlling {
         let listener = data.listeners.queue(for: key)
         listener.enqueue(ref)
         // With nobody there, the send waits in the outbox and the Connect
-        // view says so (G8).
+        // view says so.
         if listener.presence(at: Date()) == .absent { sentWithNoAgent(ref) }
         tourNoticedSend(ref)
         return StateReport.Send(send, in: review)
@@ -1033,7 +1033,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The threads on the frame on screen, paused or playing: each one's
-    /// region outlines and number badge (D 2.6). Once the video moves on,
+    /// region outlines and number badge. Once the video moves on,
     /// the frame isn't the one they were written on, and they go.
     var frameMarks: [FrameMark] {
         guard video != nil else { return [] }
@@ -1063,7 +1063,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The number of the thread the popover writes to: the thread of its
-    /// frame, or the number a new thread will take (D 2.1). Nil while the
+    /// frame, or the number a new thread will take. Nil while the
     /// popover is closed.
     var draftThreadNumber: Int? {
         guard let draft, let review = review else { return nil }
@@ -1167,7 +1167,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// Every move of the person's: a change of the moment, so the popover
-    /// closes by its rules before the player moves (D 2.2, D 2.3).
+    /// closes by its rules before the player moves.
     private func move(to seconds: Double) {
         guard video != nil else { return }
         closePopover(.momentChanged)
@@ -1189,11 +1189,11 @@ final class WindowModel: WindowControlling {
         pausePlayers()
         let time = engine.frameTime(of: engine.time)
         draft = Draft(time: time, text: "", region: region)
-        // The region is the composer's chip too, until words take it (L41).
+        // The region is the composer's chip too, until words take it.
         if let region { drawnRegion = Draft(time: time, text: "", region: region) }
     }
 
-    /// Closes the popover by `reason` (D 1.4, D 2.3): a click outside and
+    /// Closes the popover by `reason`: a click outside and
     /// a change of the moment queue its words at its own frame and region;
     /// the × and Escape drop them. A popover with no words only closes, and
     /// its region goes with it. With no popover it does nothing.
@@ -1221,7 +1221,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The popover's words go on their thread: an answer at once while the
-    /// thread has an open question (L14), else into the queue.
+    /// thread has an open question, else into the queue.
     private func deliver(_ draft: Draft) {
         // The words take the region: it isn't the composer's any more.
         dropDrawnRegion(draft)
@@ -1235,8 +1235,8 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// A click on the frame: it points, and leaves the playback as it is
-    /// (L67). It takes the keys from a text field, such as the composer,
+    /// A click on the frame points and leaves playback as it is. It takes
+    /// the keys from a text field, such as the composer,
     /// so Space and C are the player's again. While the popover is open
     /// it is a click outside the popover, which closes it.
     func clickFrame() {
@@ -1267,7 +1267,7 @@ final class WindowModel: WindowControlling {
     /// Escape: closes the version picker, else a compare side's picker,
     /// else the compare popover, else drops the rectangle being drawn,
     /// else the popover's words with its region, else closes "All
-    /// versions", else ends a comparison (E11), else goes back from a
+    /// versions", else ends a comparison, else goes back from a
     /// thread view or the Connect view to the thread list. False when
     /// there was none of them.
     @discardableResult
@@ -1310,7 +1310,7 @@ final class WindowModel: WindowControlling {
 
     /// Return in the popover and its Queue or Answer button: the words go
     /// on the thread of the popover's frame, as an answer at once when the
-    /// thread has an open question, else into the queue (L14). The popover
+    /// thread has an open question, else into the queue. The popover
     /// stays open on its thread with an empty field, so the message shows
     /// in its conversation; a follow-up is on the whole frame. A popover
     /// with no words does nothing.
@@ -1330,7 +1330,7 @@ final class WindowModel: WindowControlling {
 
     /// A click on a thread's pin or its badge: the player pauses on the
     /// thread's frame, and the thread popover opens there, at the frame the
-    /// person left it at (D 2.6 to D 2.10). The move to the frame is a
+    /// person left it at. The move to the frame is a
     /// change of the moment for a popover open on another frame; one open
     /// on this thread stays as it is. General has no frame to open on.
     func openThread(_ id: ThreadID) {
@@ -1372,7 +1372,7 @@ final class WindowModel: WindowControlling {
     private func startThread(_ id: ThreadID) -> Double? {
         guard let thread = review?.thread(id), let time = thread.time else { return nil }
         selection = id
-        // The sidebar shows the same conversation as the popover (L38).
+        // The sidebar shows the same conversation as the popover.
         shown = id
         pausePlayers()
         if draft?.time != time {
@@ -1438,7 +1438,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    // MARK: - Compare (E11)
+    // MARK: - Compare
 
     /// The comparison: the popover's choice while it is open, or the two
     /// versions the window compares; nil while neither.
@@ -1452,7 +1452,7 @@ final class WindowModel: WindowControlling {
 
     /// Whether the window compares two versions.
     var isComparing: Bool { pair != nil }
-    /// The side new messages go to while comparing (L63): the one the
+    /// The side new messages go to while comparing: the one the
     /// person last clicked or drew on, the right one at first, in Flip the
     /// one showing; nil while not comparing.
     var activeSide: CompareSide? { pair?.side(of: engine) }
@@ -1660,7 +1660,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The flip key (\) and the flip bar in Flip: the other side shows,
-    /// and new messages go to it (L63). False outside Flip.
+    /// and new messages go to it. False outside Flip.
     @discardableResult
     func flipCompare() -> Bool {
         guard isComparing, compare?.layout == .flip, let side = activeSide else { return false }
@@ -1773,7 +1773,7 @@ final class WindowModel: WindowControlling {
         beginRegion()
     }
 
-    /// `side` becomes the active side (L63): its version is the one on
+    /// `side` becomes the active side: its version is the one on
     /// screen, new messages and the composer go to it, and the player bar
     /// shows its player. Words in the popover are queued first, on the
     /// version they were written on. In Flip, it shows.
@@ -1904,7 +1904,7 @@ final class WindowModel: WindowControlling {
         move(to: time)
     }
 
-    /// `thread show` (L39): the sidebar shows the thread's view, as a
+    /// `thread show`: the sidebar shows the thread's view, as a
     /// click on its row does. It answers once the player is on the
     /// thread's frame, so `state` after it shows the frame.
     func showThread(_ ref: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
@@ -1934,7 +1934,7 @@ final class WindowModel: WindowControlling {
     }
 
     /// The person sees thread `id`'s view now: its agent messages until
-    /// now are read, and its row loses the unread dot (L46). Nothing for
+    /// now are read, and its row loses the unread dot. Nothing for
     /// a thread the open video doesn't have.
     private func markSeen(_ id: ThreadID) {
         guard review?.thread(id) != nil else { return }
@@ -1977,7 +1977,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// What a row's menu offers for `thread` (L40): Open always; Show on
+    /// What a row's menu offers for `thread`: Open always; Show on
     /// video when it has a frame; Delete queued messages when it has any.
     func rowActions(for thread: ReviewThread) -> [RowAction] {
         var actions: [RowAction] = [.open]
@@ -2038,7 +2038,7 @@ final class WindowModel: WindowControlling {
         return threads.indices.contains(next) ? threads[next] : nil
     }
 
-    // MARK: - A project's thread list by version (E9)
+    // MARK: - A project's thread list by version
 
     /// The versions the person picked from "All versions", the latest
     /// first: each has its section under the last three versions until
@@ -2160,7 +2160,7 @@ final class WindowModel: WindowControlling {
         return report
     }
 
-    // MARK: - The composer at the sidebar's foot (L41)
+    // MARK: - The composer at the sidebar's foot
 
     /// Where the composer's words go now; nil with no video.
     var composerTarget: ComposerTarget? {
@@ -2257,7 +2257,7 @@ final class WindowModel: WindowControlling {
         if target.isGeneral { isComposerGeneral = false }
     }
 
-    /// `comment compose` (L41): the words in the composer and its region
+    /// `comment compose`: the words in the composer and its region
     /// chip, as the person types them and draws, with the General toggle
     /// on or off. The composer's field takes the keys. The region is on the
     /// frame on the stage.
@@ -2339,12 +2339,12 @@ final class WindowModel: WindowControlling {
     }
 
     /// A click on a notice: it goes, and its thread's popover opens on
-    /// the thread's frame, with the answer field under a question (D 4.10).
-    /// A notice on General shows General's thread view (L18).
+    /// the thread's frame, with the answer field under a question.
+    /// A notice on General shows General's thread view.
     func openNotice(_ id: UUID) {
         guard let notice = notices.first(where: { $0.id == id }) else { return }
         dismiss(id)
-        // General has no frame: its conversation is in the sidebar (L18).
+        // General has no frame: its conversation is in the sidebar.
         if notice.thread.number == 0 {
             isSidebarVisible = true
             shown = notice.thread

@@ -5,8 +5,8 @@ import ReviewWire
 /// video bundled in the app (`Contents/Resources/Demo/`, copied there by
 /// `make bundle`), opened on
 /// demo data in a folder under the user's temporary folder, so demo threads
-/// never mix with the person's (L17). The running app switches to that
-/// folder in the same window (`AppModel.enterDemo`, L27).
+/// never mix with the person's. The running app switches to that
+/// folder in the same window (`AppModel.enterDemo`).
 enum DemoRun {
     /// The demo video's file name, in `fixtures/launch/` and in the bundle.
     static let videoName = "havooch-demo.mp4"

@@ -1,7 +1,7 @@
 import Foundation
 
-/// The version of a project a thread was raised on (ADR 0004, decision
-/// E6): that version's file, by its absolute path. A thread keeps its
+/// The version of a project a thread was raised on: that version's file,
+/// by its absolute path. A thread keeps its
 /// anchor whatever the project's list says later; its number comes from
 /// the list as it is now (`ProjectOutline.tag`). A plain video's threads
 /// have none. Kept as the path alone: `"anchor": "/Movies/cut1.mp4"`.

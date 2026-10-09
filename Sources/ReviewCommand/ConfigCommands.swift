@@ -2,7 +2,7 @@ import Foundation
 import ReviewConfig
 import ReviewWire
 
-/// `havooch config path | check | dismiss` (ADR 0002). `path` and `check`
+/// `havooch config path | check | dismiss`. `path` and `check`
 /// read the file themselves: they need no app, and no lease. `dismiss` is
 /// the operator's: the settings notice in the window goes. The file is where
 /// `ConfigLocation` says, so a command with `HAVOOCH_SUPPORT_DIR` set

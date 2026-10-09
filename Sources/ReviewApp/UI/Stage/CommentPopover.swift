@@ -3,19 +3,19 @@ import ReviewWire
 import SwiftUI
 
 /// The comment popover, for a new message and for a thread alike: one component
-/// for a new message and for an existing thread (D 2.7, D 2.9). For a
+/// for a new message and for an existing thread. For a
 /// message on a moment it floats at the foot of the stage, above the
 /// playhead, with a notch that points at the moment. For a message on a
 /// region it sits beside the rectangle, with no notch. Its header names the
 /// thread it writes to and the frame's time as the bar shows it; the
 /// thread's conversation shows above the field. Each edge and each corner
-/// resizes it, as a window's do (L70): on a thread the conversation takes
+/// resizes it, as a window's do: on a thread the conversation takes
 /// the height, on a new message the field does, and a notch stays on the
-/// bottom edge. On a thread the header drags it, and the thread keeps
-/// where it was left (D 2.8, D 2.10; `ThreadPopover`).
+/// bottom edge. On a thread the header drags it, and `ThreadPopover`
+/// keeps its size and position between openings.
 ///
-/// Return and Queue queue the words, or answer an open question at once
-/// (L14), and the popover stays on its thread; the × and Escape drop them.
+/// Return and Queue queue the words, or answer an open question at once.
+/// The popover stays on its thread; the × and Escape drop the words.
 /// A click outside and a change of the moment close it through
 /// `WindowModel.closePopover`, which owns the rules.
 struct CommentPopover: View {
@@ -24,10 +24,10 @@ struct CommentPopover: View {
     /// Where the notch points, from the box's leading edge; nil for a box
     /// beside a region.
     let notch: CGFloat?
-    /// The thread it writes to, whose conversation shows above the field
-    /// (D 2.7, D 2.9); nil for a popover that starts a thread.
+    /// The thread it writes to, whose conversation shows above the field.
+    /// Nil for a popover that starts a thread.
     var thread: ReviewThread? = nil
-    /// The size the person gave the box, without its notch (D 2.8); nil
+    /// The size the person gave the box, without its notch; nil
     /// for its own size.
     var size: CGSize? = nil
     /// A drag on the header: its translation, and whether it ended. Nil
@@ -39,8 +39,7 @@ struct CommentPopover: View {
 
     static let width: CGFloat = 340
     static let notchHeight: CGFloat = 7
-    /// The space inside the box's edge, kept small around a small field
-    /// (D 1.8).
+    /// The space inside the box's edge, kept small around a small field.
     static let padding: CGFloat = 8
     /// A new message's field: its height at the popover's own size, which
     /// opens the popover at its minimum size, and the least it takes in a
@@ -50,7 +49,7 @@ struct CommentPopover: View {
     /// A thread's field, whatever the popover's size: the conversation
     /// takes the height.
     static let threadFieldHeight: CGFloat = 58
-    /// The size rules of a popover for a new message (L70): the header, a
+    /// The size rules of a popover for a new message: the header, a
     /// roomy field and the band with its split button always show.
     static let rules = ResizeRules(minimum: CGSize(width: 340, height: 170), maximum: CGSize(width: 560, height: 320))
     /// The closest the notch comes to a side: past the rounded corner.
@@ -65,7 +64,7 @@ struct CommentPopover: View {
         return size == nil ? (Self.fieldHeight, Self.fieldHeight) : (Self.minimumFieldHeight, .infinity)
     }
 
-    /// Whether the field answers the agent's open question (L14).
+    /// Whether the field answers the agent's open question.
     private var answers: Bool { thread?.openQuestion != nil }
 
     var body: some View {
@@ -147,7 +146,7 @@ struct CommentPopover: View {
                 Text("·")
                     .foregroundStyle(palette[.textTertiary])
             }
-            // As the bar shows the time: whole seconds (D 1.7).
+            // As the bar shows the time: whole seconds.
             Text(TimeCode.text(draft.time.rounded(.down)))
                 .monospacedDigit()
                 .foregroundStyle(palette[.textSecondary])
@@ -259,7 +258,7 @@ private struct KeyHints: View {
 }
 
 /// A key and what it does: the key a step darker than its word, both
-/// small, so the hints are there to be found, not read (D 1.7).
+/// small, so the hints are there to be found, not read.
 private struct KeyHint: View {
     let key: String
     let does: String
@@ -288,7 +287,7 @@ private struct FooterBand: View {
 }
 
 /// The popover's edges and corners: eight bands on its outline, centred
-/// on it, that resize it as a window's do (L70). Each shows the resize
+/// on it, that resize it as a window's do. Each shows the resize
 /// pointer of its edge or corner, with the ways `rules` lets it still go;
 /// a drag on an edge moves that edge, and a drag on a corner its two
 /// edges. They lie clear of the header, the field and the band.

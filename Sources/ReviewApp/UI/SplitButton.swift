@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// One joined split control at the small size, on the theme's `accentFill`
-/// with white text, the pair `filledButton` uses (ADR 0006): the main part
-/// runs `action`, the chevron opens `menu` (L69). Drawn by hand because a
+/// with white text, the pair `filledButton` uses: the main part
+/// runs `action`, the chevron opens `menu`. Drawn by hand because a
 /// `Menu` with a primary action ignores the prominent fill and draws grey,
 /// even in the key window.
 struct SplitButton<MenuContent: View>: View {

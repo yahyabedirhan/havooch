@@ -5,8 +5,8 @@ import SwiftUI
 /// The stage: the video on its black letterbox, the layer that takes the
 /// mouse and shows regions, the popover over it while a message is written
 /// or a thread is open, the threads on the frame, and the notices of what
-/// the agent says. A click on the frame points and never plays (L67); a
-/// drag draws a region. While the window compares two versions (E11),
+/// the agent says. A click on the frame points and never plays; a
+/// drag draws a region. While the window compares two versions,
 /// the two pictures in their layout (`CompareStage`).
 struct StageView: View {
     let model: WindowModel
@@ -28,7 +28,7 @@ struct StageView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
-        // The tour's write step rings the frame (H4); the ring stands in the gutter.
+        // The tour's write step rings the frame; the ring stands in the gutter.
         .coachRing(model.tourRings(.stage), radius: Metrics.stageCorner)
         // Where a click is on the stage, which closes the popover by its own
         // gestures; a click anywhere else is outside it (`OutsideClicks`).
@@ -92,7 +92,7 @@ struct StagePopoverLayer: View {
     @State private var drag: (thread: ThreadID?, drag: ThreadPopover.Drag)?
     /// The box the person resized a new message's popover to, on the
     /// stage, and the draft's moment and region it holds for. No thread
-    /// keeps it yet (L30), so it goes when the popover closes.
+    /// keeps it yet, so it goes when the popover closes.
     @State private var sized: (time: Double, region: Region?, box: CGRect)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -193,7 +193,7 @@ struct StagePopoverLayer: View {
     }
 
     /// A new message's box for the resize `drag` on a stage `stage` in
-    /// size, by `CommentPopover.rules` (L70). On a moment, at `playhead`,
+    /// size, by `CommentPopover.rules`. On a moment, at `playhead`,
     /// the box stays above the notch's room at the stage's foot, and its
     /// sides never pass the notch, which stays on the bottom edge.
     private static func newMessageBox(_ drag: ThreadPopover.Drag, playhead: CGFloat?, stage: CGSize) -> CGRect {

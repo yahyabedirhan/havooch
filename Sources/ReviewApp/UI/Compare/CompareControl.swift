@@ -1,7 +1,7 @@
 import ReviewWire
 import SwiftUI
 
-/// The header's Compare button (E11, compare-control V4 "Live search
+/// The header's Compare button (compare-control V4 "Live search
 /// picker"): it opens the compare popover, a two-pane mini window of what
 /// the screen will show. Shown in a project of two versions or more.
 struct CompareButton: View {

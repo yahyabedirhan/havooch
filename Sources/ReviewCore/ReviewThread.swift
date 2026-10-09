@@ -16,7 +16,7 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
     public internal(set) var popoverFrame: PopoverFrame?
     /// When the person last opened the thread's view; nil until they do.
     public internal(set) var lastSeen: Date?
-    /// The version of a project the thread was raised on (ADR 0004); nil
+    /// The version of a project the thread was raised on; nil
     /// on a plain video, and for General, which is the whole project's.
     public internal(set) var anchor: VersionAnchor?
 

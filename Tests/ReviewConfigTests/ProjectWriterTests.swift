@@ -2,7 +2,7 @@ import Foundation
 @testable import ReviewConfig
 import Testing
 
-/// The two project writes of `config.toml` (ADR 0002, ADR 0004): append a
+/// The two project writes of `config.toml`: append a
 /// `[[projects]]` table, and append a version to one project. Each keeps
 /// every other line and comment, and is refused unless the file reads back
 /// with only its change.

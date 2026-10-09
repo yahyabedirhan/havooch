@@ -105,7 +105,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch reply <thread> <text>`: the listener's message on a
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)
-    /// `havooch ask <thread> <question> [--choice <text>]...
+    /// `havooch ask <thread> <question> [--choice <text>]..
     /// [--wait <seconds>]`: the listener's question on a thread, with the
     /// quick replies the person may answer with in one click. The app holds
     /// the request until the person answers, up to `waitSeconds`, or with
@@ -164,7 +164,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch setup link [--dry-run]`: the `havooch` command linked in
     /// `~/.local/bin`, as Link does. With `dryRun`, only what it would do.
     case setupLink(dryRun: Bool = false)
-    /// `havooch setup install [--harness <name>]... [--dry-run]`: the
+    /// `havooch setup install [--harness <name>].. [--dry-run]`: the
     /// `havooch-mate` skill installed globally with `npx skills add`, for
     /// the `harnesses` named, or for every harness found without it when
     /// none is, as Run Command does. It starts the install and answers; `setup
@@ -231,7 +231,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch project new <slug> --from <path> [--title <title>]`: a
     /// project in `config.toml` whose v1 is the video at the absolute
     /// `path`; the video's review moves into it, and its listener keeps
-    /// listening (ADR 0004). No lease: the agent makes it on the person's
+    /// listening. No lease: the agent makes it on the person's
     /// behalf.
     case projectNew(slug: String, path: String, title: String? = nil)
     /// `havooch project add <slug> <path> [--label <label>]`: the video at
@@ -240,7 +240,7 @@ public enum ControlRequest: Equatable, Sendable {
     case projectAdd(slug: String, path: String, label: String? = nil)
     /// `havooch version show <n>`: the project's version `number` (from 1)
     /// on screen in the window, as a click on its segment or its row in
-    /// the version picker does (E10). The playhead keeps its time.
+    /// the version picker does. The playhead keeps its time.
     case versionShow(number: Int)
     /// `havooch version pick [<query>]`: the version picker open under
     /// the switcher's field, with `query` typed in its search field, as a
@@ -252,7 +252,7 @@ public enum ControlRequest: Equatable, Sendable {
     case versionClose
     /// `havooch compare open`: the compare popover open under the Compare
     /// button, on the previous version and the one on screen, as a click
-    /// on the button opens it (E11).
+    /// on the button opens it.
     case compareOpen
     /// `havooch compare pick <side> [<query>]`: the version picker of one
     /// side open in the popover, with `query` typed in its search field,

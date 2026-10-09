@@ -4,7 +4,7 @@ import SwiftUI
 /// The brief notices in the stage's top-right corner: what the agent just
 /// said, under a line that names the thread (`#3 · Claude Code`). Every
 /// notice fades by itself after a few seconds, a question too: the question
-/// stays open on its thread, where the person answers it (L28). A click
+/// stays open on its thread, where the person answers it. A click
 /// opens the thread it's on.
 struct Notices: View {
     let model: WindowModel

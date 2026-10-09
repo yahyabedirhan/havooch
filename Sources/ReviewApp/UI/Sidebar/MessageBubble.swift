@@ -2,7 +2,7 @@ import AppKit
 import ReviewCore
 import SwiftUI
 
-/// Who wrote a message, as the conversation shows it (L40): "You", or the
+/// Who wrote a message, as the conversation shows it: "You", or the
 /// agent's name with its harness for the logo. An agent's message keeps the
 /// name of the listener session that wrote it; one kept before names were
 /// takes `listener`, the name of the session listening now.
@@ -80,7 +80,7 @@ enum MessageAction: CaseIterable, Identifiable {
     }
 }
 
-/// One message of a thread as a chat (L40, from variant 02 of the
+/// One message of a thread as a chat (from variant 02 of the
 /// prototype). The person's messages are trailing, in `bubblePerson` with a
 /// tail, and a quiet line under the bubble holds the state, the region tag
 /// and the time; a queued one has a dashed outline, Edit and Delete on

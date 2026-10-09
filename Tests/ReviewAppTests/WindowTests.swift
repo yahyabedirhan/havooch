@@ -5,7 +5,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// Any number of windows, each with one video or none (ADR 0003): which
+/// Any number of windows, each with one video or none: which
 /// window an open goes to, what each window keeps of its own, and the
 /// window commands. The app model and its control server, with no scene
 /// and no socket: a window made here has no AppKit window.

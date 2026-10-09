@@ -1,12 +1,12 @@
 import Foundation
 import ReviewCore
 
-/// A project's thread list by version (decision E9, thread-list V5):
+/// A project's thread list by version (thread-list V5):
 /// General first, then the last three versions as sections, newest first;
 /// an older version on screen, and the versions the person picked from
 /// "All versions", each under them; and a section for threads whose
 /// version left the list. A version with no section is older: its open
-/// threads show in the list's footer, so none hides (E6). A plain video's
+/// threads show in the list's footer, so none hides. A plain video's
 /// list is by group (`ThreadGroup`) instead.
 nonisolated struct VersionTree: Equatable, Sendable {
     /// How many of the newest versions show as sections.
@@ -135,7 +135,7 @@ nonisolated struct VersionTree: Equatable, Sendable {
     }
 }
 
-/// "All versions", the menu over a project's thread list (E9): a search
+/// "All versions", the menu over a project's thread list: a search
 /// field, then the versions in the list, the older versions with open
 /// threads, and every older version, each newest first.
 nonisolated struct AllVersionsMenu: Equatable, Sendable {

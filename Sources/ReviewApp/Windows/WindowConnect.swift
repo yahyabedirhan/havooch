@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 import ReviewSetup
 
-/// The Connect view in a window's sidebar (G1): what opened it, and the
+/// The Connect view in a window's sidebar: what opened it, and the
 /// sends it waits to see delivered.
 struct ConnectEntry: Equatable {
     /// What opened the view: the "No agent" pill, the header's connect
@@ -17,7 +17,7 @@ struct ConnectEntry: Equatable {
     var waiting: [SendRef] = []
 }
 
-/// The banner at the top of the Connect view after Send with no agent (G8).
+/// The banner at the top of the Connect view after Send with no agent.
 nonisolated enum OutboxBanner: Equatable {
     /// The sends wait in the outbox: `messages` messages in all.
     case waiting(messages: Int)
@@ -39,7 +39,7 @@ nonisolated enum OutboxBanner: Equatable {
 }
 
 /// What the Connect view can say of the picked harness, from what Havooch
-/// detects (ADR 0005). Nothing here is an error: the prompt stays primary.
+/// detects. Nothing here is an error: the prompt stays primary.
 enum Readiness: String, Equatable {
     /// The skill is in the harness's user skills folder.
     case ready
@@ -82,7 +82,7 @@ extension WindowModel {
     }
 
     /// A send was made with no agent there: it waits in the outbox, and
-    /// the Connect view opens to say so (G8).
+    /// the Connect view opens to say so.
     func sentWithNoAgent(_ ref: SendRef) {
         var entry = connect ?? ConnectEntry(reason: .send)
         entry.reason = .send
@@ -147,7 +147,7 @@ extension WindowModel {
         app.setup.readiness(of: harness)
     }
 
-    /// What the copied prompt names (ADR 0003): the window's project as
+    /// What the copied prompt names: the window's project as
     /// `project <slug>`, else its video's file name; nil with no video.
     var promptTarget: PromptTarget? {
         guard let video else { return nil }
@@ -218,7 +218,7 @@ extension WindowModel {
     }
 
     /// Whether the connect button shows its dot: setup isn't fully
-    /// detected, and no agent has ever connected (L57).
+    /// detected, and no agent has ever connected.
     var showsConnectDot: Bool {
         app.showsConnectDot
     }
@@ -261,7 +261,7 @@ extension WindowModel: SetupSteering {
 
 extension AppModel {
     /// Whether the connect button shows its dot: setup isn't fully
-    /// detected, and no agent has ever connected (L57, ADR 0005).
+    /// detected, and no agent has ever connected.
     var showsConnectDot: Bool {
         !setup.isDetected && !agentConnectedOnce
     }

@@ -5,7 +5,7 @@ import ReviewWire
 import Testing
 
 /// The comment popover's close rules through the app's model, on the
-/// fixture video (D 1.4, D 2.2, D 2.3): a click outside queues, the × and
+/// fixture video: a click outside queues, the × and
 /// Escape discard, an empty popover only closes, and a change of the moment
 /// queues the words at the popover's own frame and region.
 @Suite("The comment popover closes by its rules", .serialized)

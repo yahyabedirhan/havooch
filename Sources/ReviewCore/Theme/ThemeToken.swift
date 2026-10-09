@@ -49,7 +49,7 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     /// The fill of a filled control (Send, Open a Video…, Save), with white
     /// text on it at `ThemeColor.filledTextContrast` or more. A theme that
     /// sets its own `accent` but no `accentFill` gets one made from that
-    /// accent (`ThemeColor.filled()`).
+    /// accent (`ThemeColor.filled`).
     case accentFill
     /// The agent-control icon while an agent holds the lease.
     case control

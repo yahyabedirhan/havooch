@@ -5,21 +5,21 @@ import Foundation
 ///
 ///     { "agentConnectedOnce": true, "firstRunDone": true, "sidebarWidth": 360, "unmuteVolume": 0.7, "volume": 0 }
 ///
-/// Not settings a person sets on purpose: those are in `config.toml`
-/// (ADR 0002). Builds before it kept the pinned theme and token overrides
+/// These are not settings a person sets on purpose. Those are in
+/// `config.toml`. Earlier builds kept the pinned theme and token overrides
 /// here too; `Former` reads them once, for the move into `config.toml`, and
 /// the next save leaves them out.
 public struct Settings: Codable, Equatable, Sendable {
     public var sidebarWidth: Double?
     /// Whether an agent's `wait` ever opened on this data: the connect
-    /// button's dot leaves for good once one has (L57).
+    /// button's dot leaves for good once one has.
     public var agentConnectedOnce: Bool?
     /// Whether the person used the app on this data: Get Started or a
     /// later step, Skip Setup, a video opened or an agent connected. Until
-    /// then the first-run window shows by itself at each launch (L65).
+    /// then the first-run window shows by itself at each launch.
     public var firstRunDone: Bool?
-    /// The sound's level, 0 to 1, the same in every window; 0 is muted
-    ///. Missing is full volume.
+    /// The sound's level from 0 to 1, the same in every window. Zero is
+    /// muted. Missing is full volume.
     public var volume: Double?
     /// The level unmute brings back: the last one above 0.
     public var unmuteVolume: Double?

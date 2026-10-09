@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where the settings file and the person's themes are (ADR 0002): the one
+/// Where the settings file and the person's themes are: the one
 /// definition, so the `havooch` command and the app can't disagree.
 ///
 ///     <folder>/config.toml          the settings: the theme, the projects

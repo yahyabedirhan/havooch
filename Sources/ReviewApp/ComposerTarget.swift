@@ -1,7 +1,7 @@
 import ReviewCore
 import ReviewWire
 
-/// Where the words of the composer at the foot of the sidebar go (L41).
+/// Where the words of the composer at the foot of the sidebar go.
 /// In a thread view: a follow-up on the thread shown, or the answer to its
 /// open question. In the thread list: the thread of the frame on the stage,
 /// a new thread on that frame, or General with the General toggle on.
@@ -13,7 +13,7 @@ struct ComposerTarget: Equatable {
         case reply
         /// From a thread view, on the thread shown.
         case followUp
-        /// The answer to the thread's open question: it goes at once (D 2.16).
+        /// The answer to the thread's open question: it goes at once.
         case answer
 
         /// The kind as `state` names it.

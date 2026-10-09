@@ -23,7 +23,7 @@ struct RootView: View {
                 case .player:
                     VStack(spacing: 0) {
                         StageView(model: model)
-                            // The setup tour's panel over the foot of the stage (H4).
+                            // The setup tour's panel over the foot of the stage.
                             .overlay(alignment: .bottomLeading) {
                                 if model.tour.isOpen {
                                     TourPanel(model: model)
@@ -154,7 +154,7 @@ struct SidebarColumn: View {
             SidebarView(model: model)
                 .frame(maxHeight: .infinity)
             // One dock for the list, the thread view and the Connect view
-            // alike (L41, L68): the composer, the presence pill and Send.
+            // alike: the composer, the presence pill and Send.
             Composer(model: model)
         }
         .frame(width: width)
@@ -166,7 +166,7 @@ struct SidebarColumn: View {
     private var width: CGFloat { dragged ?? model.sidebarWidth }
 
     /// A thin strip on the leading edge that drags the width. The width is
-    /// kept in the settings when the drag ends (D 5.10).
+    /// kept in the settings when the drag ends.
     private var resizeHandle: some View {
         Color.clear
             .frame(width: 6)

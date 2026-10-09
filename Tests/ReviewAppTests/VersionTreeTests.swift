@@ -3,7 +3,7 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// A project's thread list by version (decision E9, thread-list V5), as a
+/// A project's thread list by version (thread-list V5), as a
 /// pure value: General, then the last three versions newest first, the
 /// one on screen and the versions picked from "All versions"; the
 /// versions with no section and their open threads; and the menu of

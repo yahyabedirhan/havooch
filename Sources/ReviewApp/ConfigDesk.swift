@@ -4,7 +4,7 @@ import ReviewConfig
 import ReviewCore
 import ReviewStore
 
-/// `config.toml` as the app runs it (ADR 0002): the last valid settings,
+/// `config.toml` as the app runs it: the last valid settings,
 /// the verdict of the last reload, and the targeted writes. It watches the
 /// file and applies each valid save at once; a save with a problem keeps
 /// the last valid settings. After every reload it writes the verdict to
@@ -13,7 +13,7 @@ import ReviewStore
 /// On its first run on a support folder it moves what older builds kept
 /// there: the pinned theme of `settings.json` into the file, the person's
 /// themes into `themes/` beside it. Token overrides are dropped, with a
-/// note (decision L53).
+/// note.
 ///
 /// What the person needs to know shows as a notice in the window, which
 /// never blocks: what the move did, and a new set of problems. Its close

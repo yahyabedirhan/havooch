@@ -1,6 +1,6 @@
 import Foundation
 
-/// One `[[projects]]` table of `config.toml` (ADR 0004): the versions of one
+/// One `[[projects]]` table of `config.toml`: the versions of one
 /// video, in order. Version number = position + 1. The videos stay where
 /// they are; a version is a path and an optional label.
 public struct ProjectEntry: Equatable, Sendable {

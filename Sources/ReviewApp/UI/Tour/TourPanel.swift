@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The setup tour's coach panel (H4), over the foot of the stage: first-run
+/// The setup tour's coach panel, over the foot of the stage: first-run
 /// V3's coach panel as connect-flow V6 draws it
 /// (`docs/prototypes/2026-10-08-lab/agent-onboarding/`). Its dots and "Step
 /// N of 5", the step's title and words, and its buttons: Skip Tour, Next or

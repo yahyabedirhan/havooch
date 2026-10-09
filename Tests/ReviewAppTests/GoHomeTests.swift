@@ -5,7 +5,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// Going home from the player: `WindowModel.goHome()`, which the Havooch mark
+/// Going home from the player: `WindowModel.goHome`, which the Havooch mark
 /// in the header, File > Close Video and `app home` call, and `app demo`,
 /// which runs "Try the Demo". One model on a temporary support folder, with
 /// the server in front of it. No window: the header and the menu are
