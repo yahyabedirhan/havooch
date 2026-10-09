@@ -6,7 +6,7 @@ Read it before adding or moving a module. When the code and this document disagr
 
 NOTE: Domain words follow `GLOSSARY.md`. A **message** is what the person or the agent writes, a **thread** holds the messages about one keyframe, a **send** is what Cmd+Enter delivers, and a **review** is everything kept for one plain video or one project. "Comment" survives only as the CLI's `comment` commands and the UI's Comment button.
 
-The decisions this design takes are numbered L1, L2… in [Decisions](#6-decisions). The numbers stay fixed, since code comments cite them; a number that is missing was replaced by a later decision. Other short references cite the decisions in `docs/prototypes/`: `D 2.10` and `D A.5` (with a space) are `2026-10-05-decisions.md`, and `C1`, `E6`, `G6` and the like are `2026-10-08-decisions.md`.
+The decisions this design takes are numbered L1, L2… in [Decisions](#6-decisions). The numbers stay fixed so references within this document remain stable; a number that is missing was replaced by a later decision. Other short references cite the decisions in `docs/prototypes/`: `D 2.10` and `D A.5` (with a space) are `2026-10-05-decisions.md`, and `C1`, `E6`, `G6` and the like are `2026-10-08-decisions.md`. Code comments describe behavior in words and do not cite decision numbers.
 
 ## For a newcomer, in one screen
 

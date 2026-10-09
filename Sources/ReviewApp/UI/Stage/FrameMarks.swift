@@ -2,10 +2,10 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The threads on the frame on screen (D 2.6): each one's region outlines,
+/// The threads on the frame on screen: each one's region outlines,
 /// and one number badge per thread at its first region's top-left corner,
 /// or the picture's top-left corner for a thread on the whole frame. A
-/// click on a badge opens its thread popover. Nothing opens by itself (D 2.11).
+/// click on a badge opens its thread popover. Nothing opens by itself.
 struct FrameMarks: View {
     let model: WindowModel
     let geometry: VideoFrameGeometry

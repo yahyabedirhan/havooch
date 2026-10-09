@@ -1,16 +1,16 @@
 import ReviewCore
 import SwiftUI
 
-// A project's thread list by version (decision E9), built from Swift Lab's
+// A project's thread list by version, built from Swift Lab's
 // `project-versions` session, component `thread-list`, variant V5 "Final:
 // Jump menu" (`docs/prototypes/2026-10-08-lab/project-versions/thread-list-V5/`).
 
-/// A project's thread list (E9): the bar with what it shows and "All
+/// A project's thread list: the bar with what it shows and "All
 /// versions", General, then a section per version of `VersionTree` under
 /// a header that stays at the top while the list scrolls, and a footer
 /// with the older versions and a way to each open thread on them. Every
 /// row is today's row, with its state chip, and works as it does on any
-/// version (E6).
+/// version.
 struct VersionList: View {
     let model: WindowModel
     let tree: VersionTree

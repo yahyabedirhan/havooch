@@ -3,7 +3,7 @@ import ReviewCore
 import ReviewStore
 import Testing
 
-/// A project's review on disk (ADR 0004): `project new` moves a plain
+/// A project's review on disk: `project new` moves a plain
 /// video's review, keyframes and crops to `projects/<slug>/`, its ids
 /// still finding it; a new library reads both kinds of review; and when
 /// each project was last opened is app state in `recents.json`.

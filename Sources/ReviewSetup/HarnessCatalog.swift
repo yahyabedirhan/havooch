@@ -12,7 +12,7 @@ public struct Harness: Hashable, Sendable {
     public var name: String
     /// The user skills folders the harness reads, the global install's
     /// first. Only these are looked in: a skill installed in a repository
-    /// can't be seen (ADR 0005).
+    /// can't be seen.
     public var skillsFolders: [String]
     /// Where the harness's app or command usually is. Any one of them
     /// existing is a best guess that the harness is installed.
@@ -33,7 +33,7 @@ public struct Harness: Hashable, Sendable {
     }
 
     /// The prompt the person pastes into the harness to make its agent
-    /// listen to `target`. It assumes the skill is there (G10).
+    /// listen to `target`. It assumes the skill is there.
     public func prompt(for target: PromptTarget) -> String {
         let request = "listen for my feedback on \(target.words)"
         switch promptForm {
@@ -42,7 +42,7 @@ public struct Harness: Hashable, Sendable {
         }
     }
 
-    /// The first-run window's prompt (H2): the person's own agent opens
+    /// The first-run window's prompt: the person's own agent opens
     /// the demo video bundled in the app and listens to it. It assumes the
     /// skill is there, as `prompt(for:)` does.
     public var demoPrompt: String {
@@ -69,7 +69,7 @@ public enum PromptTarget: Hashable, Sendable {
 }
 
 /// The harnesses Havooch knows how to set up, in the order the person
-/// sees them. The folders, names and prompt forms come from ADR 0005 and
+/// sees them. The folders, names and prompt forms come from  and
 /// the target design's catalog; Cursor's prompt form is unverified until its
 /// live QA.
 public enum HarnessCatalog {

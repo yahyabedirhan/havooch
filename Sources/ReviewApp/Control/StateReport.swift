@@ -160,7 +160,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The project a window holds (ADR 0004): its slug and title, the
+    /// The project a window holds: its slug and title, the
     /// version on screen, and every version in order.
     struct Project: Encodable, Equatable {
         var slug: String
@@ -169,10 +169,10 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// left the list.
         var version: Int?
         var versions: [Version]
-        /// The header's version switcher (E10), in a window's `state`;
+        /// The header's version switcher, in a window's `state`;
         /// left out elsewhere, such as in `project new`'s answer.
         var switcher: Switcher?
-        /// The comparison (E11), in a window's `state`, where it is `null`
+        /// The comparison, in a window's `state`, where it is `null`
         /// while Compare is closed; left out with the switcher elsewhere.
         var compare: Compare?
 
@@ -205,8 +205,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The comparison of two versions in a project's window (E11,
-    /// compare-control V4): the popover's choice while it is open, or what
+    /// The comparison of two versions in a project's window (    /// compare-control V4): the popover's choice while it is open, or what
     /// the window compares.
     struct Compare: Encodable, Equatable {
         /// `choosing` while the popover is open, `comparing` once the window
@@ -221,7 +220,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         var showing: String?
         /// How much of the picture's width shows the left side in Slider.
         var slider: Double
-        /// While comparing, the side new messages go to (L63); `null` in the
+        /// While comparing, the side new messages go to; `null` in the
         /// popover.
         var active: String?
         /// A side's version picker open in the popover; `null` while none is.
@@ -283,7 +282,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The version switcher of a project's window (E10, version-switcher
+    /// The version switcher of a project's window (version-switcher
     /// V5): the versions shown as segments, the one on screen, the field
     /// for the older ones and the picker it opens.
     struct Switcher: Encodable, Equatable {
@@ -672,14 +671,14 @@ nonisolated struct StateReport: Encodable, Equatable {
         var thread: String?
         /// The sidebar's width in points, as it is kept in the settings.
         var width: Double
-        /// The composer at the sidebar's foot (L41); `null` with no video.
+        /// The composer at the sidebar's foot; `null` with no video.
         var composer: Composer? = nil
         /// What the sidebar shows: `threads` (the thread list), `thread`
-        /// (a thread's view) or `connect` (the Connect view, G1).
+        /// (a thread's view) or `connect` (the Connect view).
         var mode = "threads"
         /// The Connect view; `null` while it doesn't show.
         var connect: Connect? = nil
-        /// A project's thread list by version (E9); `null` on a plain
+        /// A project's thread list by version; `null` on a plain
         /// video, whose list is by group.
         var versions: Versions? = nil
 
@@ -753,11 +752,11 @@ nonisolated struct StateReport: Encodable, Equatable {
             /// `pill`, `header` (the connect button and `connect show`) or
             /// `send` (Send with no agent there).
             var reason: String
-            /// `none`, `connected` or `reconnecting` (G6).
+            /// `none`, `connected` or `reconnecting`.
             var phase: String
             /// The picked harness's install name: `claude-code`.
             var harness: String
-            /// `ready`, `skillNotDetected` or `harnessNotDetected` (ADR 0005).
+            /// `ready`, `skillNotDetected` or `harnessNotDetected`.
             var readiness: String
             /// The prompt to paste in the picked harness.
             var prompt: String?
@@ -797,7 +796,7 @@ nonisolated struct StateReport: Encodable, Equatable {
             }
 
             /// The listener card: the agent, where it runs, since when, and
-            /// the prompt to listen again later (G7).
+            /// the prompt to listen again later.
             struct Card: Encodable, Equatable {
                 var agent: String
                 /// A Herdr pane, else its working folder: what Copy Path copies.
@@ -901,8 +900,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The setup tour over the stage, and "Finish setup" in the header (H4,
-    /// L58).
+    /// The setup tour over the stage, and "Finish setup" in the header.
     struct Tour: Encodable, Equatable {
         /// Whether the tour's panel shows.
         var open: Bool

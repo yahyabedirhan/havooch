@@ -8,7 +8,7 @@ import ReviewStore
 import Synchronization
 import Testing
 
-/// A temporary folder, removed with `cleanUp()`.
+/// A temporary folder, removed with `cleanUp`.
 struct Scratch {
     let folder = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)

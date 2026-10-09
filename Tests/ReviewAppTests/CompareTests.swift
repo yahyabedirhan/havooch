@@ -6,7 +6,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The comparison's rules (E11, compare-control V4), pure: it opens on
+/// The comparison's rules (compare-control V4), pure: it opens on
 /// the previous version and the one on screen, a side given the other
 /// side's version swaps them, and the slider stays inside the picture.
 @Suite("The compare session")
@@ -71,7 +71,7 @@ struct CompareSessionTests {
     }
 }
 
-/// Compare in a window (E11, L63), through the app model and its
+/// Compare in a window, through the app model and its
 /// control server with no scene and no socket: the popover's choice, two
 /// players on one playhead, messages on the side the person picks, and
 /// back to one version.

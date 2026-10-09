@@ -14,7 +14,7 @@ extension StateReport {
         /// The system appearance: `light` or `dark`.
         var appearance: String
         /// The fill of filled controls as `#rrggbb`, which white text reads
-        /// on (ADR 0006); `null` only without the built-in themes.
+        /// on; `null` only without the built-in themes.
         var accentFill: String? = nil
 
         func encode(to encoder: any Encoder) throws {

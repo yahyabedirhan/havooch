@@ -2,7 +2,7 @@ import AppKit
 import ReviewCore
 import SwiftUI
 
-/// The dock at the sidebar's foot (L41, L68): the one composer and the
+/// The dock at the sidebar's foot: the one composer and the
 /// one Send, in the thread list and in a thread view alike.
 ///
 /// Above the card, where the words go: in the thread list one switch,
@@ -69,7 +69,7 @@ struct Composer: View {
             .clipShape(Self.shape)
             .overlay { Self.shape.strokeBorder(border, lineWidth: 1) }
             .animation(.smooth(duration: 0.15), value: focused)
-            // The tour's write step rings the dock (H4).
+            // The tour's write step rings the dock.
             .coachRing(model.tourRings(.composer), radius: Self.corner)
         }
         .padding(.horizontal, 10)
@@ -255,9 +255,8 @@ private struct RegionChip: View {
 /// what it does now (its newest activity) on the left; on the right the
 /// queued count while an answer takes Send's place, and the dock's one
 /// split button. A click on the presence pill opens the Connect view, and
-/// goes back when it shows (G1). Sending is safe either way: with no agent
-/// the send waits for the next one, and the Connect view opens to say so
-/// (G8).
+/// goes back when it shows. Sending is safe either way: with no agent
+/// the send waits for the next one, and the Connect view opens to say so.
 private struct DockBand: View {
     let model: WindowModel
     /// The field's words answer an open question.

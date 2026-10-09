@@ -6,7 +6,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The composer at the sidebar's foot (L41), through the app's model on the
+/// The composer at the sidebar's foot, through the app's model on the
 /// fixture video: where its words go in the thread list and in a thread
 /// view, the answer path, the drafts per thread, the region chip and the
 /// General toggle, and `comment compose`.

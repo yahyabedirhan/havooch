@@ -1,6 +1,6 @@
 import ReviewWire
 
-/// A comparison of two versions of a project (E11, compare-control V4),
+/// A comparison of two versions of a project (compare-control V4),
 /// as words and numbers: which version is on each side, the layout, the
 /// side Flip shows, the slider's place and the side picker open in the
 /// popover. Pure, so the rules are tested without a window or a player:

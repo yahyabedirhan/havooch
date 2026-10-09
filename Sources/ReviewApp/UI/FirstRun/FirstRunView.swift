@@ -2,13 +2,13 @@ import ReviewCore
 import ReviewSetup
 import SwiftUI
 
-/// The first-run window's content (H1), from first-run V1 "Step wizard
+/// The first-run window's content, from first-run V1 "Step wizard
 /// (first launch)" (`docs/prototypes/2026-10-08-lab/agent-onboarding/
 /// first-run-V1/`): a progress bar of four steps, Welcome, Tools, Connect
 /// and Try it, then Skip Setup, Back and the next step in a footer. Tools
 /// and Connect show the Connect view's own steps (`CommandLineStep`,
 /// `SkillStep`, `HarnessPicker`, `HarnessReadiness`) on the first run's
-/// model, whose prompt is the demo prompt (H2). Nothing waits on the
+/// model, whose prompt is the demo prompt. Nothing waits on the
 /// person: each step can be passed with nothing done.
 struct FirstRunView: View {
     let app: AppModel
@@ -331,8 +331,8 @@ private struct FirstRunTools: View {
 // MARK: - Connect
 
 /// The harness picker and what Havooch detects of the picked one, from the
-/// Connect view's step 3, with the demo prompt to paste (H2), and whether
-/// an agent listens. There is no "waiting for you" state (G6).
+/// Connect view's step 3, with the demo prompt to paste, and whether
+/// an agent listens. There is no "waiting for you" state.
 private struct FirstRunConnect: View {
     let firstRun: FirstRun
     let agentConnected: Bool

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The tour's pulsing ring around the part of the window a step is about
-/// (H4), from connect-flow V6. `radius` is the marked part's corner radius;
+/// The tour's pulsing ring around the part of the window a step describes.
+/// `radius` is the marked part's corner radius;
 /// the ring stands `padding` points outside it, its radius grown by the
 /// same amount, so it never touches the content.
 struct CoachRing: ViewModifier {

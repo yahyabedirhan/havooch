@@ -24,7 +24,7 @@ public struct VideoInfo: Codable, Equatable, Sendable {
     }
 }
 
-/// Everything kept about one review (ADR 0004): a plain video's, or a
+/// Everything kept about one review: a plain video's, or a
 /// project's, whose threads belong to the project and are each anchored
 /// to the version they were raised on. Every rule about its threads,
 /// messages and sends is here. The review makes every id from its own
@@ -41,7 +41,7 @@ public struct Review: Codable, Equatable, Sendable {
     public private(set) var versions: [VideoInfo]
     /// The id prefix every id of the review carries. Fixed when the review
     /// is made and never changed, so ids stay valid when a plain video's
-    /// review becomes a project's (L59).
+    /// review becomes a project's.
     public let hash8: String
     /// The person's context note for the agent, added to the sidecar's
     /// text; empty for none.
@@ -120,8 +120,8 @@ public struct Review: Codable, Equatable, Sendable {
 
     // MARK: - Projects
 
-    /// The review as the project `slug`'s (`project new --from`, decision
-    /// E7): the same threads, messages, sends and ids, each thread on a
+    /// The review as the project `slug`'s when a plain video becomes a
+    /// project: the same threads, messages, sends and ids, each thread on a
     /// frame anchored to `anchor`, the video's path, which is v1. General
     /// stays the whole project's.
     public func adoptedIntoProject(_ slug: String, anchor: VersionAnchor) -> Review {

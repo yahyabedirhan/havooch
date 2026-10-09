@@ -2,13 +2,13 @@ import Foundation
 import ReviewConfig
 import ReviewWire
 
-/// `havooch project new | add | list` (ADR 0004, decisions E1 to E3). A
+/// `havooch project new | add | list`. A
 /// project holds the versions of one video in `config.toml`. The agent
 /// makes one the first time a send asks for a change (`new`, whose v1 is
 /// the video under review, with its threads), and appends each new render
 /// (`add`, which shows it and brings the window forward). Both go through
-/// the app, which moves the review and opens the window, with no lease
-/// (L59); the app is launched when it doesn't run. `list` reads the file
+/// the app, which moves the review and opens the window without a lease.
+/// The app launches when it isn't running. `list` reads the file
 /// itself and needs no app.
 enum ProjectCommands {
     static let commands: [Command] = [

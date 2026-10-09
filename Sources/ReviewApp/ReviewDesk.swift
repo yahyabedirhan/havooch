@@ -125,7 +125,7 @@ final class ReviewDesk {
     }
 
     /// Moves the plain video's review `old` into the project `slug`
-    /// (`project new --from`, decision E7): the same threads, messages,
+    /// (`project new --from`): the same threads, messages,
     /// sends and ids, each thread on a frame anchored to `anchor`, v1. Nil
     /// when the video has no review yet: the project starts with a new one.
     /// Refused when the review doesn't read, or can't be written; nothing

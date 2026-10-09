@@ -3,7 +3,7 @@ import Observation
 import ReviewCore
 import ReviewStore
 
-/// The listeners of one data folder (ADR 0003): one `ListenerQueue`, with
+/// The listeners of one data folder: one `ListenerQueue`, with
 /// its own outbox, per review (a plain video's or a project's), so two
 /// agents can listen to two windows at the same time. A `wait` binds to
 /// the review its caller names (the app resolves `--video` and

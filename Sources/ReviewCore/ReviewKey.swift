@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which review something belongs to (ADR 0004): a plain video's, by its
+/// Which review something belongs to: a plain video's, by its
 /// content hash, or a project's, by its slug. A listener listens to one
 /// review, and each review keeps its own outbox.
 public enum ReviewKey: Hashable, Sendable {

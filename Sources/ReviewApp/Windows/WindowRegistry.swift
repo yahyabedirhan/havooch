@@ -2,7 +2,7 @@ import AppKit
 import Observation
 import ReviewCore
 
-/// The app's windows (ADR 0003): which window holds which video, which
+/// The app's windows: which window holds which video, which
 /// one is key, and the windows made for a scene that hasn't shown yet.
 /// No two windows hold the same video: `holding` finds the one that does,
 /// so an open of it brings that window forward.

@@ -1,4 +1,4 @@
-/// A side of a comparison of two versions (E11): the left one and the
+/// A side of a comparison of two versions: the left one and the
 /// right one. The app and the command share these names.
 public enum CompareSide: String, CaseIterable, Codable, Equatable, Sendable {
     case left, right
@@ -7,7 +7,7 @@ public enum CompareSide: String, CaseIterable, Codable, Equatable, Sendable {
     public var other: CompareSide { self == .left ? .right : .left }
 }
 
-/// How two versions are compared (E11, compare-control V4): side by side,
+/// How two versions are compared (compare-control V4): side by side,
 /// flipped one over the other with a key, or wiped with a slider.
 public enum CompareLayout: String, CaseIterable, Codable, Equatable, Sendable {
     case sideBySide = "side-by-side"

@@ -6,7 +6,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// One listener per window (ADR 0003, F2, F3): each video's review has its
+/// One listener per window: each video's review has its
 /// own `ListenerQueue` and outbox, `wait --video` binds to that video's
 /// review and a bare `wait` to the key window's, the listener's other
 /// commands find their review by the id prefix, and a new agent on a

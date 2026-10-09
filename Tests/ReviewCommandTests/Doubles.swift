@@ -103,7 +103,7 @@ struct NoProcesses: ProcessTable {
     func process(_ pid: Int32) -> ProcessRecord? { nil }
 }
 
-/// A command run in a temporary support folder, removed with `cleanUp()`.
+/// A command run in a temporary support folder, removed with `cleanUp`.
 struct Run {
     let folder: URL
     let support: URL

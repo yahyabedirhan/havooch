@@ -3,7 +3,7 @@ import ReviewSetup
 
 /// Setup as `state`, `setup status`, `setup link`, `setup install` and
 /// `setup cancel` report it. Each detection is `detected`, `notDetected`
-/// or `cannotKnow`: never "missing" (ADR 0005).
+/// or `cannotKnow`: never "missing".
 extension StateReport {
     nonisolated struct Setup: Encodable, Equatable {
         var commandLine: CommandLine
@@ -15,7 +15,7 @@ extension StateReport {
         var agentConnectedOnce = false
         /// Whether setup still needs the person: the command line or the
         /// skill isn't detected, and no agent has ever connected. The
-        /// connect button shows its dot while it does (L57).
+        /// connect button shows its dot while it does.
         var needsFinishing = false
 
         /// The `havooch` command's link in `~/.local/bin`.

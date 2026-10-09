@@ -10,8 +10,8 @@ extension WindowModel {
         var region: Region?
     }
 
-    /// Why the popover closes, which decides what happens to its words
-    /// (D 1.4, D 2.3). A popover with no words only closes, whatever the
+    /// Why the popover closes, which decides what happens to its words.
+    /// A popover with no words only closes, whatever the
     /// reason, and its region goes with it.
     enum PopoverClose: Equatable {
         /// A click anywhere but the popover: the words are queued.
@@ -25,7 +25,7 @@ extension WindowModel {
     }
 
     /// One thread on the frame on screen: its region outlines and its
-    /// number badge (D 2.6).
+    /// number badge.
     struct FrameMark: Equatable {
         var thread: ThreadID
         var number: Int

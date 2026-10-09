@@ -4,7 +4,7 @@ import ReviewTranscript
 
 /// The data a run works on: a support folder and what reads and writes the
 /// reviews in it, the listeners' lines and the transcripts. `AppModel` holds
-/// one and replaces it to switch to the demo folder and back (L27). The
+/// one and replaces it to switch to the demo folder and back. The
 /// theme is a preference, not review data, so it isn't in it.
 struct DataFolder {
     /// The support folder.
