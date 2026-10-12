@@ -248,3 +248,13 @@ make install   # bundle, then replace /Applications/Havooch.app and open it
 ```
 
 `make install INSTALLED=<path>/Havooch.app` installs the build somewhere else and leaves the copy in `/Applications` alone.
+
+## The guide in two pictures
+
+![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](../assets/images/diagrams/havooch-connect.png)
+
+How the pieces in [Connect an agent](#connect-an-agent), [The `/havooch-mate` skill](#the-havooch-mate-skill) and [The `havooch` command](#the-havooch-command) fit together.
+
+![One round of the review loop: you comment and send, your agent works and answers on each thread](../assets/images/diagrams/havooch-feedback-loop.png)
+
+One round of the loop from [Comments, threads and sending](#comments-threads-and-sending), as the skill runs it.
