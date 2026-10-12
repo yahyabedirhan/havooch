@@ -87,13 +87,13 @@ When you ask for a change to the video itself, your agent turns it into a **proj
 
 ### Havooch architecture
 
-![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](assets/images/diagrams/havooch-connect.png)
+![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](assets/images/diagrams/havooch-architecture.png)
 
 Your agent reaches the app only through the `havooch` command; the skill teaches it how.
 
 ### Feedback round
 
-![One round of feedback: you comment and send, your agent works and answers on each thread](assets/images/diagrams/havooch-feedback-loop.png)
+![One round of feedback: you comment and send, your agent works and answers on each thread](assets/images/diagrams/havooch-feedback-round.png)
 
 One round of feedback, from your comment to your agent's answer.
 
