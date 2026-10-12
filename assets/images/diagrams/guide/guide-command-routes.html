@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which havooch commands need the app</title>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--color-paper:#181818;--color-ink:#d4d4d4;--color-muted:#888888;--color-accent:#f1b467;--font-sans:'Geist',system-ui,sans-serif;--font-serif:'Literata',serif;--font-mono:'Geist Mono',ui-monospace,monospace}
+body{font-family:var(--font-sans);color:var(--color-ink);background:var(--color-paper);min-height:100vh;padding:3rem 2rem;display:flex;align-items:center;justify-content:center}
+.frame{width:100%;max-width:1200px;margin:0 auto}
+.eyebrow{font-family:var(--font-mono);font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--color-muted);margin-bottom:.75rem}
+h1{font-family:var(--font-serif);font-size:2rem;line-height:1.1;font-weight:600;letter-spacing:normal;margin-bottom:1.75rem}
+.diagram-container{width:100%;overflow-x:auto}
+svg{display:block;width:100%;min-width:1080px}
+</style></head><body><main class="frame">
+<p class="eyebrow">Routes · Havooch guide</p><h1>Which havooch commands need the app</h1>
+<div class="diagram-container" role="region" aria-label="Which havooch commands need the app" tabindex="0">
+<svg viewBox="0 0 1080 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="guide-command-routes-title guide-command-routes-desc">
+<title id="guide-command-routes-title">Which havooch commands need the app</title>
+<desc id="guide-command-routes-desc">Almost every havooch command asks the running app through control.sock in its support folder. A few launch the app first when it is not running: open and project add in front, project new and app open in the background, wait keeps trying. The rest fail with: Havooch isn't running. project list, config path and config check read config.toml with no app; app status answers without it when it is not running.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888888"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f1b467"/></marker></defs>
+<rect width="100%" height="100%" fill="#181818"/>
+<rect x="24" y="232" width="208" height="104" rx="6" fill="#181818"/>
+<rect x="24" y="232" width="208" height="104" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="36" y="249" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">YOU OR YOUR AGENT</text>
+<text x="36" y="270" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">havooch command</text>
+<text x="36" y="288" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">Contents/Helpers/havooch</text>
+<rect x="312" y="40" width="300" height="112" rx="6" fill="#181818"/>
+<rect x="312" y="40" width="300" height="112" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="324" y="57" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">STARTS THE APP</text>
+<text x="324" y="78" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Launch it if needed, then ask</text>
+<text x="324" y="96" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">open, project add: in front</text>
+<text x="324" y="128" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">project new, app open: in the background</text>
+<text x="324" y="144" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">wait: keeps trying until it answers</text>
+<rect x="312" y="212" width="300" height="124" rx="6" fill="#181818"/>
+<rect x="312" y="212" width="300" height="124" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="324" y="229" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">NEEDS THE APP RUNNING</text>
+<text x="324" y="250" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Ask the running app</text>
+<text x="324" y="268" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">everything else: player, comment,</text>
+<text x="324" y="286" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">thread, send, ack, status, reply, ask,</text>
+<text x="324" y="302" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">setup, connect, version, compare, theme…</text>
+<text x="324" y="322" fill="#f1b467" font-size="10" font-family="'Geist Mono', monospace">not running: "Havooch isn't running"</text>
+<rect x="312" y="400" width="300" height="104" rx="6" fill="#181818"/>
+<rect x="312" y="400" width="300" height="104" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
+<text x="324" y="417" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">NO APP NEEDED</text>
+<text x="324" y="438" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Read the file, no app</text>
+<text x="324" y="456" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">project list · config path</text>
+<text x="324" y="476" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">config check · app status, when closed</text>
+<rect x="712" y="140" width="208" height="112" rx="6" fill="#181818"/>
+<rect x="712" y="140" width="208" height="112" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
+<text x="724" y="157" fill="#f1b467" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">APP SUPPORT/HAVOOCH</text>
+<text x="724" y="178" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Havooch app</text>
+<text x="724" y="196" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">listens on control.sock</text>
+<rect x="712" y="400" width="208" height="104" rx="6" fill="#181818"/>
+<rect x="712" y="400" width="208" height="104" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
+<text x="724" y="417" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">YOUR SETTINGS</text>
+<text x="724" y="438" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">config.toml</text>
+<text x="724" y="456" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">~/.config/havooch</text>
+<path d="M 232 260 C 270 260 270 96 308 96" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 232 284 H 308" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 232 308 C 270 308 270 452 308 452" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 612 96 C 660 96 660 180 708 180" fill="none" stroke="#f1b467" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<path d="M 612 274 C 660 274 660 212 708 212" fill="none" stroke="#f1b467" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<path d="M 612 452 H 708" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 816 252 V 396" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="818" y="314" width="108" height="16" rx="2" fill="#181818"/>
+<text x="824" y="326" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">APPLIES EACH SAVE</text>
+<rect x="640" y="442" width="40" height="16" rx="2" fill="#181818"/>
+<text x="660" y="454" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READS</text>
+<text x="24" y="96" fill="#d4d4d4" font-size="16" font-family="'Geist', sans-serif" font-weight="400">Most commands talk to the app.</text>
+<text x="24" y="120" fill="#d4d4d4" font-size="16" font-family="'Geist', sans-serif" font-weight="400">Three read your settings file,</text>
+<text x="24" y="144" fill="#d4d4d4" font-size="16" font-family="'Geist', sans-serif" font-weight="400">and work with Havooch closed.</text>
+<text x="24" y="560" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">A demo run (app open --demo) has its own folder and socket; the command finds it there first.</text>
+<path d="M 24 588 H 1056" stroke="rgba(228,228,228,0.12)" stroke-width="1"/>
+<rect x="24" y="604" width="20" height="16" rx="3" fill="#141414" stroke="#d4d4d4" stroke-width="1"/><text x="52" y="616" fill="#888888" font-size="12" font-family="'Geist', sans-serif">The command</text>
+<rect x="165" y="604" width="20" height="16" rx="3" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1"/><text x="193" y="616" fill="#888888" font-size="12" font-family="'Geist', sans-serif">The app</text>
+<rect x="278" y="604" width="20" height="16" rx="3" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1"/><text x="306" y="616" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Files</text>
+<text x="1056" y="616" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">HavoochCLI.swift · CommandTable.swift</text>
+</svg>
+</div></main></body></html>
