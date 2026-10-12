@@ -272,7 +272,7 @@ Packaging/Logo/                    the cat mark as PDFs, the full mark and the s
 Packaging/homebrew/havooch.rb      the cask the tap carries; version and sha256 filled in by scripts/update-tap.sh
 scripts/acceptance.sh              the acceptance scenario, 20 steps through the CLI against the installed app in demo mode
 scripts/screenshots.sh             the gallery: states/ in light and dark, themes/ the list and a thread view per built-in theme
-scripts/showcase.sh                a scripted review of the Halcyon teaser (fixtures/showcase/) through the CLI in demo mode; the landing page's
+scripts/showcase.sh                a scripted review of the Lantern teaser (fixtures/showcase/) through the CLI in demo mode; the landing page's
                                    screenshots into assets/screenshots/showcase/
 scripts/site-shots.sh              that gallery as the WebP files in site/assets/shots/ (ffmpeg, cwebp)
 scripts/site-og.html               the 1200 × 630 link preview, rendered to site/assets/og.png
@@ -289,7 +289,7 @@ site/                              the landing page, with cli/ and studio/ pages
 .agents/skills/havooch-mate/       the listener skill: SKILL.md and references/first-demo.md
 fixtures/sample/                   the fixture video and its sidecars, for the tests
 fixtures/launch/                   the launch explainer and its sidecars, the bundled demo
-fixtures/showcase/                 the Halcyon teaser and its sidecars, with its Remotion source in studio/, for showcase.sh
+fixtures/showcase/                 the Lantern teaser and its sidecars, with its Remotion source in studio/, for showcase.sh
 LICENSE, README.md                 MIT; the welcome (what Havooch is, install, connect an agent); docs/guide.md is the reference
 CITATION.cff                       how to cite Havooch
 

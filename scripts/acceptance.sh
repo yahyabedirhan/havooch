@@ -1123,7 +1123,7 @@ exits 0 "version show v4"
 run operator window new --json
 exits 0 "window new"
 plain_window=$(value "$stdout" '.window')
-run operator player open "$root/fixtures/showcase/halcyon-teaser.mp4" --window "$plain_window"
+run operator player open "$root/fixtures/showcase/lantern-teaser.mp4" --window "$plain_window"
 exits 0 "player open a plain video in $plain_window"
 run operator state --window "$plain_window" --json
 holds "a plain video has no project, so no switcher" "$stdout" '.project == null'

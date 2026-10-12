@@ -2,14 +2,19 @@ export const FPS = 30;
 export const WIDTH = 1920;
 export const HEIGHT = 1080;
 
-// Halcyon's palette: a night sky that warms into dawn, and warm paper by day.
-export const NIGHT = "#0A0D1A";
-export const DUSK = "#1A2150";
-export const DAWN = "#F2A07B";
-export const GLOW = "#FFD8A8";
-export const CREAM = "#FFF8EE";
-export const PAPER = "#F4EFE6";
-export const INK = "#1D1A16";
-export const MUTED = "#8A7F70";
-export const ACCENT = "#E0703A";
-export const RAIN = "#9CC3E8";
+// The Graphite palette: folded white paper on a dark granite tile.
+export const PAPER = "#131417";
+export const PAPER_2 = "#222529";
+export const INK = "#e4e6e9";
+export const MUTED = "#8b9097";
+export const SOFT = "#6b7078";
+export const RULE = "rgba(255,255,255,0.10)";
+export const LINE = "rgba(255,255,255,0.16)";
+export const ACCENT = "#ffffff";
+export const ACCENT_TINT = "rgba(255,255,255,0.06)";
+export const LINK = "#9db3c8";
+export const SHADE = "#b9bec4";
+export const FOLD_MUTED = "#4f545b";
+
+// While true, every reveal is held at its end, so each frame shows the scene's end pose.
+export const STORYBOARD = false;

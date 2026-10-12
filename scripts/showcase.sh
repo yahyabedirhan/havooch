@@ -1,7 +1,7 @@
 #!/bin/bash
 # Plays a believable review of the showcase video (fixtures/showcase/, the
-# Halcyon teaser) through the `havooch` CLI only, against the installed
-# app in demo mode, and takes the landing page's pictures of it:
+# Lantern teaser) through the `havooch` CLI only, against the installed
+# app in demo mode, and takes the pictures of it:
 #
 #   scripts/showcase.sh [<gallery folder>]     (default: assets/screenshots/showcase)
 #
@@ -13,16 +13,16 @@
 # The review, as a person and Claude Code would have it. Threads are numbered
 # in the order they are made, so the first send's four notes are #1 to #4:
 #
-#   #1 0:01.5  pacing: the cold open's numbers go by too fast       done
-#   #2 0:12    typography: the wordmark is heavy (region); the agent
+#   #1 0:01.5  pacing: the request line types too fast to read      done
+#   #2 0:09.5  typography: the wordmark is heavy (region); the agent
 #              asks about the tagline, gets an answer and finishes;
-#              a follow-up on the sunrise waits in the queue         done + queued
-#   #3 0:26    a caption: two times on the rain card (region); the
+#              a follow-up on the mark's unfold waits in the queue   done + queued
+#   #3 0:26    a label: three times on the trace (region); the
 #              agent asks which one should lead                     needs you (open question)
-#   #4 0:40.5  the App Store badge (region): the agent can't add
-#              Apple's artwork without the approved file            failed
-#   #5 0:20.7  a transition: the phone leaves before the rain comes  with agent (working)
-#   #6 0:34.8  colour: Thursday's tile reads cold (region)           queued
+#   #4 0:18.5  the Postgres logo (region): the agent can't add the
+#              project's trademark without the approved file        failed
+#   #5 0:19.3  a transition: the map cuts to the trace too fast      with agent (working)
+#   #6 0:33    colour: the fix panel pulls the eye (region)          queued
 #   General    the agent's lines for each send, and the person's
 #              note on the whole cut                                 queued
 #
@@ -51,7 +51,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 # passes HAVOOCH_MUTED=1 on to the app it launches.
 export HAVOOCH_MUTED=1
 cli="${HAVOOCH_CLI:-/Applications/Havooch.app/Contents/Helpers/havooch}"
-video="$root/fixtures/showcase/halcyon-teaser.mp4"
+video="$root/fixtures/showcase/lantern-teaser.mp4"
 
 case "${1:-}" in
     "") gallery="$root/assets/screenshots/showcase" ;;
@@ -134,52 +134,52 @@ operator player open "$video" >/dev/null
 
 # --- the first send: four notes ------------------------------------------------
 
-numbers="$(operator comment add "The numbers flick past before I can read them. Hold each one about half a beat longer, it's the hook." --at 1.5 --json)"
-wordmark="$(operator comment add "The wordmark feels heavy against the sky. Try a lighter weight and open the tracking a little." --at 12 --region 0.075,0.27,0.5,0.28 --json)"
-card="$(operator comment add "The card says rain at 4:40, the voice says leave by four fifteen. Two times in two seconds is a lot. Pick one to lead." --at 26 --region 0.07,0.29,0.48,0.33 --json)"
-badge="$(operator comment add "Put the App Store badge under the date, so it feels like a real launch." --at 40.5 --region 0.07,0.75,0.37,0.08 --json)"
-for added in "$numbers" "$wordmark" "$card" "$badge"; do check "$added"; done
+request="$(operator comment add "The request line types too fast to read the path. Slow the typing a little, it's the hook." --at 1.5 --json)"
+wordmark="$(operator comment add "The wordmark feels heavy next to the folded mark. Try a lighter weight and open the tracking a little." --at 9.5 --region 0.37,0.35,0.4,0.18 --json)"
+label="$(operator comment add "The label says 1.12 s, the Payments bar says 1.31 s, and the voice says more than a second. Three times in two seconds is a lot. Pick one to lead." --at 26 --region 0.46,0.74,0.33,0.1 --json)"
+logo="$(operator comment add "Put the Postgres elephant on the Postgres node, so the map reads at a glance." --at 18.5 --region 0.8,0.29,0.15,0.15 --json)"
+for added in "$request" "$wordmark" "$label" "$logo"; do check "$added"; done
 operator send >/dev/null
 
 first="$(listener wait --timeout 20)"
 listener ack "$(printf '%s' "$first" | jq -r '.send.id')" "Got your 4 notes on 4 threads. Starting with the cold open." >/dev/null
 
-listener status "$(message "$numbers")" working >/dev/null
-listener reply "$(thread "$numbers")" "Each reading now holds 18 frames longer and eases out instead of cutting. The cold open runs 1.2 s longer. Commit 3c1e7a2." >/dev/null
-listener status "$(message "$numbers")" done >/dev/null
+listener status "$(message "$request")" working >/dev/null
+listener reply "$(thread "$request")" "The path now types 40 percent slower and the time counts up only after it lands. The cold open runs 0.8 s longer. Commit 3c1e7a2." >/dev/null
+listener status "$(message "$request")" done >/dev/null
 
 listener status "$(message "$wordmark")" working >/dev/null
-listener reply "$(thread "$wordmark")" "Took Halcyon from 400 down to 300 and opened the tracking to 0.01 em. It sits on the sky much more quietly now." >/dev/null
-ask "$(thread "$wordmark")" "Should the tagline go lighter with it, or stay at 500 so it still reads over the bright part of the sky?"
-operator thread answer "$(thread "$wordmark")" "Keep it at 500, it has to read." >/dev/null
-listener reply "$(thread "$wordmark")" "Kept the tagline at 500 and moved it 12 px down, so it clears the sun's glow. Commit 9b4d1e0." >/dev/null
+listener reply "$(thread "$wordmark")" "Took Lantern from 600 down to 500 and opened the tracking to 0.01 em. It balances the mark much better now." >/dev/null
+ask "$(thread "$wordmark")" "Should the tagline go lighter with it, or stay at 400 so it still reads at small sizes?"
+operator thread answer "$(thread "$wordmark")" "Keep it at 400, it has to read." >/dev/null
+listener reply "$(thread "$wordmark")" "Kept the tagline at 400 and moved it 8 px closer to the wordmark. Commit 9b4d1e0." >/dev/null
 listener status "$(message "$wordmark")" done >/dev/null
 
-listener status "$(message "$card")" working >/dev/null
-listener reply "$(thread "$card")" "Both are right: the rain starts at 4:40, and 4:15 is when to leave. Before I touch the card, one question." >/dev/null
-ask "$(thread "$card")" "Should the card lead with \"Leave by 4:15\" to match the voice, or keep \"Rain at 4:40 pm\" up top and let the voice carry the leave time?"
+listener status "$(message "$label")" working >/dev/null
+listener reply "$(thread "$label")" "All three are right: the query takes 1.12 s inside the 1.31 s Payments call. Before I touch the label, one question." >/dev/null
+ask "$(thread "$label")" "Should the label lead with the query's 1.12 s, or with Payments' 1.31 s to match the bar the voice points at?"
 
-listener status "$(message "$badge")" working >/dev/null
-listener reply "$(thread "$badge")" "I left this one out. Apple's badge has to come from their marketing site, under their rules, and there's no copy in the repo. Drop the approved SVG into assets/ and I'll place it." >/dev/null
-listener status "$(message "$badge")" failed >/dev/null
+listener status "$(message "$logo")" working >/dev/null
+listener reply "$(thread "$logo")" "I left this one out. The elephant is the PostgreSQL project's trademark, used under their rules, and there's no copy in the repo. Drop their official SVG into assets/ and I'll place it." >/dev/null
+listener status "$(message "$logo")" failed >/dev/null
 
-listener reply 0 "#1 and #2 are done. #4 failed: it needs Apple's badge file. #3 waits on your answer." >/dev/null
+listener reply 0 "#1 and #2 are done. #4 failed: it needs the Postgres logo file. #3 waits on your answer." >/dev/null
 
 # --- the second send: a transition, with the agent ------------------------------
 
-phone="$(operator comment add "The phone jumps out before the rain comes in. Let it ease out, and start the rain underneath it." --at 20.7 --json)"
-check "$phone"
+cut="$(operator comment add "The map cuts to the trace too fast. Let the Payments node slide down into its row in the trace." --at 19.3 --json)"
+check "$cut"
 operator send >/dev/null
 second="$(listener wait --timeout 20)"
-listener ack "$(printf '%s' "$second" | jq -r '.send.id')" "Got it, looking at the cut into the rain." >/dev/null
-listener status "$(message "$phone")" working >/dev/null
+listener ack "$(printf '%s' "$second" | jq -r '.send.id')" "Got it, looking at the cut into the trace." >/dev/null
+listener status "$(message "$cut")" working >/dev/null
 
 # --- in the queue: a follow-up, a new note and a word on the whole cut ----------
 
-check "$(operator comment add "Lovely. Can the sun rise a touch slower behind it?" --thread "$(thread "$wordmark")" --json)"
-tile="$(operator comment add "Soft rain reads a little cold next to Wednesday. Warm the blue a touch, toward lavender." --at 34.8 --region 0.44,0.33,0.13,0.53 --json)"
-check "$tile"
-check "$(operator comment add "Overall this is so close. The voice and the colour are lovely, please don't touch them." --thread 0 --json)"
+check "$(operator comment add "Lovely. Can the mark unfold a touch slower?" --thread "$(thread "$wordmark")" --json)"
+panel="$(operator comment add "The fix panel is so bright it pulls the eye off the drop. Tone the white down a touch, or let the chart land first." --at 33 --region 0.64,0.3,0.31,0.42 --json)"
+check "$panel"
+check "$(operator comment add "Overall this is so close. The voice and the folds are lovely, please don't touch them." --thread 0 --json)"
 
 # The listener waits again, so the footer shows it with the agent.
 HAVOOCH_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
@@ -188,10 +188,10 @@ listener_pid=$!
 # --- the pictures ----------------------------------------------------------------
 
 # The notices of the last messages go after 5 s.
-operator player seek 34.8 >/dev/null
+operator player seek 33 >/dev/null
 operator thread list >/dev/null
 sleep 6
-echo "the thread list, at Thursday's tile:"
+echo "the thread list, at the fix panel:"
 shot list
 
 operator thread show "$(thread "$wordmark")" >/dev/null
@@ -199,17 +199,17 @@ sleep 1
 echo "thread #2: reply, question, answer, done, and a follow-up in the queue:"
 shot hero
 
-operator thread show "$(thread "$card")" >/dev/null
+operator thread show "$(thread "$label")" >/dev/null
 sleep 1
 echo "thread #3: the open question:"
 shot question
 
-operator thread show "$(thread "$badge")" >/dev/null
+operator thread show "$(thread "$logo")" >/dev/null
 sleep 1
 echo "thread #4: failed, with its reason:"
 shot failed
 
-operator thread show "$(thread "$phone")" >/dev/null
+operator thread show "$(thread "$cut")" >/dev/null
 sleep 1
 echo "thread #5: with the agent:"
 shot working
@@ -228,7 +228,7 @@ echo "  $gallery/tokyo-night-thread.png"
 
 operator theme set system >/dev/null
 operator thread list >/dev/null
-operator player seek 12 >/dev/null
+operator player seek 9.5 >/dev/null
 
 kill "$listener_pid" 2>/dev/null; wait "$listener_pid" 2>/dev/null
 listener_pid=""

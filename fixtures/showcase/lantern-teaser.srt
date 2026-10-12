@@ -1,0 +1,60 @@
+1
+00:00:00,325 --> 00:00:01,625
+One checkout request.
+
+2
+00:00:01,762 --> 00:00:03,325
+One point eight four seconds.
+
+3
+00:00:03,450 --> 00:00:05,000
+Somewhere, this got slow.
+
+4
+00:00:06,425 --> 00:00:07,250
+Meet Lantern.
+
+5
+00:00:07,362 --> 00:00:08,725
+See where the time goes.
+
+6
+00:00:11,225 --> 00:00:14,175
+Lantern follows one request through every service.
+
+7
+00:00:14,275 --> 00:00:16,625
+The gateway, checkout, then payments.
+
+8
+00:00:16,762 --> 00:00:18,325
+Payments is where it waits.
+
+9
+00:00:19,700 --> 00:00:22,175
+Open the trace, and the time lines up.
+
+10
+00:00:22,338 --> 00:00:25,700
+Payments spends more than a second on one database query.
+
+11
+00:00:27,092 --> 00:00:28,992
+Lantern suggests an index.
+
+12
+00:00:29,142 --> 00:00:32,617
+Add it, and checkout drops to about two hundred milliseconds.
+
+13
+00:00:34,092 --> 00:00:34,567
+Lantern.
+
+14
+00:00:34,630 --> 00:00:35,892
+See where the time goes.
+
+15
+00:00:36,030 --> 00:00:37,742
+Private beta, next spring.
+

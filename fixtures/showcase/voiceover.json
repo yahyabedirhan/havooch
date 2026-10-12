@@ -1,51 +1,51 @@
 {
   "scenes": [
     {
-      "id": "numbers",
-      "text": "Seventeen degrees. Sixty two percent. Fourteen kilometres an hour. Every forecast gives you numbers.",
+      "id": "cold",
+      "text": "One checkout request. One point eight four seconds. Somewhere, this got slow.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 7.525,
+      "durationSeconds": 5.275,
       "paddingSeconds": 0.8
     },
     {
-      "id": "reveal",
-      "text": "Meet Halcyon. It tells you how the day will actually feel.",
+      "id": "logo",
+      "text": "Meet Lantern. See where the time goes.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 4.05,
-      "paddingSeconds": 1.4
+      "durationSeconds": 2.9,
+      "paddingSeconds": 1.9
     },
     {
-      "id": "today",
-      "text": "A crisp morning, then a warm afternoon. Bring a light jacket, and leave the umbrella at home.",
+      "id": "map",
+      "text": "Lantern follows one request through every service. The gateway, checkout, then payments. Payments is where it waits.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 6.175,
-      "paddingSeconds": 1.0
+      "durationSeconds": 7.675,
+      "paddingSeconds": 0.8
     },
     {
-      "id": "rain",
-      "text": "When rain is on its way, Halcyon tells you when to leave. Head out by four fifteen, and you'll stay dry.",
+      "id": "trace",
+      "text": "Open the trace, and the time lines up. Payments spends more than a second on one database query.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 6.775,
-      "paddingSeconds": 1.0
+      "durationSeconds": 6.55,
+      "paddingSeconds": 0.8
     },
     {
-      "id": "week",
-      "text": "Your whole week, in plain words. Bright on Monday. Breezy on Tuesday. Soft rain by Thursday.",
+      "id": "fix",
+      "text": "Lantern suggests an index. Add it, and checkout drops to about two hundred milliseconds.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 6.825,
-      "paddingSeconds": 1.0
+      "durationSeconds": 6.1,
+      "paddingSeconds": 0.9
     },
     {
       "id": "close",
-      "text": "Halcyon. Weather, in plain words. Coming to iPhone this spring.",
+      "text": "Lantern. See where the time goes. Private beta, next spring.",
       "voice": "af_heart",
       "speed": 0.95,
-      "durationSeconds": 4.375,
+      "durationSeconds": 4.25,
       "paddingSeconds": 1.6
     }
   ]
