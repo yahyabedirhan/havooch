@@ -241,7 +241,7 @@ struct PersistenceTests {
 
     /// A second video, with content of its own.
     static let showcase = MessageTests.fixture.deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("showcase/halcyon-teaser.mp4")
+        .appendingPathComponent("showcase/lantern-teaser.mp4")
 
     @Test("opening a video puts it first on the recent videos, opening another keeps where the first was left, and state reports each one")
     func recentVideos() async throws {
@@ -255,7 +255,7 @@ struct PersistenceTests {
         try await model.open(Self.showcase)
 
         #expect(model.recents.map(\.path) == [Self.showcase.path, first.path])
-        #expect(model.recents.map(\.title) == ["halcyon-teaser", "sample take"])
+        #expect(model.recents.map(\.title) == ["lantern-teaser", "sample take"])
         #expect(model.recents.map(\.position) == [0, 4])
         #expect(model.recents.map(\.available) == [true, true])
         #expect(model.recents.allSatisfy { $0.openedAt >= before.addingTimeInterval(-1) && $0.openedAt <= Date() })
@@ -268,7 +268,7 @@ struct PersistenceTests {
         #expect(recents[1]["position"] as? Double == 4)
         #expect(recents[1]["available"] as? Bool == true)
         #expect((recents[1]["openedAt"] as? String).flatMap { try? Date($0, strategy: .iso8601) } != nil)
-        #expect(model.state().lines.contains("recents: 2\n  halcyon-teaser at 0:00"))
+        #expect(model.state().lines.contains("recents: 2\n  lantern-teaser at 0:00"))
 
         // A new run reads the same list.
         let (again, _) = await run()
