@@ -264,7 +264,7 @@ schema/config.schema.json          the JSON Schema config.toml names on its #:sc
 Makefile                           all, build, test, bundle, install, acceptance, agent-logos, logo, identity, clean; reads the app name from
                                    ReviewLease/ControlLease.swift, the bundle id from ReviewWire/AppIdentity.swift, the version from ReviewWire/Version.swift
 Packaging/Info.plist               the bundle's template (name, bundle id, version stamped by make bundle); `public.movie` as Viewer, rank Alternate (L55)
-Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), eight themes from popular VS Code themes
+Packaging/Themes/                  Default Light.json, Default Dark.json, Dimmed.json (the defaults), Graphite.json, eight themes from popular VS Code themes
                                    (docs/research/2026-10-05-popular-vs-code-themes.md) and NOTICE.md crediting them; copied to Contents/Resources/Themes/
 Packaging/AgentLogos/              the nine agent harnesses' logos as PDFs (OpenCode has a -dark file), drawn by make agent-logos from
                                    assets/images/agent-logos/*.svg, and NOTICE.md (Shipyard's attribution); copied to Contents/Resources/AgentLogos/
@@ -840,7 +840,7 @@ The tokens (each addition is one case and one value in each default theme). A to
 | presence | `presenceListening`, `presenceWorking`, `presenceAbsent` |
 | notices | `notice`, `noticeText` |
 
-The default themes use natural backgrounds and pastel state colours, with no pink; they set all five surfaces to `system`. Dimmed extends Default Dark with a softer painted background (D 5.7).
+The default themes use natural backgrounds and pastel state colours, with no pink; they set all five surfaces to `system`. Dimmed extends Default Dark with a softer painted background (D 5.7). Graphite is a painted dark theme in the logo's colours: graphite surfaces, pale grey text and accent, and a dark slate `accentFill`.
 
 ### ReviewTranscript
 
