@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Havooch connects to your agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--color-paper:#181818;--color-ink:#d4d4d4;--color-muted:#888888;--color-accent:#f1b467;--font-sans:'Geist',system-ui,sans-serif;--font-serif:'Literata',serif;--font-mono:'Geist Mono',ui-monospace,monospace}
+body{font-family:var(--font-sans);color:var(--color-ink);background:var(--color-paper);min-height:100vh;padding:3rem 2rem;display:flex;align-items:center;justify-content:center}
+.frame{width:100%;max-width:1200px;margin:0 auto}
+.eyebrow{font-family:var(--font-mono);font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--color-muted);margin-bottom:.75rem}
+h1{font-family:var(--font-serif);font-size:2rem;line-height:1.1;font-weight:600;letter-spacing:normal;margin-bottom:1.75rem}
+.diagram-container{width:100%;overflow-x:auto}
+svg{display:block;width:100%;min-width:1080px}
+</style></head><body><main class="frame">
+<p class="eyebrow">Architecture · Havooch</p><h1>How Havooch connects to your agent</h1>
+<div class="diagram-container" role="region" aria-label="How Havooch connects to your agent" tabindex="0">
+<svg viewBox="0 0 1080 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="havooch-connect-title havooch-connect-desc">
+<title id="havooch-connect-title">How Havooch connects to your agent</title>
+<desc id="havooch-connect-desc">You comment on a video in the Havooch app. Your coding agent, taught by the havooch-mate skill, talks to the app only through the havooch command, works in your repository and answers on the threads. Settings live in config.toml and reviews in Application Support.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888888"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f1b467"/></marker></defs>
+<rect width="100%" height="100%" fill="#181818"/>
+<path d="M 208 228 H 264" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 472 220 H 552" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 552 252 H 472" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<path d="M 760 220 H 832" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 832 252 H 760" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<path d="M 936 140 V 192" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 936 284 V 352" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 368 284 V 352" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<path d="M 336 352 V 284" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="210" y="208" width="52" height="16" rx="2" fill="#181818"/>
+<text x="236" y="220" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMMENT</text>
+<rect x="492" y="200" width="40" height="16" rx="2" fill="#181818"/>
+<text x="512" y="212" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
+<rect x="486" y="256" width="52" height="16" rx="2" fill="#181818"/>
+<text x="512" y="268" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPLIES</text>
+<rect x="762" y="200" width="68" height="16" rx="2" fill="#181818"/>
+<text x="796" y="212" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WAIT · ACK</text>
+<rect x="776" y="256" width="40" height="16" rx="2" fill="#181818"/>
+<text x="796" y="268" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
+<rect x="938" y="156" width="52" height="16" rx="2" fill="#181818"/>
+<text x="944" y="168" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">TEACHES</text>
+<rect x="938" y="308" width="56" height="16" rx="2" fill="#181818"/>
+<text x="944" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">WORKS IN</text>
+<rect x="370" y="308" width="40" height="16" rx="2" fill="#181818"/>
+<text x="376" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">SAVES</text>
+<rect x="282" y="308" width="52" height="16" rx="2" fill="#181818"/>
+<text x="328" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.06em">APPLIES</text>
+<rect x="24" y="196" width="184" height="64" rx="6" fill="#181818"/>
+<rect x="24" y="196" width="184" height="64" rx="6" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1.2"/>
+<text x="36" y="226" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">You</text>
+<text x="36" y="244" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">pause · point · write</text>
+<rect x="264" y="180" width="208" height="104" rx="6" fill="#181818"/>
+<rect x="264" y="180" width="208" height="104" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
+<text x="276" y="197" fill="#f1b467" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">MACOS 26 · APPLE SILICON</text>
+<text x="276" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Havooch app</text>
+<text x="276" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">player · threads · outbox</text>
+<rect x="552" y="180" width="208" height="104" rx="6" fill="#181818"/>
+<rect x="552" y="180" width="208" height="104" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="564" y="197" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">INSIDE THE APP</text>
+<text x="564" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">havooch command</text>
+<text x="564" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">wait · ack · reply · ask</text>
+<rect x="832" y="180" width="208" height="104" rx="6" fill="#181818"/>
+<rect x="832" y="180" width="208" height="104" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="844" y="197" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">PI · OPENCODE</text>
+<text x="844" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your agent</text>
+<text x="844" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">Claude Code · Codex · Cursor</text>
+<rect x="832" y="64" width="208" height="76" rx="6" fill="#181818"/>
+<rect x="832" y="64" width="208" height="76" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="844" y="81" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">AGENT SKILL</text>
+<text x="844" y="102" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">/havooch-mate skill</text>
+<text x="844" y="120" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">npx skills add …</text>
+<rect x="832" y="352" width="208" height="64" rx="6" fill="#181818"/>
+<rect x="832" y="352" width="208" height="64" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
+<text x="844" y="382" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your repository</text>
+<text x="844" y="400" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">where the work lands</text>
+<rect x="264" y="352" width="208" height="96" rx="6" fill="#181818"/>
+<rect x="264" y="352" width="208" height="96" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
+<text x="276" y="369" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">SETTINGS · REVIEWS</text>
+<text x="276" y="390" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your data</text>
+<text x="276" y="408" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">~/.config · App Support</text>
+<text x="24" y="96" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">Havooch isn't an agent: it works with the one you use.</text>
+<text x="24" y="118" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">Your agent can't click the app, so the command is its only way in.</text>
+<path d="M 24 488 H 1056" stroke="rgba(228,228,228,0.12)" stroke-width="1"/>
+<rect x="24" y="504" width="20" height="16" rx="3" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1"/><text x="52" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">You</text>
+<rect x="109" y="504" width="20" height="16" rx="3" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1"/><text x="137" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">The app</text>
+<rect x="222" y="504" width="20" height="16" rx="3" fill="#141414" stroke="#d4d4d4" stroke-width="1"/><text x="250" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Command · agent</text>
+<text x="391" y="516" fill="#888888" font-size="12" font-family="'Geist Mono', monospace">dashed = reply path</text>
+<text x="1056" y="516" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">Architecture · from README and docs/guide.md</text>
+</svg>
+</div></main></body></html>

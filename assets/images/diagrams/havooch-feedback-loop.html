@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The feedback loop</title>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--color-paper:#181818;--color-ink:#d4d4d4;--color-muted:#888888;--color-accent:#f1b467;--font-sans:'Geist',system-ui,sans-serif;--font-serif:'Literata',serif;--font-mono:'Geist Mono',ui-monospace,monospace}
+body{font-family:var(--font-sans);color:var(--color-ink);background:var(--color-paper);min-height:100vh;padding:3rem 2rem;display:flex;align-items:center;justify-content:center}
+.frame{width:100%;max-width:1200px;margin:0 auto}
+.eyebrow{font-family:var(--font-mono);font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--color-muted);margin-bottom:.75rem}
+h1{font-family:var(--font-serif);font-size:2rem;line-height:1.1;font-weight:600;letter-spacing:normal;margin-bottom:1.75rem}
+.diagram-container{width:100%;overflow-x:auto}
+svg{display:block;width:100%;min-width:1040px}
+</style></head><body><main class="frame">
+<p class="eyebrow">Sequence · Havooch</p><h1>The feedback loop</h1>
+<div class="diagram-container" role="region" aria-label="The feedback loop" tabindex="0">
+<svg viewBox="0 0 1040 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="havooch-feedback-loop-title havooch-feedback-loop-desc">
+<title id="havooch-feedback-loop-title">The feedback loop</title>
+<desc id="havooch-feedback-loop-desc">Sequence of one Havooch round: you comment and send a batch; your agent, waiting through the havooch command, receives it with timestamp, keyframe, region and transcript, acknowledges, works in your repository, reports progress and answers or asks on each thread beside the video; then it waits for the next send.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888888"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f1b467"/></marker></defs>
+<rect width="100%" height="100%" fill="#181818"/>
+<path d="M 120 96 V 636" stroke="#888888" stroke-width="1" stroke-dasharray="3,4"/>
+<path d="M 380 96 V 636" stroke="#888888" stroke-width="1" stroke-dasharray="3,4"/>
+<path d="M 640 96 V 636" stroke="#888888" stroke-width="1" stroke-dasharray="3,4"/>
+<path d="M 900 96 V 636" stroke="#888888" stroke-width="1" stroke-dasharray="3,4"/>
+<path d="M 900 140 H 644" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="700" y="120" width="140" height="16" rx="2" fill="#181818"/>
+<text x="770.0" y="132" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">wait --video launch.mp4</text>
+<path d="M 120 184 H 376" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="162" y="164" width="176" height="16" rx="2" fill="#181818"/>
+<text x="250.0" y="176" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">pause, point, comment: queued</text>
+<path d="M 120 228 H 376" fill="none" stroke="#f1b467" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="168" y="208" width="164" height="16" rx="2" fill="#181818"/>
+<text x="250.0" y="220" fill="#f1b467" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">Send (Cmd+Enter): one batch</text>
+<path d="M 380 272 H 636" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="478" y="252" width="64" height="16" rx="2" fill="#181818"/>
+<text x="510.0" y="264" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">the batch</text>
+<path d="M 640 316 H 896" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="660" y="296" width="220" height="16" rx="2" fill="#181818"/>
+<text x="770.0" y="308" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">time · keyframe · region · transcript</text>
+<path d="M 900 360 H 644" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="756" y="340" width="28" height="16" rx="2" fill="#181818"/>
+<text x="770.0" y="352" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ack</text>
+<path d="M 640 404 H 384" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="470" y="384" width="80" height="16" rx="2" fill="#181818"/>
+<text x="510.0" y="396" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">acknowledged</text>
+<path d="M 900 448 H 644" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="686" y="428" width="168" height="16" rx="2" fill="#181818"/>
+<text x="770.0" y="440" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">status: working in your repo</text>
+<path d="M 900 492 H 644" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="728" y="472" width="84" height="16" rx="2" fill="#181818"/>
+<text x="770.0" y="484" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">reply, or ask</text>
+<path d="M 640 536 H 384" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="448" y="516" width="124" height="16" rx="2" fill="#181818"/>
+<text x="510.0" y="528" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">answer on the thread</text>
+<path d="M 380 580 H 124" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="180" y="560" width="140" height="16" rx="2" fill="#181818"/>
+<text x="250.0" y="572" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">answer beside the video</text>
+<rect x="20" y="40" width="200" height="56" rx="6" fill="#181818"/>
+<rect x="20" y="40" width="200" height="56" rx="6" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1.2"/>
+<text x="32" y="66" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">You</text>
+<text x="32" y="84" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">in the player</text>
+<rect x="280" y="40" width="200" height="56" rx="6" fill="#181818"/>
+<rect x="280" y="40" width="200" height="56" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
+<text x="292" y="66" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Havooch app</text>
+<text x="292" y="84" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">one listener per window</text>
+<rect x="540" y="40" width="200" height="56" rx="6" fill="#181818"/>
+<rect x="540" y="40" width="200" height="56" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="552" y="66" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">havooch command</text>
+<text x="552" y="84" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">Contents/Helpers</text>
+<rect x="800" y="40" width="200" height="56" rx="6" fill="#181818"/>
+<rect x="800" y="40" width="200" height="56" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="812" y="66" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your agent</text>
+<text x="812" y="84" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">with /havooch-mate</text>
+<rect x="808" y="612" width="184" height="32" rx="6" fill="#181818" stroke="#d4d4d4" stroke-width="1"/><text x="900" y="632" fill="#d4d4d4" font-size="11" font-family="'Geist Mono', monospace" text-anchor="middle">wait for the next send</text>
+<text x="24" y="684" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">Only what you send from Havooch drives the loop; the agent's chat stays a normal conversation.</text>
+<path d="M 24 712 H 1016" stroke="rgba(228,228,228,0.12)" stroke-width="1"/>
+<rect x="24" y="728" width="20" height="16" rx="3" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1"/><text x="52" y="740" fill="#888888" font-size="12" font-family="'Geist', sans-serif">You</text>
+<rect x="109" y="728" width="20" height="16" rx="3" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1"/><text x="137" y="740" fill="#888888" font-size="12" font-family="'Geist', sans-serif">The app</text>
+<rect x="222" y="728" width="20" height="16" rx="3" fill="#141414" stroke="#d4d4d4" stroke-width="1"/><text x="250" y="740" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Command · agent</text>
+<text x="1016" y="740" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">Sequence · docs/guide.md</text>
+</svg>
+</div></main></body></html>

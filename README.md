@@ -65,6 +65,18 @@ When you ask for a change to the video itself, your agent turns it into a **proj
 
 ![A project on v3: the version switcher in the header, and the thread list grouped by version](assets/screenshots/0.5.0/projects/version-switcher-light.png)
 
+## How the pieces fit
+
+![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](assets/images/diagrams/havooch-connect.png)
+
+Your agent reaches the app only through the `havooch` command; the skill teaches it how.
+
+![One round of the review loop: you comment and send, your agent works and answers on each thread](assets/images/diagrams/havooch-feedback-loop.png)
+
+One round of feedback, from your comment to your agent's answer.
+
+The diagrams' sources are next to them in [`assets/images/diagrams`](assets/images/diagrams).
+
 ## Learn more
 
 The [guide](docs/guide.md) covers the rest: windows and the ways to open a video, the first-run window, the prompt for each agent, Compare, your settings in `config.toml`, every `havooch` command, the install options, and how to uninstall.
