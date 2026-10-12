@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A comment from queued to done</title>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--color-paper:#181818;--color-ink:#d4d4d4;--color-muted:#888888;--color-accent:#f1b467;--font-sans:'Geist',system-ui,sans-serif;--font-serif:'Literata',serif;--font-mono:'Geist Mono',ui-monospace,monospace}
+body{font-family:var(--font-sans);color:var(--color-ink);background:var(--color-paper);min-height:100vh;padding:3rem 2rem;display:flex;align-items:center;justify-content:center}
+.frame{width:100%;max-width:1200px;margin:0 auto}
+.eyebrow{font-family:var(--font-mono);font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--color-muted);margin-bottom:.75rem}
+h1{font-family:var(--font-serif);font-size:2rem;line-height:1.1;font-weight:600;letter-spacing:normal;margin-bottom:1.75rem}
+.diagram-container{width:100%;overflow-x:auto}
+svg{display:block;width:100%;min-width:1080px}
+</style></head><body><main class="frame">
+<p class="eyebrow">States · Havooch guide</p><h1>A comment from queued to done</h1>
+<div class="diagram-container" role="region" aria-label="A comment from queued to done" tabindex="0">
+<svg viewBox="0 0 1080 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="guide-message-states-title guide-message-states-desc">
+<title id="guide-message-states-title">A comment from queued to done</title>
+<desc id="guide-message-states-desc">A comment starts queued and is the only state you can still edit or delete. Send moves the queue to sent and into the window's outbox. If no agent waits, the sends stay in line until the next wait. The agent's ack makes them acknowledged; status sets working, done or failed. States only move forward, may be skipped, and done and failed are final.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888888"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f1b467"/></marker></defs>
+<rect width="100%" height="100%" fill="#181818"/>
+<rect x="24" y="120" width="156" height="64" rx="6" fill="#181818"/>
+<rect x="24" y="120" width="156" height="64" rx="6" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1.2"/>
+<text x="36" y="150" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">queued</text>
+<text x="36" y="168" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">you can edit, delete</text>
+<rect x="204" y="120" width="156" height="64" rx="6" fill="#181818"/>
+<rect x="204" y="120" width="156" height="64" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
+<text x="216" y="150" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">sent</text>
+<text x="216" y="168" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">in the outbox</text>
+<rect x="384" y="120" width="156" height="64" rx="6" fill="#181818"/>
+<rect x="384" y="120" width="156" height="64" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="396" y="150" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">acknowledged</text>
+<text x="396" y="168" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">the agent has it</text>
+<rect x="564" y="120" width="156" height="64" rx="6" fill="#181818"/>
+<rect x="564" y="120" width="156" height="64" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="576" y="150" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">working</text>
+<text x="576" y="168" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">status working</text>
+<rect x="904" y="96" width="152" height="52" rx="6" fill="#181818"/>
+<rect x="904" y="96" width="152" height="52" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="916" y="120" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">done</text>
+<text x="916" y="138" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">final</text>
+<rect x="904" y="160" width="152" height="52" rx="6" fill="#181818"/>
+<rect x="904" y="160" width="152" height="52" rx="6" fill="rgba(228,228,228,0.02)" stroke="rgba(228,228,228,0.45)" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text x="916" y="184" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">failed</text>
+<text x="916" y="202" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">final</text>
+<path d="M 180 152 H 204" fill="none" stroke="#f1b467" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<path d="M 360 152 H 384" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 540 152 H 564" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="140" y="100" width="104" height="16" rx="2" fill="#181818"/>
+<text x="192" y="112" fill="#f1b467" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SEND · CMD+ENTER</text>
+<rect x="334" y="100" width="76" height="16" rx="2" fill="#181818"/>
+<text x="372" y="112" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HAVOOCH ACK</text>
+<rect x="506" y="100" width="92" height="16" rx="2" fill="#181818"/>
+<text x="552" y="112" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUS WORKING</text>
+<path d="M 720 140 C 820 140 840 122 900 122" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 720 164 C 820 164 840 186 900 186" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="774" y="96" width="76" height="16" rx="2" fill="#181818"/>
+<text x="812" y="108" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUS DONE</text>
+<rect x="770" y="192" width="84" height="16" rx="2" fill="#181818"/>
+<text x="812" y="204" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUS FAILED</text>
+<path d="M 282 188 C 282 236 642 236 642 192" fill="none" stroke="#888888" stroke-width="1" stroke-dasharray="3,4" marker-end="url(#arrow)"/>
+<rect x="300" y="228" width="324" height="16" rx="2" fill="#181818"/>
+<text x="462" y="240" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">A STATE MAY BE SKIPPED, E.G. SENT TO WORKING; NEVER BACK</text>
+<text x="24" y="300" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" letter-spacing="0.14em">THE OUTBOX · ONE PER WINDOW</text>
+<rect x="24" y="320" width="220" height="80" rx="6" fill="#181818"/>
+<rect x="24" y="320" width="220" height="80" rx="6" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1.2"/>
+<text x="36" y="337" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">ONE BATCH</text>
+<text x="36" y="358" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your send</text>
+<text x="36" y="376" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">the queued comments</text>
+<rect x="304" y="320" width="240" height="80" rx="6" fill="#181818"/>
+<rect x="304" y="320" width="240" height="80" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
+<text x="316" y="337" fill="#f1b467" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">PENDING</text>
+<text x="316" y="358" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Waiting in line</text>
+<text x="316" y="376" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">first in, first out</text>
+<rect x="604" y="320" width="220" height="80" rx="6" fill="#181818"/>
+<rect x="604" y="320" width="220" height="80" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="616" y="337" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">NOT FINISHED</text>
+<text x="616" y="358" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Taken</text>
+<text x="616" y="376" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">handed to a wait</text>
+<rect x="884" y="320" width="172" height="80" rx="6" fill="#181818"/>
+<rect x="884" y="320" width="172" height="80" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
+<text x="896" y="358" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Finished</text>
+<text x="896" y="376" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">all done or failed</text>
+<path d="M 244 360 H 300" fill="none" stroke="#f1b467" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<path d="M 544 360 H 600" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 824 360 H 880" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="556" y="336" width="36" height="16" rx="2" fill="#181818"/>
+<text x="574" y="348" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WAIT</text>
+<rect x="830" y="336" width="48" height="16" rx="2" fill="#181818"/>
+<text x="854" y="348" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUS</text>
+<path d="M 714 404 C 714 452 424 452 424 408" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="457" y="444" width="224" height="16" rx="2" fill="#181818"/>
+<text x="569" y="456" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">A NEW AGENT SESSION: BACK TO THE FRONT</text>
+<text x="24" y="64" fill="#d4d4d4" font-size="16" font-family="'Geist', sans-serif" font-weight="400">Comments queue up until you send; then only the agent moves them on.</text>
+<text x="24" y="508" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">With no agent listening, Send still works: the batch waits in line and the next wait picks it up.</text>
+<text x="24" y="530" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">The outbox is saved, so a send survives quitting Havooch.</text>
+<path d="M 24 552 H 1056" stroke="rgba(228,228,228,0.12)" stroke-width="1"/>
+<rect x="24" y="568" width="20" height="16" rx="3" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1"/><text x="52" y="580" fill="#888888" font-size="12" font-family="'Geist', sans-serif">You</text>
+<rect x="109" y="568" width="20" height="16" rx="3" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1"/><text x="137" y="580" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Sent, not yet with an agent</text>
+<rect x="362" y="568" width="20" height="16" rx="3" fill="#141414" stroke="#d4d4d4" stroke-width="1"/><text x="390" y="580" fill="#888888" font-size="12" font-family="'Geist', sans-serif">With the agent</text>
+<rect x="524" y="568" width="20" height="16" rx="3" fill="rgba(228,228,228,0.02)" stroke="rgba(228,228,228,0.45)" stroke-width="1" stroke-dasharray="4,3"/><text x="552" y="580" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Failed</text>
+<text x="1056" y="580" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">MessageState.swift · Outbox.swift</text>
+</svg>
+</div></main></body></html>

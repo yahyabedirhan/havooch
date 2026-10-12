@@ -249,12 +249,16 @@ make install   # bundle, then replace /Applications/Havooch.app and open it
 
 `make install INSTALLED=<path>/Havooch.app` installs the build somewhere else and leaves the copy in `/Applications` alone.
 
-## The guide in two pictures
+## In pictures
 
-![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](../assets/images/diagrams/havooch-connect.png)
+![A comment goes queued, sent, acknowledged, working, then done or failed; sends wait in the window's outbox until an agent's wait takes them](../assets/images/diagrams/guide/guide-message-states.png)
 
-How the pieces in [Connect an agent](#connect-an-agent), [The `/havooch-mate` skill](#the-havooch-mate-skill) and [The `havooch` command](#the-havooch-command) fit together.
+Each comment's state and the outbox, from [Comments, threads and sending](#comments-threads-and-sending) and [Connect an agent](#connect-an-agent).
 
-![One round of the review loop: you comment and send, your agent works and answers on each thread](../assets/images/diagrams/havooch-feedback-loop.png)
+![Most havooch commands ask the running app; open and project commands launch it first; project list, config path and config check read config.toml with no app](../assets/images/diagrams/guide/guide-command-routes.png)
 
-One round of the loop from [Comments, threads and sending](#comments-threads-and-sending), as the skill runs it.
+Which commands need the app, from [The `havooch` command](#the-havooch-command) and [Settings: config.toml](#settings-configtoml).
+
+![A video becomes v1 of a project, each render the next version; threads keep the version they were raised on; Compare shows two versions on one playhead](../assets/images/diagrams/guide/guide-projects-versions.png)
+
+Projects, versions and Compare, from [Projects, versions and Compare](#projects-versions-and-compare).
