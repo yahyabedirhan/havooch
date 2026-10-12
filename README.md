@@ -75,8 +75,6 @@ Your agent reaches the app only through the `havooch` command; the skill teaches
 
 One round of feedback, from your comment to your agent's answer.
 
-The diagrams' sources are next to them in [`assets/images/diagrams`](assets/images/diagrams).
-
 ## Learn more
 
 The [guide](docs/guide.md) covers the rest: windows and the ways to open a video, the first-run window, the prompt for each agent, Compare, your settings in `config.toml`, every `havooch` command, the install options, and how to uninstall.
