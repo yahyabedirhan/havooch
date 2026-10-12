@@ -1,91 +1,112 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>How Havooch connects to your agent</title>
-<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Havooch architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&family=Inter+Tight:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--color-paper:#181818;--color-ink:#d4d4d4;--color-muted:#888888;--color-accent:#f1b467;--font-sans:'Geist',system-ui,sans-serif;--font-serif:'Literata',serif;--font-mono:'Geist Mono',ui-monospace,monospace}
-body{font-family:var(--font-sans);color:var(--color-ink);background:var(--color-paper);min-height:100vh;padding:3rem 2rem;display:flex;align-items:center;justify-content:center}
-.frame{width:100%;max-width:1200px;margin:0 auto}
-.eyebrow{font-family:var(--font-mono);font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--color-muted);margin-bottom:.75rem}
-h1{font-family:var(--font-serif);font-size:2rem;line-height:1.1;font-weight:600;letter-spacing:normal;margin-bottom:1.75rem}
-.diagram-container{width:100%;overflow-x:auto}
-svg{display:block;width:100%;min-width:1080px}
-</style></head><body><main class="frame">
-<p class="eyebrow">Architecture · Havooch</p><h1>How Havooch connects to your agent</h1>
-<div class="diagram-container" role="region" aria-label="How Havooch connects to your agent" tabindex="0">
-<svg viewBox="0 0 1080 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="havooch-connect-title havooch-connect-desc">
-<title id="havooch-connect-title">How Havooch connects to your agent</title>
-<desc id="havooch-connect-desc">You comment on a video in the Havooch app. Your coding agent, taught by the havooch-mate skill, talks to the app only through the havooch command, works in your repository and answers on the threads. Settings live in config.toml and reviews in Application Support.</desc>
-<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888888"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f1b467"/></marker></defs>
-<rect width="100%" height="100%" fill="#181818"/>
-<path d="M 208 228 H 264" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 472 220 H 552" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 552 252 H 472" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-<path d="M 760 220 H 832" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 832 252 H 760" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-<path d="M 936 140 V 192" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 936 284 V 352" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 368 284 V 352" fill="none" stroke="#888888" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-<path d="M 336 352 V 284" fill="none" stroke="#888888" stroke-width="1.2" marker-end="url(#arrow)"/>
-<rect x="210" y="208" width="52" height="16" rx="2" fill="#181818"/>
-<text x="236" y="220" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMMENT</text>
-<rect x="492" y="200" width="40" height="16" rx="2" fill="#181818"/>
-<text x="512" y="212" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
-<rect x="486" y="256" width="52" height="16" rx="2" fill="#181818"/>
-<text x="512" y="268" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPLIES</text>
-<rect x="762" y="200" width="68" height="16" rx="2" fill="#181818"/>
-<text x="796" y="212" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WAIT · ACK</text>
-<rect x="776" y="256" width="40" height="16" rx="2" fill="#181818"/>
-<text x="796" y="268" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
-<rect x="938" y="156" width="52" height="16" rx="2" fill="#181818"/>
-<text x="944" y="168" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">TEACHES</text>
-<rect x="938" y="308" width="56" height="16" rx="2" fill="#181818"/>
-<text x="944" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">WORKS IN</text>
-<rect x="370" y="308" width="40" height="16" rx="2" fill="#181818"/>
-<text x="376" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start" letter-spacing="0.06em">SAVES</text>
-<rect x="282" y="308" width="52" height="16" rx="2" fill="#181818"/>
-<text x="328" y="320" fill="#888888" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.06em">APPLIES</text>
-<rect x="24" y="196" width="184" height="64" rx="6" fill="#181818"/>
-<rect x="24" y="196" width="184" height="64" rx="6" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1.2"/>
-<text x="36" y="226" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">You</text>
-<text x="36" y="244" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">pause · point · write</text>
-<rect x="264" y="180" width="208" height="104" rx="6" fill="#181818"/>
-<rect x="264" y="180" width="208" height="104" rx="6" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1.2"/>
-<text x="276" y="197" fill="#f1b467" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">MACOS 26 · APPLE SILICON</text>
-<text x="276" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Havooch app</text>
-<text x="276" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">player · threads · outbox</text>
-<rect x="552" y="180" width="208" height="104" rx="6" fill="#181818"/>
-<rect x="552" y="180" width="208" height="104" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
-<text x="564" y="197" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">INSIDE THE APP</text>
-<text x="564" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">havooch command</text>
-<text x="564" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">wait · ack · reply · ask</text>
-<rect x="832" y="180" width="208" height="104" rx="6" fill="#181818"/>
-<rect x="832" y="180" width="208" height="104" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
-<text x="844" y="197" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">PI · OPENCODE</text>
-<text x="844" y="218" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your agent</text>
-<text x="844" y="236" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">Claude Code · Codex · Cursor</text>
-<rect x="832" y="64" width="208" height="76" rx="6" fill="#181818"/>
-<rect x="832" y="64" width="208" height="76" rx="6" fill="#141414" stroke="#d4d4d4" stroke-width="1.2"/>
-<text x="844" y="81" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">AGENT SKILL</text>
-<text x="844" y="102" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">/havooch-mate skill</text>
-<text x="844" y="120" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">npx skills add …</text>
-<rect x="832" y="352" width="208" height="64" rx="6" fill="#181818"/>
-<rect x="832" y="352" width="208" height="64" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
-<text x="844" y="382" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your repository</text>
-<text x="844" y="400" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">where the work lands</text>
-<rect x="264" y="352" width="208" height="96" rx="6" fill="#181818"/>
-<rect x="264" y="352" width="208" height="96" rx="6" fill="rgba(228,228,228,0.05)" stroke="#888888" stroke-width="1.2"/>
-<text x="276" y="369" fill="#888888" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">SETTINGS · REVIEWS</text>
-<text x="276" y="390" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="600">Your data</text>
-<text x="276" y="408" fill="#888888" font-size="10" font-family="'Geist Mono', monospace">~/.config · App Support</text>
-<text x="24" y="96" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">Havooch isn't an agent: it works with the one you use.</text>
-<text x="24" y="118" fill="#d4d4d4" font-size="14" font-family="'Geist', sans-serif" font-weight="400">Your agent can't click the app, so the command is its only way in.</text>
-<path d="M 24 488 H 1056" stroke="rgba(228,228,228,0.12)" stroke-width="1"/>
-<rect x="24" y="504" width="20" height="16" rx="3" fill="rgba(228,228,228,0.10)" stroke="#888888" stroke-width="1"/><text x="52" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">You</text>
-<rect x="109" y="504" width="20" height="16" rx="3" fill="rgba(241,180,103,0.08)" stroke="#f1b467" stroke-width="1"/><text x="137" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">The app</text>
-<rect x="222" y="504" width="20" height="16" rx="3" fill="#141414" stroke="#d4d4d4" stroke-width="1"/><text x="250" y="516" fill="#888888" font-size="12" font-family="'Geist', sans-serif">Command · agent</text>
-<text x="391" y="516" fill="#888888" font-size="12" font-family="'Geist Mono', monospace">dashed = reply path</text>
-<text x="1056" y="516" fill="#888888" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end">Architecture · from README and docs/guide.md</text>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter Tight', system-ui, sans-serif; background: #131417; color: #e4e6e9; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 1rem; }
+.frame { max-width: 1040px; width: 100%; }
+.diagram-container { width: 100%; overflow-x: auto; }
+.eyebrow { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #8b9097; margin-bottom: 0.5rem; }
+h1 { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; color: #e4e6e9; margin-bottom: 1.5rem; }
+svg { width: 100%; min-width: 1000px; display: block; }
+@media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+</style>
+</head>
+<body>
+<div class="frame">
+<p class="eyebrow">Diagram · havooch</p>
+<h1>Havooch architecture</h1>
+<div class="diagram-container">
+<svg viewBox="0 0 1000 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="havooch-architecture-title havooch-architecture-desc">
+<title id="havooch-architecture-title">Havooch architecture</title>
+<desc id="havooch-architecture-desc">Architecture diagram: you comment on a video in the Havooch app. The havooch command ships inside the app at Contents/Helpers. Your agent, taught by the havooch-mate skill, talks to the app only through that command, works in your repository and answers on the threads. Settings and reviews live in your data, in ~/.config and Application Support.</desc>
+<defs>
+<linearGradient id="tile" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#222529"/><stop offset="1" stop-color="#131417"/></linearGradient>
+<linearGradient id="rim-outer" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="1" stop-color="#fff" stop-opacity="0.08"/></linearGradient>
+<linearGradient id="rim-inner" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.14"/><stop offset="1" stop-color="#fff" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="tile-up" x1="0" y1="48" x2="0" y2="560" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#222529"/><stop offset="1" stop-color="#131417"/></linearGradient>
+<marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8b9097"/></marker>
+</defs>
+<rect width="1000" height="512" rx="12" fill="url(#tile)"/>
+<rect x="2" y="2" width="996" height="508" rx="10" fill="none" stroke="url(#rim-outer)" stroke-width="1"/>
+<rect x="10" y="10" width="980" height="492" rx="2" fill="none" stroke="url(#rim-inner)" stroke-width="1"/>
+<g transform="translate(0,-48)">
+<rect x="248" y="164" width="424" height="168" rx="4" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/><rect x="424.5" y="168" width="71" height="12" fill="url(#tile-up)"/><text x="460.0" y="177" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">HAVOOCH.APP</text>
+<rect x="744" y="88" width="228" height="324" rx="4" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/><rect x="820.0" y="92" width="76" height="12" fill="url(#tile-up)"/><text x="858.0" y="101" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">YOUR PROJECT</text>
+<line x1="184" y1="256" x2="264" y2="256" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="444" y1="240" x2="504" y2="240" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="504" y1="272" x2="444" y2="272" stroke="#8b9097" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<line x1="756" y1="272" x2="656" y2="272" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="858" y1="180" x2="858" y2="216" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="858" y1="296" x2="858" y2="332" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="384" y1="316" x2="384" y2="388" stroke="#8b9097" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<line x1="324" y1="388" x2="324" y2="316" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="200.5" y="236" width="47" height="12" fill="url(#tile-up)"/><text x="224" y="245" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">COMMENT</text>
+<rect x="455.5" y="220" width="37" height="12" fill="url(#tile-up)"/><rect x="455.5" y="220" width="37" height="12" fill="rgba(255,255,255,0.02)"/><text x="474" y="229" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
+<rect x="450.5" y="280" width="47" height="12" fill="url(#tile-up)"/><rect x="450.5" y="280" width="47" height="12" fill="rgba(255,255,255,0.02)"/><text x="474" y="289" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">REPLIES</text>
+<rect x="687.5" y="220" width="37" height="12" fill="url(#tile-up)"/><text x="706" y="229" fill="#ffffff" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">BATCH</text>
+<rect x="675.0" y="280" width="62" height="12" fill="url(#tile-up)"/><text x="706" y="289" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">WAIT · ACK</text>
+<rect x="866" y="192" width="47" height="12" fill="url(#tile-up)"/><rect x="866" y="192" width="47" height="12" fill="rgba(255,255,255,0.02)"/><text x="889.5" y="201" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">TEACHES</text>
+<rect x="866" y="308" width="52" height="12" fill="url(#tile-up)"/><rect x="866" y="308" width="52" height="12" fill="rgba(255,255,255,0.02)"/><text x="892.0" y="317" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">WORKS IN</text>
+<rect x="392" y="354" width="37" height="12" fill="url(#tile-up)"/><text x="410.5" y="363" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">SAVES</text>
+<rect x="269" y="354" width="47" height="12" fill="url(#tile-up)"/><text x="292.5" y="363" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">APPLIES</text>
+<rect x="40" y="226" width="144" height="60" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="48" y="232" width="30" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="63.0" y="241" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+<text x="112.0" y="262" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">You</text>
+<text x="112.0" y="278" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">pause · point · write</text>
+<rect x="504" y="212" width="152" height="88" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="512" y="218" width="25" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="524.5" y="227" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">CLI</text>
+<text x="580.0" y="250" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">havooch command</text>
+<text x="580.0" y="266" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">wait · ack · reply · ask</text>
+<text x="580.0" y="280" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Contents/Helpers</text>
+<rect x="756" y="120" width="204" height="60" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="764" y="126" width="35" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="781.5" y="135" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SKILL</text>
+<text x="858.0" y="156" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">/havooch-mate skill</text>
+<text x="858.0" y="172" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">npx skills add …</text>
+<rect x="756" y="216" width="204" height="80" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="764" y="222" width="35" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="781.5" y="231" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+<text x="858.0" y="248" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">Your agent</text>
+<text x="858.0" y="264" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Claude Code · Codex · Cursor</text>
+<text x="858.0" y="278" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Pi · OpenCode</text>
+<rect x="756" y="332" width="204" height="60" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="764" y="338" width="30" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="779.0" y="347" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">REPO</text>
+<text x="858.0" y="368" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">Your repository</text>
+<text x="858.0" y="384" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">where the work lands</text>
+<rect x="264" y="388" width="180" height="72" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<rect x="272" y="394" width="30" height="12" fill="none" stroke="#8b9097" stroke-opacity="0.5" stroke-width="0.8"/><text x="287.0" y="403" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">FILE</text>
+<text x="354.0" y="420" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">Your data</text>
+<text x="354.0" y="436" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">settings · reviews</text>
+<text x="354.0" y="450" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">~/.config · App Support</text>
+<path d="M 266,196 H 430 L 444,210 V 314 Q 444,316 442,316 H 266 Q 264,316 264,314 V 198 Q 264,196 266,196 Z" fill="#ffffff"/><polygon points="430,196 430,210 444,210" fill="#b9bec4"/>
+<rect x="272" y="202" width="25" height="12" fill="none" stroke="#4f545b" stroke-width="0.8"/><text x="284.5" y="211" fill="#4f545b" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">APP</text>
+<text x="354" y="240" fill="#131417" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="middle">Havooch app</text>
+<text x="354" y="256" fill="#4f545b" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">player · threads · outbox</text>
+<line x1="288" y1="276" x2="420" y2="276" stroke="rgba(19,20,23,0.16)" stroke-width="0.8"/>
+<text x="354" y="296" fill="#4f545b" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">MACOS 26 · APPLE SILICON</text>
+<line x1="656" y1="240" x2="744" y2="240" stroke="#ffffff" stroke-width="1.4"/><polygon points="756,240 740,233 744,240" fill="#b9bec4"/><polygon points="756,240 744,240 740,247" fill="#ffffff"/>
+<text x="40" y="364" fill="#8b9097" font-size="10.5" font-family="'Inter Tight', system-ui, sans-serif">Havooch isn't an agent:</text>
+<text x="40" y="379" fill="#8b9097" font-size="10.5" font-family="'Inter Tight', system-ui, sans-serif">it works with the one you use.</text>
+<text x="504" y="364" fill="#8b9097" font-size="10.5" font-family="'Inter Tight', system-ui, sans-serif">Your agent can't click the app,</text>
+<text x="504" y="379" fill="#8b9097" font-size="10.5" font-family="'Inter Tight', system-ui, sans-serif">so the command is its only way in.</text>
+</g>
+<line x1="40" y1="440" x2="960" y2="440" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="456" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+<path d="M 40,468 H 49 L 54,473 V 478 H 40 Z" fill="#ffffff"/><polygon points="49,468 49,473 54,473" fill="#b9bec4"/>
+<text x="60" y="476" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Havooch app</text>
+<rect x="155" y="468" width="14" height="10" rx="1" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="175" y="476" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Component</text>
+<line x1="260" y1="473" x2="274" y2="473" stroke="#ffffff" stroke-width="1.4"/><polygon points="286,473 270,466 274,473" fill="#b9bec4"/><polygon points="286,473 274,473 270,480" fill="#ffffff"/>
+<text x="292" y="476" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Batch to your agent</text>
+<line x1="423" y1="473" x2="445" y2="473" stroke="#8b9097" stroke-width="1.2" marker-end="url(#arrow)"/>
+<text x="451" y="476" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Call or hand-off</text>
+<line x1="569" y1="473" x2="591" y2="473" stroke="#8b9097" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<text x="597" y="476" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Reply path</text>
 </svg>
-</div></main></body></html>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback session</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&family=Inter+Tight:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter Tight', system-ui, sans-serif; background: #131417; color: #e4e6e9; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 1rem; }
+.frame { max-width: 1040px; width: 100%; }
+.diagram-container { width: 100%; overflow-x: auto; }
+.eyebrow { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #8b9097; margin-bottom: 0.5rem; }
+h1 { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; color: #e4e6e9; margin-bottom: 1.5rem; }
+svg { width: 100%; min-width: 1000px; display: block; }
+@media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+
+</style>
+</head>
+<body>
+<div class="frame">
+<p class="eyebrow">Diagram · havooch</p>
+<h1>Feedback session</h1>
+<div class="diagram-container">
+<svg viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="havooch-feedback-session-title havooch-feedback-session-desc">
+<title id="havooch-feedback-session-title">Feedback session</title>
+<desc id="havooch-feedback-session-desc">User journey of one person giving video feedback to a coding agent with Havooch across six stages, with a confidence line that dips when something looks off, rises once they point at it on the frame, holds while comments go out as one batch and the agent works, and peaks when the answer appears beside the video.</desc>
+<defs>
+<linearGradient id="tile" x1="0" y1="0" x2="0" y2="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#222529"/><stop offset="1" stop-color="#131417"/></linearGradient>
+<linearGradient id="rim-outer" x1="0" y1="0" x2="0" y2="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="1" stop-color="#fff" stop-opacity="0.08"/></linearGradient>
+<linearGradient id="rim-inner" x1="0" y1="0" x2="0" y2="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.14"/><stop offset="1" stop-color="#fff" stop-opacity="0.03"/></linearGradient>
+</defs>
+<rect width="1000" height="520" rx="12" fill="url(#tile)"/>
+<rect x="2" y="2" width="996" height="516" rx="10" fill="none" stroke="url(#rim-outer)" stroke-width="1"/>
+<rect x="10" y="10" width="980" height="500" rx="2" fill="none" stroke="url(#rim-inner)" stroke-width="1"/>
+<rect x="112" y="36" width="128" height="48" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="122" y="52" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 01</text>
+<text x="122" y="71" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Spot it</text>
+<rect x="256" y="36" width="128" height="48" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="266" y="52" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 02</text>
+<text x="266" y="71" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Point at it</text>
+<rect x="400" y="36" width="128" height="48" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="410" y="52" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 03</text>
+<text x="410" y="71" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Keep watching</text>
+<rect x="544" y="36" width="128" height="48" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="554" y="52" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 04</text>
+<text x="554" y="71" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Send once</text>
+<rect x="688" y="36" width="128" height="48" rx="2" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="698" y="52" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 05</text>
+<text x="698" y="71" fill="#e4e6e9" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Your agent works</text>
+<path d="M 832,36 H 946 L 960,50 V 84 H 832 Z" fill="#ffffff"/>
+<polygon points="946,36 946,50 960,50" fill="#b9bec4"/>
+<text x="842" y="52" fill="#4f545b" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">STAGE 06</text>
+<text x="842" y="71" fill="#131417" font-size="12" font-weight="600" font-family="'Inter Tight', system-ui, sans-serif">Read the answer</text>
+<text x="40" y="116" fill="#6b7078" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">CONFIDENCE</text>
+<line x1="112" y1="136" x2="960" y2="136" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="139" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">High</text>
+<line x1="112" y1="200" x2="960" y2="200" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="203" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">Neutral</text>
+<line x1="112" y1="264" x2="960" y2="264" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="267" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">Low</text>
+<line x1="176" y1="232" x2="320" y2="168" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="320" y1="168" x2="464" y2="168" stroke="#8b9097" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="464" y1="168" x2="608" y2="168" stroke="#8b9097" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="608" y1="168" x2="752" y2="168" stroke="#8b9097" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="752" y1="168" x2="896" y2="136" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="176" cy="232" r="3.5" fill="#222529" stroke="#8b9097" stroke-width="1.2"/>
+<text x="176" y="250" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Unclear</text>
+<circle cx="320" cy="168" r="4" fill="#ffffff"/>
+<text x="320" y="158" fill="#e4e6e9" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Clear</text>
+<circle cx="464" cy="168" r="3.5" fill="#222529" stroke="#8b9097" stroke-width="1.2"/>
+<text x="464" y="158" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Focused</text>
+<circle cx="608" cy="168" r="3.5" fill="#222529" stroke="#8b9097" stroke-width="1.2"/>
+<text x="608" y="158" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Done in one step</text>
+<circle cx="752" cy="168" r="3.5" fill="#222529" stroke="#8b9097" stroke-width="1.2"/>
+<text x="752" y="158" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Waiting</text>
+<circle cx="896" cy="136" r="4" fill="#ffffff"/>
+<text x="896" y="126" fill="#e4e6e9" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace" text-anchor="middle">Resolved</text>
+<path d="M 346,208 Q 328,204 322,176" fill="none" stroke="rgba(228,230,233,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="322" cy="176" r="1.6" fill="#e4e6e9"/>
+<text x="352" y="214" fill="#e4e6e9" font-size="12" font-family="'Inter Tight', system-ui, sans-serif">No screenshots, no timestamps to guess.</text>
+<path d="M 890,204 Q 902,178 897,142" fill="none" stroke="rgba(228,230,233,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="897" cy="142" r="1.6" fill="#e4e6e9"/>
+<text x="884" y="214" fill="#e4e6e9" font-size="12" font-family="'Inter Tight', system-ui, sans-serif" text-anchor="end">Answers land on your thread.</text>
+<line x1="40" y1="288" x2="960" y2="288" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<line x1="40" y1="392" x2="960" y2="392" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="310" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">WHAT HAPPENS</text>
+<text x="40" y="414" fill="#8b9097" font-size="7" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.14em">YOU SEE</text>
+<text x="112" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Something looks off</text>
+<text x="112" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">at 0:12.</text>
+<text x="112" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">the player</text>
+<text x="256" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Pause, drag a box,</text>
+<text x="256" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">type the change.</text>
+<text x="256" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">a box on the frame</text>
+<text x="400" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Comments queue up,</text>
+<text x="400" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">grouped by moment.</text>
+<text x="400" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">the comment queue</text>
+<text x="544" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Cmd+Enter sends all</text>
+<text x="544" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">as one batch.</text>
+<text x="544" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">one batch, sent</text>
+<text x="688" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Gets moment, frame,</text>
+<text x="688" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">box and transcript.</text>
+<text x="688" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">working in your repo,</text>
+<text x="688" y="428" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">questions on the thread</text>
+<text x="832" y="310" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">Answers appear</text>
+<text x="832" y="326" fill="#e4e6e9" font-size="11" font-family="'Inter Tight', system-ui, sans-serif">beside the video.</text>
+<text x="832" y="414" fill="#8b9097" font-size="9" font-family="'IBM Plex Mono', ui-monospace, monospace">v2 opens to compare</text>
+<rect x="112" y="336" width="128" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="120" y="347" fill="#8b9097" font-size="7.5" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.04em">HOW DO I DESCRIBE IT?</text>
+<rect x="112" y="358" width="128" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="120" y="369" fill="#8b9097" font-size="7.5" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.04em">USUALLY: SCREENSHOTS</text>
+<line x1="40" y1="452" x2="960" y2="452" stroke="rgba(255,255,255,0.10)" stroke-width="0.8"/>
+<text x="40" y="468" fill="#8b9097" font-size="8" font-family="'IBM Plex Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+<path d="M 40,480 H 49 L 54,485 V 490 H 40 Z" fill="#ffffff"/><polygon points="49,480 49,485 54,485" fill="#b9bec4"/>
+<text x="60" y="488" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">The payoff</text>
+<rect x="130" y="480" width="14" height="10" rx="1" fill="#222529" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="150" y="488" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Stage</text>
+<line x1="200" y1="485" x2="218" y2="485" stroke="#8b9097" stroke-width="1.2"/><circle cx="209" cy="485" r="2.5" fill="#222529" stroke="#8b9097" stroke-width="1.2"/>
+<text x="224" y="488" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Confidence at each stage</text>
+<line x1="344" y1="485" x2="362" y2="485" stroke="#ffffff" stroke-width="1.6"/><circle cx="353" cy="485" r="2.5" fill="#ffffff"/>
+<text x="368" y="488" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">Where it lifts</text>
+<rect x="440" y="480" width="16" height="10" rx="1" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+<text x="462" y="488" fill="#8b9097" font-size="8.5" font-family="'Inter Tight', system-ui, sans-serif">The usual way, without Havooch</text>
+</svg>
+</div>
+</div>
+</body>
+</html>

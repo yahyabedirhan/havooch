@@ -17,6 +17,24 @@ When your agent builds something you can watch, like an app, an animation or a v
 3. **Send** your comments to your agent when you're ready.
 4. **Your agent does the work** in your repository and answers on each thread, inside the player. When something isn't clear, it asks you there.
 
+### Review loop
+
+![The review loop: watch, pause and point, send, your agent works, it answers, and a new version joins your project](assets/images/diagrams/havooch-review-loop.png)
+
+Each round leaves a new version in your project, so you can see what changed.
+
+### Comment anatomy
+
+![One comment taken apart: your words, the moment, the region you drew, the frame and the transcript around it](assets/images/diagrams/havooch-comment-anatomy.png)
+
+Your agent gets what you saw, not only what you typed.
+
+### Feedback session
+
+![One feedback session: confidence dips when you spot a problem, rises when you point at it, and peaks when you read the answer](assets/images/diagrams/havooch-feedback-session.png)
+
+One session, from the first doubt to the answer on your thread.
+
 ## Install
 
 Havooch needs an Apple silicon Mac with macOS 26 (Tahoe) or later.
@@ -67,11 +85,15 @@ When you ask for a change to the video itself, your agent turns it into a **proj
 
 ## How the pieces fit
 
+### Havooch architecture
+
 ![How the Havooch app, the `havooch` command, your agent, the skill, your repository and your data connect](assets/images/diagrams/havooch-connect.png)
 
 Your agent reaches the app only through the `havooch` command; the skill teaches it how.
 
-![One round of the review loop: you comment and send, your agent works and answers on each thread](assets/images/diagrams/havooch-feedback-loop.png)
+### Feedback round
+
+![One round of feedback: you comment and send, your agent works and answers on each thread](assets/images/diagrams/havooch-feedback-loop.png)
 
 One round of feedback, from your comment to your agent's answer.
 
