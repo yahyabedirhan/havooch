@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// The cat mark: the head of Havuç, the app's logo (logo v2,
-/// `assets/images/logo/v2-havuc/`), as the vector PDFs `make logo` draws
+/// The cat mark: the head of Havuç folded from paper, the app's logo (logo v3,
+/// `assets/images/logo/v3-paper-cat/`), as the vector PDFs `make logo` draws
 /// into `Packaging/Logo/`. At 24 points and under it's the small cut:
 /// cropped tight, with bigger eyes and a bolder face, so the catchlights,
 /// the nose and the mouth still read at 16 points. From 32 points it's the

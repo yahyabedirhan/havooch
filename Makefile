@@ -18,7 +18,7 @@
 #   make agent-logos redraw Packaging/AgentLogos/*.pdf from the SVGs in
 #                   assets/images/agent-logos/ (needs rsvg-convert)
 #   make logo       redraw Packaging/Logo/*.pdf, the cat mark the app shows,
-#                   from assets/images/logo/v2-havuc/ (needs rsvg-convert)
+#                   from assets/images/logo/v3-paper-cat/ (needs rsvg-convert)
 #   make identity   print the app name, the command, the bundle id and the
 #                   version as name=value lines (the release workflow reads them)
 #   make clean
@@ -37,8 +37,8 @@ BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
 INSTALLED   := /Applications/$(APP_NAME).app
-# The app icon: logo v2 "Havuç" on the white tile, beside Shipyard's.
-APP_ICON    := assets/images/logo/v2-havuc/AppIcon-light.icns
+# The app icon: logo v3 "Paper cat" on Swift Lab's graphite tile.
+APP_ICON    := assets/images/logo/v3-paper-cat/AppIcon.icns
 
 # With the Command Line Tools alone (no Xcode), swift test can't find the
 # Testing framework the tests use: point the compiler and the test runner at
@@ -146,7 +146,7 @@ agent-logos:
 # The cat mark, as the vector PDFs the app bundles: the full mark, and the
 # small cut for 32 points and under. Committed like the agents' logos; run
 # this after changing the logo (brew install librsvg).
-LOGO_SVGS := assets/images/logo/v2-havuc/havooch-mark.svg assets/images/logo/v2-havuc/havooch-mark-small.svg
+LOGO_SVGS := assets/images/logo/v3-paper-cat/havooch-mark.svg assets/images/logo/v3-paper-cat/havooch-mark-small.svg
 
 logo:
 	@mkdir -p Packaging/Logo

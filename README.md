@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/images/logo/v2-havuc/png/havooch-app-icon-light-256.png" width="128" alt="Havooch's app icon: the head of Havuç, an orange tabby cat with pink ears, on a white rounded tile"></p>
+<p align="center"><img src="assets/images/logo/v3-paper-cat/png/havooch-app-icon-256.png" width="128" alt="Havooch's app icon: the head of Havuç, an orange and white cat folded from paper, on a dark graphite rounded tile"></p>
 
 <h1 align="center">Havooch</h1>
 
