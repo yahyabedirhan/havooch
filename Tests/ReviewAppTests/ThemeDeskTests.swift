@@ -128,7 +128,7 @@ struct ThemeDeskTests {
         let themes = try #require(try object(reply.output)["themes"] as? [[String: Any]])
         #expect(themes.map { $0["name"] as? String } == [
             "Atom One Light", "Brown", "Catppuccin Latte", "Catppuccin Mocha", "Default Dark", "Default Light", "Dimmed",
-            "Dracula", "GitHub Dark", "GitHub Light", "One Dark Pro", "Tokyo Night",
+            "Dracula", "GitHub Dark", "GitHub Light", "Graphite", "One Dark Pro", "Tokyo Night",
         ])
         #expect(themes.first { $0["name"] as? String == "Dimmed" }?["source"] as? String == "user")
         #expect(themes.first { $0["name"] as? String == "Default Dark" }?["source"] as? String == "built-in")

@@ -17,12 +17,12 @@ struct ThemeFilesTests {
         return SupportLayout(root: root)
     }
 
-    @Test("the app ships its own three themes and eight from popular VS Code themes, and every file reads")
+    @Test("the app ships its own four themes and eight from popular VS Code themes, and every file reads")
     func shippedThemes() {
         let reading = ThemeFiles.read(Self.shipped)
         #expect(reading.problems.isEmpty)
         #expect(Set(reading.files.map(\.name)) == [
-            "Default Light", "Default Dark", "Dimmed",
+            "Default Light", "Default Dark", "Dimmed", "Graphite",
             "GitHub Dark", "GitHub Light", "One Dark Pro", "Dracula", "Tokyo Night",
             "Catppuccin Mocha", "Catppuccin Latte", "Atom One Light",
         ])
