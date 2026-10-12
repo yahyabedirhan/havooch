@@ -2,6 +2,41 @@
 
 The head of Havuç, the maintainer's orange-and-white cat. "Havuç" is Turkish for "carrot"; "Havooch" spells how it sounds.
 
+## Current logo: Paper cat (v3)
+
+The app icon, the cat mark in the app, the README and the site use logo v3, in `v3-paper-cat/`. The first logo (v1) and the second (v2, `v2-havuc/`) follow as earlier options.
+
+![v3 test sheet](v3-paper-cat/havooch-test-sheet.png)
+
+Havuç's head, folded from paper in the style of Swift Lab's logo (`yahyabedirhan/swift-lab`), beside Shipyard's folded sails (`yahyabedirhan/shipyard`). The faces are flat and lit from the right. There are no lines and no gradients.
+
+- **Head**: an angular outline with big upright ears, cheek points and a soft chin, its corners rounded.
+- **Middle fold**: one fold runs down the head, the white muzzle and the nose. The left half is shaded (`#D4621A` fur, `#ECE4DC` muzzle) and the right half is lit (`#F37A1F`, `#FFFFFF`).
+- **Folded ears**: each ear folds from its tip to the middle of its foot. The outer face is orange (`#C95B17` left, `#F6863A` right) and the inner face is peach (`#F7B9A4` left, `#E39E89` right). The peach face replaces v2's inner ears.
+- **Kept from v2**: the white stripe that opens into the muzzle, the big dark eyes with one catchlight each, the orange ring round each eye, the pink nose and the "w" mouth. The tabby marks are dropped.
+- **Tile**: Swift Lab's graphite tile, `#222529` to `#131417`, with a bright outer rim and a faint inner rim that fade from top to bottom. It keeps the macOS squircle and the drop shadow of the light icon.
+- **Small cut** (24 pt and under): bigger eyes and catchlights, v2's bolder small-cut nose and mouth, cropped tight. The 16 pt app icon draws it larger and drops the rims.
+
+| File | What it is |
+|---|---|
+| `havooch-mark.svg` | the mark in colour, for 32 pt and up |
+| `havooch-mark-small.svg` | the small cut, for 24 pt and under |
+| `havooch-app-icon.svg` | the macOS app icon on the graphite tile |
+| `havooch-app-icon-small.svg` | the app icon for 16 pt (16 and 32 px) |
+| `AppIcon.icns` | the app icon, 16 to 1024 px |
+| `png/` | the mark and the app icon at 16 to 1024 px |
+| `havooch-test-sheet.png` | the app icon and the mark at true sizes on light and dark, with 16 and 32 px magnified |
+
+`make logo` draws `Packaging/Logo/*.pdf` from the two mark SVGs. `site/assets/logo.svg` is a copy of `havooch-mark.svg`, and `site/assets/og.png` shows it. v3 has no one-colour files or lockups yet.
+
+```sh
+python3 -B assets/images/logo/v3-paper-cat/build_logo.py
+python3 -B assets/images/logo/v3-paper-cat/export.py   # png/, AppIcon.icns and the test sheet
+make logo                                             # Packaging/Logo/*.pdf
+```
+
+## First logo: Play blaze (v1)
+
 ![Test sheet](havooch-test-sheet.png)
 
 ## Concept
