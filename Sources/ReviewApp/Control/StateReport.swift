@@ -205,7 +205,8 @@ nonisolated struct StateReport: Encodable, Equatable {
         }
     }
 
-    /// The comparison of two versions in a project's window (    /// compare-control V4): the popover's choice while it is open, or what
+    /// The comparison of two versions in a project's window
+    /// (compare-control V4): the popover's choice while it is open, or what
     /// the window compares.
     struct Compare: Encodable, Equatable {
         /// `choosing` while the popover is open, `comparing` once the window

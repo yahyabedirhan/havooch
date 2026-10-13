@@ -35,7 +35,7 @@ fixtures/                      tracked   the sample video and its sidecars for t
 
 Agent control follows Shipyard's design (`yahyabedirhan/shipyard`, ADR 0006 and ADR 0007), adapted here in `docs/adr/0001-agents-control-the-app-through-a-leased-cli.md`. Read it before touching the CLI, the socket or the lease.
 
-Keep decision numbers out of code comments. Explain the behavior in words. Decisions live in `docs/decisions/`.
+Keep decision numbers out of code comments. Explain the behavior in words. Decisions live in `docs/decisions/`, `docs/low-level-design.md` (the L numbers) and `docs/prototypes/` (the lettered ones).
 
 `docs/low-level-design.md` is the design of the code as it is: its modules, files, types, flows and decisions, kept with the `low-level-design` skill. It is documentation for the maintainer to read later, not a review gate. Read it before adding or moving a module, and update it in the same change whenever the code moves away from it, with a new decision as the next L number.
 
