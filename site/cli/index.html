@@ -71,12 +71,12 @@
     "keyframePath": "…/t-1.png", "region": { "x": .22, "y": .42, "w": .18, "h": .15 },
     "messages": [{ "text": "The intro goes by too fast." }] }] }</span>
 <span class="l"><b>$</b> havooch ack s-f92cbb2a-2 "Got 1 message on 1 thread, starting."</span>
-<span class="l"><b>$</b> havooch status m-f92cbb2a-9 working</span>
+<span class="l"><b>$</b> havooch message state m-f92cbb2a-9 working</span>
 <span class="l dim">  edit src/scenes/intro.ts · commit 3f9c2ab</span>
 <span class="l"><b>$</b> havooch reply 1 "Slowed the first slide from 3 s to 4.5 s. The title holds for a full beat. 3f9c2ab"</span>
 <span class="l"><b>$</b> havooch ask 1 "Should the subtitle hold as long as the title?"</span>
 <span class="l ans">Yes, the same beat for both.</span>
-<span class="l"><b>$</b> havooch status m-f92cbb2a-9 done</span>
+<span class="l"><b>$</b> havooch message state m-f92cbb2a-9 done</span>
 <span class="l"><b>$</b> havooch wait<i class="cursor"></i></span></code></pre>
           <button class="term-replay" type="button" hidden>Replay</button>
         </div>
@@ -111,7 +111,7 @@
           <div class="row">
             <div class="you cell quiet"><p>Pins on the timeline show each thread's state while you keep watching.</p></div>
             <div class="mid cell"><i class="node"></i></div>
-            <div class="agent cell"><code>havooch status m-… working</code><p>The agent reads the keyframe and the crop, edits your repo and commits once per message.</p></div>
+            <div class="agent cell"><code>havooch message state m-… working</code><p>The agent reads the keyframe and the crop, edits your repo and commits once per message.</p></div>
           </div>
           <div class="row">
             <div class="you cell"><h3>A question lands on the frame</h3><p>The thread moves to Needs you. Your answer skips the queue and goes straight back.</p></div>
@@ -121,7 +121,7 @@
           <div class="row">
             <div class="you cell"><h3>The answer, beside the frame</h3><p>One to three plain sentences and the commit, in a thread you can reopen from the pin.</p></div>
             <div class="mid cell"><i class="node"></i></div>
-            <div class="agent cell"><code>havooch reply 1 "Slowed the first slide… 3f9c2ab"</code><code>havooch status m-… done</code></div>
+            <div class="agent cell"><code>havooch reply 1 "Slowed the first slide… 3f9c2ab"</code><code>havooch message state m-… done</code></div>
           </div>
         </div>
       </div>
@@ -166,14 +166,14 @@
     <section class="commands" id="commands" aria-labelledby="commands-title">
       <div class="wrap">
         <h2 id="commands-title">The command line</h2>
-        <p class="section-lede">The app ships a <code>havooch</code> command. The listener uses five of its verbs and never touches the player. Everything else drives the player under a lease, so an agent can review a video with you and give the controls back the moment you want them.</p>
+        <p class="section-lede">The app ships a <code>havooch</code> command. The listener uses five of its commands and never touches the player. Everything else drives the player under a lease, so an agent can review a video with you and give the controls back the moment you want them.</p>
         <div class="cmd-cols">
           <div>
             <h3>For the listener</h3>
             <dl class="cmdlist">
               <dt><code>wait [--timeout s]</code></dt><dd>Wait for the next send and print it as JSON.</dd>
               <dt><code>ack &lt;send&gt; [text]</code></dt><dd>Say you have it. The messages turn acknowledged.</dd>
-              <dt><code>status &lt;message&gt; working|done|failed [&lt;text&gt;]</code></dt><dd>Say how far you are. The pin shows it, and the text with <code>working</code> shows what you do now.</dd>
+              <dt><code>message state &lt;message&gt; working|done|failed [&lt;text&gt;]</code></dt><dd>Say how far you are. The pin shows it, and the text with <code>working</code> shows what you do now.</dd>
               <dt><code>reply &lt;thread&gt; &lt;text&gt;</code></dt><dd>Answer on a thread, by id or by number.</dd>
               <dt><code>ask &lt;thread&gt; &lt;question&gt; [--choice text]…</code></dt><dd>Ask on the frame and print the person's answer. Each choice is a button the person can click.</dd>
             </dl>
@@ -182,14 +182,14 @@
             <h3>For driving the player</h3>
             <dl class="cmdlist">
               <dt><code>control take</code> <code>control release</code></dt><dd>Take the lease, or hand it back.</dd>
-              <dt><code>player open &lt;path&gt;</code> <code>player seek 0:12</code></dt><dd>Open a video, move to a time, play, pause.</dd>
-              <dt><code>comment add &lt;text&gt; --at 12 --region x,y,w,h</code></dt><dd>Queue a comment where a person would.</dd>
-              <dt><code>thread show 3</code> <code>thread list</code></dt><dd>Open a thread in the sidebar, or go back to the list.</dd>
+              <dt><code>player load &lt;path&gt;</code> <code>player seek 0:12</code></dt><dd>Load a video, move to a time, play, pause.</dd>
+              <dt><code>message add &lt;text&gt; --at 12 --region x,y,w,h</code></dt><dd>Queue a message where a person would.</dd>
+              <dt><code>sidebar show thread 3</code> <code>sidebar show threads</code></dt><dd>Open a thread in the sidebar, or go back to the list.</dd>
               <dt><code>screenshot out.png --appearance dark</code></dt><dd>Capture the window as it is.</dd>
             </dl>
           </div>
         </div>
-        <p class="lease-note">The lease is the whole safety story: one holder at a time, you can take it back from the toolbar, and a listener never needs it. Exit codes are plain: 0 done, 1 refused with the reason on stderr, 2 a wait ran out.</p>
+        <p class="lease-note">The lease is the whole safety story: one holder at a time, you can take it back from the toolbar, and a listener never needs it. Exit codes are plain: 0 done, 1 refused with the reason on stderr, 2 wrong usage, 124 a wait ran out.</p>
       </div>
     </section>
 
