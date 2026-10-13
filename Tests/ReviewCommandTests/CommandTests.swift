@@ -501,13 +501,13 @@ struct CommandTests {
         #expect(run("help", "plyer").error.contains("did you mean havooch help player"))
     }
 
-    @Test("--version prints 0.5.1 without asking the app, as JSON with --json")
+    @Test("--version prints 0.6.0 without asking the app, as JSON with --json")
     func version() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.5.1\n"))
+        #expect(HavoochCLI.run(["--version"], environment: run.environment) == CommandResult(output: "0.6.0\n"))
         #expect(HavoochCLI.run(["--version", "--json"], environment: run.environment)
-            == CommandResult(output: "{\n  \"version\" : \"0.5.1\"\n}\n"))
+            == CommandResult(output: "{\n  \"version\" : \"0.6.0\"\n}\n"))
         #expect(run.transport.sent.isEmpty)
     }
 
