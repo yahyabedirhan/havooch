@@ -1,20 +1,14 @@
 import Foundation
 import ReviewWire
 
-/// `havooch connect show | pick <harness> | disconnect | forget`: the
-/// Connect view's own actions, each the operator's, as the person's clicks
-/// are. Back is `thread list`; Link, Run Command and Cancel are `setup link`,
+/// `havooch connect pick <harness> | disconnect | forget`: the Connect
+/// view's own actions, each the operator's, as the person's clicks are.
+/// `sidebar show connect` shows the view and `sidebar show threads` is
+/// Back; Link, Run Command and Cancel are `setup link`,
 /// `setup install` and `setup cancel`. Copying a prompt or a path changes
 /// nothing in the app: `state --json` has the text under `sidebar.connect`.
 enum ConnectCommands {
     static let commands: [Command] = [
-        Command(
-            name: "connect show", synopsis: "connect show",
-            summary: "show the Connect view in the sidebar, as the header's connect button does; thread list goes back"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.connectShow)
-        },
         Command(
             name: "connect pick", synopsis: "connect pick <harness>",
             summary: "pick a harness in the Connect view (claude-code, codex, cursor, pi, opencode), as a click on its logo does; prints its readiness and its prompt"

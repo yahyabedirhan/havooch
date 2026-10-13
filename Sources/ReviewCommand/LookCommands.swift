@@ -1,14 +1,28 @@
 import Foundation
 import ReviewWire
 
-/// `havooch screenshot <abs.png> [--appearance light|dark]
-/// [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]`: a window
-/// as a PNG: the key window, or the window `--window <id>` names. The path
-/// is absolute, as the contract says. The agent-control indicator shows as the person sees it; `--hide-agent-indicator` leaves
-/// it out. `--window settings` captures the Settings window instead, and
-/// `--window about` the About panel, `--window first-run` the first-run window.
-enum ScreenshotCommand {
-    static let command = Command(
+/// `havooch state | screenshot`: looking at the app. `state` prints
+/// everything the window shows. `screenshot <abs.png> [--appearance
+/// light|dark] [--hide-agent-indicator] [--window
+/// main|settings|about|first-run|<id>]` saves a window as a PNG: the key
+/// window, or the window `--window <id>` names. The path is absolute, as
+/// the contract says. The agent-control indicator shows as the person sees
+/// it; `--hide-agent-indicator` leaves it out. `--window settings` captures
+/// the Settings window instead, and `--window about` the About panel,
+/// `--window first-run` the first-run window.
+enum LookCommands {
+    static let commands: [Command] = [
+        Command(name: "state", synopsis: "state", summary: "everything the app shows: the window's video and player, and every window") {
+            arguments, _ throws(UsageError) in
+            try arguments.none()
+            return .send(.state)
+        }.onAWindow(),
+        screenshot,
+    ]
+
+    /// `screenshot` names its own window: a player window by its id, or
+    /// one of the app's other windows by its name.
+    private static let screenshot = Command(
         name: "screenshot", synopsis: "screenshot <abs.png> [--appearance light|dark] [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]",
         summary: "save a window (the key one, or --window <id>), Settings, the About panel or the first-run window as a PNG, with the agent-control indicator unless hidden",
         valuedOptions: ["--appearance", "--window"], flags: ["--hide-agent-indicator"]

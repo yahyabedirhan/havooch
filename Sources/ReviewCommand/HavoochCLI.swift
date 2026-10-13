@@ -91,7 +91,7 @@ public enum HavoochCLI {
         let json = arguments[..<end].contains("--json")
         let arguments = arguments[..<end].filter { $0 != "--json" } + arguments[end...]
         // Help is asked for before the command's name: after it, `-h` and
-        // `--help` may be a comment's text.
+        // `--help` may be a message's text.
         let beforeTheName = arguments.prefix { $0.hasPrefix("-") && $0 != Arguments.optionsEnd }
         if beforeTheName.contains("--help") || beforeTheName.contains("-h") {
             return CommandResult(output: CommandTable.usageText)

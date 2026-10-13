@@ -1,11 +1,11 @@
 import Foundation
 import ReviewWire
 
-/// `havooch player open | play | pause | seek | mute | unmute | volume |
+/// `havooch player load | play | pause | seek | mute | unmute | volume |
 /// sound`.
 enum PlayerCommands {
     static let commands: [Command] = [
-        Command(name: "player open", synopsis: "player open <path>", summary: "open a video file, paused at its start") {
+        Command(name: "player load", synopsis: "player load <path>", summary: "load a video file, paused at its start") {
             arguments, environment throws(UsageError) in
             // Made absolute here: the app runs in another folder.
             let path = try arguments.one("<path>")

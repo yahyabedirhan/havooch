@@ -2,8 +2,8 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// `havooch app status | open [--demo <folder>] | home | demo | quit`, and
-/// `state`. `home` and `demo` are plain requests to the running app.
+/// `havooch app status | open [--demo <folder>] | home | demo | quit`.
+/// `home` and `demo` are plain requests to the running app.
 /// `status` answers without the app; `open` launches it (through
 /// `AppLaunching`) when it doesn't run on the data asked for; `quit` waits
 /// until it's gone.
@@ -39,11 +39,6 @@ enum AppCommands {
             try arguments.none()
             return .appQuit
         },
-        Command(name: "state", synopsis: "state", summary: "everything the app shows: the window's video and player, and every window") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.state)
-        }.onAWindow(),
     ]
 
     /// What running an `app` command needs.

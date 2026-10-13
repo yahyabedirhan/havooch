@@ -1,19 +1,19 @@
 import Foundation
 import ReviewWire
 
-/// `havooch first-run show [<step>] | next | back | pick <harness> | demo
+/// `havooch first-run open [<step>] | next | back | pick <harness> | demo
 /// | skip`: the first-run window, which shows by itself on the first
 /// launch only. Each is the operator's, as the person's clicks are. Link,
 /// Run Command and Cancel on its Tools step are `setup link`, `setup install`
 /// and `setup cancel`; copying the demo prompt changes nothing in the app:
 /// `state --json` has it under `firstRun.prompt`.
 enum FirstRunCommands {
-    /// The steps, in order, as `first-run show` and `state` name them.
+    /// The steps, in order, as `first-run open` and `state` name them.
     static let steps = ["welcome", "tools", "connect", "try-it"]
 
     static let commands: [Command] = [
         Command(
-            name: "first-run show", synopsis: "first-run show [welcome|tools|connect|try-it]",
+            name: "first-run open", synopsis: "first-run open [welcome|tools|connect|try-it]",
             summary: "show the first-run window, as on the first launch, on a step as a click on its progress bar does"
         ) { arguments, _ throws(UsageError) in
             guard arguments.words.count <= 1 else { throw UsageError("unexpected `\(arguments.words[1])`") }

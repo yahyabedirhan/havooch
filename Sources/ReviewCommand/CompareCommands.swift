@@ -1,37 +1,12 @@
 import Foundation
 import ReviewWire
 
-/// `havooch version show | pick | close`: the version switcher's own
-/// actions in a project's window, and `havooch compare open | pick |
-/// set | swap | start | exit`: the compare control's. Each is the
-/// operator's, as the person's clicks on a segment, a row, the Compare
-/// button, a side, the swap button and Exit Compare are.
+/// `havooch compare open | find | set | swap | start | exit`: the compare
+/// control's own actions in a project's window. Each is the operator's, as
+/// the person's clicks on the Compare button, a side, the swap button and
+/// Exit Compare are.
 enum CompareCommands {
     static let commands: [Command] = [
-        Command(
-            name: "version show", synopsis: "version show <n>",
-            summary: "show the project's version n (`3` or `v3`), as its segment or its row in the picker does; the playhead keeps its time"
-        ) { arguments, _ throws(UsageError) in
-            let written = try arguments.one("<n>")
-            guard let number = versionNumber(written) else {
-                throw UsageError("`\(written)` isn't a version; write its number, `3` or `v3`")
-            }
-            return .send(.versionShow(number: number))
-        },
-        Command(
-            name: "version pick", synopsis: "version pick [<query>]",
-            summary: "open the version picker under the switcher's field, with the query typed in its search field"
-        ) { arguments, _ throws(UsageError) in
-            guard arguments.words.count <= 1 else { throw UsageError("unexpected `\(arguments.words[1])`") }
-            return .send(.versionPick(query: arguments.words.first ?? ""))
-        },
-        Command(
-            name: "version close", synopsis: "version close",
-            summary: "close the version picker, as Escape does"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.versionClose)
-        },
         Command(
             name: "compare open", synopsis: "compare open",
             summary: "open the compare popover under the Compare button, on the previous version and the one on screen"
@@ -40,7 +15,7 @@ enum CompareCommands {
             return .send(.compareOpen)
         },
         Command(
-            name: "compare pick", synopsis: "compare pick <left|right> [<query>]",
+            name: "compare find", synopsis: "compare find <left|right> [<query>]",
             summary: "open one side's version picker in the compare popover, with the query typed in its search field"
         ) { arguments, _ throws(UsageError) in
             guard let written = arguments.words.first else { throw UsageError("missing <left|right>") }
@@ -99,16 +74,9 @@ enum CompareCommands {
         },
     ]
 
-    /// The number of `3` or `v3`; nil for anything else, and below 1.
-    static func versionNumber(_ text: String) -> Int? {
-        let bare = text.lowercased().hasPrefix("v") ? String(text.dropFirst()) : text
-        guard !bare.isEmpty, bare.allSatisfy(\.isASCII), let number = Int(bare), number >= 1 else { return nil }
-        return number
-    }
-
     /// `versionNumber`, refused in words.
     private static func version(_ text: String) throws(UsageError) -> Int {
-        guard let number = versionNumber(text) else { throw UsageError("`\(text)` isn't a version; write its number, `3` or `v3`") }
+        guard let number = VersionCommands.versionNumber(text) else { throw UsageError("`\(text)` isn't a version; write its number, `3` or `v3`") }
         return number
     }
 

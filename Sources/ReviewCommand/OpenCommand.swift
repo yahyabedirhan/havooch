@@ -6,7 +6,8 @@ import ReviewWire
 /// front: in the project `--project` names, else in the most recently
 /// used project that lists it, else as a plain video. The app is launched
 /// when it doesn't run. It takes no lease, so the agent-control icon never
-/// shows for it; `player open` stays the operator's leased open.
+/// shows for it; `player load` stays the operator's leased open. The
+/// command is listed with the listener's loop.
 enum OpenCommand {
     static let command = Command(
         name: "open", synopsis: "open <path> [--project <slug>]",

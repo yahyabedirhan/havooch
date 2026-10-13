@@ -137,15 +137,19 @@ struct Command: Sendable {
     }
 }
 
-/// The commands of `havooch`, by name. A new command is a `Command` in
-/// one of the lists below. `--json` is accepted on every command.
+/// The commands of `havooch`, by name, in the order the help lists them.
+/// A new command is a `Command` in its group's list, each group in its own
+/// file. `--json` is accepted on every command.
 public enum CommandTable {
-    static let commands: [Command] = [OpenCommand.command] + AppCommands.commands + ControlCommands.commands
-        + PlayerCommands.commands.map { $0.onAWindow() } + CommentCommands.commands.map { $0.onAWindow() }
-        + [ScreenshotCommand.command] + WindowCommands.commands + SidebarCommands.commands + ListenerCommands.commands + ThemeCommands.commands
+    static let commands: [Command] = ListenerCommands.commands + LookCommands.commands + ProjectCommands.commands
+        + AppCommands.commands + WindowCommands.commands + ControlCommands.commands
+        + PlayerCommands.commands.map { $0.onAWindow() } + MessageCommands.commands.map { $0.onAWindow() }
+        + ContextCommands.commands.map { $0.onAWindow() } + ThreadCommands.commands.map { $0.onAWindow() }
+        + PopoverCommands.commands.map { $0.onAWindow() } + ComposerCommands.commands.map { $0.onAWindow() }
+        + SidebarCommands.commands + VersionCommands.commands.map { $0.onAWindow() }
+        + CompareCommands.commands.map { $0.onAWindow() } + ThemeCommands.commands + ConfigCommands.commands
         + SetupCommands.commands + ConnectCommands.commands.map { $0.onAWindow() }
-        + TourCommands.commands.map { $0.onAWindow() } + FirstRunCommands.commands + ConfigCommands.commands + ProjectCommands.commands
-        + CompareCommands.commands.map { $0.onAWindow() }
+        + TourCommands.commands.map { $0.onAWindow() } + FirstRunCommands.commands
 
     /// The command `arguments` start with, and the arguments after its name.
     static func find(_ arguments: [String]) -> (Command, [String])? {
@@ -171,7 +175,8 @@ public enum CommandTable {
 
             --window <id> names the window a command acts on, as `window list` shows it;
             without it, the key window. It goes with app home, app demo, state, screenshot,
-            the player, comment, context, send, thread, connect, tour, window close and window resize, and sidebar commands.
+            the player, message, context, thread, popover, composer, sidebar, version, compare,
+            connect and tour commands, and window close and window resize.
             --json prints machine output on every command.
             --version prints the version of Havooch this command comes with.
             Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.

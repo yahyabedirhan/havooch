@@ -6,11 +6,11 @@ import Testing
 
 @Suite("The compare commands")
 struct CompareCommandTests {
-    @Test("compare open, pick, set, swap, start and exit send their requests, to the window --window names", arguments: [
+    @Test("compare open, find, set, swap, start and exit send their requests, to the window --window names", arguments: [
         (["compare", "open"], ControlRequest.compareOpen, nil as String?),
         (["compare", "open", "--window", "w2"], .compareOpen, "w2"),
-        (["compare", "pick", "left"], .comparePick(side: .left, query: ""), nil),
-        (["compare", "pick", "Right", "alt opening"], .comparePick(side: .right, query: "alt opening"), nil),
+        (["compare", "find", "left"], .comparePick(side: .left, query: ""), nil),
+        (["compare", "find", "Right", "alt opening"], .comparePick(side: .right, query: "alt opening"), nil),
         (["compare", "set", "--left", "v1"], .compareSet(CompareChange(left: 1)), nil),
         (["compare", "set", "--right", "3", "--layout", "flip"], .compareSet(CompareChange(right: 3, layout: .flip)), nil),
         (["compare", "set", "--layout", "Side-by-side"], .compareSet(CompareChange(layout: .sideBySide)), nil),
@@ -28,7 +28,7 @@ struct CompareCommandTests {
     }
 
     @Test("each compare command takes what it says and refuses the rest", arguments: [
-        ["compare", "open", "now"], ["compare", "pick"], ["compare", "pick", "middle"], ["compare", "pick", "left", "a", "b"],
+        ["compare", "open", "now"], ["compare", "find"], ["compare", "find", "middle"], ["compare", "find", "left", "a", "b"],
         ["compare", "set"], ["compare", "set", "--left", "0"], ["compare", "set", "--right", "two"],
         ["compare", "set", "--layout", "grid"], ["compare", "set", "--side", "up"], ["compare", "set", "--slider", "1.2"],
         ["compare", "set", "--slider", "half"], ["compare", "set", "3"], ["compare", "swap", "now"], ["compare", "start", "v1"],
@@ -43,7 +43,7 @@ struct CompareCommandTests {
 
     @Test("the usage text names the compare commands")
     func usageText() {
-        for synopsis in ["compare open", "compare pick <left|right> [<query>]", "compare swap", "compare start", "compare exit"] {
+        for synopsis in ["compare open", "compare find <left|right> [<query>]", "compare swap", "compare start", "compare exit"] {
             #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
         }
         #expect(CommandTable.usageText.contains("havooch compare set [--left <n>]"))

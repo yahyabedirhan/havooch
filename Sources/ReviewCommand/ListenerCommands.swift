@@ -1,14 +1,17 @@
 import Foundation
 import ReviewWire
 
-/// The listener's commands, which need no lease. `havooch wait [--video
-/// <path> | --project <slug>] [--timeout <seconds>]` is a long-poll: it
-/// exits 0 with the next send of one review as JSON, and the window that
-/// holds the review shows the listener while it's open. `ack`, `status`, `reply` and `ask` answer in the
-/// player, on the video their id names; `ask` is held until the person
-/// answers, and exits 0 with the answer.
+/// The listener's loop, which needs no lease: `havooch open | wait | ack
+/// | mark | reply | ask`. `open` is the person's open, run by
+/// `OpenCommand`. `wait [--video <path> | --project <slug>] [--timeout
+/// <seconds>]` is a long-poll: it exits 0 with the next send of one review
+/// as JSON, and the window that holds the review shows the listener while
+/// it's open. `ack`, `mark`, `reply` and `ask` answer in the player, on the
+/// video their id names; `ask` is held until the person answers, and exits
+/// 0 with the answer.
 enum ListenerCommands {
     static let commands: [Command] = [
+        OpenCommand.command,
         Command(
             name: "wait", synopsis: "wait [--video <path> | --project <slug>] [--timeout <seconds>]",
             summary: "wait for the next send of the video at <path>, of the project <slug>, else of the key window, and print it as JSON; exit 2 when --timeout runs out with none",
@@ -36,7 +39,7 @@ enum ListenerCommands {
             return .send(.ack(sendID: id, text: arguments.words.count == 2 ? arguments.words[1] : nil))
         },
         Command(
-            name: "status", synopsis: "status <message-id> working|done|failed [<text>]",
+            name: "mark", synopsis: "mark <message-id> working|done|failed [<text>]",
             summary: "say how far you are with a message; its thread's pin shows it, and the text with working what you do now"
         ) { arguments, _ throws(UsageError) in
             let words = arguments.words

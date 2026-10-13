@@ -6,13 +6,13 @@ import Testing
 
 @Suite("The version commands")
 struct VersionCommandTests {
-    @Test("version show, pick and close send their requests, to the window --window names", arguments: [
+    @Test("version show and find, and find --close, send their requests, to the window --window names", arguments: [
         (["version", "show", "3"], ControlRequest.versionShow(number: 3), nil as String?),
         (["version", "show", "v12", "--window", "w2"], .versionShow(number: 12), "w2"),
         (["version", "show", "V7"], .versionShow(number: 7), nil),
-        (["version", "pick"], .versionPick(query: ""), nil),
-        (["version", "pick", "alt opening"], .versionPick(query: "alt opening"), nil),
-        (["version", "close", "--window", "w3"], .versionClose, "w3"),
+        (["version", "find"], .versionPick(query: ""), nil),
+        (["version", "find", "alt opening"], .versionPick(query: "alt opening"), nil),
+        (["version", "find", "--close", "--window", "w3"], .versionClose, "w3"),
     ])
     func sends(arguments: [String], request: ControlRequest, window: String?) {
         let run = Run { _, _ in .success(.done("done\n")) }
@@ -22,9 +22,9 @@ struct VersionCommandTests {
         #expect(run.transport.sent.map(\.message.window) == [window])
     }
 
-    @Test("version show needs one version number, pick one query at most, close none", arguments: [
+    @Test("version show needs one version number, find one query at most, and none with --close", arguments: [
         ["version", "show"], ["version", "show", "0"], ["version", "show", "v"], ["version", "show", "-2"],
-        ["version", "show", "two"], ["version", "show", "1", "2"], ["version", "pick", "a", "b"], ["version", "close", "now"],
+        ["version", "show", "two"], ["version", "show", "1", "2"], ["version", "find", "a", "b"], ["version", "find", "--close", "now"], ["version", "find", "v2", "--close"],
     ])
     func usage(arguments: [String]) {
         let run = Run()
@@ -35,7 +35,7 @@ struct VersionCommandTests {
 
     @Test("the usage text names the version commands")
     func usageText() {
-        for synopsis in ["version show <n>", "version pick [<query>]", "version close"] {
+        for synopsis in ["version show <n>", "version find [<query>] [--close]", "version menu [--search <text>] [--close]", "version section <n> [--remove]"] {
             #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
         }
     }
