@@ -12,7 +12,7 @@ struct CommandTests {
         (["app", "home"], .appHome),
         (["app", "demo"], .appDemo),
         (["control", "take"], .controlTake(waitSeconds: nil)),
-        (["control", "take", "--wait", "30"], .controlTake(waitSeconds: 30)),
+        (["control", "take", "--timeout", "30"], .controlTake(waitSeconds: 30)),
         (["control", "release"], .controlRelease),
         (["screenshot", "/tmp/shot.png", "--hide-agent-indicator"], .screenshot(path: "/tmp/shot.png", appearance: nil, hideAgentIndicator: true)),
         (["player", "load", "/videos/sample.mp4"], .playerOpen(path: "/videos/sample.mp4")),
@@ -70,9 +70,9 @@ struct CommandTests {
         (["reply", "t-f92cbb2a-1", "Slowed it down"], .reply(thread: "t-f92cbb2a-1", text: "Slowed it down")),
         (["reply", "0", "All done"], .reply(thread: "0", text: "All done")),
         (["ask", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil)),
-        (["ask", "t-f92cbb2a-1", "Which part?", "--wait", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
-        (["ask", "--wait", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
-        (["ask", "1", "Which part?", "--choice", "The intro", "--wait", "30", "--choice", "The end"],
+        (["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
+        (["ask", "--timeout", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
+        (["ask", "1", "Which part?", "--choice", "The intro", "--timeout", "30", "--choice", "The end"],
          .ask(thread: "1", question: "Which part?", waitSeconds: 30, choices: ["The intro", "The end"])),
         (["thread", "answer", "t-f92cbb2a-1", "The intro"], .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro")),
         (["thread", "choose", "t-f92cbb2a-1", "2"], .threadChoose(thread: "t-f92cbb2a-1", choice: 2)),
@@ -122,7 +122,7 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         // `--window` before the command's name isn't the command's.
         if arguments.first == "--window" {
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 2)
             return
         }
         #expect(result == CommandResult(output: "done\n"))
@@ -167,7 +167,7 @@ struct CommandTests {
         #expect(result.exitCode == 1)
         #expect(result.output.isEmpty)
         #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
-            + "`havooch control take --wait <seconds>` to queue\n")
+            + "`havooch control take --timeout <seconds>` to queue\n")
     }
 
     @Test(
@@ -207,8 +207,17 @@ struct CommandTests {
     func takeWaits() {
         let run = Run { _, _ in .failure(.timedOut) }
         defer { run.cleanUp() }
-        #expect(run("control", "take", "--wait", "30")
+        #expect(run("control", "take", "--timeout", "30")
             == CommandResult(error: "\(AppIdentity.appName) didn't answer within 45 seconds\n", exitCode: 1))
+    }
+
+    @Test("a take whose timeout runs out in line exits 124 with who still holds the lease on standard error")
+    func takeRunsOut() {
+        let line = "waited 5s; \(AppIdentity.appName) is still in use by codex in /work until 00:01:00 (55s left)"
+        let run = Run { _, _ in .success(.ranOut(line)) }
+        defer { run.cleanUp() }
+        #expect(run("control", "take", "--timeout", "5") == CommandResult(error: line + "\n", exitCode: 124))
+        #expect(run.transport.requests == [.controlTake(waitSeconds: 5)])
     }
 
     @Test("every command but app status and app open exits 1 when the app isn't running")
@@ -217,7 +226,7 @@ struct CommandTests {
         defer { run.cleanUp() }
         let line = "\(AppIdentity.appName) isn't running; run `havooch app open`\n"
         #expect(run("player", "play") == CommandResult(error: line, exitCode: 1))
-        #expect(run("control", "take", "--wait", "5") == CommandResult(error: line, exitCode: 1))
+        #expect(run("control", "take", "--timeout", "5") == CommandResult(error: line, exitCode: 1))
         #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
         #expect(run("state", "--json") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "quit") == CommandResult(error: line, exitCode: 1))
@@ -227,7 +236,7 @@ struct CommandTests {
         #expect(run("app", "status", "--json") == CommandResult(output: "{\"running\":false}\n"))
     }
 
-    @Test("arguments that don't read exit 64 and send nothing", arguments: [
+    @Test("arguments that don't read exit 2 and send nothing", arguments: [
         [], ["rewind"], ["player"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
         ["player", "seek", "-5"], ["player", "seek", "1", "2"], ["player", "seek", String(repeating: "9", count: 400)],
         ["message", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["message", "add", "--", "Too fast", "--at", "5"], ["player", "load"], ["player", "play", "now"],
@@ -238,8 +247,8 @@ struct CommandTests {
         ["window", "close", "w1", "--window", "w2"], ["window", "list", "--window", "w1"], ["player", "play", "--window"],
         ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
-        ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
-        ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
+        ["control"], ["control", "steal"], ["control", "take", "--timeout"], ["control", "take", "--timeout", "soon"],
+        ["control", "take", "--timeout", "-1"], ["control", "take", "--timeout", "3601"], ["control", "take", "--wait", "5"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--hide-agent-indicator"],
         ["message"], ["message", "add"], ["message", "add", "Too", "fast"], ["message", "add", "Too fast", "--at", "soon"],
         ["message", "add", "Too fast", "--at"], ["message", "add", "This box", "--region"],
@@ -255,9 +264,9 @@ struct CommandTests {
         ["mark", "m-f92cbb2a-1", "done", "now"], ["mark", "m-f92cbb2a-1", "failed", "now"],
         ["mark", "m-f92cbb2a-1", "working", "Rendering", "now"],
         ["reply"], ["reply", "t-f92cbb2a-1"], ["reply", "t-f92cbb2a-1", "Slowed", "it"],
-        ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait"],
-        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "-1"],
-        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5"],
+        ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "-1"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "5"],
         ["thread"], ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
         ["ask", "1", "Which part?", "--choice"],
         ["thread", "choose"], ["thread", "choose", "1"], ["thread", "choose", "1", "0"], ["thread", "choose", "1", "first"],
@@ -272,7 +281,7 @@ struct CommandTests {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(result.output.isEmpty)
         #expect(result.error.contains("usage: havooch"))
         #expect(run.transport.sent.isEmpty)
@@ -309,12 +318,12 @@ struct CommandTests {
         #expect(run.transport.requests[0].holdSeconds == 600)
     }
 
-    @Test("a wait whose timeout runs out exits 2 with nothing on standard output")
+    @Test("a wait whose timeout runs out exits 124 with nothing on standard output")
     func waitRunsOut() {
         let run = Run { _, _ in .success(.ranOut) }
         defer { run.cleanUp() }
-        #expect(run("wait", "--timeout", "5") == CommandResult(exitCode: 2))
-        #expect(run("wait", "--timeout", "5", "--json") == CommandResult(exitCode: 2))
+        #expect(run("wait", "--timeout", "5") == CommandResult(exitCode: 124))
+        #expect(run("wait", "--timeout", "5", "--json") == CommandResult(exitCode: 124))
     }
 
     @Test("a wait the app refuses exits 1 with the reason")
@@ -337,12 +346,12 @@ struct CommandTests {
         ])
     }
 
-    @Test("a wait with a timeout gives up, exit 2, when the app never runs; one without keeps looking")
+    @Test("a wait with a timeout gives up, exit 124, when the app never runs; one without keeps looking")
     func waitWithoutTheApp() {
         let clock = Clock()
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 2))
+        #expect(HavoochCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 124))
         #expect(clock.now == Date(timeIntervalSince1970: 3))
 
         let later = Clock()
@@ -378,17 +387,17 @@ struct CommandTests {
     func askPrintsTheAnswer() {
         let run = Run { _, _ in .success(.done("The intro\n")) }
         defer { run.cleanUp() }
-        #expect(run("ask", "t-f92cbb2a-1", "Which part?", "--wait", "600") == CommandResult(output: "The intro\n"))
+        #expect(run("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "600") == CommandResult(output: "The intro\n"))
         #expect(run("ask", "t-f92cbb2a-1", "Which part?") == CommandResult(output: "The intro\n"))
         #expect(run.transport.sent.map(\.message.request.holdSeconds) == [600, nil])
     }
 
-    @Test("an ask whose wait runs out exits 2 with nothing printed; a refused one exits 1 with the reason")
+    @Test("an ask whose timeout runs out exits 124 with nothing printed; a refused one exits 1 with the reason")
     func askRunsOutOrIsRefused() {
         let ranOut = Run { _, _ in .success(.ranOut) }
         defer { ranOut.cleanUp() }
-        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5") == CommandResult(exitCode: 2))
-        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5", "--json") == CommandResult(exitCode: 2))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5") == CommandResult(exitCode: 124))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5", "--json") == CommandResult(exitCode: 124))
 
         let line = "c-7f3a9c2e already has an open question"
         let refused = Run { _, _ in .success(.refused(line)) }
@@ -450,8 +459,8 @@ struct CommandTests {
         #expect(run.transport.requests == [.commentAdd(text: "Too fast here", at: 5), .commentAdd(text: "Too fast here", at: 5)])
         #expect(run.transport.sent.map(\.message.json) == [true, true])
         // A word too many is still refused, also after --.
-        #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 64)
-        #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 64)
+        #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 2)
+        #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 2)
     }
 
     @Test("a reply that doesn't read, or none in time, exits 1 saying why")

@@ -60,7 +60,7 @@ struct MergedCommandTests {
         let run = Run()
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(result.error.contains("usage: havooch \(arguments[0]) \(arguments[1])"))
         #expect(run.transport.requests.isEmpty)
     }
@@ -76,7 +76,7 @@ struct MergedCommandTests {
         let run = Run()
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(result.error.hasPrefix("havooch: unknown command"))
         #expect(run.transport.requests.isEmpty)
     }

@@ -14,7 +14,7 @@ enum ListenerCommands {
         OpenCommand.command,
         Command(
             name: "wait", synopsis: "wait [--video <path> | --project <slug>] [--timeout <seconds>]",
-            summary: "wait for the next send of the video at <path>, of the project <slug>, else of the key window, and print it as JSON; exit 2 when --timeout runs out with none",
+            summary: "wait for the next send of the video at <path>, of the project <slug>, else of the key window, and print it as JSON; exit 124 when --timeout runs out with none",
             valuedOptions: ["--timeout", "--video", "--project"]
         ) { arguments, environment throws(UsageError) in
             try arguments.none()
@@ -61,15 +61,15 @@ enum ListenerCommands {
             return .send(.reply(thread: words[0], text: words[1]))
         },
         Command(
-            name: "ask", synopsis: "ask <thread> <question> [--choice <text>]... [--wait <seconds>]",
-            summary: "ask a question on a thread and print the person's answer; each --choice is a quick reply the person can click; exit 2 when --wait runs out with none",
-            valuedOptions: ["--wait", "--choice"]
+            name: "ask", synopsis: "ask <thread> <question> [--choice <text>]... [--timeout <seconds>]",
+            summary: "ask a question on a thread and print the person's answer; each --choice is a quick reply the person can click; exit 124 when --timeout runs out with none",
+            valuedOptions: ["--timeout", "--choice"]
         ) { arguments, _ throws(UsageError) in
             let words = try arguments.exactly(["<thread>", "<question>"])
             var wait: Int?
-            if let seconds = arguments.options["--wait"] {
+            if let seconds = arguments.options["--timeout"] {
                 guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
-                    throw UsageError("`--wait` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
+                    throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
                 }
                 wait = whole
             }
@@ -87,7 +87,7 @@ enum ListenerCommands {
     /// The payload is JSON with or without `--json`. While the app isn't
     /// running, or quits, the command connects again each second, so a
     /// listener can start before the app and outlive its restart. Exit 0
-    /// with the send, 2 when the time ran out, 1 when the app refuses.
+    /// with the send, 124 when the time ran out, 1 when the app refuses.
     static func wait(
         timeout: Int?, video: URL? = nil, project: String? = nil, client: ControlClient, environment: CommandEnvironment
     ) -> CommandResult {

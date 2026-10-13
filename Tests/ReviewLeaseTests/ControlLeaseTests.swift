@@ -75,7 +75,7 @@ struct ControlLeaseTests {
         case use
         /// `control take`.
         case take
-        /// `control take --wait <seconds>`.
+        /// `control take --timeout <seconds>`.
         case wait(Int)
         /// `control release`.
         case release
@@ -203,7 +203,7 @@ struct ControlLeaseTests {
         guard case .failure(let refusal) = refused.answer else { Issue.record("not refused"); return }
         #expect(refusal.message(at: Self.at(12.5), timeZone: try #require(TimeZone(identifier: "UTC")))
             == "Havooch is in use by codex in Herdr pane w1-2 until 00:01:00 (48s left); "
-            + "`havooch control take --wait <seconds>` to queue")
+            + "`havooch control take --timeout <seconds>` to queue")
     }
 
     @Test("take says until when it holds the lease; a wait that runs out says how long it waited and who still holds it")

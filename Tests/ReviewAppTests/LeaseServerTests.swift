@@ -90,7 +90,7 @@ struct LeaseServerTests {
         let refused = await server.reply(to: request.sent(by: Self.other))
 
         #expect(refused == .init(reply: .refused(
-            "\(Self.name) is in use by Claude Code in /work until 00:01:00 (48s left); `havooch control take --wait <seconds>` to queue"
+            "\(Self.name) is in use by Claude Code in /work until 00:01:00 (48s left); `havooch control take --timeout <seconds>` to queue"
         )))
         #expect(app.calls == ["play"])
         #expect(screenshotter.calls.isEmpty)
@@ -169,7 +169,7 @@ struct LeaseServerTests {
 
         #expect(taken == .init(reply: .done("you hold \(Self.name) until 00:05:00\n"), granted: Self.term(Self.agent, taken: 0)))
         #expect(refused == .init(reply: .refused(
-            "\(Self.name) is in use by Claude Code in /work until 00:05:00 (290s left); `havooch control take --wait <seconds>` to queue"
+            "\(Self.name) is in use by Claude Code in /work until 00:05:00 (290s left); `havooch control take --timeout <seconds>` to queue"
         )))
         #expect(notTheirs == .init(reply: .done("released \(Self.name)\n")))
         #expect(stillHeld == Self.agent)
@@ -180,14 +180,14 @@ struct LeaseServerTests {
         #expect((json["lease"] as? [String: Any])?["secondsLeft"] as? Int == 300)
     }
 
-    @Test("a take whose wait runs out is refused with who still holds the lease, and leaves the line")
+    @Test("a take whose wait runs out is answered as a wait that ran out, with who still holds the lease, and leaves the line")
     func waitRunsOut() async {
         let server = server()
         _ = await server.reply(to: ControlRequest.playerPlay.sent(by: Self.agent))
 
         let waited = await server.reply(to: ControlRequest.controlTake(waitSeconds: 1).sent(by: Self.other))
 
-        #expect(waited == .init(reply: .refused(
+        #expect(waited == .init(reply: .ranOut(
             "waited 1s; \(Self.name) is still in use by Claude Code in /work until 00:01:00 (59s left)"
         )))
         #expect(server.lease.waiting(at: clock.now) == 0)

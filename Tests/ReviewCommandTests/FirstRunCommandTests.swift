@@ -32,7 +32,7 @@ struct FirstRunCommandTests {
     func usage(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 64)
+        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 2)
         #expect(run.transport.requests.isEmpty)
     }
 

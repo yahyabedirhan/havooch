@@ -26,7 +26,7 @@ struct ThemeCommandTests {
         let run = Run()
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(run.transport.requests.isEmpty)
     }
 

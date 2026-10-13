@@ -9,7 +9,7 @@ public enum ControlRequest: Equatable, Sendable {
     case appStatus
     /// `havooch state`: everything the app shows.
     case state
-    /// `havooch control take [--wait <seconds>]`: hold the lease to
+    /// `havooch control take [--timeout <seconds>]`: hold the lease to
     /// its cap; while another agent holds it, wait in line up to
     /// `waitSeconds`, or be refused at once without them.
     case controlTake(waitSeconds: Int?)
@@ -106,7 +106,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)
     /// `havooch ask <thread> <question> [--choice <text>]..
-    /// [--wait <seconds>]`: the listener's question on a thread, with the
+    /// [--timeout <seconds>]`: the listener's question on a thread, with the
     /// quick replies the person may answer with in one click. The app holds
     /// the request until the person answers, up to `waitSeconds`, or with
     /// no limit when it's nil.
@@ -367,10 +367,10 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
-    /// The longest a `control take --wait` may wait in line, in seconds.
+    /// The longest a `control take --timeout` may wait in line, in seconds.
     public static let longestWait = 3600
 
-    /// The longest `wait --timeout` or `ask --wait` a listener may ask for,
+    /// The longest `wait --timeout` or `ask --timeout` a listener may ask for,
     /// in seconds: a day. Without the option neither has a limit.
     public static let longestListen = 86400
 

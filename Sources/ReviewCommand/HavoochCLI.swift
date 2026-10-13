@@ -19,17 +19,18 @@ public struct CommandResult: Equatable, Sendable {
     /// Refused or failed: the lease is in use, the app isn't running, a
     /// file doesn't play.
     public static let refusedCode: Int32 = 1
-    /// Timed out with no result.
-    public static let timedOutCode: Int32 = 2
+    /// A wait ran out with no result: `wait`, `ask` or `control take`
+    /// with `--timeout`.
+    public static let timedOutCode: Int32 = 124
     /// The arguments don't read.
-    public static let usageCode: Int32 = 64
+    public static let usageCode: Int32 = 2
 
     /// Refused: one line on standard error, exit 1.
     public static func refused(_ message: String) -> CommandResult {
         CommandResult(error: message + "\n", exitCode: refusedCode)
     }
 
-    /// The arguments don't read: lines on standard error, exit 64.
+    /// The arguments don't read: lines on standard error, exit 2.
     public static func usage(_ message: String) -> CommandResult {
         CommandResult(error: message + "\n", exitCode: usageCode)
     }
@@ -83,7 +84,7 @@ public struct CommandEnvironment: Sendable {
 
 /// The `havooch` command: its arguments read through `CommandTable`,
 /// one request sent to the app, the reply printed, the exit code picked.
-/// Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.
+/// Exit codes: 0 done, 1 refused or failed, 2 wrong usage, 124 a wait ran out.
 public enum HavoochCLI {
     public static func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult {
         // `--json` is an option anywhere before `--`; after it, it's a word.
@@ -161,8 +162,9 @@ public enum HavoochCLI {
         case .success(let reply) where reply.ok:
             return CommandResult(output: reply.output, error: reply.error)
         case .success(let reply) where reply.timedOut == true:
-            // A held request (an `ask`) waited its whole time: nothing to print.
-            return CommandResult(exitCode: CommandResult.timedOutCode)
+            // A held request waited its whole time: an `ask` has nothing to
+            // print, a `control take` says who still holds the lease.
+            return CommandResult(error: reply.error.isEmpty ? "" : reply.error + "\n", exitCode: CommandResult.timedOutCode)
         case .success(let reply):
             return .refused(reply.error.isEmpty ? "\(AppIdentity.appName) refused without saying why" : reply.error)
         case .failure(.notRunning):

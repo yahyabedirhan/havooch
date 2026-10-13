@@ -77,9 +77,9 @@ struct ConfigCommandTests {
     func usage() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(run("config", "path", "x").exitCode == 64)
-        #expect(run("config", "check", "x").exitCode == 64)
-        #expect(run("config", "close-notice", "x").exitCode == 64)
+        #expect(run("config", "path", "x").exitCode == 2)
+        #expect(run("config", "check", "x").exitCode == 2)
+        #expect(run("config", "close-notice", "x").exitCode == 2)
         #expect(CommandTable.usageText.contains("havooch config check"))
     }
 }

@@ -57,6 +57,13 @@ public struct ControlLease: Equatable, Sendable {
         /// The person stopped this holder, and its bar hasn't ended.
         case stopped
 
+        /// Whether the `take` waited its whole time in line: a wait that ran
+        /// out, not a refusal.
+        public var isWaitedOut: Bool {
+            if case .waitedOut = self { return true }
+            return false
+        }
+
         /// The refusal as the agent reads it, its times in `timeZone`.
         public func message(at now: Date, timeZone: TimeZone) -> String {
             switch self {
@@ -65,7 +72,7 @@ public struct ControlLease: Equatable, Sendable {
             case .inUse(let term), .queued(let term):
                 return "\(ControlLease.appName) is in use by \(term.holder.name) in \(term.holder.place) "
                     + "until \(ControlLease.clock(term.ends, timeZone)) (\(term.secondsLeft(at: now))s left); "
-                    + "`havooch control take --wait <seconds>` to queue"
+                    + "`havooch control take --timeout <seconds>` to queue"
             case .waitedOut(let seconds, let term):
                 return "waited \(seconds)s; \(ControlLease.appName) is still in use by \(term.holder.name) in \(term.holder.place) "
                     + "until \(ControlLease.clock(term.ends, timeZone)) (\(term.secondsLeft(at: now))s left)"
