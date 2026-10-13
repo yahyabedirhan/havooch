@@ -1,6 +1,6 @@
 import Foundation
 
-// The targeted writes of `config.toml` (ADR 0002). Havooch never rewrites
+// The targeted writes of `config.toml`. Havooch never rewrites
 // the file as a whole: TOMLDecoder only decodes, and a rewrite would lose
 // the person's comments. Each write changes its own lines, and is refused
 // unless the result reads back as the file's settings with only that change.

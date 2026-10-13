@@ -2,8 +2,8 @@ import Foundation
 import ReviewWire
 
 /// `havooch version show | pick | close`: the version switcher's own
-/// actions in a project's window (E10), and `havooch compare open | pick |
-/// set | swap | start | exit`: the compare control's (E11). Each is the
+/// actions in a project's window, and `havooch compare open | pick |
+/// set | swap | start | exit`: the compare control's. Each is the
 /// operator's, as the person's clicks on a segment, a row, the Compare
 /// button, a side, the swap button and Exit Compare are.
 enum CompareCommands {

@@ -1,9 +1,9 @@
 import ReviewSetup
 import SwiftUI
 
-/// Step 1, the `havooch` command line (G3): Link puts it in
+/// Step 1, the `havooch` command line: Link puts it in
 /// `~/.local/bin`, and done reads "Linked". A failed link shows the line
-/// to run in a terminal. Only a detected link counts (ADR 0005).
+/// to run in a terminal. Only a detected link counts.
 struct CommandLineStep: View {
     let model: any SetupSteering
     let open: Bool
@@ -48,11 +48,11 @@ struct CommandLineStep: View {
     }
 }
 
-/// Step 2, the `/havooch-mate` skill (G4): a row per harness with what is
+/// Step 2, the `/havooch-mate` skill: a row per harness with what is
 /// detected, the install command for every harness found without it in a
 /// `RunBox` with Run Command, its live log and Cancel, and the command for
 /// one repository. A ✓ only for what is detected; anything else is a
-/// neutral "Not detected" (G9).
+/// neutral "Not detected".
 struct SkillStep: View {
     let model: any SetupSteering
     let open: Bool
@@ -144,7 +144,7 @@ struct SkillStep: View {
 }
 
 /// A check and a word for what is detected, else a neutral "Not detected"
-/// with an open circle: never a cross (G9).
+/// with an open circle: never a cross.
 struct DetectionWord: View {
     let detected: Bool
     let word: String
@@ -160,7 +160,7 @@ struct DetectionWord: View {
     }
 }
 
-/// While an agent listens, the setup steps folded to one line (G7): "Set
+/// While an agent listens, the setup steps folded to one line: "Set
 /// up" with a check, or an open circle, for each step. A click shows them.
 struct SetupLine: View {
     let setup: SetupDesk

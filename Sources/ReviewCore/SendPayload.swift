@@ -4,7 +4,7 @@ import Foundation
 /// grouped by thread. Each thread carries its keyframe, its transcript
 /// window as the send cut it, the conversation so far (`history`) and the
 /// person's messages of this send. A send of a project's review carries
-/// the project (decision E8): the version on screen, which `video` is,
+/// the project: the version on screen, which `video` is,
 /// and every version's path and label; each thread names its version,
 /// with a `null` number for a removed version. On a plain video `project`
 /// and each thread's `version` are `null`. A key with no value is `null`,
@@ -37,7 +37,7 @@ public struct SendPayload: Codable, Equatable, Sendable {
         /// The file's name with its extension.
         public var title: String
         /// Whether the video is the demo bundled in the app, by its content
-        /// (`DemoVideo`): the skill then guides a beginner (H3, L60).
+        /// (`DemoVideo`): the skill then guides a beginner.
         public var demo: Bool
 
         public init(from decoder: any Decoder) throws {

@@ -3,7 +3,7 @@ import Observation
 import ReviewSetup
 
 /// What the setup steps act on: a player window's Connect view, or the
-/// first-run window. Both show the same steps (H1): the command line, the
+/// first-run window. Both show the same steps: the command line, the
 /// skill, and a harness picker with the prompt to paste.
 protocol SetupSteering: AnyObject {
     /// What Havooch detects of the setup, Link and the install.
@@ -25,7 +25,7 @@ protocol SetupSteering: AnyObject {
     var keysWindow: WindowModel? { get }
 }
 
-/// The first-run window's steps (H1), in order.
+/// The first-run window's steps, in order.
 nonisolated enum FirstRunStep: String, CaseIterable, Equatable {
     case welcome, tools, connect
     case tryIt = "try-it"
@@ -56,11 +56,11 @@ nonisolated enum FirstRunAction: Equatable {
     case demo, skip
 }
 
-/// The first-run window (H1, first-run V1): Welcome, Tools, Connect and Try
+/// The first-run window (first-run V1): Welcome, Tools, Connect and Try
 /// it, with Back, Continue and Skip Setup on every step. Tools shows the
 /// Connect view's command line and skill steps; Connect its harness picker,
-/// with the demo prompt in the picked harness's form (H2), so the person's
-/// own agent opens the demo and listens (H3). It shows by itself at each
+/// with the demo prompt in the picked harness's form, so the person's
+/// own agent opens the demo and listens. It shows by itself at each
 /// launch until the person uses the app (`AppModel.showFirstRunOnFirstLaunch`),
 /// and at any time through `first-run show`. Nothing in it blocks: every
 /// step can be passed with nothing done.
@@ -144,7 +144,7 @@ final class FirstRun: SetupSteering {
         pickedHarness = harness
     }
 
-    /// The demo prompt (H2), whatever the harness's readiness: it stays primary.
+    /// The demo prompt, whatever the harness's readiness: it stays primary.
     func pastePrompt(for harness: Harness) -> String? {
         harness.demoPrompt
     }
@@ -177,8 +177,8 @@ final class FirstRun: SetupSteering {
 // MARK: - The app's first-run actions
 
 extension AppModel {
-    /// A launch shows the first-run window, in front of the empty window
-    /// (H1), until the person uses the app: on a person's data whose
+    /// On a person's data, a launch shows the first-run window in front of
+    /// the empty window until the person uses the app. The data's
     /// `settings.json` reads, where the first run isn't done, and where no
     /// video was opened and no agent connected yet (a person who used a
     /// build before it isn't new). Closing it, or quitting, isn't a use.
@@ -274,7 +274,7 @@ extension AppModel {
 }
 
 extension StateReport {
-    /// The first-run window (H1): whether it shows, its step, the picked
+    /// The first-run window: whether it shows, its step, the picked
     /// harness and its demo prompt.
     nonisolated struct FirstRun: Encodable, Equatable {
         var showing: Bool
@@ -287,7 +287,7 @@ extension StateReport {
         var harness: String
         /// `ready`, `skillNotDetected` or `harnessNotDetected`.
         var readiness: String
-        /// The demo prompt in the harness's form (H2).
+        /// The demo prompt in the harness's form.
         var prompt: String
         /// Whether an agent ever connected: the Connect step says it listens.
         var agentConnected: Bool

@@ -3,8 +3,8 @@ import ReviewLease
 import ReviewWire
 import SwiftUI
 
-/// The app: any number of windows, each with one video or none (ADR
-/// 0003), and Settings (⌘,).
+/// The app: any number of windows, each holding one video or no video, and
+/// Settings (⌘,).
 @main
 struct HavoochApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
@@ -152,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.config.startWatching()
             model.themes.startWatching()
             // A launch opens no video: its one window shows home. The first
-            // launch shows the first-run window in front of it (H1).
+            // launch shows the first-run window in front of it.
             let firstRun = firstRunWindow
             model.firstRun.present = { [weak firstRun] showing in firstRun?.present(showing) }
             model.showFirstRunOnFirstLaunch()
@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         model.refreshRecents()
         // The person may have linked the command or installed the skill in
-        // a terminal meanwhile: setup reads the disk again, never polling (L52).
+        // a terminal meanwhile: setup reads the disk again, never polling.
         model.setup.probe()
     }
 
@@ -199,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Finder's Open With, a drop on the Dock icon and `open -a Havooch
-    /// <file>`: the same open as `havooch open` (decision C3).
+    /// <file>`: the same open as `havooch open`.
     func application(_ application: NSApplication, open urls: [URL]) {
         model.openFromFinder(urls.filter(\.isFileURL))
     }

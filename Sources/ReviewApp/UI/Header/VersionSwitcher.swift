@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 import SwiftUI
 
-/// The version switcher of a project's window (E10, version-switcher V5,
+/// The version switcher of a project's window (version-switcher V5,
 /// "Recent plus picker"), as words and numbers: the last three versions
 /// as segments, and a field after them for the older ones, which names
 /// an older version while it is on screen and opens a searchable picker

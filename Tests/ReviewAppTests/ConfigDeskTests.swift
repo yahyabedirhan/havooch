@@ -6,7 +6,7 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// `config.toml` as the app runs it (ADR 0002): made from the header on
+/// `config.toml` as the app runs it: made from the header on
 /// the first launch, a valid save applied at once, a broken one rejected
 /// with the last valid settings kept, the verdict in `config-status.json`,
 /// the one-time move of an older build's settings, and app state kept out

@@ -1,6 +1,6 @@
 import Foundation
 
-// The two project writes of `config.toml` (ADR 0002, ADR 0004): append a
+// The two project writes of `config.toml`: append a
 // `[[projects]]` table, and append a version to one project's `versions`.
 // Like the theme line, each changes only its own lines, and is refused
 // unless the result reads back as the file's settings with only that change.

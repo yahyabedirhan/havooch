@@ -139,7 +139,8 @@ codex_listener() {
 # person's ~/.config/havooch.
 settings() { HAVOOCH_SUPPORT_DIR="$demo" "$cli" "$@"; }
 
-# The thread list's rule (spec 0.2.0, L38), over a thread of `state --json`:
+# The thread list groups each thread by the next person who must act, using
+# data from `state --json`:
 # Needs you (the last question has no answer after it), With agent (a
 # person's message sent, acknowledged or working), Queued (a queued one),
 # Done (the rest). `list` is the thread list: each group that has a thread,

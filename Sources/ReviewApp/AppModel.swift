@@ -11,11 +11,11 @@ import UniformTypeIdentifiers
 /// videos, and every action that is the app's and not one window's. A
 /// window's own actions are its `WindowModel`'s. Opening a video for the
 /// person finds its window here: the window that holds it comes forward,
-/// else an empty key window takes it, else a new window does (ADR 0003).
+/// else an empty key window takes it, else a new window does.
 @Observable
 final class AppModel: AppControlling {
     /// The data the run is on now: the support folder it started on, or
-    /// the demo folder while an in-app demo runs (L27). Every window is on it.
+    /// the demo folder while an in-app demo runs. Every window is on it.
     private(set) var data: DataFolder
     /// The reviews of every window, and the one path for changing them.
     var desk: ReviewDesk { data.desk }
@@ -39,14 +39,14 @@ final class AppModel: AppControlling {
     private(set) var keptSidebarWidth: Double?
     /// Whether an agent ever connected on the person's data, kept in
     /// `settings.json`: setup then counts as working, whatever was
-    /// detected (L57, ADR 0005).
+    /// detected.
     private(set) var agentConnectedOnce = false
     /// Whether the person used the app on their data, kept in
     /// `settings.json`: Get Started or a later step, Skip Setup, a video
     /// opened, or an agent connected. Until then the first-run window shows
-    /// by itself at each launch (L65).
+    /// by itself at each launch.
     private(set) var firstRunDone = false
-    /// The first-run window: Welcome, Tools, Connect, Try it (H1).
+    /// The first-run window: Welcome, Tools, Connect, Try it.
     let firstRun: FirstRun
     /// The sound: one level for every window and both players of a
     /// comparison, kept in `settings.json` on the folder the run started
@@ -80,7 +80,7 @@ final class AppModel: AppControlling {
     /// open` does; the app sets it.
     @ObservationIgnored var bringToFront: (WindowModel) -> Void = { _ in }
     /// The content hashes of the files opened in this run, so opening one
-    /// again skips reading it whole (L51).
+    /// again skips reading it whole.
     @ObservationIgnored let hashes = ContentHashCache()
     /// Turns a video's sound into lines, on every data folder of the run.
     @ObservationIgnored let speech: any SpeechRecognizing
@@ -171,7 +171,7 @@ final class AppModel: AppControlling {
     /// The review a `wait` listens to: the review the video at `path`
     /// (`--video`) opens in, as `open` resolves it (its project, else the
     /// plain video), open in a window or not; the project `project`
-    /// (`--project`); with neither, the key window's (L56). Refused for a
+    /// (`--project`); with neither, the key window's. Refused for a
     /// path with no file, a project `config.toml` doesn't have, and with
     /// neither when the key window holds no video.
     func listenedReview(video path: String?, project: String? = nil) async throws(AppRefusal) -> ReviewKey {
@@ -363,7 +363,7 @@ final class AppModel: AppControlling {
     }
 
     /// Finder's Open With, a drop on the Dock icon and `open -a Havooch
-    /// <file>` (decision C3): each file opens as `havooch open` opens it
+    /// <file>`: each file opens as `havooch open` opens it
     /// (`openInFront`), one after the other, so the first fills an empty
     /// key window and the next ones open in new windows. A file that
     /// doesn't play shows why in the key window, or in a new one with
@@ -453,9 +453,9 @@ final class AppModel: AppControlling {
         return window
     }
 
-    // MARK: - Projects (ADR 0004)
+    // MARK: - Projects
 
-    /// What the video at `url` with `contentHash` opens as (decision C4):
+    /// What the video at `url` with `contentHash` opens as:
     /// the project `project` when it's set, which must list the file; else
     /// the most recently opened project that lists it; else the plain
     /// video. Refused for a project `config.toml` doesn't have, or that
@@ -519,13 +519,13 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// `havooch project new <slug> --from <path> [--title]` (decisions E3
-    /// and E7): the project goes into `config.toml` with the video as v1.
+    /// `havooch project new <slug> --from <path> [--title]`: the project
+    /// goes into `config.toml` with the video as v1.
     /// When no other project lists the video, its plain review moves into
     /// the project with every thread anchored to v1, its ids unchanged;
     /// its listener keeps listening, now to the project, and a window that
     /// holds the video holds the project. When another project lists it,
-    /// the new project starts with fresh threads (E7). Refused for a slug
+    /// the new project starts with fresh threads. Refused for a slug
     /// in use, a path with no file, a file that doesn't play, and a
     /// `config.toml` with a problem; nothing changes then.
     func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project {
@@ -552,7 +552,7 @@ final class AppModel: AppControlling {
         return StateReport.Project(outline, onScreen: url.path)
     }
 
-    /// `havooch project add <slug> <path> [--label]` (decision E3): the
+    /// `havooch project add <slug> <path> [--label]`: the
     /// video goes into `config.toml` as the project's next version, and
     /// shows in the project's window (else the empty key window, else a new
     /// one), which comes forward. Refused for a project `config.toml`
@@ -610,8 +610,8 @@ final class AppModel: AppControlling {
     }
 
     /// Enters the demo: the run switches to the demo folder and `window`
-    /// opens `video` there, so demo threads never mix with the person's
-    /// (L17, L27). Every window is on the run's data, so the other windows
+    /// opens `video` there, so demo threads never mix with the person's data.
+    /// Every window is on the run's data, so the other windows
     /// go home. A run already on demo data (an in-app demo, or `app open
     /// --demo`) opens it where it is. When the video doesn't open, the
     /// demo this call entered is left again.

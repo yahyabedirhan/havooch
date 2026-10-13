@@ -59,7 +59,7 @@ public enum ThemeRefusal: Error, Equatable, Sendable {
 /// colour: the native macOS part; on any other token `system` counts as
 /// missing. One exception: a theme that sets `accent` nearer than
 /// `accentFill` (itself, a theme it extends, or an override) gets
-/// `accentFill` made from that accent (`ThemeColor.filled()`), so its
+/// `accentFill` made from that accent (`ThemeColor.filled`), so its
 /// filled buttons keep its hue and white text still reads on them.
 /// A pure value: the files are read by the store.
 public struct ThemeCatalog: Equatable, Sendable {

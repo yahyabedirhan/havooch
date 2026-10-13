@@ -3,7 +3,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The words of a thread's row in the thread list (L38): its name, its
+/// The words of a thread's row in the thread list: its name, its
 /// frame's time, its state, how fresh it is and its last message.
 struct ThreadSummary: Hashable {
     /// `#3`, or `General`.
@@ -11,7 +11,7 @@ struct ThreadSummary: Hashable {
     /// The frame's time as the player bar shows it (`0:12`); nil for General.
     var time: String?
     /// In a project, the version the thread was raised on: `v2`, or
-    /// `Removed version` (decision E6); nil on a plain video and for General.
+    /// `Removed version`; nil on a plain video and for General.
     var version: String?
     var state: MessageState?
     /// Who wrote the last message: `You`, `Asks` for the agent's question,
@@ -30,7 +30,7 @@ struct ThreadSummary: Hashable {
     /// Whether the agent waits for the person's answer on the thread.
     var waitsForAnswer: Bool
     /// Whether an agent message came after the person last opened the
-    /// thread's view: the row shows the unread dot (L46).
+    /// thread's view: the row shows the unread dot.
     var isUnread: Bool
     /// The name of the agent that wrote the last message, for VoiceOver's
     /// reading of a question.
@@ -77,7 +77,7 @@ struct ThreadSummary: Hashable {
     }
 }
 
-/// What a row's menu offers (L40); `WindowModel.rowActions` says which
+/// What a row's menu offers; `WindowModel.rowActions` says which
 /// apply to a thread.
 enum RowAction: Identifiable {
     /// Shows the thread's view, as a click on the row does.
@@ -120,12 +120,12 @@ enum RelativeTime {
     }
 }
 
-/// One thread in the thread list (L38): its keyframe thumbnail with its
+/// One thread in the thread list: its keyframe thumbnail with its
 /// regions, its number and time, its state, how fresh it is, and a
 /// two-line preview of its last message. General has a symbol in the
 /// keyframe's place. A click shows the thread's view and moves the player
 /// to its frame. The row of the thread on the stage sits in a `well`.
-/// An unread row (L46) has an 8 pt dot in the accent colour at its left,
+/// An unread row  has an 8 pt dot in the accent colour at its left,
 /// its title bold, its preview in the primary text colour and its time in
 /// the accent colour.
 /// Keyboard navigation reaches the row, with the system focus ring, and
@@ -136,7 +136,7 @@ struct ThreadRow: View {
     /// Whether the thread's frame is on the stage.
     let isOnStage: Bool
     /// Whether the row shows its version's tag; a version section of a
-    /// project's list names the version in its header instead (E9).
+    /// project's list names the version in its header instead.
     /// VoiceOver reads the version either way.
     var showsVersion = true
     /// Whether the thread was raised on another version than the one on

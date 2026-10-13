@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The first-run window on screen (H1): an AppKit window of its own, beside
+/// The first-run window on screen: an AppKit window of its own, beside
 /// the player windows, made the first time it shows and kept for the run.
 /// `AppModel.firstRun.present` shows and closes it. Its close button only
 /// closes it: unlike Skip Setup, it doesn't make the first run done, so the
@@ -35,7 +35,7 @@ final class FirstRunWindow: NSObject, NSWindowDelegate {
     }
 
     /// Sizes `window` to what its view settles on, then centers it over the
-    /// player window in front, else on the screen. `center()` alone measured
+    /// player window in front, else on the screen. `center` alone measured
     /// the size the window was made with, before the hosting view resized it,
     /// and centered it on the screen, not over the player window.
     private func place(_ window: NSWindow) {

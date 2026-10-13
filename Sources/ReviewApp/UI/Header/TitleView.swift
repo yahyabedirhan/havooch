@@ -130,7 +130,7 @@ struct TitleView: View {
                 .labelStyle(HeaderLabelStyle())
                 .accessibilityElement(children: .combine)
                 // While comparing, the two versions and Exit Compare take
-                // the switcher's place (E11).
+                // the switcher's place.
                 if words.isProject, let session = model.compare, model.isComparing {
                     ComparingBadge(model: model, session: session)
                 } else if words.isProject, let versions = model.versionSwitch {

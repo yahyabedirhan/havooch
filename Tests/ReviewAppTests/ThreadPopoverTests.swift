@@ -5,8 +5,8 @@ import ReviewWire
 import SwiftUI
 import Testing
 
-/// The thread popover through the app's model, on the fixture video
-/// (D 2.6 to D 2.11): a pin or a badge opens it on its thread's frame, its
+/// The thread popover through the app's model, on the fixture video. A pin
+/// or a badge opens it on its thread's frame. Its
 /// field continues the thread or answers its open question, and the thread
 /// keeps where the person left it. No window.
 @Suite("A thread continues in its popover on the video", .serialized)

@@ -2,7 +2,7 @@ import Foundation
 import ReviewCore
 
 /// A brief notice on the stage: the agent said something on a thread.
-/// Every notice fades after a few seconds (D 4.10), a question too: the
+/// Every notice fades after a few seconds, a question too: the
 /// question stays open on its thread, where the person answers it.
 struct Notice: Equatable, Identifiable {
     enum Kind: Equatable {
@@ -12,8 +12,8 @@ struct Notice: Equatable, Identifiable {
         case message
         /// The agent asks, and waits for the answer (`ask`).
         case question
-        /// Another agent's `wait` replaced the listener that was there
-        /// (F3): "Codex took over from Claude Code", on General.
+        /// Another agent's `wait` replaced the listener that was there.
+        /// On General, the notice says "Codex took over from Claude Code".
         case takeover
     }
 

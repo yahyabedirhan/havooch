@@ -17,7 +17,7 @@ extension ControlServerTests.FakeApp {
     }
 }
 
-/// The first-run window (H1 to H3): it shows at launch until the person
+/// The first-run window: it shows at launch until the person
 /// uses the app, every step can be passed or skipped, Tools and Connect act on the
 /// Connect view's setup, the demo prompt takes the picked harness's form,
 /// and Open the Demo opens the bundled video for the person, whose sends

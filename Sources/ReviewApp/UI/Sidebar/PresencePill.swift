@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The words of the footer's presence pill: one word
 /// on the pill, and on hover who the agent is and what happens to a send
-/// made now. A click on the pill opens the Connect view (G1).
+/// made now. A click on the pill opens the Connect view.
 struct PresencePill: Equatable {
     /// "Listening", "Working", "Reconnecting" or "No agent".
     var title: String
@@ -13,8 +13,8 @@ struct PresencePill: Equatable {
     /// listener's harness while it listens, works or reconnects. Nil with
     /// no listener, or for a name no known agent has: the pill shows its glyph.
     var logo: KnownAgent?
-    /// Whether the agent the last run had is reconnecting after a relaunch
-    /// (G6): the pill takes the working colour and its logo turns grey.
+    /// Whether the agent from the last run is reconnecting after a relaunch.
+    /// The pill uses the working colour and its logo turns grey.
     var isReconnecting = false
 
     init(presence: Presence, session: String?, pendingSends: Int) {

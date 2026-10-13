@@ -16,13 +16,13 @@ import ReviewCore
 ///     <root>/videos/<contentHash>/transcript.json     a video's transcribed speech, plain or a project's version
 ///     <root>/videos/<contentHash>/frames/<id>.png     a thread's keyframe
 ///     <root>/videos/<contentHash>/crops/<id>.png      a region message's crop
-///     <root>/projects/<slug>/review.json              one project's review (ADR 0004)
+///     <root>/projects/<slug>/review.json              one project's review
 ///     <root>/projects/<slug>/frames/<id>.png          a thread's keyframe, on any version
 ///     <root>/projects/<slug>/crops/<id>.png           a region message's crop
 ///
 /// The settings a person sets on purpose and their own themes are not
-/// here: they are in `config.toml` and `themes/` beside it (ADR 0002,
-/// `ReviewConfig.ConfigLocation`).
+/// here: they are in `config.toml` and `themes/` beside it, as
+/// `ReviewConfig.ConfigLocation` defines.
 ///
 /// A video's folder is named after the hash of its content, so a renamed or
 /// moved file finds its review again. The socket and the demo pointer are

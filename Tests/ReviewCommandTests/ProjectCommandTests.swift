@@ -3,9 +3,9 @@ import ReviewCommand
 import ReviewWire
 import Testing
 
-/// `project new`, `project add` and `project list` (ADR 0004, decision E3,
-/// L59). `new` and `add` go through the app with no lease, the paths made
-/// absolute; `add` brings the app's process to the front, as `open` does.
+/// `project new`, `project add` and `project list`. `new` and `add` go
+/// through the app with no lease, and make paths absolute. `add` brings the
+/// app's process to the front, as `open` does.
 /// `list` reads `config.toml` itself and needs no app.
 @Suite("The project commands")
 struct ProjectCommandTests {

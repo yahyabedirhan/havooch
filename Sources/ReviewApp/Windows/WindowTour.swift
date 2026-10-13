@@ -1,7 +1,7 @@
 import Foundation
 import ReviewCore
 
-/// One step of the setup tour (H4): first-run V3's coach panel, as
+/// One step of the setup tour: first-run V3's coach panel, as
 /// connect-flow V6 draws it in the player window. It walks the tools, the
 /// connect step, writing on a frame, the send and the agent's reply.
 nonisolated enum TourStep: String, CaseIterable, Equatable, Sendable {
@@ -28,7 +28,7 @@ nonisolated struct TourState: Equatable, Sendable {
     var send: SendRef?
 }
 
-/// A part of the window the tour rings (H4): the ring stands
+/// A part of the window the tour rings: the ring stands
 /// `CoachRing.padding` points outside it.
 nonisolated enum TourRing: String, Equatable, Sendable {
     /// The command line and skill steps of the Connect view.
@@ -50,14 +50,14 @@ extension WindowModel {
 
     /// How many setup items are left, the count on "Finish setup": the
     /// command line, the skill and a first connection, each until it is
-    /// detected (L58).
+    /// detected.
     var setupItemsLeft: Int {
         let setup = app.setup
         return (setup.isLinked ? 0 : 1) + (setup.isSkillDetected ? 0 : 1) + (app.agentConnectedOnce ? 0 : 1)
     }
 
     /// Whether "Finish setup" shows in the header: beside a video, while
-    /// setup isn't fully detected and no agent has ever connected (L58), and
+    /// setup isn't fully detected and no agent has ever connected, and
     /// while the tour shows, so the button that closes it stays.
     var showsFinishSetup: Bool {
         video != nil && (app.showsConnectDot || tour.isOpen)

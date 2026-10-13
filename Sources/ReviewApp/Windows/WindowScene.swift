@@ -2,8 +2,8 @@ import AppKit
 import ReviewWire
 import SwiftUI
 
-/// One player window's scene: the `WindowGroup`'s content for a target
-/// (ADR 0003). As it appears it takes the `WindowModel` made for it, or a
+/// One player window's scene: the `WindowGroup`'s content for a target.
+/// As it appears, it takes the `WindowModel` made for it, or a
 /// new empty one, and its scene value follows what the window holds. It
 /// hands SwiftUI's `openWindow` to the registry, so the app can open a
 /// window from a control command, and tells the app which AppKit window

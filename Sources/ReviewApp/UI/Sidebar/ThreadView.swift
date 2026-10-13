@@ -2,7 +2,7 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The sidebar's view of one thread (L38): a top bar with Back, the
+/// The sidebar's view of one thread: a top bar with Back, the
 /// thread's number and time, and Previous and Next; then the conversation.
 /// No keyframe: the stage shows the thread's frame. Under the conversation,
 /// the live line says what the agent does now (`ThreadActivity`). The
@@ -37,7 +37,7 @@ struct ThreadView: View {
     }
 }
 
-/// A thread's messages as a chat (L40), in the order written: in the
+/// A thread's messages as a chat, in the order written: in the
 /// thread view and in the thread popover alike. The thread view offers the
 /// open question's quick replies under it.
 struct Conversation: View {

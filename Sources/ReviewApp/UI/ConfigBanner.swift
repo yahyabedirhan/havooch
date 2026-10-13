@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The settings notice at the top of the window (ADR 0002): what the move
+/// The settings notice at the top of the window: what the move
 /// into `config.toml` did, or the problems of a save the app didn't apply.
 /// It never blocks the window or the control socket: the person reads it
 /// and closes it, or `havooch config dismiss` does. A full soft fill and

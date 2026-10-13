@@ -5,7 +5,7 @@ import ReviewLease
 import ReviewStore
 import ReviewWire
 
-/// One review's listener (ADR 0003): it holds the review's `Outbox` (the
+/// One review's listener: it holds the review's `Outbox` (the
 /// rules), the one open `wait` and the open `ask`s (held connections, like
 /// a `take` waiting in line) and assembles the payload at the moment a
 /// `wait` takes a send. The listener's answers (`ack`, `status`, `reply`,
@@ -46,7 +46,7 @@ final class ListenerQueue {
     /// new` moves a plain video's review into a project (`rekey`).
     private(set) var key: ReviewKey
     /// When the data the listener is on opened: a session the last run
-    /// left reconnects for `reconnectSeconds` after it (G6).
+    /// left reconnects for `reconnectSeconds` after it.
     let startedAt: Date
     /// The last time a new agent replaced one that was there; nil until one does.
     private(set) var takeover: Takeover?
@@ -179,7 +179,7 @@ final class ListenerQueue {
     }
 
     /// How long a listener the last run left counts as reconnecting after
-    /// the launch, with no word from it yet (G6).
+    /// the launch, with no word from it yet.
     static let reconnectSeconds: TimeInterval = 30
 
     /// The listener as the Connect view and the pill show it.
@@ -195,7 +195,7 @@ final class ListenerQueue {
 
     /// The phase at `time`. The only waiting state is a real connection
     /// state: a session the last run left, not yet heard from in this one,
-    /// for `reconnectSeconds` after the data opened (G6).
+    /// for `reconnectSeconds` after the data opened.
     func phase(at time: Date) -> Phase {
         guard let session = outbox.session else { return .none }
         if outbox.presence(at: time) != .absent { return .connected(session) }

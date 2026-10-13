@@ -7,9 +7,9 @@ import PackageDescription
 // ReviewApp is macOS UI code: every other module builds and tests on Linux. A
 // module and a type never share a name.
 //
-// ReviewConfig reads `config.toml` (ADR 0002) with TOMLDecoder, the
-// package's one dependency, as Swift Lab's LabConfig does (Swift Lab ADR
-// 0016): Swift has no TOML parser. Only ReviewConfig links it.
+// ReviewConfig reads `config.toml` with TOMLDecoder, the package's one
+// dependency, as Swift Lab's LabConfig does. Swift has no TOML parser. Only
+// ReviewConfig links it.
 let package = Package(
     name: "Havooch",
     platforms: [.macOS(.v26)],

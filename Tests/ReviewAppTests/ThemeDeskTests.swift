@@ -210,7 +210,7 @@ struct ThemeDeskTests {
             }
         }
         #expect(inline.isEmpty, "split buttons built inline:\n\(inline.joined(separator: "\n"))")
-        // White text on the fill filledButton uses, which reads at 4.5:1 or more (ADR 0006).
+        // White text on the fill filledButton uses, which reads at 4.5:1 or more.
         #expect(control.contains(".background(palette[.accentFill])"))
         #expect(control.contains(".foregroundStyle(palette.textOnFill)"))
         // The comment popover's Queue or Answer.
@@ -331,7 +331,7 @@ enum RawColour {
         // A colour made or named on the type: Color.black, Color(red:…), Color(nsColor:).
         #"\bColor\s*(\.(?!clear\b)\w|\()"#,
         #"\bNSColor\b"#, #"\bCGColor\b"#,
-        // A named colour or hierarchical style: .white, .secondary, …
+        // A named colour or hierarchical style:.white,.secondary, …
         #"(?<!weight: )\.(white|black|gray|grey|red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown|primary|secondary|tertiary|quaternary|quinary|accentColor)\b(?!\s*:)"#,
         // The tint as a style (the `.tint(…)` modifier is fine).
         #"\.tint\b(?!\s*\()"#,
