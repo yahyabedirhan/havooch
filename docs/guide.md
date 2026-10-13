@@ -179,20 +179,130 @@ Recent videos, playheads and your threads are app state, kept out of this file.
 
 ## The `havooch` command
 
-The command ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Homebrew and the install script put it on your `PATH`, and **Link** in the Connect view does the same. Most commands talk to the Havooch app running on your Mac. An agent that listens uses only a few of them:
+The command ships inside the app, at `Havooch.app/Contents/Helpers/havooch`. Homebrew and the install script put it on your `PATH`, and **Link** in the Connect view does the same. Most commands talk to the Havooch app running on your Mac.
 
-| Group | Commands | What they do |
-|---|---|---|
-| Open | `open` | Open a video, in its project when one lists it. |
-| Listen | `wait`, `ack`, `status`, `reply`, `ask` | The listener's loop: take a send, acknowledge it, report progress, answer on a thread, ask a question. `wait --video <path>` or `wait --project <slug>` picks the window. |
-| Projects | `project`, `version`, `compare` | Make a project and add versions, show a version, drive Compare. |
-| Settings | `config`, `theme` | Find and check `config.toml`, list and pin themes. |
-| Setup | `setup`, `connect`, `first-run`, `tour` | Link the command, install the skill, and drive the Connect view, the first-run window and the tour. |
-| App control | `control`, `app`, `window`, `state`, `player`, `comment`, `thread`, `send`, `context`, `screenshot` | Drive the app for checks and screenshots. An agent takes a lease first with `control take` and gives it back with `control release`, so it never fights you for the player. `app open --demo <folder>` runs the app on a separate folder, not your data, and with `HAVOOCH_MUTED=1` set, muted. `player volume`, `player mute`, `player unmute` and `player sound [--close]` drive the sound and its panel. |
+Every command is `havooch <group> <verb>`, such as `havooch player seek 0:12`. The listener's loop (`open`, `wait`, `ack`, `reply`, `ask`), `state`, `screenshot` and `help` sit at the top, with no group. An agent that listens uses only those, `message state` and the project commands.
 
-`window resize <width>` sets the key window's content width in points. Use `--window <id>` to name another window. The window stops at the width its content needs. `sidebar show` and `sidebar hide` use the same visibility control as the header button.
+### Help
 
-`havooch --help` lists every command, and `havooch --version` prints the version.
+- `havooch`, `havooch --help` or `havooch help` prints the top help: the listener's commands, the groups and the options.
+- `havooch <group>`, `havooch <group> --help` or `havooch help <group>` prints a group's commands, each with its usage.
+- `havooch <group> <verb> --help` or `havooch help <group> <verb>` prints one command, with examples.
+- `havooch help --json` prints every command as JSON, for an agent: its name, usage, summary, role, options and whether it takes `--window`.
+- `havooch --version` prints the version.
+
+### Options
+
+- `--json` prints JSON, on every command.
+- `--window <id>` acts on that window, not the key one, on the commands that act on one window. `havooch window list` prints the ids.
+- `--timeout <seconds>` limits a wait: `wait`, `ask` and `control take`. Without it, `wait` and `ask` wait with no limit, and `control take` fails at once when another agent holds the lease.
+- `--` ends the options, so a text can start with a dash.
+
+### The lease
+
+A command that drives the app needs the lease, so it never fights you for the player. An agent takes it with `havooch control take` and gives it back with `havooch control release`. The listener's commands, the project commands and the commands that only print need no lease. `havooch app open --demo <folder>` runs the app on a separate folder, not your data, and with `HAVOOCH_MUTED=1` set, muted.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Done. |
+| 1 | Refused or failed. The reason is one line on standard error. |
+| 2 | Wrong usage. The command prints its usage line. |
+| 124 | A wait ran out: `wait --timeout`, `ask --timeout` or `control take --timeout`. |
+
+### Commands
+
+#### Get feedback
+
+| Command | What it does |
+|---|---|
+| `open <path> [--project <slug>]` | Open a video for the person, playing. |
+| `wait [--video <path> \| --project <slug>] [--timeout <seconds>]` | Wait for the person's next send and print it. |
+| `ack <send-id> [<text>]` | Say you have a send. |
+| `reply <thread> <text>` | Send a message on a thread. |
+| `ask <thread> <question> [--choice <text>]... [--timeout <seconds>]` | Ask a question on a thread and print the answer. |
+| `message state <message-id> working\|done\|failed [<text>]` | Say a message is working, done or failed. |
+| `project new <slug> --from <path> [--title <title>]` | Make a project whose first version is a video. |
+| `project add <slug> <path> [--label <label>]` | Add a video as a project's next version. |
+| `project list` | List every project with its versions. |
+
+#### Look
+
+| Command | What it does |
+|---|---|
+| `state` | Print everything the app shows. |
+| `screenshot <abs.png> [--appearance light\|dark] [--hide-agent-indicator] [--window main\|settings\|about\|first-run\|<id>]` | Save a window as a PNG. Needs the lease. |
+| `help [<group> [<verb>]]` | Print the help of the command, a group or one command. |
+
+#### Drive the app
+
+| Command | What it does |
+|---|---|
+| `app status` | Print whether the app runs, and on which data. |
+| `app open [--demo <folder>]` | Start the app. Needs the lease. |
+| `app home` | Go home: close the video and leave the demo. Needs the lease. |
+| `app demo` | Run the demo in the window. Needs the lease. |
+| `app quit` | Quit the app and wait until it's gone. Needs the lease. |
+| `window list` | List every window, what it holds, and which one is key. |
+| `window new` | Open a new empty window on the home screen. Needs the lease. |
+| `window close [<id>]` | Close a window, or the key window. Needs the lease. |
+| `window resize <width>` | Set a window's content width in points. Needs the lease. |
+| `control take [--timeout <seconds>]` | Hold the app for 5 minutes. |
+| `control release` | Give the app up, so the next agent in line gets it. |
+| `player load <path>` | Load a video file, paused at its start. Needs the lease. |
+| `player play` | Play the video. Needs the lease. |
+| `player pause` | Pause the video. Needs the lease. |
+| `player seek <seconds\|m:ss>` | Move to an exact time. Needs the lease. |
+| `player mute` | Mute the sound in every window. Needs the lease. |
+| `player unmute` | Bring back the last volume. Needs the lease. |
+| `player volume <0-100>` | Set the volume in every window. Needs the lease. |
+| `player sound [--close]` | Open the sound panel over the stage. Needs the lease. |
+| `message add <text> [--at <time>] [--region x,y,w,h] [--thread <thread>]` | Queue a message on a frame's thread. Needs the lease. |
+| `message edit <message-id> <text>` | Change a queued message's text. Needs the lease. |
+| `message delete <message-id>` | Remove a queued message. Needs the lease. |
+| `message send` | Send every queued message at once. Needs the lease. |
+| `context set <text>` | Set the open video's context note for the agent. Needs the lease. |
+| `thread answer <thread> <text>` | Answer the agent's open question on a thread. Needs the lease. |
+| `thread choose <thread> <number>` | Answer the agent's open question on a thread with a quick reply. Needs the lease. |
+| `popover open [<text>] [--region x,y,w,h] \| --thread <thread> [--frame x,y,w,h]` | Open the comment popover on the player's frame. Needs the lease. |
+| `composer set [<text>] [--region x,y,w,h] [--general]` | Put a text in the composer at the sidebar's foot. Needs the lease. |
+| `sidebar show [threads \| thread <thread> \| connect]` | Show the sidebar, or one of its views. Needs the lease. |
+| `sidebar hide` | Hide the sidebar. Needs the lease. |
+| `version show <n>` | Show one of the project's versions. Needs the lease. |
+| `version find [<query>] [--close]` | Open the version picker with a query typed in. Needs the lease. |
+| `version menu [--search <text>] [--close]` | Open All versions over a project's thread list. Needs the lease. |
+| `version section <n> [--remove]` | Add an older version's section to the thread list. Needs the lease. |
+| `compare open` | Open the compare popover. Needs the lease. |
+| `compare find left\|right [<query>]` | Open one side's version picker with a query typed in. Needs the lease. |
+| `compare set [--left <n>] [--right <n>] [--layout side-by-side\|flip\|slider] [--side left\|right] [--slider <0-1>]` | Change the comparison. Needs the lease. |
+| `compare swap` | Exchange the left and the right version. Needs the lease. |
+| `compare start` | Compare the two versions on one playhead. Needs the lease. |
+| `compare exit` | Go back to one version, the right side's. Needs the lease. |
+| `theme list` | List every theme, built-in or yours, and which one is active. |
+| `theme set <name\|system>` | Pin a theme by its name. Needs the lease. |
+| `config path` | Print where config.toml and your themes are. |
+| `config check` | Check that config.toml reads. |
+| `config close-notice` | Close the settings notice in the window. Needs the lease. |
+| `setup status` | Print what Havooch detects. |
+| `setup link [--dry-run]` | Link the havooch command in ~/.local/bin. Needs the lease. |
+| `setup install [--harness <name>]... [--dry-run]` | Install the havooch-mate skill globally. Needs the lease. |
+| `setup cancel` | Stop the running skill install. Needs the lease. |
+| `connect pick <harness>` | Pick a harness in the Connect view. Needs the lease. |
+| `connect disconnect` | Let the window's agent go. Needs the lease. |
+| `connect forget` | Stop waiting for the agent that reconnects after a relaunch. Needs the lease. |
+| `tour open` | Show the setup tour over the stage. Needs the lease. |
+| `tour next` | Go to the tour's next step. Needs the lease. |
+| `tour skip` | End the tour. Needs the lease. |
+| `tour close` | Close the tour's panel. Needs the lease. |
+| `first-run open [welcome\|tools\|connect\|try-it]` | Show the first-run window. Needs the lease. |
+| `first-run next` | Go to the first-run window's next step. Needs the lease. |
+| `first-run back` | Go to the first-run window's step before. Needs the lease. |
+| `first-run pick <harness>` | Pick a harness on the Connect step. Needs the lease. |
+| `first-run demo` | Open the bundled demo video and close the first-run window. Needs the lease. |
+| `first-run skip` | Close the first-run window. Needs the lease. |
+
+`window resize <width>` stops at the width the window's content needs. `sidebar show` and `sidebar hide` use the same visibility control as the header button. `player volume`, `player mute`, `player unmute` and `player sound [--close]` drive the sound and its panel.
 
 ## Uninstall
 
