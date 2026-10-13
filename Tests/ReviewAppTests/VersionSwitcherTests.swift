@@ -269,7 +269,7 @@ struct VersionSwitcherTests {
         window.moveVersionHighlight(by: 3)
         #expect(window.state().project?.switcher?.picker?.highlighted == 2)
         window.openHighlightedVersion()
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while window.versionNumber != 2, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
         }

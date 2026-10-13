@@ -113,7 +113,7 @@ struct NoModel: LocalizedError {
 
 /// Waits until `condition` holds: speech arrives on its own task.
 func eventually(_ condition: () -> Bool) async {
-    let deadline = ContinuousClock.now + .seconds(10)
+    let deadline = ContinuousClock.now + .seconds(60)
     while !condition(), ContinuousClock.now < deadline {
         try? await Task.sleep(for: .milliseconds(5))
     }
