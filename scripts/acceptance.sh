@@ -37,8 +37,8 @@
 # each step checks the sidebar:
 #
 #   - which view it shows: `sidebar.thread` of `state --json`, the shown
-#     thread's id or null for the thread list, and `thread show <thread>` and
-#     `thread list` to change it;
+#     thread's id or null for the thread list, and `sidebar show thread <thread>` and
+#     `sidebar show threads` to change it;
 #   - the group each thread is in on the thread list (Needs you, With agent,
 #     Queued, Done), worked out from the threads of `state --json` by the
 #     rule of the spec (`group` below);
@@ -302,8 +302,8 @@ require_demo() {
 
 # take: the operator's lease, waiting in line behind another agent.
 take() {
-    run operator control take --wait "$lease_wait"
-    exits 0 "control take --wait $lease_wait (the operator's lease)"
+    run operator control take --timeout "$lease_wait"
+    exits 0 "control take --timeout $lease_wait (the operator's lease)"
     [ "$code" -eq 0 ] && holds_lease=1
 }
 
@@ -423,8 +423,8 @@ else
     require_demo
     take
 fi
-run operator player open "$video"
-exits 0 "player open (the fixture)"
+run operator player load "$video"
+exits 0 "player load (the fixture)"
 state
 holds "the video is the fixture, of $duration s" "$stdout" \
     '.video.path == $path and ((.video.duration - $duration) | fabs) < 0.1' --arg path "$video" --argjson duration "$duration"
@@ -442,13 +442,13 @@ begin 2 "Seek to a frame. Add a message, then a message with a region at the sam
 run operator player seek "$first_time"
 exits 0 "player seek $first_time"
 composer_says "New thread at 0:$first_time"
-run operator comment add "$first_text" --json
-exits 0 "comment add"
+run operator message add "$first_text" --json
+exits 0 "message add"
 first_message="$(value "$stdout" '.message.id')"
 first_thread="$(value "$stdout" '.thread.id')"
 holds "the message starts thread #1" "$stdout" '.thread.number == 1'
-run operator comment add "$first_region_text" --region "$first_region" --json
-exits 0 "comment add --region $first_region"
+run operator message add "$first_region_text" --region "$first_region" --json
+exits 0 "message add --region $first_region"
 first_region_message="$(value "$stdout" '.message.id')"
 holds "the region message joins the same thread" "$stdout" '.thread.id == $id and .thread.number == 1' --arg id "$first_thread"
 state
@@ -471,8 +471,8 @@ finish
 begin 3 "Seek to another frame. Add a message with a region. Check that it starts a second thread, after #1 in Queued"
 run operator player seek "$second_time"
 exits 0 "player seek $second_time"
-run operator comment add "$second_text" --region "$second_region" --json
-exits 0 "comment add --region $second_region"
+run operator message add "$second_text" --region "$second_region" --json
+exits 0 "message add --region $second_region"
 second_message="$(value "$stdout" '.message.id')"
 second_thread="$(value "$stdout" '.thread.id')"
 holds "the message starts thread #2" "$stdout" '.thread.number == 2 and .thread.id != $id' --arg id "$first_thread"
@@ -490,27 +490,27 @@ finish
 
 # --- step 4 --------------------------------------------------------------------
 
-begin 4 "Show thread #1's view, then the thread list again. Run send. Check that both threads move to With agent"
+begin 4 "Show thread #1's view, then the thread list again. Run message send. Check that both threads move to With agent"
 run operator player seek "$second_time"
 exits 0 "player seek $second_time (away from #1's frame)"
-run operator thread show 1 --json
-exits 0 "thread show 1"
-holds "thread show answers with the shown thread" "$stdout" '.sidebar.thread == $id' --arg id "$first_thread"
+run operator sidebar show thread 1 --json
+exits 0 "sidebar show thread 1"
+holds "sidebar show thread answers with the shown thread" "$stdout" '.sidebar.thread == $id' --arg id "$first_thread"
 state
 on_thread "$stdout" "$first_thread" "#1"
 holds "the player is paused on #1's frame, at $first_time s" "$stdout" \
     '.player.playing == false and ((.player.time - $time) | fabs) < 0.05' --argjson time "$first_time"
 composer_says "Follow up on #1"
-run operator thread list --json
-exits 0 "thread list"
-holds "thread list answers with no shown thread" "$stdout" '.sidebar.thread == null'
+run operator sidebar show threads --json
+exits 0 "sidebar show threads"
+holds "sidebar show threads answers with no shown thread" "$stdout" '.sidebar.thread == null'
 state
 on_list "$stdout"
 # The listener's `wait` is open before the send, in a second process.
 first_payload="$out/send-1.json"
 listen "$first_payload"
-run operator send --json
-exits 0 "send"
+run operator message send --json
+exits 0 "message send"
 send_id="$(value "$stdout" '.send.id')"
 holds "the send has the three messages on the two threads" "$stdout" \
     '(.send.messageIds | length) == 3 and .send.threadIds == [$a, $b]' --arg a "$first_thread" --arg b "$second_thread"
@@ -567,7 +567,7 @@ holds "the acknowledgement is on the General thread" "$stdout" \
     'any(.threads[] | select(.number == 0) | .messages[]; .author == "agent" and .text == $text)' --arg text "$ack_text"
 
 answer_file="$out/answer.txt"
-listener ask "$first_thread" "$question" --wait 60 >"$answer_file" 2>"$logs/ask.err" &
+listener ask "$first_thread" "$question" --timeout 60 >"$answer_file" 2>"$logs/ask.err" &
 ask_pid=$!
 # The question is in the thread before the person can answer it.
 asked=0
@@ -583,8 +583,8 @@ if [ "$asked" -eq 1 ]; then ok "ask puts the agent's question on thread #1"; els
 state
 grouped "the thread list: #1 in Needs you, #2 in With agent" "$stdout" '[["needs you", [1]], ["with agent", [2]], ["done", [0]]]'
 
-run operator thread show "$first_thread" --json
-exits 0 "thread show $first_thread"
+run operator sidebar show thread "$first_thread" --json
+exits 0 "sidebar show thread $first_thread"
 state
 on_thread "$stdout" "$first_thread" "#1"
 composer_says "Answer #1 · goes at once"
@@ -609,10 +609,10 @@ exits 0 "reply on thread #1"
 run listener reply "$second_thread" "$second_reply"
 exits 0 "reply on thread #2"
 for message in "$first_message" "$first_region_message" "$second_message"; do
-    run listener status "$message" working
-    exits 0 "status $message working"
-    run listener status "$message" "done"
-    exits 0 "status $message done"
+    run listener message state "$message" working
+    exits 0 "message state $message working"
+    run listener message state "$message" "done"
+    exits 0 "message state $message done"
 done
 state
 holds "every person message is done, and both threads are done" "$stdout" \
@@ -632,9 +632,9 @@ finish
 
 # --- step 7 --------------------------------------------------------------------
 
-begin 7 "Follow up on the first thread from its view with comment add --thread. Send it. Check that wait returns it with the earlier messages in history[] and no context"
-run operator comment add "$follow_up" --thread "$first_thread" --json
-exits 0 "comment add --thread $first_thread"
+begin 7 "Follow up on the first thread from its view with message add --thread. Send it. Check that wait returns it with the earlier messages in history[] and no context"
+run operator message add "$follow_up" --thread "$first_thread" --json
+exits 0 "message add --thread $first_thread"
 follow_up_message="$(value "$stdout" '.message.id')"
 holds "the follow-up goes on thread #1" "$stdout" '.thread.id == $id and .thread.number == 1' --arg id "$first_thread"
 state
@@ -643,8 +643,8 @@ grouped "the thread list: #1 in Queued again" "$stdout" '[["queued", [1]], ["don
 on_thread "$stdout" "$first_thread" "#1, still: a written message leaves the view as it is"
 second_payload="$out/send-2.json"
 listen "$second_payload"
-run operator send --json
-exits 0 "send"
+run operator message send --json
+exits 0 "message send"
 second_send="$(value "$stdout" '.send.id')"
 heard "$second_payload"
 p="$second_payload"
@@ -666,8 +666,8 @@ run listener ack "$second_send"
 exits 0 "ack"
 run listener reply "$first_thread" "$follow_up_reply"
 exits 0 "reply on thread #1"
-run listener status "$follow_up_message" "done"
-exits 0 "status $follow_up_message done"
+run listener message state "$follow_up_message" "done"
+exits 0 "message state $follow_up_message done"
 state
 grouped "the thread list: every thread in Done again" "$stdout" '[["done", [0, 1, 2]]]'
 finish
@@ -719,8 +719,8 @@ state
 holds "the launch shows home in one window, with no video" "$stdout" \
     '.screen == "home" and .video.path == null and (.windows | length) == 1'
 holds "the fixture is first in recents" "$stdout" '.recents[0].path == $path' --arg path "$video"
-run operator player open "$video"
-exits 0 "player open (the fixture, again)"
+run operator player load "$video"
+exits 0 "player load (the fixture, again)"
 state
 after="$stdout"
 # The lease, the listener's presence, the player and the sidebar's view are
@@ -755,8 +755,8 @@ exits 0 "player seek $first_time (thread #1's frame)"
 sleep 6
 for view in list thread; do
     if [ "$view" = thread ]; then
-        run operator thread show "$first_thread"
-        exits 0 "thread show $first_thread"
+        run operator sidebar show thread "$first_thread"
+        exits 0 "sidebar show thread $first_thread"
         sleep 1
     fi
     for appearance in light dark; do
@@ -775,8 +775,8 @@ if ! cmp -s "$shots/list-light.png" "$shots/thread-light.png"; then
 else
     bad "the thread list and the thread view are two pictures"
 fi
-run operator thread list
-exits 0 "thread list"
+run operator sidebar show threads
+exits 0 "sidebar show threads"
 run operator control release
 exits 0 "control release"
 holds_lease=0
@@ -832,8 +832,8 @@ run operator player pause --window w2
 exits 0 "player pause --window w2"
 run operator state --window w2 --json
 holds "w2 is paused, and still holds its video" "$stdout" '.player.playing == false and .video.path == $path' --arg path "$other_video"
-run operator player open "$video" --window w2
-exits 1 "player open of w1's video in w2 is refused"
+run operator player load "$video" --window w2
+exits 1 "player load of w1's video in w2 is refused"
 run operator window close w2
 exits 0 "window close w2"
 run operator window list --json
@@ -869,10 +869,10 @@ for _ in $(seq 1 50); do
 done
 holds "w1 and w2 each show a listening agent, w2's is Claude Code" "$logs/window-listeners.json" \
     '[.windows[] | .listener.presence] == ["listening", "listening"] and .windows[1].listener.session == "Claude Code"'
-run operator comment add "Brighter logo here." --window "$second_window"
-exits 0 "comment add --window w2"
-run operator send --window "$second_window"
-exits 0 "send --window w2"
+run operator message add "Brighter logo here." --window "$second_window"
+exits 0 "message add --window w2"
+run operator message send --window "$second_window"
+exits 0 "message send --window w2"
 wait "$second_pid"
 code=$?
 stderr="$second_wait.err"
@@ -907,10 +907,10 @@ begin 14 "Send with no agent. Check that the Connect view opens with the outbox 
 take
 # w1's listener of step 13 went: let its grace run out, so nobody is there.
 sleep 6
-run operator comment add "Connect check." --at 3
-exits 0 "comment add (no agent listens)"
-run operator send
-exits 0 "send with no agent"
+run operator message add "Connect check." --at 3
+exits 0 "message add (no agent listens)"
+run operator message send
+exits 0 "message send with no agent"
 state
 holds "the sidebar shows the Connect view, opened by the send" "$stdout" '.sidebar.mode == "connect" and .sidebar.connect.reason == "send"'
 holds "the banner says 1 message waits for an agent" "$stdout" \
@@ -931,8 +931,8 @@ state
 holds "nobody listens after Disconnect" "$stdout" '.sidebar.connect.phase == "none" and .sidebar.connect.listener == null'
 run operator connect disconnect
 exits 1 "connect disconnect again (nobody is connected)"
-run operator thread list
-exits 0 "thread list (Back)"
+run operator sidebar show threads
+exits 0 "sidebar show threads (Back)"
 state
 holds "the sidebar shows the threads again" "$stdout" '.sidebar.mode == "threads" and .sidebar.connect == null'
 run operator control release
@@ -944,8 +944,8 @@ finish
 
 begin 15 "Take the setup tour. Check that it shows its steps with their rings, that close keeps the step and skip starts over, and that Finish setup is gone after step 14's agent"
 take
-run operator tour show --json
-exits 0 "tour show"
+run operator tour open --json
+exits 0 "tour open"
 holds "the tour shows step 1 of 5 and rings the setup steps" "$stdout" \
     '.tour.open == true and .tour.step == "tools" and .tour.stepNumber == 1 and .tour.steps == 5 and .tour.rings == ["setupSteps"]'
 holds "Finish setup shows while the tour does, and counts no first connection: step 14's agent connected" "$stdout" \
@@ -963,16 +963,16 @@ exits 0 "tour close"
 holds "close keeps the step" "$stdout" '.tour.open == false and .tour.step == "write" and .tour.rings == []'
 state
 holds "with the tour closed and an agent connected once, Finish setup is gone" "$stdout" '.tour.finishSetup == false'
-run operator tour show --json
-exits 0 "tour show (again)"
+run operator tour open --json
+exits 0 "tour open (again)"
 holds "the tour opens at the step it was left on" "$stdout" '.tour.open == true and .tour.step == "write"'
 run operator tour skip --json
 exits 0 "tour skip"
 holds "skip starts the next tour from the first step" "$stdout" '.tour.open == false and .tour.step == "tools"'
 run operator tour next
 exits 1 "tour next (the tour isn't showing)"
-run operator thread list
-exits 0 "thread list"
+run operator sidebar show threads
+exits 0 "sidebar show threads"
 run operator control release
 exits 0 "control release"
 holds_lease=0
@@ -999,10 +999,10 @@ holds "w1 shows v2, the second video, and v1's threads stay" "$stdout" \
     '.project.version == 2 and .video.path == $path and ([.threads[] | select(.version.number == 1)] | length > 0)' \
     --arg path "$other_video"
 take
-run operator comment add "The logo is too small in v2." --at 2 --window w1
-exits 0 "comment add on v2"
-run operator send --window w1
-exits 0 "send on v2"
+run operator message add "The logo is too small in v2." --at 2 --window w1
+exits 0 "message add on v2"
+run operator message send --window w1
+exits 0 "message send on v2"
 run operator control release
 exits 0 "control release"
 holds_lease=0
@@ -1025,8 +1025,8 @@ take
 # A demo run never shows it by itself: it shows only on a person's first launch.
 state
 holds "the first-run window doesn't show by itself on demo data" "$stdout" '.firstRun.showing == false'
-run operator first-run show --json
-exits 0 "first-run show"
+run operator first-run open --json
+exits 0 "first-run open"
 holds "it shows Welcome" "$stdout" '.firstRun.showing == true and .firstRun.step == "welcome"'
 run operator first-run next
 exits 0 "first-run next (Get Started)"
@@ -1062,29 +1062,29 @@ for number in 3 4; do
     exits 0 "project add $slug, a copy of the first video as v$number"
 done
 take
-run operator thread list --window w1
-exits 0 "thread list"
+run operator sidebar show threads --window w1
+exits 0 "sidebar show threads"
 run operator state --window w1 --json
 holds "the list shows the last three versions, v4 on screen, and v1 under All versions" "$stdout" \
     '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.onScreen == 4 and .sidebar.versions.older == [1]
      and .sidebar.versions.showing == "Showing v2 to v4" and .sidebar.versions.menu == null'
-run operator thread versions --search v1 --window w1 --json
-exits 0 "thread versions --search v1"
+run operator version menu --search v1 --window w1 --json
+exits 0 "version menu --search v1"
 holds "All versions is open with the search, and finds v1" "$stdout" \
     '.sidebar.versions.menu.search == "v1" and .sidebar.versions.menu.older == [1] and .sidebar.versions.menu.inList == []'
 run operator screenshot "$out/thread-list-all-versions.png" --window w1 --hide-agent-indicator
 exits 0 "screenshot of All versions"
-run operator thread version 1 --window w1 --json
-exits 0 "thread version 1"
+run operator version section 1 --window w1 --json
+exits 0 "version section 1"
 holds "v1 joins the list under the last three, picked, and the menu closes" "$stdout" \
     '.sidebar.versions.sections == [4, 3, 2, 1] and .sidebar.versions.picked == [1] and .sidebar.versions.menu == null
      and .sidebar.versions.older == []'
 run operator screenshot "$out/thread-list-v1-picked.png" --window w1 --hide-agent-indicator
 exits 0 "screenshot of the list with v1"
-run operator thread version 3 --remove --window w1
-exits 1 "thread version 3 --remove (v3 is one of the last three)"
-run operator thread version 1 --remove --window w1 --json
-exits 0 "thread version 1 --remove"
+run operator version section 3 --remove --window w1
+exits 1 "version section 3 --remove (v3 is one of the last three)"
+run operator version section 1 --remove --window w1 --json
+exits 0 "version section 1 --remove"
 holds "v1 leaves the list" "$stdout" '.sidebar.versions.sections == [4, 3, 2] and .sidebar.versions.picked == []'
 run operator control release
 exits 0 "control release"
@@ -1103,8 +1103,8 @@ run operator state --window w1 --json
 holds "w1 shows v4: the segments are v2 to v4, and the field says All 4" "$stdout" \
     '.project.version == 4 and .project.switcher.segments == [2, 3, 4] and .project.switcher.selected == 4
      and .project.switcher.field == "All 4" and .project.switcher.picker == null'
-run operator version pick v1 --window w1 --json
-exits 0 "version pick v1"
+run operator version find v1 --window w1 --json
+exits 0 "version find v1"
 holds "the picker is open with the search, and finds v1" "$stdout" \
     '.project.switcher.picker.query == "v1" and .project.switcher.picker.matches == [1] and .project.switcher.picker.highlighted == 1'
 run operator screenshot "$out/version-picker.png" --window w1 --hide-agent-indicator
@@ -1124,8 +1124,8 @@ exits 0 "version show v4"
 run operator window new --json
 exits 0 "window new"
 plain_window=$(value "$stdout" '.window')
-run operator player open "$root/fixtures/showcase/lantern-teaser.mp4" --window "$plain_window"
-exits 0 "player open a plain video in $plain_window"
+run operator player load "$root/fixtures/showcase/lantern-teaser.mp4" --window "$plain_window"
+exits 0 "player load a plain video in $plain_window"
 run operator state --window "$plain_window" --json
 holds "a plain video has no project, so no switcher" "$stdout" '.project == null'
 run operator version show 1 --window "$plain_window"
@@ -1150,8 +1150,8 @@ exits 0 "compare open"
 holds "the popover opens on v3 and v4, side by side" "$stdout" \
     '.project.compare.phase == "choosing" and .project.compare.left == 3 and .project.compare.right == 4
      and .project.compare.layout == "side-by-side" and .project.compare.active == null'
-run operator compare pick left v1 --window w1 --json
-exits 0 "compare pick left v1"
+run operator compare find left v1 --window w1 --json
+exits 0 "compare find left v1"
 holds "the left side's picker finds v1" "$stdout" \
     '.project.compare.picker.side == "left" and .project.compare.picker.matches == [1] and .project.compare.picker.highlighted == 1'
 run operator screenshot "$out/compare-popover.png" --window w1 --hide-agent-indicator
@@ -1175,8 +1175,8 @@ exits 0 "compare set --side left"
 holds "the left side is active: v3 is the version on screen" "$stdout" \
     '.project.compare.active == "left" and .project.version == 3'
 compare_text="The title is cut off on this cut"
-run operator comment add "$compare_text" --window w1 --json
-exits 0 "comment add on the left side"
+run operator message add "$compare_text" --window w1 --json
+exits 0 "message add on the left side"
 run operator state --window w1 --json
 holds "the message is on v3, the left side's version" "$stdout" \
     '[.threads[] | select(any(.messages[]; .text == $text))][0].version.number == 3' --arg text "$compare_text"
