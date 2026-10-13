@@ -1,6 +1,6 @@
 # Havooch: low-level design
 
-This document is the design of Havooch's code as it is: the modules and their files, the types that hold state and enforce rules, how a click or a command travels to the store and back, and the decisions behind them. It covers the whole package at version 0.5.1, control protocol 6: the player, threads and sends, windows, projects and versions, Compare, themes, `config.toml`, setup, the Connect view, the first run and the tour, the `havooch` command and the listener skill.
+This document is the design of Havooch's code as it is: the modules and their files, the types that hold state and enforce rules, how a click or a command travels to the store and back, and the decisions behind them. It covers the whole package at version 0.6.0, control protocol 6: the player, threads and sends, windows, projects and versions, Compare, themes, `config.toml`, setup, the Connect view, the first run and the tour, the `havooch` command and the listener skill.
 
 Read it before adding or moving a module. When the code and this document disagree, fix one of them in the same change.
 
@@ -303,7 +303,7 @@ Sources/
     ControlLease.swift             the lease rules as a pure value: use, take, release, stop, settle, giveUp, status; the app's name
   ReviewWire/
     AppIdentity.swift              the app name, bundle id, support folder name ("Havooch", no suffix)
-    Version.swift                  the app version "0.5.1" and the control protocol version 6 (L44)
+    Version.swift                  the app version "0.6.0" and the control protocol version 6 (L44)
     ControlRequest.swift           every request as an enum case; its role; how long the app may hold it; Rectangle, Status, Appearance, Window
     Compare.swift                  `CompareSide`, `CompareLayout` and `CompareChange`, the words compare's commands and the app share (L63)
     ControlMessage.swift           request, holder and `window` as one JSON object; decode refuses another version
@@ -588,7 +588,7 @@ A module and a type never share a name. `ReviewThread` is not called `Thread`, w
 ### ReviewWire
 
 - `AppIdentity`: `appName` "Havooch", `bundleID` "com.yahyabedirhan.havooch", support folder `~/Library/Application Support/Havooch/`.
-- `Version.app` is "0.5.1"; `havooch --version` prints it. `Version.controlProtocol` is 6 (L44).
+- `Version.app` is "0.6.0"; `havooch --version` prints it. `Version.controlProtocol` is 6 (L44).
 - `ControlMessage` is one JSON object: the request, the holder, the protocol version and `window` (`--window`, L54). `decode` refuses another version before anything else, naming both.
 - `ControlReply` is `{ok, output, error, lease?, timedOut?, pid?}`; `pid` is the app's process, which the CLI brings to the front after a person request (L51).
 - `ControlRequest` follows the contract by role (`ControlRequest.role`):
@@ -624,9 +624,9 @@ The cases and their wire names keep the names of the 0.5.1 commands, so the prot
 
 | Command | Prints | `--json` |
 |---|---|---|
-| `--version` | `0.5.1` |
-| `--help`, `help [<group> [<verb>]]` (L73) | the top help, a group's commands with their usage, or one command with its examples; exit 0 | `help --json`: `{"groups": [{"name", "section", "summary", "commands": [{"name", "usage", "summary", "description", "examples", "role", "options", "takesWindow"}]}]}` | `{"version": "0.5.1"}` |
-| `app status` | `running: Havooch 0.5.1`, then `data:`, `video:` and the lease; `not running` with exit 0 | `{"running", "version", "demo", "support", "video", "lease"}`, or `{"running": false}` |
+| `--version` | `0.6.0` |
+| `--help`, `help [<group> [<verb>]]` (L73) | the top help, a group's commands with their usage, or one command with its examples; exit 0 | `help --json`: `{"groups": [{"name", "section", "summary", "commands": [{"name", "usage", "summary", "description", "examples", "role", "options", "takesWindow"}]}]}` | `{"version": "0.6.0"}` |
+| `app status` | `running: Havooch 0.6.0`, then `data:`, `video:` and the lease; `not running` with exit 0 | `{"running", "version", "demo", "support", "video", "lease"}`, or `{"running": false}` |
 | `app open [--demo <folder>]` | launches the app (on the demo folder with `HAVOOCH_DEMO_RUN`), or relaunches it with the lease handed over; then prints what `app status` prints | as `app status` |
 | `app quit` | `Havooch quit`, once the app is gone (about 10 s at most, checked every 0.25 s) | `{"quit": true}` |
 | `state` | the window's lines (below) | the state report (below) |
@@ -1039,7 +1039,7 @@ What Havooch can say of the person's setup, and the two actions that change it (
 
 ```json
 {
-  "app":      { "version": "0.5.1", "demo": true, "support": "/abs/demo", "active": true },
+  "app":      { "version": "0.6.0", "demo": true, "support": "/abs/demo", "active": true },
   "window":   "w1",
   "windows":  [ { "id": "w1", "key": true, "onScreen": true, "screen": "player",
                   "video": { "path": "/abs/cut2.mp4", "title": "cut2.mp4", "contentHash": "…", "project": "launch-video", "version": 2 },
