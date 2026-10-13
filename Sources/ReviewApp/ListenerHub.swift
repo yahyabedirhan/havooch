@@ -96,7 +96,7 @@ final class ListenerHub {
         return try queue.ack(sendID, text: text)
     }
 
-    /// `havooch mark`, on the review the message's id names.
+    /// `havooch message state`, on the review the message's id names.
     func status(_ messageID: String, _ state: MessageState, text: String? = nil) throws(AppRefusal) -> StateReport.Message {
         guard let id = ItemID(messageID), id.kind == .message, let queue = queue(of: id) else {
             throw AppRefusal("no message `\(messageID)`; the send `havooch wait` printed names each message's id")

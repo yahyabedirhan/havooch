@@ -97,7 +97,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
     case ack(sendID: String, text: String?)
-    /// `havooch mark <message-id> working|done|failed [<text>]`: how
+    /// `havooch message state <message-id> working|done|failed [<text>]`: how
     /// far the listener is with a message. With `working`, `text` is what
     /// the agent does now, the live line the thread view and the footer
     /// show; `done` and `failed` clear it.
@@ -299,7 +299,7 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
-    /// What `mark` can say of a message.
+    /// What `message state` can say of a message.
     public enum Status: String, Equatable, Sendable, CaseIterable {
         case working, done, failed
     }

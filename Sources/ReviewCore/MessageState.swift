@@ -29,7 +29,7 @@ public enum MessageState: String, Codable, Sendable, CaseIterable {
         self == .queued
     }
 
-    /// Whether the listener can set this state with `mark`: `working`,
+    /// Whether the listener can set this state with `message state`: `working`,
     /// `done` or `failed`.
     public var isStatus: Bool {
         self == .working || isFinal

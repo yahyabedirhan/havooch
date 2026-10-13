@@ -554,7 +554,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     /// One live line: what the agent does now on a thread, for a message,
-    /// as its last `mark working` said it.
+    /// as its last `message state working` said it.
     struct Activity: Encodable, Equatable {
         var thread: String
         var message: String
