@@ -117,11 +117,11 @@ A message by the agent on a thread that waits for nothing.
 _Avoid_: response, answer
 
 **State**:
-Where a person's message is in its life: queued, sent, acknowledged, working, done or failed. A thread's state is that of its latest open person message.
-_Avoid_: status (except as the CLI command's name), progress
+Where a person's message is in its life: queued, sent, acknowledged, working, done or failed. A thread's state is that of its latest open person message. The listener sets it with `message state <message> working|done|failed`.
+_Avoid_: status, progress
 
 **Activity**:
-What the agent says it does now on a thread, given as the text of `status <message> working`. It shows as a live line under the thread view's conversation and in the footer, until the message is done or failed.
+What the agent says it does now on a thread, given as the text of `message state <message> working`. It shows as a live line under the thread view's conversation and in the footer, until the message is done or failed.
 _Avoid_: progress, status text
 
 ### Sending
