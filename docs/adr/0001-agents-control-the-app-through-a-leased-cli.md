@@ -2,6 +2,8 @@
 
 Agents are users of Havooch from the first build, not only testers. Every action a person can take in the app, an agent can take through the `havooch` command line, and the app enforces that one agent at a time drives it. The design is Shipyard's app control (`yahyabedirhan/shipyard`, ADR 0006 and ADR 0007), adapted to a video player.
 
+NOTE: This record names the commands as they were up to 0.5.1. `docs/cli-design.md` has the current command tree, and its "Changes from 0.5.1" table maps each old name to the new one: for example `status` is now `message state`, `--wait` is now `--timeout`, and a wait that runs out exits 124.
+
 ## The wire
 
 - The app listens on a Unix stream socket, `control.sock` in `~/Library/Application Support/Havooch/`, mode 0600. It exists only while the app runs.
