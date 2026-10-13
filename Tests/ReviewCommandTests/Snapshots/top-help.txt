@@ -1,0 +1,53 @@
+Havooch: a video player for giving feedback to agents.
+
+Usage: havooch <command> [options]
+       havooch <group> <verb> [options]
+
+Get feedback:
+  open <path>                         open a video for the person, playing
+  wait                                wait for the person's next send and print it
+  ack <send-id> [<text>]              say you have a send
+  reply <thread> <text>               send a message on a thread
+  ask <thread> <question>             ask a question on a thread and print the answer
+  message state <message-id> <state>  say a message is working, done or failed
+  project                             make projects and add versions to them
+
+Look:
+  state                               print everything the app shows
+  screenshot <abs.png>                save a window as a PNG
+
+Drive the app (take the lease first: havooch control take):
+  app        start, quit and check the app
+  window     list, open, close and resize windows
+  control    take and release the lease
+  player     load, play, seek and set the sound
+  message    queue, edit, delete and send messages, and say their state
+  context    set the open video's context note
+  thread     answer the agent on a thread
+  popover    open the comment popover
+  composer   write in the sidebar's composer
+  sidebar    show the sidebar's views
+  version    show and find a project's versions
+  compare    compare two versions
+  theme      list and set themes
+  config     find and check config.toml
+  setup      link the command and install the skill
+  connect    pick, disconnect and forget an agent
+  tour       step through the setup tour
+  first-run  step through the first-run window
+
+Options:
+  --json          print JSON
+  --window <id>   act on that window, not the key one
+  -h, --help      show help: havooch <group> --help, havooch <group> <verb> --help
+  --version       print the version
+
+Environment:
+  HAVOOCH_SUPPORT_DIR   use this data folder, not yours
+  HAVOOCH_MUTED=1       play no sound in any window
+
+Exit codes: 0 done, 1 refused or failed, 2 wrong usage, 124 a wait ran out.
+
+Guide: https://github.com/yahyabedirhan/havooch/blob/main/docs/guide.md
+Agents: havooch help --json prints every command.
+        havooch setup install installs the havooch-mate skill.

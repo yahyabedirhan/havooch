@@ -17,7 +17,7 @@ import ReviewStore
 ///
 /// What the person needs to know shows as a notice in the window, which
 /// never blocks: what the move did, and a new set of problems. Its close
-/// button and `havooch config dismiss` close it.
+/// button and `havooch config close-notice` close it.
 @Observable
 final class ConfigDesk {
     /// The settings notice in the window.

@@ -12,11 +12,11 @@ struct CommandTests {
         (["app", "home"], .appHome),
         (["app", "demo"], .appDemo),
         (["control", "take"], .controlTake(waitSeconds: nil)),
-        (["control", "take", "--wait", "30"], .controlTake(waitSeconds: 30)),
+        (["control", "take", "--timeout", "30"], .controlTake(waitSeconds: 30)),
         (["control", "release"], .controlRelease),
         (["screenshot", "/tmp/shot.png", "--hide-agent-indicator"], .screenshot(path: "/tmp/shot.png", appearance: nil, hideAgentIndicator: true)),
-        (["player", "open", "/videos/sample.mp4"], .playerOpen(path: "/videos/sample.mp4")),
-        (["player", "open", "clips/../sample.mp4"], .playerOpen(path: "/Users/me/shop/sample.mp4")),
+        (["player", "load", "/videos/sample.mp4"], .playerOpen(path: "/videos/sample.mp4")),
+        (["player", "load", "clips/../sample.mp4"], .playerOpen(path: "/Users/me/shop/sample.mp4")),
         (["player", "play"], .playerPlay),
         (["player", "pause"], .playerPause),
         (["player", "seek", "0:10"], .playerSeek(seconds: 10)),
@@ -34,27 +34,27 @@ struct CommandTests {
         (["screenshot", "/tmp/set.png", "--window", "settings"], .screenshot(path: "/tmp/set.png", appearance: nil, window: .settings)),
         (["screenshot", "/tmp/about.png", "--window", "about"], .screenshot(path: "/tmp/about.png", appearance: nil, window: .about)),
         (["screenshot", "/tmp/shot.png", "--window", "main"], .screenshot(path: "/tmp/shot.png", appearance: nil)),
-        (["comment", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
-        (["comment", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
-        (["comment", "add", "--at", "12.5", "Too fast here"], .commentAdd(text: "Too fast here", at: 12.5)),
-        (["comment", "add", "This box", "--region", "0.25,0.2,0.3,0.25"],
+        (["message", "add", "Too fast here"], .commentAdd(text: "Too fast here", at: nil)),
+        (["message", "add", "Too fast here", "--at", "0:10"], .commentAdd(text: "Too fast here", at: 10)),
+        (["message", "add", "--at", "12.5", "Too fast here"], .commentAdd(text: "Too fast here", at: 12.5)),
+        (["message", "add", "This box", "--region", "0.25,0.2,0.3,0.25"],
          .commentAdd(text: "This box", at: nil, region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
-        (["comment", "add", "--region", "0,0,1,1", "This box", "--at", "0:10"],
+        (["message", "add", "--region", "0,0,1,1", "This box", "--at", "0:10"],
          .commentAdd(text: "This box", at: 10, region: .init(x: 0, y: 0, w: 1, h: 1))),
-        (["comment", "add", "Follow-up", "--thread", "t-f92cbb2a-1"], .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1")),
-        (["comment", "add", "--thread", "0", "In general"], .commentAdd(text: "In general", at: nil, thread: "0")),
-        (["comment", "edit", "m-f92cbb2a-1", "Slower here"], .commentEdit(id: "m-f92cbb2a-1", text: "Slower here")),
-        (["comment", "delete", "m-f92cbb2a-1"], .commentDelete(id: "m-f92cbb2a-1")),
-        (["comment", "open"], .commentOpen(text: "")),
-        (["comment", "open", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
+        (["message", "add", "Follow-up", "--thread", "t-f92cbb2a-1"], .commentAdd(text: "Follow-up", at: nil, thread: "t-f92cbb2a-1")),
+        (["message", "add", "--thread", "0", "In general"], .commentAdd(text: "In general", at: nil, thread: "0")),
+        (["message", "edit", "m-f92cbb2a-1", "Slower here"], .commentEdit(id: "m-f92cbb2a-1", text: "Slower here")),
+        (["message", "delete", "m-f92cbb2a-1"], .commentDelete(id: "m-f92cbb2a-1")),
+        (["popover", "open"], .commentOpen(text: "")),
+        (["popover", "open", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
          .commentOpen(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
-        (["comment", "compose"], .commentCompose(text: "")),
-        (["comment", "compose", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
+        (["composer", "set"], .commentCompose(text: "")),
+        (["composer", "set", "Too fast", "--region", "0.25,0.2,0.3,0.25"],
          .commentCompose(text: "Too fast", region: .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))),
-        (["comment", "compose", "--general", "Overall"], .commentCompose(text: "Overall", general: true)),
+        (["composer", "set", "--general", "Overall"], .commentCompose(text: "Overall", general: true)),
         (["context", "set", "Compare with the old cut"], .contextSet(text: "Compare with the old cut")),
         (["context", "set", ""], .contextSet(text: "")),
-        (["send"], .send),
+        (["message", "send"], .send),
         (["wait"], .wait(timeoutSeconds: nil)),
         (["wait", "--timeout", "0"], .wait(timeoutSeconds: 0)),
         (["wait", "--video", "cuts/../cut1.mp4", "--timeout", "5"], .wait(timeoutSeconds: 5, video: "/Users/me/shop/cut1.mp4")),
@@ -62,30 +62,30 @@ struct CommandTests {
         (["wait", "--project", "launch-video", "--timeout", "5"], .wait(timeoutSeconds: 5, project: "launch-video")),
         (["ack", "s-f92cbb2a-1"], .ack(sendID: "s-f92cbb2a-1", text: nil)),
         (["ack", "s-f92cbb2a-1", "On it"], .ack(sendID: "s-f92cbb2a-1", text: "On it")),
-        (["status", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
-        (["status", "m-f92cbb2a-1", "done"], .status(messageID: "m-f92cbb2a-1", state: .done)),
-        (["status", "m-f92cbb2a-1", "failed"], .status(messageID: "m-f92cbb2a-1", state: .failed)),
-        (["status", "m-f92cbb2a-1", "working", "Rendering 0:14 to 0:21"],
+        (["message", "state", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
+        (["message", "state", "m-f92cbb2a-1", "done"], .status(messageID: "m-f92cbb2a-1", state: .done)),
+        (["message", "state", "m-f92cbb2a-1", "failed"], .status(messageID: "m-f92cbb2a-1", state: .failed)),
+        (["message", "state", "m-f92cbb2a-1", "working", "Rendering 0:14 to 0:21"],
          .status(messageID: "m-f92cbb2a-1", state: .working, text: "Rendering 0:14 to 0:21")),
         (["reply", "t-f92cbb2a-1", "Slowed it down"], .reply(thread: "t-f92cbb2a-1", text: "Slowed it down")),
         (["reply", "0", "All done"], .reply(thread: "0", text: "All done")),
         (["ask", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: nil)),
-        (["ask", "t-f92cbb2a-1", "Which part?", "--wait", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
-        (["ask", "--wait", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
-        (["ask", "1", "Which part?", "--choice", "The intro", "--wait", "30", "--choice", "The end"],
+        (["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "30"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 30)),
+        (["ask", "--timeout", "0", "t-f92cbb2a-1", "Which part?"], .ask(thread: "t-f92cbb2a-1", question: "Which part?", waitSeconds: 0)),
+        (["ask", "1", "Which part?", "--choice", "The intro", "--timeout", "30", "--choice", "The end"],
          .ask(thread: "1", question: "Which part?", waitSeconds: 30, choices: ["The intro", "The end"])),
         (["thread", "answer", "t-f92cbb2a-1", "The intro"], .threadAnswer(thread: "t-f92cbb2a-1", text: "The intro")),
         (["thread", "choose", "t-f92cbb2a-1", "2"], .threadChoose(thread: "t-f92cbb2a-1", choice: 2)),
-        (["thread", "open", "3"], .threadOpen(thread: "3")),
-        (["thread", "open", "t-f92cbb2a-3", "--frame", "0.55,0.1,0.4,0.5"],
+        (["popover", "open", "--thread", "3"], .threadOpen(thread: "3")),
+        (["popover", "open", "--thread", "t-f92cbb2a-3", "--frame", "0.55,0.1,0.4,0.5"],
          .threadOpen(thread: "t-f92cbb2a-3", frame: .init(x: 0.55, y: 0.1, w: 0.4, h: 0.5))),
-        (["thread", "show", "3"], .threadShow(thread: "3")),
-        (["thread", "list"], .threadList),
-        (["thread", "versions"], .threadVersionsOpen(search: nil)),
-        (["thread", "versions", "--search", "lower third"], .threadVersionsOpen(search: "lower third")),
-        (["thread", "versions", "--close"], .threadVersionsClose),
-        (["thread", "version", "12"], .threadVersion(number: 12, remove: false)),
-        (["thread", "version", "v12", "--remove"], .threadVersion(number: 12, remove: true)),
+        (["sidebar", "show", "thread", "3"], .threadShow(thread: "3")),
+        (["sidebar", "show", "threads"], .threadList),
+        (["version", "menu"], .threadVersionsOpen(search: nil)),
+        (["version", "menu", "--search", "lower third"], .threadVersionsOpen(search: "lower third")),
+        (["version", "menu", "--close"], .threadVersionsClose),
+        (["version", "section", "12"], .threadVersion(number: 12, remove: false)),
+        (["version", "section", "v12", "--remove"], .threadVersion(number: 12, remove: true)),
         (["window", "list"], .windowList),
         (["window", "new"], .windowNew),
         (["window", "close"], .windowClose),
@@ -106,9 +106,9 @@ struct CommandTests {
         (["--window", "w2", "state"], .state, nil),
         (["state", "--window", "w2"], .state, "w2"),
         (["app", "home", "--window", "w3"], .appHome, "w3"),
-        (["comment", "add", "Too fast", "--window", "w2", "--at", "5"], .commentAdd(text: "Too fast", at: 5), "w2"),
-        (["send", "--window", "w2"], .send, "w2"),
-        (["thread", "show", "1", "--window", "w2"], .threadShow(thread: "1"), "w2"),
+        (["message", "add", "Too fast", "--window", "w2", "--at", "5"], .commentAdd(text: "Too fast", at: 5), "w2"),
+        (["message", "send", "--window", "w2"], .send, "w2"),
+        (["sidebar", "show", "thread", "1", "--window", "w2"], .threadShow(thread: "1"), "w2"),
         (["window", "close", "w2"], .windowClose, "w2"),
         (["window", "close", "--window", "w2"], .windowClose, "w2"),
         (["window", "resize", "780", "--window", "w2"], .windowResize(width: 780), "w2"),
@@ -122,7 +122,7 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         // `--window` before the command's name isn't the command's.
         if arguments.first == "--window" {
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 2)
             return
         }
         #expect(result == CommandResult(output: "done\n"))
@@ -167,7 +167,7 @@ struct CommandTests {
         #expect(result.exitCode == 1)
         #expect(result.output.isEmpty)
         #expect(result.error == "\(AppIdentity.appName) is in use by Claude Code in /Users/me/shop until 00:01:00 (48s left); "
-            + "`havooch control take --wait <seconds>` to queue\n")
+            + "`havooch control take --timeout <seconds>` to queue\n")
     }
 
     @Test(
@@ -207,8 +207,17 @@ struct CommandTests {
     func takeWaits() {
         let run = Run { _, _ in .failure(.timedOut) }
         defer { run.cleanUp() }
-        #expect(run("control", "take", "--wait", "30")
+        #expect(run("control", "take", "--timeout", "30")
             == CommandResult(error: "\(AppIdentity.appName) didn't answer within 45 seconds\n", exitCode: 1))
+    }
+
+    @Test("a take whose timeout runs out in line exits 124 with who still holds the lease on standard error")
+    func takeRunsOut() {
+        let line = "waited 5s; \(AppIdentity.appName) is still in use by codex in /work until 00:01:00 (55s left)"
+        let run = Run { _, _ in .success(.ranOut(line)) }
+        defer { run.cleanUp() }
+        #expect(run("control", "take", "--timeout", "5") == CommandResult(error: line + "\n", exitCode: 124))
+        #expect(run.transport.requests == [.controlTake(waitSeconds: 5)])
     }
 
     @Test("every command but app status and app open exits 1 when the app isn't running")
@@ -217,7 +226,7 @@ struct CommandTests {
         defer { run.cleanUp() }
         let line = "\(AppIdentity.appName) isn't running; run `havooch app open`\n"
         #expect(run("player", "play") == CommandResult(error: line, exitCode: 1))
-        #expect(run("control", "take", "--wait", "5") == CommandResult(error: line, exitCode: 1))
+        #expect(run("control", "take", "--timeout", "5") == CommandResult(error: line, exitCode: 1))
         #expect(run("control", "release") == CommandResult(error: line, exitCode: 1))
         #expect(run("state", "--json") == CommandResult(error: line, exitCode: 1))
         #expect(run("app", "quit") == CommandResult(error: line, exitCode: 1))
@@ -227,44 +236,45 @@ struct CommandTests {
         #expect(run("app", "status", "--json") == CommandResult(output: "{\"running\":false}\n"))
     }
 
-    @Test("arguments that don't read exit 64 and send nothing", arguments: [
-        [], ["rewind"], ["player"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
+    @Test("arguments that don't read exit 2 and send nothing", arguments: [
+        ["rewind"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
         ["player", "seek", "-5"], ["player", "seek", "1", "2"], ["player", "seek", String(repeating: "9", count: 400)],
-        ["comment", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["comment", "add", "--", "Too fast", "--at", "5"], ["player", "open"], ["player", "play", "now"],
+        ["message", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["message", "add", "--", "Too fast", "--at", "5"], ["player", "load"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["screenshot", "/tmp/shot.png", "--window", ""], ["screenshot", "/tmp/shot.png", "--window"],
-        ["window"], ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
+        ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
         ["window", "close", "w1", "--window", "w2"], ["window", "list", "--window", "w1"], ["player", "play", "--window"],
-        ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
+        ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
-        ["control"], ["control", "steal"], ["control", "take", "--wait"], ["control", "take", "--wait", "soon"],
-        ["control", "take", "--wait", "-1"], ["control", "take", "--wait", "3601"], ["control", "take", "now"],
+        ["control", "steal"], ["control", "take", "--timeout"], ["control", "take", "--timeout", "soon"],
+        ["control", "take", "--timeout", "-1"], ["control", "take", "--timeout", "3601"], ["control", "take", "--wait", "5"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--hide-agent-indicator"],
-        ["comment"], ["comment", "add"], ["comment", "add", "Too", "fast"], ["comment", "add", "Too fast", "--at", "soon"],
-        ["comment", "add", "Too fast", "--at"], ["comment", "add", "This box", "--region"],
-        ["comment", "add", "This box", "--region", "0.25,0.2,0.3"], ["comment", "add", "This box", "--region", "left,top,0.3,0.25"],
-        ["comment", "edit"], ["comment", "edit", "m-f92cbb2a-1"],
-        ["comment", "edit", "m-f92cbb2a-1", "Slower", "here"], ["comment", "delete"], ["comment", "delete", "m-1", "m-2"],
-        ["context"], ["context", "set"], ["context", "set", "two", "words"], ["context", "get"],
-        ["batch", "send"], ["send", "now"], ["send", "--timeout", "5"], ["comment", "add", "x", "--thread"], ["comment", "open", "two", "words"], ["comment", "open", "--region", "1,2"],
+        ["message", "add"], ["message", "add", "Too", "fast"], ["message", "add", "Too fast", "--at", "soon"],
+        ["message", "add", "Too fast", "--at"], ["message", "add", "This box", "--region"],
+        ["message", "add", "This box", "--region", "0.25,0.2,0.3"], ["message", "add", "This box", "--region", "left,top,0.3,0.25"],
+        ["message", "edit"], ["message", "edit", "m-f92cbb2a-1"],
+        ["message", "edit", "m-f92cbb2a-1", "Slower", "here"], ["message", "delete"], ["message", "delete", "m-1", "m-2"],
+        ["context", "set"], ["context", "set", "two", "words"], ["context", "get"],
+        ["batch", "send"], ["message", "send", "now"], ["message", "send", "--timeout", "5"], ["message", "add", "x", "--thread"], ["popover", "open", "two", "words"], ["popover", "open", "--region", "1,2"],
         ["wait", "now"], ["wait", "--timeout"], ["wait", "--timeout", "soon"], ["wait", "--timeout", "-1"],
         ["wait", "--timeout", "86401"], ["wait", "--wait", "5"],
         ["ack"], ["ack", "s-f92cbb2a-1", "On", "it"], ["ack", "s-f92cbb2a-1", "--wait", "5"],
-        ["status"], ["status", "m-f92cbb2a-1"], ["status", "m-f92cbb2a-1", "acknowledged"], ["status", "m-f92cbb2a-1", "sent"],
-        ["status", "m-f92cbb2a-1", "done", "now"], ["status", "m-f92cbb2a-1", "failed", "now"],
-        ["status", "m-f92cbb2a-1", "working", "Rendering", "now"],
+        ["message", "state"], ["message", "state", "m-f92cbb2a-1"], ["message", "state", "m-f92cbb2a-1", "acknowledged"],
+        ["message", "state", "m-f92cbb2a-1", "sent"], ["message", "state", "m-f92cbb2a-1", "done", "now"],
+        ["message", "state", "m-f92cbb2a-1", "failed", "now"], ["message", "state", "m-f92cbb2a-1", "working", "Rendering", "now"],
+        ["message", "state", "m-f92cbb2a-1", "done", "--window", "w2"], ["mark", "m-f92cbb2a-1", "done"],
         ["reply"], ["reply", "t-f92cbb2a-1"], ["reply", "t-f92cbb2a-1", "Slowed", "it"],
-        ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait"],
-        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "-1"],
-        ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5"],
-        ["thread"], ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
+        ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "-1"],
+        ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "5"],
+        ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
         ["ask", "1", "Which part?", "--choice"],
         ["thread", "choose"], ["thread", "choose", "1"], ["thread", "choose", "1", "0"], ["thread", "choose", "1", "first"],
         ["thread", "choose", "1", "2", "3"],
-        ["thread", "open"], ["thread", "open", "1", "2"], ["thread", "open", "1", "--frame"], ["thread", "open", "1", "--frame", "1,2"],
-        ["thread", "versions", "12"], ["thread", "versions", "--search"], ["thread", "versions", "--close", "--search", "v1"],
-        ["thread", "version"], ["thread", "version", "0"], ["thread", "version", "twelve"], ["thread", "version", "1", "2"],
+        ["popover", "open", "--thread"], ["popover", "open", "--thread", "1", "2"], ["popover", "open", "--thread", "1", "--frame"], ["popover", "open", "--thread", "1", "--frame", "1,2"],
+        ["version", "menu", "12"], ["version", "menu", "--search"], ["version", "menu", "--close", "--search", "v1"],
+        ["version", "section"], ["version", "section", "0"], ["version", "section", "twelve"], ["version", "section", "1", "2"],
         ["player", "mute", "now"], ["player", "volume"], ["player", "volume", "101"], ["player", "volume", "-1"],
         ["player", "volume", "loud"], ["player", "volume", "40.5"], ["player", "volume", "40", "50"], ["player", "sound", "show"],
     ])
@@ -272,9 +282,9 @@ struct CommandTests {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(result.output.isEmpty)
-        #expect(result.error.contains("usage: havooch"))
+        #expect(result.error.lowercased().contains("usage: havooch"))
         #expect(run.transport.sent.isEmpty)
         #expect(run.launcher.launches.isEmpty)
     }
@@ -309,12 +319,12 @@ struct CommandTests {
         #expect(run.transport.requests[0].holdSeconds == 600)
     }
 
-    @Test("a wait whose timeout runs out exits 2 with nothing on standard output")
+    @Test("a wait whose timeout runs out exits 124 with nothing on standard output")
     func waitRunsOut() {
         let run = Run { _, _ in .success(.ranOut) }
         defer { run.cleanUp() }
-        #expect(run("wait", "--timeout", "5") == CommandResult(exitCode: 2))
-        #expect(run("wait", "--timeout", "5", "--json") == CommandResult(exitCode: 2))
+        #expect(run("wait", "--timeout", "5") == CommandResult(exitCode: 124))
+        #expect(run("wait", "--timeout", "5", "--json") == CommandResult(exitCode: 124))
     }
 
     @Test("a wait the app refuses exits 1 with the reason")
@@ -337,12 +347,12 @@ struct CommandTests {
         ])
     }
 
-    @Test("a wait with a timeout gives up, exit 2, when the app never runs; one without keeps looking")
+    @Test("a wait with a timeout gives up, exit 124, when the app never runs; one without keeps looking")
     func waitWithoutTheApp() {
         let clock = Clock()
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 2))
+        #expect(HavoochCLI.run(["wait", "--timeout", "3"], environment: timed(run, clock)) == CommandResult(exitCode: 124))
         #expect(clock.now == Date(timeIntervalSince1970: 3))
 
         let later = Clock()
@@ -378,36 +388,117 @@ struct CommandTests {
     func askPrintsTheAnswer() {
         let run = Run { _, _ in .success(.done("The intro\n")) }
         defer { run.cleanUp() }
-        #expect(run("ask", "t-f92cbb2a-1", "Which part?", "--wait", "600") == CommandResult(output: "The intro\n"))
+        #expect(run("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "600") == CommandResult(output: "The intro\n"))
         #expect(run("ask", "t-f92cbb2a-1", "Which part?") == CommandResult(output: "The intro\n"))
         #expect(run.transport.sent.map(\.message.request.holdSeconds) == [600, nil])
     }
 
-    @Test("an ask whose wait runs out exits 2 with nothing printed; a refused one exits 1 with the reason")
+    @Test("an ask whose timeout runs out exits 124 with nothing printed; a refused one exits 1 with the reason")
     func askRunsOutOrIsRefused() {
         let ranOut = Run { _, _ in .success(.ranOut) }
         defer { ranOut.cleanUp() }
-        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5") == CommandResult(exitCode: 2))
-        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--wait", "5", "--json") == CommandResult(exitCode: 2))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5") == CommandResult(exitCode: 124))
+        #expect(ranOut("ask", "t-f92cbb2a-1", "Which part?", "--timeout", "5", "--json") == CommandResult(exitCode: 124))
 
         let line = "c-7f3a9c2e already has an open question"
         let refused = Run { _, _ in .success(.refused(line)) }
         defer { refused.cleanUp() }
         #expect(refused("ask", "t-f92cbb2a-1", "And how?") == CommandResult(error: line + "\n", exitCode: 1))
-        #expect(refused("status", "m-f92cbb2a-1", "working") == CommandResult(error: line + "\n", exitCode: 1))
+        #expect(refused("message", "state", "m-f92cbb2a-1", "working") == CommandResult(error: line + "\n", exitCode: 1))
     }
 
-    @Test("--help prints the usage on standard output, and so do -h and --help with --json or before a command's name", arguments: [
-        ["--help"], ["-h"], ["--json", "--help"], ["--help", "comment", "add"],
+    @Test("the top help prints for no words, help, -h and --help, also with --json before a command's name, exit 0", arguments: [
+        [], ["help"], ["--help"], ["-h"], ["--json", "--help"],
     ])
-    func help(arguments: [String]) {
+    func topHelp(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
-        #expect(CommandTable.usageText.contains("havooch player seek <seconds|mm:ss>"))
-        #expect(CommandTable.usageText.contains("havooch app home "))
-        #expect(CommandTable.usageText.contains("havooch app demo "))
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result == CommandResult(output: help()))
+        #expect(result.output.hasPrefix("\(AppIdentity.appName): a video player for giving feedback to agents."))
         #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a group's help prints for the group alone, with --help and through help, exit 0", arguments: [
+        ["player"], ["player", "--help"], ["player", "-h"], ["help", "player"], ["--help", "player"],
+    ])
+    func groupHelp(arguments: [String]) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 0)
+        #expect(result.output.hasPrefix("Load, play, seek and set the sound. Needs the lease: havooch control take."))
+        #expect(result.output.contains("  havooch player seek <seconds|m:ss>\n      move to an exact time\n"))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a command's help prints with -h or --help right after its name, and through help, exit 0", arguments: [
+        ["player", "seek", "--help"], ["player", "seek", "-h"], ["help", "player", "seek"], ["--help", "player", "seek"],
+        ["player", "seek", "--json", "--help"],
+    ])
+    func commandHelp(arguments: [String]) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 0)
+        #expect(result.output.hasPrefix("""
+            Move to an exact time.
+
+            Usage: havooch player seek <seconds|m:ss> [--window <id>] [--json]
+
+            Examples:
+              havooch player seek 12.5
+
+            """))
+        #expect(result.output.contains("Needs the lease."))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a command's help says it needs the lease only when it does, and a mixed group marks the commands that do")
+    func leasePerCommand() {
+        #expect(!help("message", "state").contains("Needs the lease."))
+        #expect(help("message", "add").contains("Needs the lease."))
+        let group = help("message")
+        #expect(group.contains("      queue a message on a frame's thread (needs the lease)\n"))
+        #expect(group.contains("      say a message is working, done or failed\n"))
+        #expect(!group.contains("Needs the lease: havooch control take."))
+        #expect(!help("control").contains("lease first") && !help("control").contains("(needs the lease)"))
+    }
+
+    @Test("wrong usage prints the command's usage line and where its details are")
+    func wrongUsage() {
+        let run = Run()
+        defer { run.cleanUp() }
+        #expect(run("player", "seek") == CommandResult(
+            error: "havooch player seek: missing <seconds|m:ss>\n"
+                + "usage: havooch player seek <seconds|m:ss> [--window <id>] [--json]\n"
+                + "run havooch player seek --help for details\n",
+            exitCode: 2
+        ))
+    }
+
+    @Test("an unknown command names the closest command when one is near, and the usage lines", arguments: [
+        (["plyer", "play"], "havooch: unknown command `plyer play`; did you mean havooch player play?"),
+        (["player", "paus"], "havooch: unknown command `player paus`; did you mean havooch player pause?"),
+        (["stat"], "havooch: unknown command `stat`; did you mean havooch state?"),
+        (["mark", "m-f92cbb2a-1", "done"], "havooch: unknown command `mark`"),
+        (["rewind", "now"], "havooch: unknown command `rewind`"),
+    ])
+    func unknown(arguments: [String], line: String) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 2)
+        #expect(result.error.hasPrefix(line + "\nUsage: havooch <command> [options]\n"))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("help for a word that names nothing is wrong usage")
+    func helpForNothing() {
+        let run = Run()
+        defer { run.cleanUp() }
+        #expect(run("help", "plyer").exitCode == 2)
+        #expect(run("help", "plyer").error.contains("did you mean havooch help player"))
     }
 
     @Test("--version prints 0.5.1 without asking the app, as JSON with --json")
@@ -420,15 +511,16 @@ struct CommandTests {
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's name", arguments: [
+    @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's first word", arguments: [
         (["reply", "t-f92cbb2a-1", "--region now takes pixels"], ControlRequest.reply(thread: "t-f92cbb2a-1", text: "--region now takes pixels")),
-        (["comment", "add", "--at is wrong here", "--at", "5"], .commentAdd(text: "--at is wrong here", at: 5)),
-        (["comment", "add", "--json is the default now"], .commentAdd(text: "--json is the default now", at: nil)),
-        (["comment", "add", "-h"], .commentAdd(text: "-h", at: nil)),
+        (["message", "add", "--at is wrong here", "--at", "5"], .commentAdd(text: "--at is wrong here", at: 5)),
+        (["message", "add", "--json is the default now"], .commentAdd(text: "--json is the default now", at: nil)),
+        (["message", "add", "--", "--help"], .commentAdd(text: "--help", at: nil)),
+        (["message", "add", "--", "-h"], .commentAdd(text: "-h", at: nil)),
         (["reply", "t-f92cbb2a-1", "-h"], .reply(thread: "t-f92cbb2a-1", text: "-h")),
         (["reply", "t-f92cbb2a-1", "--", "--region"], .reply(thread: "t-f92cbb2a-1", text: "--region")),
         (["reply", "--", "t-f92cbb2a-1", "--help"], .reply(thread: "t-f92cbb2a-1", text: "--help")),
-        (["comment", "add", "--at", "5", "--", "--json"], .commentAdd(text: "--json", at: 5)),
+        (["message", "add", "--at", "5", "--", "--json"], .commentAdd(text: "--json", at: 5)),
         (["context", "set", "--", "--"], .contextSet(text: "--")),
     ])
     func optionLikeText(arguments: [String], request: ControlRequest) {
@@ -445,13 +537,13 @@ struct CommandTests {
     func optionsAnywhere() {
         let run = Run { _, _ in .success(.done("{}\n")) }
         defer { run.cleanUp() }
-        _ = run("comment", "add", "Too fast here", "--at", "5", "--json")
-        _ = run("comment", "add", "--json", "--at", "5", "--", "Too fast here")
+        _ = run("message", "add", "Too fast here", "--at", "5", "--json")
+        _ = run("message", "add", "--json", "--at", "5", "--", "Too fast here")
         #expect(run.transport.requests == [.commentAdd(text: "Too fast here", at: 5), .commentAdd(text: "Too fast here", at: 5)])
         #expect(run.transport.sent.map(\.message.json) == [true, true])
         // A word too many is still refused, also after --.
-        #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 64)
-        #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 64)
+        #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 2)
+        #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 2)
     }
 
     @Test("a reply that doesn't read, or none in time, exits 1 saying why")

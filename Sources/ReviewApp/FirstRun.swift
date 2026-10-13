@@ -62,7 +62,7 @@ nonisolated enum FirstRunAction: Equatable {
 /// with the demo prompt in the picked harness's form, so the person's
 /// own agent opens the demo and listens. It shows by itself at each
 /// launch until the person uses the app (`AppModel.showFirstRunOnFirstLaunch`),
-/// and at any time through `first-run show`. Nothing in it blocks: every
+/// and at any time through `first-run open`. Nothing in it blocks: every
 /// step can be passed with nothing done.
 @Observable
 final class FirstRun: SetupSteering {
@@ -258,7 +258,7 @@ extension AppModel {
 
     private func needFirstRun() throws(AppRefusal) {
         guard firstRun.isShowing else {
-            throw AppRefusal("the first-run window isn't open; havooch first-run show opens it")
+            throw AppRefusal("the first-run window isn't open; havooch first-run open opens it")
         }
     }
 

@@ -9,7 +9,7 @@ The person watches a video in the Havooch app and writes messages on its frames.
 
 You are the **listener**: you take each send, do what each message asks in this repo, and answer on its thread, where the person reads it beside the video. Only sends drive this loop; what the person says in the chat is ordinary conversation.
 
-While you listen, the person reads the player, not this chat. Everything you have to say about a send goes on its thread in the player, through `reply`, `ask` and `status`. Write in the chat only to answer what the person writes there, or when you stop listening.
+While you listen, the person reads the player, not this chat. Everything you have to say about a send goes on its thread in the player, through `reply`, `ask` and `message state`. Write in the chat only to answer what the person writes there, or when you stop listening.
 
 ## The command
 
@@ -19,9 +19,9 @@ While you listen, the person reads the player, not this chat. Everything you hav
 2. Else `/Applications/Havooch.app/Contents/Helpers/havooch`.
 3. Else the one match of `/Applications/Havooch*.app/Contents/Helpers/havooch`. With several matches, ask the person which app they review in.
 
-Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` a wait ran out, with nothing printed; `64` wrong usage (`havooch --help` prints the usage).
+Every text argument is one quoted argument, and it must not start with `--`: the command would read it as an option. Exit codes: `0` done; `1` refused, with the reason as one line on standard error; `2` wrong usage (`havooch <command> --help` prints its usage); `124` a wait ran out, with nothing printed.
 
-You run only the listener commands `wait`, `ack`, `status`, `reply` and `ask`, the project commands `project new` and `project add` (see [Projects](#projects)), the free `state --json`, `window list --json` and `app status`, `config path`, `config check` and `project list`, which need no app, and `open <path>`, which opens a video for the person. Every other command drives the player and takes control of the app from the person.
+You run only the listener commands `wait`, `ack`, `message state`, `reply` and `ask`, the project commands `project new` and `project add` (see [Projects](#projects)), the free `state --json`, `window list --json` and `app status`, `config path`, `config check` and `project list`, which need no app, and `open <path>`, which opens a video for the person. Every other command drives the player and takes control of the app from the person.
 
 The app knows you by your holder key: `$HAVOOCH_CONTROL_KEY` when set, else your harness's session: `$CLAUDE_CODE_SESSION_ID` (Claude Code), `$CODEX_THREAD_ID` (Codex) or `$PI_SESSION_ID` (Pi). Any other harness is known by its process. A `wait` under another key is a new listener, and the app gives it your unfinished sends again. So run every `havooch` command from this session with this environment: a sub-agent may do a message's work, and you send the commands.
 
@@ -41,7 +41,7 @@ Pass your target on every `wait`. Another agent can listen to another window at 
 
 1. **Listen.** Run `havooch wait <target>` as a background command, so that its exit wakes you. The player shows the person a listening agent only while a `wait` is open, so keep exactly one open at all times. `wait` keeps connecting while the app is closed, so start it whether or not the app runs.
    - Exit `0`: the send is on standard output, as JSON.
-   - Exit `2`: a `--timeout` ran out with no send. Run `wait` again.
+   - Exit `124`: a `--timeout` ran out with no send. Run `wait` again.
    - Exit `1`: see [Refusals](#refusals).
 2. **Acknowledge, then listen again.** The moment a send wakes you, before you study it:
    1. `havooch ack <send id>`, with no text. Every message of the send turns `acknowledged`, which the player shows.
@@ -49,12 +49,12 @@ Pass your target on every `wait`. Another agent can listen to another window at 
 
    A send that arrives while you work gets the same two commands at once. Its work starts when the send before it is finished.
 3. **Work each thread**, in the order of `threads[]`. Read the thread first: see [The send](#the-send). Then work each of its `messages[]`, in order:
-   1. `havooch status <message id> working "<what you do now>"`
-   2. Decide its [intent](#intent) and do the work. When you cannot tell what it asks, [ask](#ask). When the work renders a new version of the video, see [Projects](#projects). Each time the work moves to a new step, send `status <message id> working "<the step>"` again: see [Activity](#activity).
+   1. `havooch message state <message id> working "<what you do now>"`
+   2. Decide its [intent](#intent) and do the work. When you cannot tell what it asks, [ask](#ask). When the work renders a new version of the video, see [Projects](#projects). Each time the work moves to a new step, send `message state <message id> working "<the step>"` again: see [Activity](#activity).
    3. When the work changed files in this repo, commit: one commit per message, with only that message's files staged, in this repo's commit convention, and the line `Havooch-Message: <message id>` at the end of the body.
-   4. `havooch reply <thread id> "<the result>"`, then `havooch status <message id> done`.
+   4. `havooch reply <thread id> "<the result>"`, then `havooch message state <message id> done`.
 
-   When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch status <message id> failed`. `done` and `failed` carry no text, so the reply is the reason.
+   When the message cannot be done: `havooch reply <thread id> "<why, and what would unblock it>"`, then `havooch message state <message id> failed`. `done` and `failed` carry no text, so the reply is the reason.
 
 A send is finished when every message in it is `done` or `failed` and has a reply on its thread. `done` and `failed` are final. The player shows each message's state, so post no summary of the send.
 
@@ -62,7 +62,7 @@ The reply is the person's only view of what you did, read in a narrow column bes
 
 ## Activity
 
-The text of `status <message id> working "<text>"` is the **activity**, a live line. The player shows it under the thread's conversation and in the footer, beside the presence pill, until the message is `done` or `failed`. The newest text replaces the one before; an empty text clears the line.
+The text of `message state <message id> working "<text>"` is the **activity**, a live line. The player shows it under the thread's conversation and in the footer, beside the presence pill, until the message is `done` or `failed`. The newest text replaces the one before; an empty text clears the line.
 
 - Write what you do now, not what you did: `"Reading the intro scene"`, `"Rendering 0:14 to 0:21"`, `"Running the tests"`.
 - Keep it to one short line, at most about 40 characters. Start with a verb in the `-ing` form, with no agent name and no full stop.
@@ -125,7 +125,7 @@ When the answer is one of a few short readings, give each one as a choice: `havo
 
 A thread holds one open question: a second `ask` on it is refused until the person answers the first. A `reply` does not close a question.
 
-Exit `2` means an `--wait` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `havooch state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the key window's video or project only. With no answer there, reply with what you still need to know and mark the message `failed`.
+Exit `124` means a `--timeout` ran out with no answer; an `ask` that the app's quitting cut off with exit `1` is the same case. The question stays open in the player, and an answer that comes later stays on the thread. Do not run `ask` on that thread again: it is refused until the person answers the open question. When the rest of the send is finished, run `havooch state --json`, find the thread by its id, and read its `messages`: one of `kind` `answer` after your `question` is the answer. `state` lists the threads of the key window's video or project only. With no answer there, reply with what you still need to know and mark the message `failed`.
 
 ## Projects
 

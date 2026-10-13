@@ -579,7 +579,7 @@ final class ControlServer {
                 return done(tour.open ? tour.line : "the tour is finished", Output(tour: tour), json)
             case .tourSkip:
                 let tour = try inWindow().skipTour()
-                return done("the tour is skipped; Finish setup or havooch tour show starts it again", Output(tour: tour), json)
+                return done("the tour is skipped; Finish setup or havooch tour open starts it again", Output(tour: tour), json)
             case .tourClose:
                 let tour = try inWindow().closeTour()
                 return done(tour.line, Output(tour: tour), json)
@@ -815,8 +815,8 @@ final class ControlServer {
     }
 
     /// A waiting `take`'s wait ran out (unless it was answered already): it
-    /// leaves the line, refused with who still holds the lease, or holding
-    /// it should it be free by now.
+    /// leaves the line, answered as a wait that ran out with who still holds
+    /// the lease, or holding it should it be free by now.
     private func waitRanOut(_ ticket: UUID, deadline: Date) {
         guard let waiter = waiters.removeValue(forKey: ticket) else { return }
         // Never before the deadline the take was given, whatever the clock says.
@@ -824,6 +824,9 @@ final class ControlServer {
         switch lease.giveUp(by: waiter.holder, waited: waiter.seconds, at: time).answer {
         case .success(let term):
             waiter.answer.resume(returning: granting(term, json: waiter.json))
+        case .failure(let refusal) where refusal.isWaitedOut:
+            // Its whole wait ran out: the command exits as a wait that ran out.
+            waiter.answer.resume(returning: Answer(reply: .ranOut(refusal.message(at: time, timeZone: timeZone))))
         case .failure(let refusal):
             waiter.answer.resume(returning: Answer(reply: .refused(refusal.message(at: time, timeZone: timeZone))))
         }

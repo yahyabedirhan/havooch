@@ -39,7 +39,7 @@
 #
 # The operator holds the lease (HAVOOCH_CONTROL_KEY when set, else a
 # key of this run). The listener has a key of its own and runs `wait`,
-# `ack`, `status`, `reply` and `ask` only. Both carry CLAUDE_CODE_SESSION_ID,
+# `ack`, `message state`, `reply` and `ask` only. Both carry CLAUDE_CODE_SESSION_ID,
 # so the player names the agent Claude Code. The commit ids in the replies
 # are scene text.
 
@@ -79,10 +79,10 @@ operator() {
 listener() {
     HAVOOCH_CONTROL_KEY="$listener_key" "$cli" "$@" || fail "refused: havooch $*"
 }
-# ask <thread> <question>: leaves the question open; `--wait 0` exits 2 at once.
+# ask <thread> <question>: leaves the question open; `--timeout 0` exits 124 at once.
 ask() {
-    HAVOOCH_CONTROL_KEY="$listener_key" "$cli" ask "$1" "$2" --wait 0 >/dev/null
-    [ $? -eq 2 ] || fail "the question on $1 was refused"
+    HAVOOCH_CONTROL_KEY="$listener_key" "$cli" ask "$1" "$2" --timeout 0 >/dev/null
+    [ $? -eq 124 ] || fail "the question on $1 was refused"
 }
 
 clean_up() {
@@ -120,66 +120,66 @@ mkdir -p "$gallery" "$demo"
 # A running app answers only to the lease holder: take it first. Opening the
 # demo folder relaunches the app on it and hands the lease over.
 if HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
-    operator control take --wait 1800 >/dev/null
+    operator control take --timeout 1800 >/dev/null
     holds_lease=1
     operator app open --demo "$demo" >/dev/null
 else
     operator app open --demo "$demo" >/dev/null
-    operator control take --wait 1800 >/dev/null
+    operator control take --timeout 1800 >/dev/null
     holds_lease=1
 fi
 require_demo
 operator theme set system >/dev/null
-operator player open "$video" >/dev/null
+operator player load "$video" >/dev/null
 
 # --- the first send: four notes ------------------------------------------------
 
-request="$(operator comment add "The request line types too fast to read the path. Slow the typing a little, it's the hook." --at 1.5 --json)"
-wordmark="$(operator comment add "The wordmark feels heavy next to the folded mark. Try a lighter weight and open the tracking a little." --at 9.5 --region 0.37,0.35,0.4,0.18 --json)"
-label="$(operator comment add "The label says 1.12 s, the Payments bar says 1.31 s, and the voice says more than a second. Three times in two seconds is a lot. Pick one to lead." --at 26 --region 0.46,0.74,0.33,0.1 --json)"
-logo="$(operator comment add "Put the Postgres elephant on the Postgres node, so the map reads at a glance." --at 18.5 --region 0.8,0.29,0.15,0.15 --json)"
+request="$(operator message add "The request line types too fast to read the path. Slow the typing a little, it's the hook." --at 1.5 --json)"
+wordmark="$(operator message add "The wordmark feels heavy next to the folded mark. Try a lighter weight and open the tracking a little." --at 9.5 --region 0.37,0.35,0.4,0.18 --json)"
+label="$(operator message add "The label says 1.12 s, the Payments bar says 1.31 s, and the voice says more than a second. Three times in two seconds is a lot. Pick one to lead." --at 26 --region 0.46,0.74,0.33,0.1 --json)"
+logo="$(operator message add "Put the Postgres elephant on the Postgres node, so the map reads at a glance." --at 18.5 --region 0.8,0.29,0.15,0.15 --json)"
 for added in "$request" "$wordmark" "$label" "$logo"; do check "$added"; done
-operator send >/dev/null
+operator message send >/dev/null
 
 first="$(listener wait --timeout 20)"
 listener ack "$(printf '%s' "$first" | jq -r '.send.id')" "Got your 4 notes on 4 threads. Starting with the cold open." >/dev/null
 
-listener status "$(message "$request")" working >/dev/null
+listener message state "$(message "$request")" working >/dev/null
 listener reply "$(thread "$request")" "The path now types 40 percent slower and the time counts up only after it lands. The cold open runs 0.8 s longer. Commit 3c1e7a2." >/dev/null
-listener status "$(message "$request")" done >/dev/null
+listener message state "$(message "$request")" done >/dev/null
 
-listener status "$(message "$wordmark")" working >/dev/null
+listener message state "$(message "$wordmark")" working >/dev/null
 listener reply "$(thread "$wordmark")" "Took Lantern from 600 down to 500 and opened the tracking to 0.01 em. It balances the mark much better now." >/dev/null
 ask "$(thread "$wordmark")" "Should the tagline go lighter with it, or stay at 400 so it still reads at small sizes?"
 operator thread answer "$(thread "$wordmark")" "Keep it at 400, it has to read." >/dev/null
 listener reply "$(thread "$wordmark")" "Kept the tagline at 400 and moved it 8 px closer to the wordmark. Commit 9b4d1e0." >/dev/null
-listener status "$(message "$wordmark")" done >/dev/null
+listener message state "$(message "$wordmark")" done >/dev/null
 
-listener status "$(message "$label")" working >/dev/null
+listener message state "$(message "$label")" working >/dev/null
 listener reply "$(thread "$label")" "All three are right: the query takes 1.12 s inside the 1.31 s Payments call. Before I touch the label, one question." >/dev/null
 ask "$(thread "$label")" "Should the label lead with the query's 1.12 s, or with Payments' 1.31 s to match the bar the voice points at?"
 
-listener status "$(message "$logo")" working >/dev/null
+listener message state "$(message "$logo")" working >/dev/null
 listener reply "$(thread "$logo")" "I left this one out. The elephant is the PostgreSQL project's trademark, used under their rules, and there's no copy in the repo. Drop their official SVG into assets/ and I'll place it." >/dev/null
-listener status "$(message "$logo")" failed >/dev/null
+listener message state "$(message "$logo")" failed >/dev/null
 
 listener reply 0 "#1 and #2 are done. #4 failed: it needs the Postgres logo file. #3 waits on your answer." >/dev/null
 
 # --- the second send: a transition, with the agent ------------------------------
 
-cut="$(operator comment add "The map cuts to the trace too fast. Let the Payments node slide down into its row in the trace." --at 19.3 --json)"
+cut="$(operator message add "The map cuts to the trace too fast. Let the Payments node slide down into its row in the trace." --at 19.3 --json)"
 check "$cut"
-operator send >/dev/null
+operator message send >/dev/null
 second="$(listener wait --timeout 20)"
 listener ack "$(printf '%s' "$second" | jq -r '.send.id')" "Got it, looking at the cut into the trace." >/dev/null
-listener status "$(message "$cut")" working >/dev/null
+listener message state "$(message "$cut")" working >/dev/null
 
 # --- in the queue: a follow-up, a new note and a word on the whole cut ----------
 
-check "$(operator comment add "Lovely. Can the mark unfold a touch slower?" --thread "$(thread "$wordmark")" --json)"
-panel="$(operator comment add "The fix panel is so bright it pulls the eye off the drop. Tone the white down a touch, or let the chart land first." --at 33 --region 0.64,0.3,0.31,0.42 --json)"
+check "$(operator message add "Lovely. Can the mark unfold a touch slower?" --thread "$(thread "$wordmark")" --json)"
+panel="$(operator message add "The fix panel is so bright it pulls the eye off the drop. Tone the white down a touch, or let the chart land first." --at 33 --region 0.64,0.3,0.31,0.42 --json)"
 check "$panel"
-check "$(operator comment add "Overall this is so close. The voice and the folds are lovely, please don't touch them." --thread 0 --json)"
+check "$(operator message add "Overall this is so close. The voice and the folds are lovely, please don't touch them." --thread 0 --json)"
 
 # The listener waits again, so the footer shows it with the agent.
 HAVOOCH_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
@@ -189,37 +189,37 @@ listener_pid=$!
 
 # The notices of the last messages go after 5 s.
 operator player seek 33 >/dev/null
-operator thread list >/dev/null
+operator sidebar show threads >/dev/null
 sleep 6
 echo "the thread list, at the fix panel:"
 shot list
 
-operator thread show "$(thread "$wordmark")" >/dev/null
+operator sidebar show thread "$(thread "$wordmark")" >/dev/null
 sleep 1
 echo "thread #2: reply, question, answer, done, and a follow-up in the queue:"
 shot hero
 
-operator thread show "$(thread "$label")" >/dev/null
+operator sidebar show thread "$(thread "$label")" >/dev/null
 sleep 1
 echo "thread #3: the open question:"
 shot question
 
-operator thread show "$(thread "$logo")" >/dev/null
+operator sidebar show thread "$(thread "$logo")" >/dev/null
 sleep 1
 echo "thread #4: failed, with its reason:"
 shot failed
 
-operator thread show "$(thread "$cut")" >/dev/null
+operator sidebar show thread "$(thread "$cut")" >/dev/null
 sleep 1
 echo "thread #5: with the agent:"
 shot working
 
 operator theme set "Tokyo Night" >/dev/null
-operator thread list >/dev/null
+operator sidebar show threads >/dev/null
 operator player seek 26 >/dev/null
 sleep 1
 operator screenshot "$gallery/tokyo-night-list.png" --hide-agent-indicator >/dev/null
-operator thread show "$(thread "$wordmark")" >/dev/null
+operator sidebar show thread "$(thread "$wordmark")" >/dev/null
 sleep 1
 operator screenshot "$gallery/tokyo-night-thread.png" --hide-agent-indicator >/dev/null
 echo "Tokyo Night:"
@@ -227,7 +227,7 @@ echo "  $gallery/tokyo-night-list.png"
 echo "  $gallery/tokyo-night-thread.png"
 
 operator theme set system >/dev/null
-operator thread list >/dev/null
+operator sidebar show threads >/dev/null
 operator player seek 9.5 >/dev/null
 
 kill "$listener_pid" 2>/dev/null; wait "$listener_pid" 2>/dev/null

@@ -205,7 +205,7 @@ struct FirstRunTests {
         defer { cleanUp() }
         let app = app()
         let server = server(app)
-        #expect(await reply(server, .firstRunNext) == .refused("the first-run window isn't open; havooch first-run show opens it"))
+        #expect(await reply(server, .firstRunNext) == .refused("the first-run window isn't open; havooch first-run open opens it"))
 
         #expect(await reply(server, .firstRunShow()) == .done("the first-run window shows welcome\n"))
         #expect(await reply(server, .firstRunBack) == .refused("welcome is the first step"))
@@ -260,7 +260,7 @@ struct FirstRunTests {
         defer { cleanUp() }
         let app = app()
         let server = server(app)
-        #expect(await reply(server, .firstRunSkip) == .refused("the first-run window isn't open; havooch first-run show opens it"))
+        #expect(await reply(server, .firstRunSkip) == .refused("the first-run window isn't open; havooch first-run open opens it"))
         _ = await reply(server, .firstRunShow(step: "connect"))
         let state = try #require(try app.state(window: nil).firstRun)
         #expect(state.showing && state.step == "connect" && !state.done)

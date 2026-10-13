@@ -6,8 +6,8 @@ import Testing
 
 @Suite("The tour commands")
 struct TourCommandTests {
-    @Test("tour show, next, skip and close send their requests, to the window --window names", arguments: [
-        (["tour", "show"], ControlRequest.tourShow, nil as String?),
+    @Test("tour open, next, skip and close send their requests, to the window --window names", arguments: [
+        (["tour", "open"], ControlRequest.tourShow, nil as String?),
         (["tour", "next"], .tourNext, nil),
         (["tour", "skip", "--window", "w2"], .tourSkip, "w2"),
         (["tour", "close"], .tourClose, nil),
@@ -21,19 +21,19 @@ struct TourCommandTests {
     }
 
     @Test("the tour commands take no words", arguments: [
-        ["tour", "show", "now"], ["tour", "next", "2"], ["tour", "skip", "it"], ["tour", "close", "it"],
+        ["tour", "open", "now"], ["tour", "next", "2"], ["tour", "skip", "it"], ["tour", "close", "it"],
     ])
     func usage(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 64)
+        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 2)
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the tour commands")
+    @Test("the group's help names the tour commands")
     func usageText() {
-        for synopsis in ["tour show", "tour next", "tour skip", "tour close"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+        for synopsis in ["tour open", "tour next", "tour skip", "tour close"] {
+            #expect(help("tour").contains("havooch \(synopsis)"))
         }
     }
 }

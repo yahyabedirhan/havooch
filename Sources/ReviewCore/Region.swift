@@ -33,7 +33,7 @@ public struct Region: Codable, Equatable, Sendable {
         }
     }
 
-    /// The region as `comment add --region` takes it: `0.25,0.2,0.3,0.25`.
+    /// The region as `message add --region` takes it: `0.25,0.2,0.3,0.25`.
     public var text: String {
         [x, y, w, h].map { "\($0)" }.joined(separator: ",")
     }

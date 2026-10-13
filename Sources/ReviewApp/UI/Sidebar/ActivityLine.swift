@@ -1,7 +1,7 @@
 import ReviewCore
 import SwiftUI
 
-/// The activity, what the agent does now (`status working` with a text):
+/// The activity, what the agent does now (`message state working` with a text):
 /// a quiet line with the working glyph, under the last message of the
 /// thread view's conversation, where the agent's next message will come.
 /// It shows while an agent is there and the line's message works; `done`

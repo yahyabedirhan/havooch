@@ -225,7 +225,7 @@ struct ContextDeliveryTests {
     func noVideo() async throws {
         defer { cleanUp() }
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path]).makeWindow()
-        #expect(throws: AppRefusal("no video is open in the window; open one with `havooch player open <path>`")) {
+        #expect(throws: AppRefusal("no video is open in the window; load one with `havooch player load <path>`")) {
             try model.setContextNote("A note")
         }
     }

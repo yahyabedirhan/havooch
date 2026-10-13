@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let lease = AgentControlIcon()
     /// The Settings window, for app control's screenshots of it.
     let settings = SettingsWindow()
-    /// The first-run window, shown on the first launch and by `first-run show`.
+    /// The first-run window, shown on the first launch and by `first-run open`.
     private(set) lazy var firstRunWindow = FirstRunWindow(app: model)
     private var server: ControlServer?
     private var termination: (any DispatchSourceSignal)?

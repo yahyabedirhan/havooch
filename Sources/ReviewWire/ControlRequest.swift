@@ -9,7 +9,7 @@ public enum ControlRequest: Equatable, Sendable {
     case appStatus
     /// `havooch state`: everything the app shows.
     case state
-    /// `havooch control take [--wait <seconds>]`: hold the lease to
+    /// `havooch control take [--timeout <seconds>]`: hold the lease to
     /// its cap; while another agent holds it, wait in line up to
     /// `waitSeconds`, or be refused at once without them.
     case controlTake(waitSeconds: Int?)
@@ -32,7 +32,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// most recently used project that lists it, else as a plain video. No
     /// lease: opening a file never takes control of the app from the person.
     case open(path: String, project: String? = nil)
-    /// `havooch player open <path>`: the video at the absolute `path`
+    /// `havooch player load <path>`: the video at the absolute `path`
     /// opened, paused at its start.
     case playerOpen(path: String)
     /// `havooch player play`.
@@ -54,35 +54,35 @@ public enum ControlRequest: Equatable, Sendable {
     /// speaker does. An addition to the spec's contract: the panel can be
     /// shown, checked and screenshotted without a click.
     case playerSound(open: Bool)
-    /// `havooch comment add <text> [--at <time>] [--region x,y,w,h]
+    /// `havooch message add <text> [--at <time>] [--region x,y,w,h]
     /// [--thread <thread>]`: a message queued at `at` seconds, or at the
     /// player's time when it's nil, on `region` of the frame when it has
     /// one. It joins the thread of that frame or starts one; with `thread`
     /// (a thread id, or a number of the open video, `0` for General) it's
     /// written on that thread.
     case commentAdd(text: String, at: Double?, region: Rectangle? = nil, thread: String? = nil)
-    /// `havooch comment open [<text>] [--region x,y,w,h]`: the comment
+    /// `havooch popover open [<text>] [--region x,y,w,h]`: the comment
     /// popover opened at the player's frame, as C or a drawn rectangle
     /// opens it, on `region` when it has one, with `text` in its field. An
     /// addition to the spec's contract: the popover and its region can be
     /// shown, checked and screenshotted without a click.
     case commentOpen(text: String, region: Rectangle? = nil)
-    /// `havooch comment compose [<text>] [--region x,y,w,h]
+    /// `havooch composer set [<text>] [--region x,y,w,h]
     /// [--general]`: the composer at the sidebar's foot holds `text`, as
     /// the person types it, with a region chip on the player's frame and
     /// the General toggle. An addition to the contract: the composer can
     /// be shown, checked and screenshotted without typing.
     case commentCompose(text: String, region: Rectangle? = nil, general: Bool = false)
-    /// `havooch comment edit <message-id> <text>`: a queued message's
+    /// `havooch message edit <message-id> <text>`: a queued message's
     /// new text.
     case commentEdit(id: String, text: String)
-    /// `havooch comment delete <message-id>`: a queued message removed.
+    /// `havooch message delete <message-id>`: a queued message removed.
     case commentDelete(id: String)
     /// `havooch context set <text>`: the open video's context note,
     /// which the listener gets with the sidecar's text. An empty `text`
     /// clears it.
     case contextSet(text: String)
-    /// `havooch send`: every queued message of the open video sent as
+    /// `havooch message send`: every queued message of the open video sent as
     /// one send, which the listener's `wait` gets.
     case send
     /// `havooch wait [--video <path> | --project <slug>] [--timeout
@@ -97,7 +97,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// Its messages are acknowledged, and `text` is the agent's message on
     /// the General thread.
     case ack(sendID: String, text: String?)
-    /// `havooch status <message-id> working|done|failed [<text>]`: how
+    /// `havooch message state <message-id> working|done|failed [<text>]`: how
     /// far the listener is with a message. With `working`, `text` is what
     /// the agent does now, the live line the thread view and the footer
     /// show; `done` and `failed` clear it.
@@ -106,7 +106,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// thread (a thread id, or a number of the open video).
     case reply(thread: String, text: String)
     /// `havooch ask <thread> <question> [--choice <text>]..
-    /// [--wait <seconds>]`: the listener's question on a thread, with the
+    /// [--timeout <seconds>]`: the listener's question on a thread, with the
     /// quick replies the person may answer with in one click. The app holds
     /// the request until the person answers, up to `waitSeconds`, or with
     /// no limit when it's nil.
@@ -118,25 +118,25 @@ public enum ControlRequest: Equatable, Sendable {
     /// answered with its quick-reply choice `choice` (from 1), as a click
     /// on that choice's button answers it.
     case threadChoose(thread: String, choice: Int)
-    /// `havooch thread open <thread> [--frame x,y,w,h]`: the thread
+    /// `havooch popover open --thread <thread> [--frame x,y,w,h]`: the thread
     /// popover opened on the thread's frame, as a click on its pin or its
     /// badge opens it. With `frame` (0 to 1 of the video area, from its
     /// top-left corner) the popover is first kept there, as a drag and a
     /// resize leave it. An addition to the spec's contract: the CLI can't
     /// click, drag or resize.
     case threadOpen(thread: String, frame: Rectangle? = nil)
-    /// `havooch thread show <thread>`: the sidebar shows the thread's
+    /// `havooch sidebar show thread <thread>`: the sidebar shows the thread's
     /// view, as a click on its row in the thread list shows it.
     case threadShow(thread: String)
-    /// `havooch thread list`: the sidebar shows the thread list, as
+    /// `havooch sidebar show threads`: the sidebar shows the thread list, as
     /// Back in a thread view shows it.
     case threadList
-    /// `havooch thread versions [--search <text>]`: a project's thread
+    /// `havooch version menu [--search <text>]`: a project's thread
     /// list with "All versions" open, its search set to `search`.
     case threadVersionsOpen(search: String?)
-    /// `havooch thread versions --close`: "All versions" closes.
+    /// `havooch version menu --close`: "All versions" closes.
     case threadVersionsClose
-    /// `havooch thread version <n> [--remove]`: the version `number` picked
+    /// `havooch version section <n> [--remove]`: the version `number` picked
     /// in "All versions", which adds an older version's section to the
     /// thread list and scrolls to it; with `remove`, a picked version's
     /// section leaves the list, as its close button takes it.
@@ -172,7 +172,7 @@ public enum ControlRequest: Equatable, Sendable {
     case setupInstall(harnesses: [String] = [], dryRun: Bool = false)
     /// `havooch setup cancel`: the running install stopped, as Cancel does.
     case setupCancel
-    /// `havooch connect show`: the Connect view in the sidebar, as the
+    /// `havooch sidebar show connect`: the Connect view in the sidebar, as the
     /// header's connect button opens it.
     case connectShow
     /// `havooch connect pick <harness>`: the harness picked in the Connect
@@ -185,7 +185,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch connect forget`: the agent the last run had is no longer
     /// waited for, as Forget does while it reconnects.
     case connectForget
-    /// `havooch tour show`: the setup tour over the stage, as "Finish
+    /// `havooch tour open`: the setup tour over the stage, as "Finish
     /// setup" opens it, at the step it was left on.
     case tourShow
     /// `havooch tour next`: the tour's next step, as Next or Later on its
@@ -197,7 +197,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch tour close`: the tour's panel goes, as its close button
     /// does; the tour keeps its step.
     case tourClose
-    /// `havooch first-run show [<step>]`: the first-run window shows, as
+    /// `havooch first-run open [<step>]`: the first-run window shows, as
     /// on the first launch, on `step` (`welcome`, `tools`, `connect`,
     /// `try-it`) as a click on its progress bar shows it, else where it was.
     case firstRunShow(step: String? = nil)
@@ -215,7 +215,7 @@ public enum ControlRequest: Equatable, Sendable {
     /// `havooch first-run skip`: the first-run window closed, as Skip
     /// Setup and its close button close it.
     case firstRunSkip
-    /// `havooch config dismiss`: the settings notice in the window goes,
+    /// `havooch config close-notice`: the settings notice in the window goes,
     /// as its close button does.
     case configDismiss
     /// `havooch window list`: every window, in the order they were made,
@@ -247,19 +247,19 @@ public enum ControlRequest: Equatable, Sendable {
     /// on screen in the window, as a click on its segment or its row in
     /// the version picker does. The playhead keeps its time.
     case versionShow(number: Int)
-    /// `havooch version pick [<query>]`: the version picker open under
+    /// `havooch version find [<query>]`: the version picker open under
     /// the switcher's field, with `query` typed in its search field, as a
     /// click on the field and typing do. An addition to the contract: the
     /// picker can be shown, checked and screenshotted without a click.
     case versionPick(query: String = "")
-    /// `havooch version close`: the version picker closed, as Escape
+    /// `havooch version find --close`: the version picker closed, as Escape
     /// closes it.
     case versionClose
     /// `havooch compare open`: the compare popover open under the Compare
     /// button, on the previous version and the one on screen, as a click
     /// on the button opens it.
     case compareOpen
-    /// `havooch compare pick <side> [<query>]`: the version picker of one
+    /// `havooch compare find <side> [<query>]`: the version picker of one
     /// side open in the popover, with `query` typed in its search field,
     /// as a click on the side and typing do.
     case comparePick(side: CompareSide, query: String = "")
@@ -299,7 +299,7 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
-    /// What `status` can say of a message.
+    /// What `message state` can say of a message.
     public enum Status: String, Equatable, Sendable, CaseIterable {
         case working, done, failed
     }
@@ -367,10 +367,10 @@ public enum ControlRequest: Equatable, Sendable {
         }
     }
 
-    /// The longest a `control take --wait` may wait in line, in seconds.
+    /// The longest a `control take --timeout` may wait in line, in seconds.
     public static let longestWait = 3600
 
-    /// The longest `wait --timeout` or `ask --wait` a listener may ask for,
+    /// The longest `wait --timeout` or `ask --timeout` a listener may ask for,
     /// in seconds: a day. Without the option neither has a limit.
     public static let longestListen = 86400
 

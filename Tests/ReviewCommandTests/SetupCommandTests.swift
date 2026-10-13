@@ -29,7 +29,7 @@ struct SetupCommandTests {
     func usage(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 64)
+        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 2)
         #expect(run.transport.requests.isEmpty)
     }
 
@@ -44,10 +44,10 @@ struct SetupCommandTests {
         #expect(result.error.contains("ln -sf /Applications/Havooch.app/Contents/Helpers/havooch ~/.local/bin/havooch"))
     }
 
-    @Test("the usage text names the setup commands")
+    @Test("the group's help names the setup commands")
     func usageText() {
         for synopsis in ["setup status", "setup link [--dry-run]", "setup install [--harness <name>]... [--dry-run]", "setup cancel"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+            #expect(help("setup").contains("havooch \(synopsis)"))
         }
     }
 }

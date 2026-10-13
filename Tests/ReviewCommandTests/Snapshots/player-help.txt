@@ -1,0 +1,24 @@
+Load, play, seek and set the sound. Needs the lease: havooch control take.
+
+Usage: havooch player <verb> [options]
+
+Commands:
+  havooch player load <path>
+      load a video file, paused at its start
+  havooch player play
+      play the video
+  havooch player pause
+      pause the video
+  havooch player seek <seconds|m:ss>
+      move to an exact time
+  havooch player mute
+      mute the sound in every window
+  havooch player unmute
+      bring back the last volume
+  havooch player volume <0-100>
+      set the volume in every window
+  havooch player sound [--close]
+      open the sound panel over the stage
+
+Options: --window <id>, --json
+Run havooch player <verb> --help for a command's details.

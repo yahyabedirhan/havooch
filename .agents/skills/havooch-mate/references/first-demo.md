@@ -5,7 +5,7 @@ The send came from the demo video bundled in Havooch (`video.demo` is `true`). T
 ## What changes
 
 - **No repo work.** The demo video has no source in this repo. Change no file, make no commit and file no issue for a demo message. For each message, reply with what you would do if this video were theirs: one to three plain sentences, naming the change and where it would happen.
-- **Every step of the loop stays visible.** Run `ack`, `status working`, `reply` and `status done` for each message, exactly as in daily use, so the person sees each part appear in the player.
+- **Every step of the loop stays visible.** Run `ack`, `message state working`, `reply` and `message state done` for each message, exactly as in daily use, so the person sees each part appear in the player.
 - **Plain words.** Write for someone who has never used Havooch. Leave out ids, holder keys, payloads and command names in replies.
 
 ## Guide the first send

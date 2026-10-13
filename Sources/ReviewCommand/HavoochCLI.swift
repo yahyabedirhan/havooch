@@ -19,17 +19,18 @@ public struct CommandResult: Equatable, Sendable {
     /// Refused or failed: the lease is in use, the app isn't running, a
     /// file doesn't play.
     public static let refusedCode: Int32 = 1
-    /// Timed out with no result.
-    public static let timedOutCode: Int32 = 2
+    /// A wait ran out with no result: `wait`, `ask` or `control take`
+    /// with `--timeout`.
+    public static let timedOutCode: Int32 = 124
     /// The arguments don't read.
-    public static let usageCode: Int32 = 64
+    public static let usageCode: Int32 = 2
 
     /// Refused: one line on standard error, exit 1.
     public static func refused(_ message: String) -> CommandResult {
         CommandResult(error: message + "\n", exitCode: refusedCode)
     }
 
-    /// The arguments don't read: lines on standard error, exit 64.
+    /// The arguments don't read: lines on standard error, exit 2.
     public static func usage(_ message: String) -> CommandResult {
         CommandResult(error: message + "\n", exitCode: usageCode)
     }
@@ -83,41 +84,85 @@ public struct CommandEnvironment: Sendable {
 
 /// The `havooch` command: its arguments read through `CommandTable`,
 /// one request sent to the app, the reply printed, the exit code picked.
-/// Exit codes: 0 done, 1 refused or failed, 2 timed out, 64 wrong usage.
+/// Exit codes: 0 done, 1 refused or failed, 2 wrong usage, 124 a wait ran out.
 public enum HavoochCLI {
     public static func run(_ arguments: [String], environment: CommandEnvironment) -> CommandResult {
+        switch read(arguments, environment: environment) {
+        case .answered(let result): result
+        case .invocation(_, let invocation, let json): run(invocation, json: json, environment: environment)
+        }
+    }
+
+    /// What a command line comes to before anything is asked: an answer
+    /// the command gives itself (help, the version, wrong usage), or the
+    /// command found and what it asks for.
+    enum Reading {
+        case answered(CommandResult)
+        case invocation(Command, Invocation, json: Bool)
+    }
+
+    /// Reads `arguments` through `CommandTable`, the one path from a
+    /// command line to what it asks for.
+    static func read(_ arguments: [String], environment: CommandEnvironment) -> Reading {
         // `--json` is an option anywhere before `--`; after it, it's a word.
         let end = arguments.firstIndex(of: Arguments.optionsEnd) ?? arguments.endIndex
         let json = arguments[..<end].contains("--json")
         let arguments = arguments[..<end].filter { $0 != "--json" } + arguments[end...]
-        // Help is asked for before the command's name: after it, `-h` and
-        // `--help` may be a comment's text.
         let beforeTheName = arguments.prefix { $0.hasPrefix("-") && $0 != Arguments.optionsEnd }
-        if beforeTheName.contains("--help") || beforeTheName.contains("-h") {
-            return CommandResult(output: CommandTable.usageText)
+        if beforeTheName.contains(where: isHelp) {
+            // The help of the words that follow, or the top help.
+            let topic = Array(arguments.dropFirst(beforeTheName.count).prefix { !$0.hasPrefix("-") })
+            let answer = Help.answer(topic, json: false)
+            return .answered(answer.exitCode == 0 ? answer : CommandResult(output: Help.top()))
         }
         // The app's version, which this command was built with; no app is asked.
         if beforeTheName.contains("--version") {
             // As the app's JSON is printed: readable, one key per line.
-            return CommandResult(output: json ? "{\n  \"version\" : \"\(Version.app)\"\n}\n" : Version.app + "\n")
+            return .answered(CommandResult(output: json ? "{\n  \"version\" : \"\(Version.app)\"\n}\n" : Version.app + "\n"))
         }
-        guard !arguments.isEmpty else { return .usage(CommandTable.usageText) }
+        guard let first = arguments.first else { return .answered(CommandResult(output: Help.top())) }
         guard let (command, rest) = CommandTable.find(arguments) else {
-            return .usage("havooch: unknown command `\(arguments.prefix(2).joined(separator: " "))`\n\n" + CommandTable.usageText)
+            if let group = CommandTable.group(named: first), arguments.count == 1 || isHelp(arguments[1]) {
+                return .answered(CommandResult(output: Help.help(for: group)))
+            }
+            return .answered(unknown(arguments))
         }
-        var invocation: Invocation
+        // Help counts right after the command's name; later, and after
+        // `--`, `-h` and `--help` may be a message's text.
+        if let word = rest.first, isHelp(word) { return .answered(CommandResult(output: Help.help(for: command))) }
         do throws(UsageError) {
             let valued = command.takesWindow ? command.valuedOptions.union([Command.windowOption]) : command.valuedOptions
             let parsed = try Arguments(rest, valued: valued, flags: command.flags)
-            invocation = try command.parse(parsed, environment)
+            var invocation = try command.parse(parsed, environment)
             // The window `--window` names, unless the command named one itself.
             if command.takesWindow, case .send(let request, .none) = invocation, let window = parsed.options[Command.windowOption] {
                 invocation = .send(request, window: window)
             }
+            return .invocation(command, invocation, json: json)
         } catch {
-            return .usage("havooch \(command.name): \(error.message)\nusage: havooch \(command.synopsis)")
+            return .answered(.usage(
+                "havooch \(command.name): \(error.message)\nusage: \(Help.usageLine(command))\nrun havooch \(command.name) --help for details"
+            ))
         }
-        return run(invocation, json: json, environment: environment)
+    }
+
+    /// Whether `argument` asks for help.
+    private static func isHelp(_ argument: String) -> Bool {
+        argument == "-h" || argument == "--help"
+    }
+
+    /// No command starts `arguments`: it names the closest one, when one
+    /// is near, and the usage lines.
+    private static func unknown(_ arguments: [String]) -> CommandResult {
+        let written = Array(arguments.prefix { !$0.hasPrefix("-") }.prefix(2))
+        let closest = CommandTable.closest(to: written)
+        // A group's word and the verb after it, or as many words as the
+        // closest name has, else the one word.
+        let inGroup = written.first.flatMap(CommandTable.group(named:)) != nil
+        let length = inGroup || closest?.contains(" ") == true ? 2 : 1
+        let named = arguments.prefix(length).joined(separator: " ")
+        let near = closest.map { "; did you mean havooch \($0)?" } ?? ""
+        return .usage("havooch: unknown command `\(named)`\(near)\n\(Help.usageLines)\nrun havooch --help for every command")
     }
 
     /// Runs `invocation` against the app the environment's support folder
@@ -150,6 +195,7 @@ public enum HavoochCLI {
         case .projectList: return ProjectCommands.list(json: json, environment: environment)
         case .configPath: return ConfigCommands.path(json: json, environment: environment)
         case .configCheck: return ConfigCommands.check(json: json, environment: environment)
+        case .help(let topic): return Help.answer(topic, json: json)
         }
     }
 
@@ -161,8 +207,9 @@ public enum HavoochCLI {
         case .success(let reply) where reply.ok:
             return CommandResult(output: reply.output, error: reply.error)
         case .success(let reply) where reply.timedOut == true:
-            // A held request (an `ask`) waited its whole time: nothing to print.
-            return CommandResult(exitCode: CommandResult.timedOutCode)
+            // A held request waited its whole time: an `ask` has nothing to
+            // print, a `control take` says who still holds the lease.
+            return CommandResult(error: reply.error.isEmpty ? "" : reply.error + "\n", exitCode: CommandResult.timedOutCode)
         case .success(let reply):
             return .refused(reply.error.isEmpty ? "\(AppIdentity.appName) refused without saying why" : reply.error)
         case .failure(.notRunning):

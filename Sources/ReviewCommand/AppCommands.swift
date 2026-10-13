@@ -2,49 +2,55 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// `havooch app status | open [--demo <folder>] | home | demo | quit`, and
-/// `state`. `home` and `demo` are plain requests to the running app.
+/// `havooch app status | open [--demo <folder>] | home | demo | quit`.
+/// `home` and `demo` are plain requests to the running app.
 /// `status` answers without the app; `open` launches it (through
 /// `AppLaunching`) when it doesn't run on the data asked for; `quit` waits
 /// until it's gone.
 enum AppCommands {
-    static let commands: [Command] = [
-        Command(name: "app status", synopsis: "app status", summary: "whether the app runs, and on which data") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .appStatus
-        },
-        Command(
-            name: "app open", synopsis: "app open [--demo <folder>]",
-            summary: "start the app; --demo runs it on that folder's data, not yours",
-            valuedOptions: ["--demo"]
-        ) { arguments, environment throws(UsageError) in
-            try arguments.none()
-            guard let folder = arguments.options["--demo"] else { return .appOpen(demo: nil) }
-            guard !folder.isEmpty else { throw UsageError("`--demo` needs a folder") }
-            return .appOpen(demo: URL(fileURLWithPath: folder, isDirectory: true, relativeTo: environment.workingDirectory).standardizedFileURL)
-        },
-        Command(name: "app home", synopsis: "app home", summary: "go home: close the video and leave the demo, as the Havooch mark does") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.appHome)
-        }.onAWindow(),
-        Command(name: "app demo", synopsis: "app demo", summary: "run the demo in the window, as \"Try the Demo\" does") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.appDemo)
-        }.onAWindow(),
-        Command(name: "app quit", synopsis: "app quit", summary: "quit the app, and wait until it's gone") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .appQuit
-        },
-        Command(name: "state", synopsis: "state", summary: "everything the app shows: the window's video and player, and every window") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.state)
-        }.onAWindow(),
-    ]
+    static let group = CommandGroup(
+        name: "app", summary: "start, quit and check the app", section: .drive, commands: [
+            Command(
+                name: "app status", summary: "print whether the app runs, and on which data",
+                description: "It answers `not running` without the app.", examples: ["", "--json"], role: .free
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .appStatus
+            },
+            Command(
+                name: "app open", arguments: "[--demo <folder>]", summary: "start the app",
+                description: "With --demo, the app runs on that folder's data, not yours, and a demo or the normal app that "
+                    + "runs is quit first. A running app on the data asked for just answers.",
+                examples: ["", "--demo /tmp/havooch-demo"], role: .operator, valuedOptions: ["--demo"]
+            ) { arguments, environment throws(UsageError) in
+                try arguments.none()
+                guard let folder = arguments.options["--demo"] else { return .appOpen(demo: nil) }
+                guard !folder.isEmpty else { throw UsageError("`--demo` needs a folder") }
+                return .appOpen(demo: URL(fileURLWithPath: folder, isDirectory: true, relativeTo: environment.workingDirectory).standardizedFileURL)
+            },
+            Command(
+                name: "app home", summary: "go home: close the video and leave the demo",
+                description: "As a click on the Havooch mark in the header does.", examples: ["", "--window w2"], role: .operator
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .send(.appHome)
+            }.onAWindow(),
+            Command(
+                name: "app demo", summary: "run the demo in the window",
+                description: "As \"Try the Demo\" does.", examples: ["", "--window w2"], role: .operator
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .send(.appDemo)
+            }.onAWindow(),
+            Command(
+                name: "app quit", summary: "quit the app and wait until it's gone",
+                examples: [""], role: .operator
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .appQuit
+            },
+        ]
+    )
 
     /// What running an `app` command needs.
     struct Context {

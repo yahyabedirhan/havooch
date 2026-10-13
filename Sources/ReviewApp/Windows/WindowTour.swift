@@ -75,7 +75,7 @@ extension WindowModel {
         }
     }
 
-    /// `tour show`: the tour shows, as "Finish setup" opens it. Refused with
+    /// `tour open`: the tour shows, as "Finish setup" opens it. Refused with
     /// no video: the tour is about a video's window.
     func showTour() throws(AppRefusal) -> StateReport.Tour {
         try needVideo()
@@ -114,7 +114,7 @@ extension WindowModel {
     }
 
     /// Write an Example on the write step: the example in the composer, as
-    /// `comment compose` puts it there.
+    /// `composer set` puts it there.
     func writeTourExample() {
         _ = try? compose(text: Self.tourExample, region: nil, general: false)
     }
@@ -133,7 +133,7 @@ extension WindowModel {
 
     private func needTour() throws(AppRefusal) {
         try needVideo()
-        guard tour.isOpen else { throw AppRefusal("the tour isn't showing; havooch tour show opens it") }
+        guard tour.isOpen else { throw AppRefusal("the tour isn't showing; havooch tour open opens it") }
     }
 
     /// Shows `step`, and in the sidebar the part it is about: the Connect

@@ -5,9 +5,10 @@ import ReviewLease
 /// output (`output`) and, rarely, a note for standard error (`error`), or a
 /// refusal (`ok` false) whose `error` says why. The reply to `app.quit` may
 /// carry the lease the quit renewed (`lease`), for a relaunch to hand over
-/// to the app it launches. The reply to a `wait` whose time ran out with no
-/// send says so (`timedOut`), which the command exits 2 on. Every other
-/// reply leaves both out.
+/// to the app it launches. The reply to a held request whose time ran out
+/// says so (`timedOut`), which the command exits 124 on: a `wait` with no
+/// send, an `ask` with no answer, a `control take` still in line. Every
+/// other reply leaves both out.
 public struct ControlReply: Codable, Equatable, Sendable {
     public var ok: Bool
     public var output: String
@@ -41,8 +42,14 @@ public struct ControlReply: Codable, Equatable, Sendable {
         ControlReply(ok: false, error: why)
     }
 
-    /// The wait ran out with no result: nothing printed, exit 2.
+    /// The wait ran out with no result: nothing printed, exit 124.
     public static let ranOut = ControlReply(ok: false, timedOut: true)
+
+    /// The wait ran out, and `why` says what still stands in the way: one
+    /// line on standard error, exit 124.
+    public static func ranOut(_ why: String) -> ControlReply {
+        ControlReply(ok: false, error: why, timedOut: true)
+    }
 
     /// The reply as one JSON object.
     public func encoded() -> Data {

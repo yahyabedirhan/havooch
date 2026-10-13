@@ -337,7 +337,7 @@ struct AnswerTests {
 
     // MARK: - ask and answer
 
-    @Test("ask --wait exits with the answer that thread answer gives, and the thread keeps each message's author and kind")
+    @Test("ask --timeout exits with the answer that thread answer gives, and the thread keeps each message's author and kind")
     func askAnsweredByTheOperator() async throws {
         defer { cleanUp() }
         let app = try await taken()
@@ -366,7 +366,7 @@ struct AnswerTests {
         #expect(app.server.lease.current(at: Date())?.holder.key == "operator")
     }
 
-    @Test("ask --wait exits with the answer the person gives in the answer field, as JSON with --json")
+    @Test("ask --timeout exits with the answer the person gives in the answer field, as JSON with --json")
     func askAnsweredByThePerson() async throws {
         defer { cleanUp() }
         let app = try await taken()

@@ -281,7 +281,7 @@ final class WindowModel: WindowControlling {
 
     /// Opens `url` in this window in the review it opens in:
     /// the most recently opened project that lists it, else the plain
-    /// video. `player open`, the demo and tests open this way.
+    /// video. `player load`, the demo and tests open this way.
     func open(_ url: URL) async throws(AppRefusal) {
         try await open(url, resolving: true, project: nil)
     }
@@ -433,7 +433,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// `version pick`: the version picker open under the switcher's
+    /// `version find`: the version picker open under the switcher's
     /// field with `query` in its search field, the first row highlighted.
     /// Refused on a plain video, and for a project of three versions or
     /// fewer, whose versions are all segments.
@@ -461,7 +461,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// Escape in the picker, a click outside it and `version close`: the
+    /// Escape in the picker, a click outside it and `version find --close`: the
     /// picker closes. False when it was closed.
     @discardableResult
     func closeVersionPicker() -> Bool {
@@ -724,7 +724,7 @@ final class WindowModel: WindowControlling {
         await seekPlayers(to: seconds)
     }
 
-    /// `comment add`: queues a message, as a person would. On `thread` (a
+    /// `message add`: queues a message, as a person would. On `thread` (a
     /// thread id or a number of the open video) it's written on that
     /// thread, and the player moves to the thread's frame. Otherwise it
     /// joins the thread of the frame at `at`, or where the player is, or
@@ -778,14 +778,14 @@ final class WindowModel: WindowControlling {
         )
     }
 
-    /// `comment edit` and a row's Save: a queued message's new text.
+    /// `message edit` and a row's Save: a queued message's new text.
     func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message {
         let id = try messageID(id)
         let message = try change { review throws(ReviewRefusal) in try review.edit(id, text: text) }
         return report(message)
     }
 
-    /// `comment delete` and a row's Delete: a queued message goes, with its
+    /// `message delete` and a row's Delete: a queued message goes, with its
     /// crop; a thread that loses its last message goes, with its keyframe.
     func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message {
         let id = try messageID(id)
@@ -818,7 +818,7 @@ final class WindowModel: WindowControlling {
         return note
     }
 
-    /// Cmd+Return and `send`: every queued message of the open video goes
+    /// Cmd+Return and `message send`: every queued message of the open video goes
     /// out as one send, which the listener's `wait` gets, now or when it
     /// next opens. Words still in the popover are queued first, so nothing
     /// is left behind. Refused when nothing is queued.
@@ -1087,7 +1087,7 @@ final class WindowModel: WindowControlling {
 
     // MARK: - What an action needs
 
-    private static let noVideo = AppRefusal("no video is open in the window; open one with `havooch player open <path>`")
+    private static let noVideo = AppRefusal("no video is open in the window; load one with `havooch player load <path>`")
 
     func needVideo() throws(AppRefusal) {
         guard video != nil else { throw Self.noVideo }
@@ -1361,7 +1361,7 @@ final class WindowModel: WindowControlling {
         Task { await seekPlayers(to: time) }
     }
 
-    /// `thread open`: the thread popover opens as a click on the thread's
+    /// `popover open --thread`: the thread popover opens as a click on the thread's
     /// pin opens it, once the player is on its frame. With `frame`, the
     /// popover is first kept at that frame, as a drag and a resize leave it.
     func openThread(_ ref: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover {
@@ -1397,7 +1397,7 @@ final class WindowModel: WindowControlling {
         return time
     }
 
-    /// `comment open`: the popover opens at the player's frame, on
+    /// `popover open`: the popover opens at the player's frame, on
     /// `region` when there is one, with `text` in its field, as C or a
     /// drawn rectangle opens it. An open popover closes first, as a click
     /// outside it does.
@@ -1558,7 +1558,7 @@ final class WindowModel: WindowControlling {
         }
     }
 
-    /// A click on a side in the popover and `compare pick`: that side's
+    /// A click on a side in the popover and `compare find`: that side's
     /// version picker opens with `query` in its search field, the first
     /// row highlighted. The popover opens first when it is closed.
     func pickCompareSide(_ side: CompareSide, query: String = "") throws(AppRefusal) {
@@ -1919,7 +1919,7 @@ final class WindowModel: WindowControlling {
         move(to: time)
     }
 
-    /// `thread show`: the sidebar shows the thread's view, as a
+    /// `sidebar show thread`: the sidebar shows the thread's view, as a
     /// click on its row does. It answers once the player is on the
     /// thread's frame, so `state` after it shows the frame.
     func showThread(_ ref: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
@@ -2028,7 +2028,7 @@ final class WindowModel: WindowControlling {
         for message in queued { delete(message) }
     }
 
-    /// Back, Escape and `thread list`: the sidebar shows the thread list.
+    /// Back, Escape and `sidebar show threads`: the sidebar shows the thread list.
     /// The player stays where it is.
     func showThreadList() -> StateReport.Sidebar {
         shown = nil
@@ -2094,7 +2094,7 @@ final class WindowModel: WindowControlling {
         return tree
     }
 
-    /// "All versions" (`thread versions [--search]`): the sidebar shows the
+    /// "All versions" (`version menu [--search]`): the sidebar shows the
     /// thread list with the menu open, its search set to `search`.
     func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar {
         _ = try needVersionTree()
@@ -2112,14 +2112,14 @@ final class WindowModel: WindowControlling {
         versionMenu = text
     }
 
-    /// A click outside "All versions", or `thread versions --close`.
+    /// A click outside "All versions", or `version menu --close`.
     func closeVersionMenu() -> StateReport.Sidebar {
         versionMenu = nil
         return sidebarReport
     }
 
     /// A version picked in "All versions", a "Still open" chip, or
-    /// `thread version <n>`: the menu closes, an older version's section
+    /// `version section <n>`: the menu closes, an older version's section
     /// is added under the last three, and the list scrolls to it.
     func pickVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
         let tree = try needVersionTree()
@@ -2137,7 +2137,7 @@ final class WindowModel: WindowControlling {
         return sidebarReport
     }
 
-    /// A picked version's close button, or `thread version <n> --remove`:
+    /// A picked version's close button, or `version section <n> --remove`:
     /// its section leaves the list. The last three versions and the one on
     /// screen stay.
     func removePickedVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar {
@@ -2272,7 +2272,7 @@ final class WindowModel: WindowControlling {
         if target.isGeneral { isComposerGeneral = false }
     }
 
-    /// `comment compose`: the words in the composer and its region
+    /// `composer set`: the words in the composer and its region
     /// chip, as the person types them and draws, with the General toggle
     /// on or off. The composer's field takes the keys. The region is on the
     /// frame on the stage.

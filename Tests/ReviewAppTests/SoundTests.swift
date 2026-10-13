@@ -257,7 +257,7 @@ struct SoundTests {
         let window = app.makeWindow()
         let server = await server(app)
         #expect(await ask(.playerSound(open: true), server).error
-            == "no video is open in the window; open one with `havooch player open <path>`")
+            == "no video is open in the window; load one with `havooch player load <path>`")
         try await window.open(MessageTests.fixture)
         #expect(await ask(.playerSound(open: true), server).output == "sound panel open: muted for an agent check\n")
         #expect(window.isSoundPanelOpen)

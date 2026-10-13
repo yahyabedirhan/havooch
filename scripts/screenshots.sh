@@ -25,7 +25,7 @@
 #   agent-control   the header with the agent-control icon, and the footer with
 #                   the listener's presence, the queued count and Send
 #   dimmed          the Dimmed theme
-#   comment-popover the comment popover on a region (`comment open --region`)
+#   comment-popover the comment popover on a region (`popover open --region`)
 #
 # The themes: every built-in theme of `theme list`, pinned in turn, on the
 # threads scene, in three views: `list` (the thread list and its composer),
@@ -114,7 +114,7 @@ pending() {
     pending_states+=("$1 [$2]")
 }
 
-# message <json>: the id of the message a `comment add --json` queued.
+# message <json>: the id of the message a `message add --json` queued.
 message() { printf '%s' "$1" | jq -r '.message.id'; }
 thread() { printf '%s' "$1" | jq -r '.thread.id'; }
 
@@ -127,14 +127,14 @@ mkdir -p "$shots" "$theme_shots"
 # A running app answers only to the lease holder: take it first. With no app
 # running, the open launches one and the lease is taken from it.
 if HAVOOCH_CONTROL_KEY="$operator_key" "$cli" app status --json 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
-    operator control take --wait 1800 >/dev/null
+    operator control take --timeout 1800 >/dev/null
     holds_lease=1
     operator app open --demo "$demo/empty" >/dev/null
     require_demo
 else
     operator app open --demo "$demo/empty" >/dev/null
     require_demo
-    operator control take --wait 1800 >/dev/null
+    operator control take --timeout 1800 >/dev/null
     holds_lease=1
 fi
 operator theme set system >/dev/null
@@ -147,44 +147,44 @@ pair empty --hide-agent-indicator
 operator app open --demo "$demo/review" >/dev/null
 require_demo
 operator theme set system >/dev/null
-operator player open "$video" >/dev/null
+operator player load "$video" >/dev/null
 
 # The first send: #1 done, #2 failed, #3 working with an open question.
 operator player seek 3 >/dev/null
-intro="$(operator comment add "The intro goes by too fast. Hold this frame a second longer." --json)"
+intro="$(operator message add "The intro goes by too fast. Hold this frame a second longer." --json)"
 operator player seek 7.5 >/dev/null
-words="$(operator comment add "\"Too fast here\" is my own note from above. Use another example." --region 0.1,0.55,0.5,0.2 --json)"
+words="$(operator message add "\"Too fast here\" is my own note from above. Use another example." --region 0.1,0.55,0.5,0.2 --json)"
 operator player seek 12.5 >/dev/null
-keys="$(operator comment add "Show the keys as the menu names them." --region 0.47,0.27,0.29,0.15 --json)"
+keys="$(operator message add "Show the keys as the menu names them." --region 0.47,0.27,0.29,0.15 --json)"
 # A refusal inside $( ) ends only the subshell: check that each message is there.
 for added in "$intro" "$words" "$keys"; do
     [ "$(message "$added")" != "null" ] && [ -n "$(message "$added")" ] || fail "a message of the first send was refused"
 done
-operator send >/dev/null
+operator message send >/dev/null
 first="$(listener wait --timeout 20)"
 listener ack "$(printf '%s' "$first" | jq -r '.send.id')" "Got your 3 messages on 3 threads, starting." >/dev/null
-listener status "$(message "$intro")" working >/dev/null
+listener message state "$(message "$intro")" working >/dev/null
 listener reply "$(thread "$intro")" "The first scene now holds for 1 s more: paddingSeconds is 1.4 in voiceover.json. Commit 4f2a91c." >/dev/null
-listener status "$(message "$intro")" "done" >/dev/null
-listener status "$(message "$words")" working >/dev/null
+listener message state "$(message "$intro")" "done" >/dev/null
+listener message state "$(message "$words")" working >/dev/null
 listener reply "$(thread "$words")" "I can't change this one: the scene's source is in the explainer studio, not in this repo." >/dev/null
-listener status "$(message "$words")" failed >/dev/null
-listener status "$(message "$keys")" working >/dev/null
+listener message state "$(message "$words")" failed >/dev/null
+listener message state "$(message "$keys")" working >/dev/null
 listener reply "$(thread "$keys")" "Both names are in the video. I'll ask before I change one." >/dev/null
-# `ask --wait 0` leaves the question open and exits 2 at once.
+# `ask --timeout 0` leaves the question open and exits 124 at once.
 HAVOOCH_CONTROL_KEY="$listener_key" "$cli" ask "$(thread "$keys")" \
-    "Which name do you want: Cmd+Return, as the menu says, or Cmd+Enter, as the narration says?" --wait 0 >/dev/null
-[ $? -eq 2 ] || fail "the open question was refused"
+    "Which name do you want: Cmd+Return, as the menu says, or Cmd+Enter, as the narration says?" --timeout 0 >/dev/null
+[ $? -eq 124 ] || fail "the open question was refused"
 
 # The second send, taken and not acknowledged yet: #4 sent.
 operator player seek 17 >/dev/null
-operator comment add "Name the repo here, so a viewer can find the skill." >/dev/null
-operator send >/dev/null
+operator message add "Name the repo here, so a viewer can find the skill." >/dev/null
+operator message send >/dev/null
 listener wait --timeout 20 >/dev/null
 
 # A message still in the queue: #5 queued.
 operator player seek 19.5 >/dev/null
-operator comment add "Show the three ways the agent can answer, not only the reply." --region 0.55,0.6,0.4,0.3 >/dev/null
+operator message add "Show the three ways the agent can answer, not only the reply." --region 0.55,0.6,0.4,0.3 >/dev/null
 
 # The listener waits again, so the footer shows it present.
 HAVOOCH_CONTROL_KEY="$listener_key" "$cli" wait --timeout 900 >/dev/null 2>&1 &
@@ -194,19 +194,19 @@ listener_pid=$!
 # of the last messages go after 5 s.
 operator player seek 12.5 >/dev/null
 sleep 6
-operator thread list >/dev/null
+operator sidebar show threads >/dev/null
 echo "the thread list, threads in every group, with their pins:"
 pair threads --hide-agent-indicator
 
 # Thread #3 shown, with its reply, its open question and its region's
 # crop.
-operator thread show "$(thread "$keys")" >/dev/null
+operator sidebar show thread "$(thread "$keys")" >/dev/null
 sleep 1
 echo "a thread view in the sidebar, the composer answering its question:"
 pair sidebar --hide-agent-indicator
 
 # Thread #1, done: the composer follows up on it.
-operator thread show "$(thread "$intro")" >/dev/null
+operator sidebar show thread "$(thread "$intro")" >/dev/null
 sleep 1
 echo "a done thread's view, the composer following up:"
 pair follow-up --hide-agent-indicator
@@ -215,11 +215,11 @@ pair follow-up --hide-agent-indicator
 # closes it again after the picture.
 echo "the Settings window:"
 pair settings --window settings
-operator thread show "$(thread "$keys")" >/dev/null
+operator sidebar show thread "$(thread "$keys")" >/dev/null
 
 # Thread #3's popover, as a click on its pin opens it: its conversation with
 # the agent's open question above the field, beside its region.
-operator thread open "$(thread "$keys")" >/dev/null
+operator popover open --thread "$(thread "$keys")" >/dev/null
 sleep 1
 echo "a thread's popover on the video:"
 pair thread-popover --hide-agent-indicator
@@ -250,10 +250,10 @@ themes="$(operator theme list --json | jq -r '.themes[] | select(.source == "bui
 while IFS= read -r name; do
     slug="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
     operator theme set "$name" >/dev/null
-    operator thread list >/dev/null
+    operator sidebar show threads >/dev/null
     sleep 1
     operator screenshot "$theme_shots/$slug-list.png" --hide-agent-indicator >/dev/null
-    operator thread show "$(thread "$keys")" >/dev/null
+    operator sidebar show thread "$(thread "$keys")" >/dev/null
     sleep 1
     operator screenshot "$theme_shots/$slug-thread.png" --hide-agent-indicator >/dev/null
     operator screenshot "$theme_shots/$slug-settings.png" --window settings >/dev/null
@@ -262,7 +262,7 @@ while IFS= read -r name; do
     echo "  $theme_shots/$slug-settings.png"
     taken+=("theme:$slug")
 done <<< "$themes"
-operator thread list >/dev/null
+operator sidebar show threads >/dev/null
 operator theme set system >/dev/null
 
 # --- the comment popover on a region -----------------------------------------
@@ -271,7 +271,7 @@ operator theme set system >/dev/null
 # the popover starts thread #6, and still: 1.5 s is in the first scene,
 # not in a cross-fade. The region is the scene's title.
 operator player seek 1.5 >/dev/null
-operator comment open "The title and the subtitle overlap here." --region 0.62,0.6,0.32,0.27 >/dev/null
+operator popover open "The title and the subtitle overlap here." --region 0.62,0.6,0.32,0.27 >/dev/null
 sleep 1
 echo "the comment popover on a region:"
 pair comment-popover --hide-agent-indicator

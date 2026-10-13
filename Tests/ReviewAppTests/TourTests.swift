@@ -183,7 +183,7 @@ struct TourTests {
         #expect(window.tour.step == .write)
         #expect(window.tourAgentName == "Claude Code")
 
-        // Write an Example puts the words in the composer, as `comment compose` does.
+        // Write an Example puts the words in the composer, as `composer set` does.
         window.writeTourExample()
         #expect(window.composerText == WindowModel.tourExample)
 

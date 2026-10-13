@@ -6,8 +6,8 @@ import Testing
 
 @Suite("The connect commands")
 struct ConnectCommandTests {
-    @Test("connect show, pick, disconnect and forget send their requests, to the window --window names", arguments: [
-        (["connect", "show"], ControlRequest.connectShow, nil as String?),
+    @Test("sidebar show connect, connect pick, disconnect and forget send their requests, to the window --window names", arguments: [
+        (["sidebar", "show", "connect"], ControlRequest.connectShow, nil as String?),
         (["connect", "pick", "codex"], .connectPick(harness: "codex"), nil),
         (["connect", "pick", "claude-code", "--window", "w2"], .connectPick(harness: "claude-code"), "w2"),
         (["connect", "disconnect", "--window", "w2"], .connectDisconnect, "w2"),
@@ -22,20 +22,20 @@ struct ConnectCommandTests {
     }
 
     @Test("connect pick needs one harness; the others take no words", arguments: [
-        ["connect", "show", "now"], ["connect", "pick"], ["connect", "pick", " "], ["connect", "pick", "codex", "pi"],
+        ["sidebar", "show", "connect", "now"], ["connect", "pick"], ["connect", "pick", " "], ["connect", "pick", "codex", "pi"],
         ["connect", "disconnect", "it"], ["connect", "forget", "it"],
     ])
     func usage(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 64)
+        #expect(HavoochCLI.run(arguments, environment: run.environment).exitCode == 2)
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the connect commands")
+    @Test("the group's help names the connect commands")
     func usageText() {
-        for synopsis in ["connect show", "connect pick <harness>", "connect disconnect", "connect forget"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+        for synopsis in ["connect pick <harness>", "connect disconnect", "connect forget"] {
+            #expect(help("connect").contains("havooch \(synopsis)"))
         }
     }
 }

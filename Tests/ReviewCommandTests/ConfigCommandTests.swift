@@ -65,11 +65,11 @@ struct ConfigCommandTests {
         #expect(problem["line"] as? Int == 3)
     }
 
-    @Test("config dismiss asks the app to close the settings notice")
-    func dismiss() {
+    @Test("config close-notice asks the app to close the settings notice")
+    func closeNotice() {
         let run = Run { _, _ in .success(.done("the settings notice is closed\n")) }
         defer { run.cleanUp() }
-        #expect(run("config", "dismiss") == CommandResult(output: "the settings notice is closed\n"))
+        #expect(run("config", "close-notice") == CommandResult(output: "the settings notice is closed\n"))
         #expect(run.transport.requests == [.configDismiss])
     }
 
@@ -77,9 +77,9 @@ struct ConfigCommandTests {
     func usage() {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(run("config", "path", "x").exitCode == 64)
-        #expect(run("config", "check", "x").exitCode == 64)
-        #expect(run("config", "dismiss", "x").exitCode == 64)
-        #expect(CommandTable.usageText.contains("havooch config check"))
+        #expect(run("config", "path", "x").exitCode == 2)
+        #expect(run("config", "check", "x").exitCode == 2)
+        #expect(run("config", "close-notice", "x").exitCode == 2)
+        #expect(help("config").contains("havooch config check"))
     }
 }
