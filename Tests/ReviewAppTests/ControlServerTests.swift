@@ -659,7 +659,7 @@ struct ControlServerTests {
         #expect(app.calls == ["comment compose Too fast", "comment compose  on 0.25,0.2,0.3,0.25", "comment compose Overall general"])
     }
 
-    @Test("`thread open` opens a thread's popover, kept at a frame when it names one; a frame outside the video area is refused first")
+    @Test("`popover open --thread` opens a thread's popover, kept at a frame when it names one; a frame outside the video area is refused first")
     func threadOpen() async throws {
         _ = try await app.addMessage(text: "Here", at: 12.5, region: nil, thread: nil)
         #expect(await answer(.threadOpen(thread: "t-abcdef01-1")).reply == .done("popover open on #1 at 0:12.5\n"))
@@ -676,7 +676,7 @@ struct ControlServerTests {
         ])
     }
 
-    @Test("`thread show` shows a thread's view and `thread list` the list; the state report names the thread the sidebar shows, or null")
+    @Test("`sidebar show thread` shows a thread's view and `sidebar show threads` the list; the state report names the thread the sidebar shows, or null")
     func threadShowAndList() async throws {
         _ = try await app.addMessage(text: "Here", at: 12.5, region: nil, thread: nil)
         var sidebar = try #require(try object(await answer(.state, json: true).reply.output)["sidebar"] as? [String: Any])
@@ -703,7 +703,7 @@ struct ControlServerTests {
         ])
     }
 
-    @Test("`connect show` and `connect pick` show the Connect view and answer with the picked harness's readiness and prompt; disconnect and forget name the agent")
+    @Test("`sidebar show connect` and `connect pick` show the Connect view and answer with the picked harness's readiness and prompt; disconnect and forget name the agent")
     func connectCommands() async throws {
         #expect(await answer(.connectShow).reply == .done("the sidebar shows the Connect view\n"))
         let shown = try object(await answer(.connectShow, json: true).reply.output)
@@ -726,7 +726,7 @@ struct ControlServerTests {
         #expect(refused.reply == .refused("no agent is connected to this window"))
     }
 
-    @Test("`tour show`, `next`, `close` and `skip` move the tour and answer with its step; `--json` has the tour")
+    @Test("`tour open`, `next`, `close` and `skip` move the tour and answer with its step; `--json` has the tour")
     func tourCommands() async throws {
         #expect(await answer(.tourShow).reply == .done("the tour shows step 1 of 5: Give your agent two tools\n"))
         #expect(await answer(.tourNext).reply == .done("the tour shows step 2 of 5: Connect your agent\n"))

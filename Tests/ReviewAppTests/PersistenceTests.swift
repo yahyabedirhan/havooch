@@ -169,7 +169,7 @@ struct PersistenceTests {
         #expect(app.windows.windows.count == 1)
         #expect(again.recents.first?.url == video.standardizedFileURL)
 
-        // The acceptance scenario's `player open` of the same file.
+        // The acceptance scenario's `player load` of the same file.
         try await again.open(video)
         let after = try state(again)
         for key in ["threads", "queue", "sends", "video"] {

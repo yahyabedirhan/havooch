@@ -121,7 +121,7 @@ struct ThreadPopoverTests {
         #expect(model.draftThread?.messages.last?.text == "Cmd+Return it is.")
     }
 
-    @Test("`thread open --frame` keeps the popover's frame; it is kept across a restart; General and unknown threads are refused")
+    @Test("`popover open --thread --frame` keeps the popover's frame; it is kept across a restart; General and unknown threads are refused")
     func keptFrame() async throws {
         defer { cleanUp() }
         let model = try await model()

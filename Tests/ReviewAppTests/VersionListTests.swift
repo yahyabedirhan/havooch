@@ -7,8 +7,8 @@ import Testing
 
 /// A project's thread list by version (thread-list V5),
 /// through the app model and its control server: `state` reports the
-/// sections, the older versions and their open threads; `thread versions`
-/// opens "All versions" with its search; `thread version <n>` adds an older
+/// sections, the older versions and their open threads; `version menu`
+/// opens "All versions" with its search; `version section <n>` adds an older
 /// version's section and `--remove` takes it out; a plain video's list
 /// stays by group.
 @Suite("Thread list by version", .serialized)

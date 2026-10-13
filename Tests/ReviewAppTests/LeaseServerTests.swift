@@ -64,7 +64,7 @@ struct LeaseServerTests {
     }
 
     /// A `havooch` command's exchange, as it runs in its own process:
-    /// on a thread of its own, since `send` blocks until the app answers,
+    /// on a thread of its own, since `message send` blocks until the app answers,
     /// and a blocked send must not hold one of the few threads the server's
     /// own tasks answer on.
     nonisolated static func sending(

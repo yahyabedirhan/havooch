@@ -83,7 +83,7 @@ struct ListenerSocketTests {
         (try await state(app)["listener"] as? [String: Any])?["presence"] as? String
     }
 
-    /// The listener's `wait` in its own shell, and the operator's `send`
+    /// The listener's `wait` in its own shell, and the operator's `message send`
     /// while it's held: the send's payload.
     private func waitThenSend(_ app: Running, as holder: Holder = listener) async throws -> [String: Any] {
         let socket = app.server.socket

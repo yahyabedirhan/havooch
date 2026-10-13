@@ -171,7 +171,7 @@ struct PopoverCloseTests {
         #expect(model.draftThreadNumber == nil)
     }
 
-    @Test("C with the popover open keeps it; `comment open` over an open popover closes it as a click outside")
+    @Test("C with the popover open keeps it; `popover open` over an open popover closes it as a click outside")
     func reopen() async throws {
         defer { cleanUp() }
         let model = try await model()
