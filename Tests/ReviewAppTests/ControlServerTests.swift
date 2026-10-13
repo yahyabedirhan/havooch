@@ -731,7 +731,7 @@ struct ControlServerTests {
         #expect(await answer(.tourShow).reply == .done("the tour shows step 1 of 5: Give your agent two tools\n"))
         #expect(await answer(.tourNext).reply == .done("the tour shows step 2 of 5: Connect your agent\n"))
         #expect(await answer(.tourClose).reply == .done(
-            "the tour is closed at step 2 of 5; havooch tour show opens it there\n"
+            "the tour is closed at step 2 of 5; havooch tour open opens it there\n"
         ))
         let shown = try object(await answer(.tourShow, json: true).reply.output)
         let tour = try #require(shown["tour"] as? [String: Any])
@@ -740,12 +740,12 @@ struct ControlServerTests {
         #expect(tour["finishSetup"] as? Bool == true)
         #expect(tour["setupItemsLeft"] as? Int == 3)
         #expect(await answer(.tourSkip).reply == .done(
-            "the tour is skipped; Finish setup or havooch tour show starts it again\n"
+            "the tour is skipped; Finish setup or havooch tour open starts it again\n"
         ))
         #expect(app.calls == ["tour show", "tour next", "tour close", "tour show", "tour skip"])
 
-        app.refusal = AppRefusal("the tour isn't showing; havooch tour show opens it")
-        #expect(await answer(.tourNext).reply == .refused("the tour isn't showing; havooch tour show opens it"))
+        app.refusal = AppRefusal("the tour isn't showing; havooch tour open opens it")
+        #expect(await answer(.tourNext).reply == .refused("the tour isn't showing; havooch tour open opens it"))
     }
 
     @Test("a message on a region reaches the app with its region, and answers with the region, the crop's path and the thread")
@@ -819,9 +819,9 @@ struct ControlServerTests {
         let state = try object(await answer(.state, json: true).reply.output)
         #expect((state["video"] as? [String: Any])?["contextNote"] as? String == "Mind the intro")
         #expect(await answer(.contextSet(text: "")).reply == .done("context note cleared\n"))
-        app.refusal = AppRefusal("no video is open in the window; open one with `havooch player open <path>`")
+        app.refusal = AppRefusal("no video is open in the window; load one with `havooch player load <path>`")
         #expect(await answer(.contextSet(text: "note")).reply
-            == .refused("no video is open in the window; open one with `havooch player open <path>`"))
+            == .refused("no video is open in the window; load one with `havooch player load <path>`"))
     }
 
     @Test("send reaches the app and answers the send's id, how many messages it carries and on how many threads")

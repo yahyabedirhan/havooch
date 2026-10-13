@@ -6,7 +6,7 @@ import ReviewSetup
 /// sends it waits to see delivered.
 struct ConnectEntry: Equatable {
     /// What opened the view: the "No agent" pill, the header's connect
-    /// button (and `connect show`), or Send with no agent there.
+    /// button (and `sidebar show connect`), or Send with no agent there.
     enum Reason: String, Equatable {
         case pill, header, send
     }
@@ -63,7 +63,7 @@ extension WindowModel {
         }
     }
 
-    /// `connect show`: the Connect view, as the header's connect button
+    /// `sidebar show connect`: the Connect view, as the header's connect button
     /// opens it. Refused with no video: the sidebar is a video's.
     func showConnect() throws(AppRefusal) -> StateReport.Sidebar {
         try needVideo()

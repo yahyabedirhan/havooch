@@ -84,10 +84,10 @@ final class Screenshotter: Screenshotting {
             try await AboutPanel.showForCapture()
             found = AboutPanel.window
         case .firstRun:
-            // It shows only when the person or `first-run show` opened it.
+            // It shows only when the person or `first-run open` opened it.
             opened = false
             guard let window = firstRun.window else {
-                throw AppRefusal("the first-run window isn't open; havooch first-run show opens it")
+                throw AppRefusal("the first-run window isn't open; havooch first-run open opens it")
             }
             found = window
         }

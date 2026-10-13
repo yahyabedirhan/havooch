@@ -554,7 +554,7 @@ nonisolated struct StateReport: Encodable, Equatable {
     }
 
     /// One live line: what the agent does now on a thread, for a message,
-    /// as its last `status working` said it.
+    /// as its last `mark working` said it.
     struct Activity: Encodable, Equatable {
         var thread: String
         var message: String
@@ -750,7 +750,7 @@ nonisolated struct StateReport: Encodable, Equatable {
         /// The Connect view: what opened it, the outbox banner, the picked
         /// harness with its readiness and prompt, and the listener card.
         struct Connect: Encodable, Equatable {
-            /// `pill`, `header` (the connect button and `connect show`) or
+            /// `pill`, `header` (the connect button and `sidebar show connect`) or
             /// `send` (Send with no agent there).
             var reason: String
             /// `none`, `connected` or `reconnecting`.
@@ -929,8 +929,8 @@ nonisolated struct StateReport: Encodable, Equatable {
             open
                 ? "the tour shows step \(stepNumber) of \(steps): \(title)"
                 : step == TourStep.tools.rawValue
-                    ? "the tour is closed; Finish setup or havooch tour show starts it"
-                    : "the tour is closed at step \(stepNumber) of \(steps); havooch tour show opens it there"
+                    ? "the tour is closed; Finish setup or havooch tour open starts it"
+                    : "the tour is closed at step \(stepNumber) of \(steps); havooch tour open opens it there"
         }
     }
 

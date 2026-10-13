@@ -579,7 +579,7 @@ final class ControlServer {
                 return done(tour.open ? tour.line : "the tour is finished", Output(tour: tour), json)
             case .tourSkip:
                 let tour = try inWindow().skipTour()
-                return done("the tour is skipped; Finish setup or havooch tour show starts it again", Output(tour: tour), json)
+                return done("the tour is skipped; Finish setup or havooch tour open starts it again", Output(tour: tour), json)
             case .tourClose:
                 let tour = try inWindow().closeTour()
                 return done(tour.line, Output(tour: tour), json)

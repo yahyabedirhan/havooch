@@ -50,7 +50,7 @@ public enum ReviewRefusal: Error, Equatable, Sendable {
         case .badRegion(let x, let y, let w, let h):
             "the region \(x),\(y),\(w),\(h) isn't a rectangle inside the frame; give x,y,w,h from 0 to 1 from the top-left corner, with a width and a height above 0, x+w at most 1 and y+h at most 1"
         case .nothingQueued:
-            "no message is queued, so there's nothing to send; queue one with `havooch comment add <text>`"
+            "no message is queued, so there's nothing to send; queue one with `havooch message add <text>`"
         case .emptyMessage:
             "a message needs text"
         case .notSent(let thread):

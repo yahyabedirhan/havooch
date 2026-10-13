@@ -138,7 +138,7 @@ final class AppModel: AppControlling {
         firstRun.used = { [weak self] in self?.markFirstRunDone() }
     }
 
-    /// The settings notice's close button, in any window, and `config dismiss`.
+    /// The settings notice's close button, in any window, and `config close-notice`.
     @discardableResult
     func dismissConfigNotice() -> Bool {
         config.dismissNotice()

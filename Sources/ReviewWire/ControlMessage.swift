@@ -427,9 +427,9 @@ public struct ControlMessage: Equatable, Sendable {
         var state: String?
         var name: String?
         var thread: String?
-        /// `thread open --frame`: where the thread's popover is kept.
+        /// `popover open --thread --frame`: where the thread's popover is kept.
         var frame: ControlRequest.Rectangle?
-        /// `comment compose --general`: the composer writes to General.
+        /// `composer set --general`: the composer writes to General.
         var general: Bool?
         /// `ask --choice`: the question's quick replies; left out with none.
         var choices: [String]?
@@ -447,14 +447,14 @@ public struct ControlMessage: Equatable, Sendable {
         var title: String?
         /// `project add --label`: the version's label.
         var label: String?
-        /// `thread version <n>` and `version show <n>`: the version's
+        /// `version section <n>` and `version show <n>`: the version's
         /// number, from 1.
         var number: Int?
         /// `window resize`: the content width in points.
         var width: Int?
-        /// `thread version --remove`: the picked version leaves the list.
+        /// `version section --remove`: the picked version leaves the list.
         var remove: Bool?
-        /// `compare pick` and `compare set --side`: a side, `left` or `right`.
+        /// `compare find` and `compare set --side`: a side, `left` or `right`.
         var side: String?
         /// `compare set --left` and `--right`: a side's version, from 1.
         var left: Int?

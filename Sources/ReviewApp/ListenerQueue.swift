@@ -8,7 +8,7 @@ import ReviewWire
 /// One review's listener: it holds the review's `Outbox` (the
 /// rules), the one open `wait` and the open `ask`s (held connections, like
 /// a `take` waiting in line) and assembles the payload at the moment a
-/// `wait` takes a send. The listener's answers (`ack`, `status`, `reply`,
+/// `wait` takes a send. The listener's answers (`ack`, `mark`, `reply`,
 /// `ask`) change the review through the `ReviewDesk` and are announced as
 /// a notice. The window that holds the review reads the presence from it.
 /// The `ListenerHub` makes one per review and routes to it.
@@ -88,7 +88,7 @@ final class ListenerQueue {
         var timeout: Task<Void, Never>?
     }
 
-    /// What the agent does now, as `status working` with a text said it:
+    /// What the agent does now, as `mark working` with a text said it:
     /// the live line under a thread's conversation and in the footer. One
     /// per thread, the latest; never kept, since it's only true while the
     /// agent works.
@@ -355,7 +355,7 @@ final class ListenerQueue {
         return StateReport.Send(send, in: review)
     }
 
-    /// `havooch status`: how far the listener is with a message. The
+    /// `havooch mark`: how far the listener is with a message. The
     /// send whose last message finishes is no longer taken, so the listener
     /// is back to listening. `working` with a `text` makes it the thread's
     /// live line, and with an empty one clears it; `done` and `failed`
