@@ -12,17 +12,34 @@ enum FrameGrabber {
     nonisolated static func keyframe(
         of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double
     ) async throws(AppRefusal) -> CGImage {
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
-        generator.appliesPreferredTrackTransform = true
         // The video's end is past its last frame: ask inside that frame.
         let inside = min(max(seconds, 0), max(duration - frameDuration / 2, 0))
-        do {
-            return try await generator.image(at: PlayerEngine.exact(inside)).image
-        } catch {
-            throw AppRefusal("couldn't read the frame at \(seconds) s: \(error.localizedDescription)")
+        var attempt = 1
+        while true {
+            // A new generator for each try, so a try starts with a new decoder.
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            generator.appliesPreferredTrackTransform = true
+            do {
+                return try await generator.image(at: PlayerEngine.exact(inside)).image
+            } catch where readsAgain(after: error, attempt: attempt) {
+                try? await Task.sleep(for: .milliseconds(200) * attempt)
+                attempt += 1
+            } catch {
+                throw AppRefusal("couldn't read the frame at \(seconds) s: \(error.localizedDescription)")
+            }
         }
+    }
+
+    /// How many times a frame is read before its error is given up on.
+    nonisolated static let readAttempts = 3
+
+    /// Whether a frame read that failed with `error` on try `attempt` is
+    /// tried again: only when the decoder failed, which a Mac under load
+    /// can do for a moment, and up to `readAttempts` tries in all.
+    nonisolated static func readsAgain(after error: any Error, attempt: Int) -> Bool {
+        (error as? AVError)?.code == .decodeFailed && attempt < readAttempts
     }
 
     /// The part of `keyframe` inside `region`: the keyframe's own pixels.
