@@ -41,11 +41,11 @@ struct CompareCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the compare commands")
+    @Test("the group's help names the compare commands")
     func usageText() {
-        for synopsis in ["compare open", "compare find <left|right> [<query>]", "compare swap", "compare start", "compare exit"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+        for synopsis in ["compare open", "compare find left|right [<query>]", "compare swap", "compare start", "compare exit"] {
+            #expect(help("compare").contains("havooch \(synopsis)"))
         }
-        #expect(CommandTable.usageText.contains("havooch compare set [--left <n>]"))
+        #expect(help("compare").contains("havooch compare set [--left <n>]"))
     }
 }

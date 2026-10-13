@@ -33,10 +33,10 @@ struct VersionCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the version commands")
+    @Test("the group's help names the version commands")
     func usageText() {
         for synopsis in ["version show <n>", "version find [<query>] [--close]", "version menu [--search <text>] [--close]", "version section <n> [--remove]"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+            #expect(help("version").contains("havooch \(synopsis)"))
         }
     }
 }

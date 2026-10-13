@@ -80,6 +80,6 @@ struct ConfigCommandTests {
         #expect(run("config", "path", "x").exitCode == 2)
         #expect(run("config", "check", "x").exitCode == 2)
         #expect(run("config", "close-notice", "x").exitCode == 2)
-        #expect(CommandTable.usageText.contains("havooch config check"))
+        #expect(help("config").contains("havooch config check"))
     }
 }

@@ -36,15 +36,15 @@ struct FirstRunCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the first-run commands, and screenshot names the first-run window")
+    @Test("the group's help names the first-run commands, and screenshot names the first-run window")
     func usageText() {
         for synopsis in [
             "first-run open [welcome|tools|connect|try-it]", "first-run next", "first-run back", "first-run pick <harness>",
             "first-run demo", "first-run skip",
         ] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+            #expect(help("first-run").contains("havooch \(synopsis)"))
         }
-        #expect(CommandTable.usageText.contains("--window main|settings|about|first-run|<id>"))
+        #expect(help("screenshot").contains("--window main|settings|about|first-run|<id>"))
     }
 
     @Test("screenshot --window first-run captures the first-run window")

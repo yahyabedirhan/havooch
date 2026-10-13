@@ -30,9 +30,9 @@ struct ThemeCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names both theme commands")
+    @Test("the group's help names both theme commands")
     func usageText() {
-        #expect(CommandTable.usageText.contains("havooch theme list"))
-        #expect(CommandTable.usageText.contains("havooch theme set <name|system>"))
+        #expect(help("theme").contains("havooch theme list"))
+        #expect(help("theme").contains("havooch theme set <name|system>"))
     }
 }

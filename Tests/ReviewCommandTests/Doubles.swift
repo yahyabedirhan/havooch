@@ -135,3 +135,10 @@ struct Run {
         HavoochCLI.run(arguments, environment: environment)
     }
 }
+
+/// What `havooch <words> --help` prints: a group's help, or a command's.
+func help(_ words: String...) -> String {
+    let run = Run()
+    defer { run.cleanUp() }
+    return HavoochCLI.run(words + ["--help"], environment: run.environment).output
+}

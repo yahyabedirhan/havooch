@@ -2,81 +2,83 @@ import Foundation
 import ReviewWire
 
 /// The listener's loop, which needs no lease: `havooch open | wait | ack
-/// | mark | reply | ask`. `open` is the person's open, run by
-/// `OpenCommand`. `wait [--video <path> | --project <slug>] [--timeout
-/// <seconds>]` is a long-poll: it exits 0 with the next send of one review
-/// as JSON, and the window that holds the review shows the listener while
-/// it's open. `ack`, `mark`, `reply` and `ask` answer in the player, on the
-/// video their id names; `ask` is held until the person answers, and exits
-/// 0 with the answer.
+/// | reply | ask`, and `message state` in the message group. `open` is the
+/// person's open, run by `OpenCommand`. `wait [--video <path> | --project
+/// <slug>] [--timeout <seconds>]` is a long-poll: it exits 0 with the next
+/// send of one review as JSON, and the window that holds the review shows
+/// the listener while it's open. `ack`, `reply` and `ask` answer in the
+/// player, on the video their id names; `ask` is held until the person
+/// answers, and exits 0 with the answer.
 enum ListenerCommands {
-    static let commands: [Command] = [
-        OpenCommand.command,
-        Command(
-            name: "wait", synopsis: "wait [--video <path> | --project <slug>] [--timeout <seconds>]",
-            summary: "wait for the next send of the video at <path>, of the project <slug>, else of the key window, and print it as JSON; exit 124 when --timeout runs out with none",
-            valuedOptions: ["--timeout", "--video", "--project"]
-        ) { arguments, environment throws(UsageError) in
-            try arguments.none()
-            // Made absolute here: the app runs in another folder.
-            let video = arguments.options["--video"].map {
-                URL(fileURLWithPath: $0, relativeTo: environment.workingDirectory).standardizedFileURL
-            }
-            let project = arguments.options["--project"]
-            if video != nil, project != nil { throw UsageError("give --video or --project, not both") }
-            guard let seconds = arguments.options["--timeout"] else { return .wait(timeout: nil, video: video, project: project) }
+    static let group = CommandGroup(
+        name: nil, summary: "get feedback: wait for the person's sends and answer them", section: .feedback,
+        commands: [OpenCommand.command, wait, ack, reply, ask]
+    )
+
+    private static let wait = Command(
+        name: "wait", arguments: "[--video <path> | --project <slug>] [--timeout <seconds>]",
+        summary: "wait for the person's next send and print it",
+        description: "It waits for a send of the video at <path>, of the project <slug>, else of the key window's video, "
+            + "and prints it as JSON. The window shows the listener while it waits. While the app isn't running, it "
+            + "connects again each second.",
+        examples: ["", "--timeout 600", "--project launch-video"], role: .listener,
+        exitCodes: "124 when --timeout runs out with no send.",
+        valuedOptions: ["--timeout", "--video", "--project"]
+    ) { arguments, environment throws(UsageError) in
+        try arguments.none()
+        // Made absolute here: the app runs in another folder.
+        let video = arguments.options["--video"].map {
+            URL(fileURLWithPath: $0, relativeTo: environment.workingDirectory).standardizedFileURL
+        }
+        let project = arguments.options["--project"]
+        if video != nil, project != nil { throw UsageError("give --video or --project, not both") }
+        guard let seconds = arguments.options["--timeout"] else { return .wait(timeout: nil, video: video, project: project) }
+        guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
+            throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
+        }
+        return .wait(timeout: whole, video: video, project: project)
+    }
+
+    private static let ack = Command(
+        name: "ack", arguments: "<send-id> [<text>]",
+        summary: "say you have a send",
+        description: "Its messages turn acknowledged, and the text goes on the General thread.",
+        examples: ["s-f92cbb2a-1", "s-f92cbb2a-1 \"On it: three changes\""], role: .listener
+    ) { arguments, _ throws(UsageError) in
+        guard let id = arguments.words.first else { throw UsageError("missing <send-id>") }
+        guard arguments.words.count <= 2 else { throw UsageError("unexpected `\(arguments.words[2])`") }
+        return .send(.ack(sendID: id, text: arguments.words.count == 2 ? arguments.words[1] : nil))
+    }
+
+    private static let reply = Command(
+        name: "reply", arguments: "<thread> <text>",
+        summary: "send a message on a thread",
+        description: "The thread is its id, or its number in the open video, 0 for General.",
+        examples: ["2 \"Slowed the intro down\"", "t-f92cbb2a-1 \"Done, see v3\""], role: .listener
+    ) { arguments, _ throws(UsageError) in
+        let words = try arguments.exactly(["<thread>", "<text>"])
+        return .send(.reply(thread: words[0], text: words[1]))
+    }
+
+    private static let ask = Command(
+        name: "ask", arguments: "<thread> <question> [--choice <text>]... [--timeout <seconds>]",
+        summary: "ask a question on a thread and print the answer",
+        description: "Each --choice is a quick reply the person can click. Without --timeout it waits with no limit.",
+        examples: ["1 \"Which part?\"", "1 \"Keep the music?\" --choice Yes --choice No --timeout 600"], role: .listener,
+        exitCodes: "124 when --timeout runs out with no answer.",
+        valuedOptions: ["--timeout", "--choice"]
+    ) { arguments, _ throws(UsageError) in
+        let words = try arguments.exactly(["<thread>", "<question>"])
+        var wait: Int?
+        if let seconds = arguments.options["--timeout"] {
             guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
                 throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
             }
-            return .wait(timeout: whole, video: video, project: project)
-        },
-        Command(
-            name: "ack", synopsis: "ack <send-id> [<text>]",
-            summary: "say you have the send: its messages turn acknowledged, and the text goes on the General thread"
-        ) { arguments, _ throws(UsageError) in
-            guard let id = arguments.words.first else { throw UsageError("missing <send-id>") }
-            guard arguments.words.count <= 2 else { throw UsageError("unexpected `\(arguments.words[2])`") }
-            return .send(.ack(sendID: id, text: arguments.words.count == 2 ? arguments.words[1] : nil))
-        },
-        Command(
-            name: "mark", synopsis: "mark <message-id> working|done|failed [<text>]",
-            summary: "say how far you are with a message; its thread's pin shows it, and the text with working what you do now"
-        ) { arguments, _ throws(UsageError) in
-            let words = arguments.words
-            guard words.count >= 1 else { throw UsageError("missing <message-id>") }
-            guard words.count >= 2 else { throw UsageError("missing working|done|failed") }
-            guard let state = ControlRequest.Status(rawValue: words[1]) else {
-                throw UsageError("`\(words[1])` isn't a status; write `working`, `done` or `failed`")
-            }
-            // Only work in progress has a "now": done and failed clear the line.
-            let most = state == .working ? 3 : 2
-            guard words.count <= most else { throw UsageError("unexpected `\(words[most])`") }
-            return .send(.status(messageID: words[0], state: state, text: words.count == 3 ? words[2] : nil))
-        },
-        Command(
-            name: "reply", synopsis: "reply <thread> <text>",
-            summary: "send a message on a thread: its id, or a number of the open video (0 for General)"
-        ) { arguments, _ throws(UsageError) in
-            let words = try arguments.exactly(["<thread>", "<text>"])
-            return .send(.reply(thread: words[0], text: words[1]))
-        },
-        Command(
-            name: "ask", synopsis: "ask <thread> <question> [--choice <text>]... [--timeout <seconds>]",
-            summary: "ask a question on a thread and print the person's answer; each --choice is a quick reply the person can click; exit 124 when --timeout runs out with none",
-            valuedOptions: ["--timeout", "--choice"]
-        ) { arguments, _ throws(UsageError) in
-            let words = try arguments.exactly(["<thread>", "<question>"])
-            var wait: Int?
-            if let seconds = arguments.options["--timeout"] {
-                guard let whole = Int(seconds), (0...ControlRequest.longestListen).contains(whole) else {
-                    throw UsageError("`--timeout` takes whole seconds from 0 to \(ControlRequest.longestListen), not `\(seconds)`")
-                }
-                wait = whole
-            }
-            let choices = arguments.repeated["--choice"] ?? []
-            return .send(.ask(thread: words[0], question: words[1], waitSeconds: wait, choices: choices))
-        },
-    ]
+            wait = whole
+        }
+        let choices = arguments.repeated["--choice"] ?? []
+        return .send(.ask(thread: words[0], question: words[1], waitSeconds: wait, choices: choices))
+    }
 
     /// How long `wait` rests before it looks for the app again.
     static let retry: TimeInterval = 1

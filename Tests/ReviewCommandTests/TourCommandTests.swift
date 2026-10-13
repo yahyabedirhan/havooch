@@ -30,10 +30,10 @@ struct TourCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the tour commands")
+    @Test("the group's help names the tour commands")
     func usageText() {
         for synopsis in ["tour open", "tour next", "tour skip", "tour close"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+            #expect(help("tour").contains("havooch \(synopsis)"))
         }
     }
 }

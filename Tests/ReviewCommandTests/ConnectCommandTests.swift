@@ -32,10 +32,10 @@ struct ConnectCommandTests {
         #expect(run.transport.requests.isEmpty)
     }
 
-    @Test("the usage text names the connect commands")
+    @Test("the group's help names the connect commands")
     func usageText() {
         for synopsis in ["connect pick <harness>", "connect disconnect", "connect forget"] {
-            #expect(CommandTable.usageText.contains("havooch \(synopsis)"))
+            #expect(help("connect").contains("havooch \(synopsis)"))
         }
     }
 }

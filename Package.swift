@@ -64,7 +64,9 @@ let package = Package(
         .testTarget(
             name: "ReviewCommandTests",
             dependencies: ["ReviewWire", "ReviewLease", "ReviewCommand", "ReviewConfig"],
-            path: "Tests/ReviewCommandTests"
+            path: "Tests/ReviewCommandTests",
+            // The stored help the snapshot tests compare with, read by path.
+            exclude: ["Snapshots"]
         ),
     ]
 )

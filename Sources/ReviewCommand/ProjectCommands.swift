@@ -11,34 +11,42 @@ import ReviewWire
 /// The app launches when it isn't running. `list` reads the file
 /// itself and needs no app.
 enum ProjectCommands {
-    static let commands: [Command] = [
-        Command(
-            name: "project new", synopsis: "project new <slug> --from <path> [--title <title>]",
-            summary: "make a project whose v1 is the video at <path>; its threads move into the project, and its listener keeps listening",
-            valuedOptions: ["--from", "--title"]
-        ) { arguments, environment throws(UsageError) in
-            let slug = try arguments.one("<slug>")
-            guard let from = arguments.options["--from"] else { throw UsageError("missing --from <path>") }
-            try needSlug(slug)
-            return .projectNew(slug: slug, video: absolute(from, environment), title: arguments.options["--title"])
-        },
-        Command(
-            name: "project add", synopsis: "project add <slug> <path> [--label <label>]",
-            summary: "append the video at <path> as the project's next version, show it and bring its window forward",
-            valuedOptions: ["--label"]
-        ) { arguments, environment throws(UsageError) in
-            let words = try arguments.exactly(["<slug>", "<path>"])
-            try needSlug(words[0])
-            return .projectAdd(slug: words[0], video: absolute(words[1], environment), label: arguments.options["--label"])
-        },
-        Command(
-            name: "project list", synopsis: "project list",
-            summary: "every project in config.toml with its versions; needs no app"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .projectList
-        },
-    ]
+    static let group = CommandGroup(
+        name: "project", summary: "make projects and add versions to them", section: .feedback, commands: [
+            Command(
+                name: "project new", arguments: "<slug> --from <path> [--title <title>]",
+                summary: "make a project whose first version is a video",
+                description: "The video's threads move into the project, and its listener keeps listening. The app starts "
+                    + "in the background when it isn't running.",
+                examples: ["launch-video --from renders/v1.mp4", "launch-video --from renders/v1.mp4 --title \"Launch video\""],
+                role: .person, valuedOptions: ["--from", "--title"]
+            ) { arguments, environment throws(UsageError) in
+                let slug = try arguments.one("<slug>")
+                guard let from = arguments.options["--from"] else { throw UsageError("missing --from <path>") }
+                try needSlug(slug)
+                return .projectNew(slug: slug, video: absolute(from, environment), title: arguments.options["--title"])
+            },
+            Command(
+                name: "project add", arguments: "<slug> <path> [--label <label>]",
+                summary: "add a video as a project's next version",
+                description: "The app shows the new version and brings its window forward. It starts when it isn't running.",
+                examples: ["launch-video renders/v2.mp4", "launch-video renders/v3.mp4 --label \"Shorter intro\""],
+                role: .person, valuedOptions: ["--label"]
+            ) { arguments, environment throws(UsageError) in
+                let words = try arguments.exactly(["<slug>", "<path>"])
+                try needSlug(words[0])
+                return .projectAdd(slug: words[0], video: absolute(words[1], environment), label: arguments.options["--label"])
+            },
+            Command(
+                name: "project list", summary: "list every project with its versions",
+                description: "It reads config.toml and needs no app.",
+                examples: ["", "--json"], role: .free, exitCodes: "1 when config.toml doesn't read."
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .projectList
+            },
+        ]
+    )
 
     /// `path` made absolute here: the app runs in another folder.
     private static func absolute(_ path: String, _ environment: CommandEnvironment) -> URL {

@@ -8,29 +8,32 @@ import ReviewWire
 /// `ConfigLocation` says, so a command with `HAVOOCH_SUPPORT_DIR` set
 /// reads that folder's `config/config.toml`, never the person's.
 enum ConfigCommands {
-    static let commands: [Command] = [
-        Command(
-            name: "config path", synopsis: "config path",
-            summary: "where config.toml and your themes are; needs no app"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .configPath
-        },
-        Command(
-            name: "config check", synopsis: "config check",
-            summary: "whether config.toml reads, each problem with its line; exit 1 when it doesn't; needs no app"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .configCheck
-        },
-        Command(
-            name: "config close-notice", synopsis: "config close-notice",
-            summary: "close the settings notice in the window, as its close button does"
-        ) { arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.configDismiss)
-        },
-    ]
+    static let group = CommandGroup(
+        name: "config", summary: "find and check config.toml", section: .drive, commands: [
+            Command(
+                name: "config path", summary: "print where config.toml and your themes are",
+                description: "It needs no app.", examples: ["", "--json"], role: .free
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .configPath
+            },
+            Command(
+                name: "config check", summary: "check that config.toml reads",
+                description: "It prints each problem with its line, and needs no app.", examples: ["", "--json"], role: .free,
+                exitCodes: "1 when config.toml doesn't read."
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .configCheck
+            },
+            Command(
+                name: "config close-notice", summary: "close the settings notice in the window",
+                description: "As its close button does.", examples: [""], role: .operator
+            ) { arguments, _ throws(UsageError) in
+                try arguments.none()
+                return .send(.configDismiss)
+            },
+        ]
+    )
 
     /// The file the environment's settings are in.
     static func location(_ environment: CommandEnvironment) -> ConfigLocation {

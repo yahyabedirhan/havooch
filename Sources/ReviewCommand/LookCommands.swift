@@ -1,7 +1,8 @@
 import Foundation
 import ReviewWire
 
-/// `havooch state | screenshot`: looking at the app. `state` prints
+/// `havooch state | screenshot | help`: looking at the app, and at the
+/// command's own help. `state` prints
 /// everything the window shows. `screenshot <abs.png> [--appearance
 /// light|dark] [--hide-agent-indicator] [--window
 /// main|settings|about|first-run|<id>]` saves a window as a PNG: the key
@@ -11,20 +12,40 @@ import ReviewWire
 /// the Settings window instead, and `--window about` the About panel,
 /// `--window first-run` the first-run window.
 enum LookCommands {
-    static let commands: [Command] = [
-        Command(name: "state", synopsis: "state", summary: "everything the app shows: the window's video and player, and every window") {
-            arguments, _ throws(UsageError) in
-            try arguments.none()
-            return .send(.state)
-        }.onAWindow(),
-        screenshot,
-    ]
+    static let group = CommandGroup(
+        name: nil, summary: "look at the app and learn the command", section: .look, commands: [state, screenshot, help]
+    )
+
+    private static let state = Command(
+        name: "state", summary: "print everything the app shows",
+        description: "It prints the window's video and player, and every window. With --json, the whole state as one object.",
+        examples: ["", "--json", "--window w2"], role: .free
+    ) { arguments, _ throws(UsageError) in
+        try arguments.none()
+        return .send(.state)
+    }.onAWindow()
+
+    /// `help` is answered from the table itself; the top help says how to
+    /// ask for it, so it isn't listed there.
+    private static let help = Command(
+        name: "help", arguments: "[<group> [<verb>]]",
+        summary: "print the help of the command, a group or one command",
+        description: "With --json, every group and command, with its usage, role and options, for an agent.",
+        examples: ["", "player", "player seek", "--json"], role: .free, listing: .unlisted
+    ) { arguments, _ throws(UsageError) in
+        guard arguments.words.count <= 2 else { throw UsageError("unexpected `\(arguments.words[2])`") }
+        return .help(arguments.words)
+    }
 
     /// `screenshot` names its own window: a player window by its id, or
     /// one of the app's other windows by its name.
     private static let screenshot = Command(
-        name: "screenshot", synopsis: "screenshot <abs.png> [--appearance light|dark] [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]",
-        summary: "save a window (the key one, or --window <id>), Settings, the About panel or the first-run window as a PNG, with the agent-control indicator unless hidden",
+        name: "screenshot", arguments: "<abs.png> [--appearance light|dark] [--hide-agent-indicator] [--window main|settings|about|first-run|<id>]",
+        summary: "save a window as a PNG",
+        description: "It saves the key window, the player window --window names, Settings, the About panel or the first-run "
+            + "window. The agent-control indicator shows as the person sees it, unless --hide-agent-indicator leaves it out.",
+        examples: ["/tmp/shot.png", "/tmp/dark.png --appearance dark --window w2", "/tmp/settings.png --window settings"],
+        role: .operator,
         valuedOptions: ["--appearance", "--window"], flags: ["--hide-agent-indicator"]
     ) { arguments, _ throws(UsageError) in
         let path = try arguments.one("<abs.png>")

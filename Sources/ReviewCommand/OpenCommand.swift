@@ -10,8 +10,11 @@ import ReviewWire
 /// command is listed with the listener's loop.
 enum OpenCommand {
     static let command = Command(
-        name: "open", synopsis: "open <path> [--project <slug>]",
-        summary: "open a video, playing, in front, in its project when one lists it; starts the app when needed, takes no lease",
+        name: "open", arguments: "<path> [--project <slug>]",
+        summary: "open a video for the person, playing",
+        description: "The app comes to the front with the video, in the project --project names, else in the most recently "
+            + "used project that lists it. It starts the app when it isn't running, and takes no lease.",
+        examples: ["~/Movies/launch.mp4", "renders/v3.mp4 --project launch-video"], role: .person,
         valuedOptions: ["--project"]
     ) { arguments, environment throws(UsageError) in
         // Made absolute here: the app runs in another folder.

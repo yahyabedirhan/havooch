@@ -62,10 +62,10 @@ struct CommandTests {
         (["wait", "--project", "launch-video", "--timeout", "5"], .wait(timeoutSeconds: 5, project: "launch-video")),
         (["ack", "s-f92cbb2a-1"], .ack(sendID: "s-f92cbb2a-1", text: nil)),
         (["ack", "s-f92cbb2a-1", "On it"], .ack(sendID: "s-f92cbb2a-1", text: "On it")),
-        (["mark", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
-        (["mark", "m-f92cbb2a-1", "done"], .status(messageID: "m-f92cbb2a-1", state: .done)),
-        (["mark", "m-f92cbb2a-1", "failed"], .status(messageID: "m-f92cbb2a-1", state: .failed)),
-        (["mark", "m-f92cbb2a-1", "working", "Rendering 0:14 to 0:21"],
+        (["message", "state", "m-f92cbb2a-1", "working"], .status(messageID: "m-f92cbb2a-1", state: .working)),
+        (["message", "state", "m-f92cbb2a-1", "done"], .status(messageID: "m-f92cbb2a-1", state: .done)),
+        (["message", "state", "m-f92cbb2a-1", "failed"], .status(messageID: "m-f92cbb2a-1", state: .failed)),
+        (["message", "state", "m-f92cbb2a-1", "working", "Rendering 0:14 to 0:21"],
          .status(messageID: "m-f92cbb2a-1", state: .working, text: "Rendering 0:14 to 0:21")),
         (["reply", "t-f92cbb2a-1", "Slowed it down"], .reply(thread: "t-f92cbb2a-1", text: "Slowed it down")),
         (["reply", "0", "All done"], .reply(thread: "0", text: "All done")),
@@ -237,37 +237,38 @@ struct CommandTests {
     }
 
     @Test("arguments that don't read exit 2 and send nothing", arguments: [
-        [], ["rewind"], ["player"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
+        ["rewind"], ["player", "rewind"], ["player", "seek"], ["player", "seek", "soon"],
         ["player", "seek", "-5"], ["player", "seek", "1", "2"], ["player", "seek", String(repeating: "9", count: 400)],
         ["message", "add", "Too fast", "--at", String(repeating: "9", count: 400) + ":00"], ["message", "add", "--", "Too fast", "--at", "5"], ["player", "load"], ["player", "play", "now"],
         ["screenshot"], ["screenshot", "shot.png"], ["screenshot", "/tmp/shot.jpg"],
         ["screenshot", "/tmp/shot.png", "--appearance", "sepia"], ["screenshot", "/tmp/shot.png", "--appearance"],
         ["screenshot", "/tmp/shot.png", "--window", ""], ["screenshot", "/tmp/shot.png", "--window"],
-        ["window"], ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
+        ["window", "list", "now"], ["window", "new", "w2"], ["window", "close", "w1", "w2"],
         ["window", "close", "w1", "--window", "w2"], ["window", "list", "--window", "w1"], ["player", "play", "--window"],
-        ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
+        ["wait", "--window", "w1"], ["wait", "--video", "/a.mp4", "--project", "a"], ["project", "new", "a"], ["project", "new", "Launch Video", "--from", "/a.mp4"], ["project", "add", "a"], ["project", "add", "a", "/a.mp4", "/b.mp4"], ["project", "list", "a"], ["open", "/a.mp4", "--project"], ["control", "take", "--window", "w1"], ["theme", "list", "--window", "w1"],
         ["state", "--verbose"], ["app", "open", "--demo"], ["app", "status", "now"], ["app", "home", "now"], ["app", "demo", "sample.mp4"],
-        ["control"], ["control", "steal"], ["control", "take", "--timeout"], ["control", "take", "--timeout", "soon"],
+        ["control", "steal"], ["control", "take", "--timeout"], ["control", "take", "--timeout", "soon"],
         ["control", "take", "--timeout", "-1"], ["control", "take", "--timeout", "3601"], ["control", "take", "--wait", "5"], ["control", "take", "now"],
         ["control", "release", "--wait", "5"], ["player", "play", "--hide-agent-indicator"],
-        ["message"], ["message", "add"], ["message", "add", "Too", "fast"], ["message", "add", "Too fast", "--at", "soon"],
+        ["message", "add"], ["message", "add", "Too", "fast"], ["message", "add", "Too fast", "--at", "soon"],
         ["message", "add", "Too fast", "--at"], ["message", "add", "This box", "--region"],
         ["message", "add", "This box", "--region", "0.25,0.2,0.3"], ["message", "add", "This box", "--region", "left,top,0.3,0.25"],
         ["message", "edit"], ["message", "edit", "m-f92cbb2a-1"],
         ["message", "edit", "m-f92cbb2a-1", "Slower", "here"], ["message", "delete"], ["message", "delete", "m-1", "m-2"],
-        ["context"], ["context", "set"], ["context", "set", "two", "words"], ["context", "get"],
+        ["context", "set"], ["context", "set", "two", "words"], ["context", "get"],
         ["batch", "send"], ["message", "send", "now"], ["message", "send", "--timeout", "5"], ["message", "add", "x", "--thread"], ["popover", "open", "two", "words"], ["popover", "open", "--region", "1,2"],
         ["wait", "now"], ["wait", "--timeout"], ["wait", "--timeout", "soon"], ["wait", "--timeout", "-1"],
         ["wait", "--timeout", "86401"], ["wait", "--wait", "5"],
         ["ack"], ["ack", "s-f92cbb2a-1", "On", "it"], ["ack", "s-f92cbb2a-1", "--wait", "5"],
-        ["mark"], ["mark", "m-f92cbb2a-1"], ["mark", "m-f92cbb2a-1", "acknowledged"], ["mark", "m-f92cbb2a-1", "sent"],
-        ["mark", "m-f92cbb2a-1", "done", "now"], ["mark", "m-f92cbb2a-1", "failed", "now"],
-        ["mark", "m-f92cbb2a-1", "working", "Rendering", "now"],
+        ["message", "state"], ["message", "state", "m-f92cbb2a-1"], ["message", "state", "m-f92cbb2a-1", "acknowledged"],
+        ["message", "state", "m-f92cbb2a-1", "sent"], ["message", "state", "m-f92cbb2a-1", "done", "now"],
+        ["message", "state", "m-f92cbb2a-1", "failed", "now"], ["message", "state", "m-f92cbb2a-1", "working", "Rendering", "now"],
+        ["message", "state", "m-f92cbb2a-1", "done", "--window", "w2"], ["mark", "m-f92cbb2a-1", "done"],
         ["reply"], ["reply", "t-f92cbb2a-1"], ["reply", "t-f92cbb2a-1", "Slowed", "it"],
         ["ask"], ["ask", "t-f92cbb2a-1"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout"],
         ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "soon"], ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "-1"],
         ["ask", "t-f92cbb2a-1", "Which part?", "--timeout", "86401"], ["ask", "t-f92cbb2a-1", "Which part?", "--wait", "5"],
-        ["thread"], ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
+        ["thread", "answer"], ["thread", "answer", "t-f92cbb2a-1"], ["thread", "answer", "t-f92cbb2a-1", "The", "intro"],
         ["ask", "1", "Which part?", "--choice"],
         ["thread", "choose"], ["thread", "choose", "1"], ["thread", "choose", "1", "0"], ["thread", "choose", "1", "first"],
         ["thread", "choose", "1", "2", "3"],
@@ -283,7 +284,7 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result.exitCode == 2)
         #expect(result.output.isEmpty)
-        #expect(result.error.contains("usage: havooch"))
+        #expect(result.error.lowercased().contains("usage: havooch"))
         #expect(run.transport.sent.isEmpty)
         #expect(run.launcher.launches.isEmpty)
     }
@@ -403,20 +404,101 @@ struct CommandTests {
         let refused = Run { _, _ in .success(.refused(line)) }
         defer { refused.cleanUp() }
         #expect(refused("ask", "t-f92cbb2a-1", "And how?") == CommandResult(error: line + "\n", exitCode: 1))
-        #expect(refused("mark", "m-f92cbb2a-1", "working") == CommandResult(error: line + "\n", exitCode: 1))
+        #expect(refused("message", "state", "m-f92cbb2a-1", "working") == CommandResult(error: line + "\n", exitCode: 1))
     }
 
-    @Test("--help prints the usage on standard output, and so do -h and --help with --json or before a command's name", arguments: [
-        ["--help"], ["-h"], ["--json", "--help"], ["--help", "message", "add"],
+    @Test("the top help prints for no words, help, -h and --help, also with --json before a command's name, exit 0", arguments: [
+        [], ["help"], ["--help"], ["-h"], ["--json", "--help"],
     ])
-    func help(arguments: [String]) {
+    func topHelp(arguments: [String]) {
         let run = Run()
         defer { run.cleanUp() }
-        #expect(HavoochCLI.run(arguments, environment: run.environment) == CommandResult(output: CommandTable.usageText))
-        #expect(CommandTable.usageText.contains("havooch player seek <seconds|mm:ss>"))
-        #expect(CommandTable.usageText.contains("havooch app home "))
-        #expect(CommandTable.usageText.contains("havooch app demo "))
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result == CommandResult(output: help()))
+        #expect(result.output.hasPrefix("\(AppIdentity.appName): a video player for giving feedback to agents."))
         #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a group's help prints for the group alone, with --help and through help, exit 0", arguments: [
+        ["player"], ["player", "--help"], ["player", "-h"], ["help", "player"], ["--help", "player"],
+    ])
+    func groupHelp(arguments: [String]) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 0)
+        #expect(result.output.hasPrefix("Load, play, seek and set the sound. Needs the lease: havooch control take."))
+        #expect(result.output.contains("  havooch player seek <seconds|m:ss>\n      move to an exact time\n"))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a command's help prints with -h or --help right after its name, and through help, exit 0", arguments: [
+        ["player", "seek", "--help"], ["player", "seek", "-h"], ["help", "player", "seek"], ["--help", "player", "seek"],
+        ["player", "seek", "--json", "--help"],
+    ])
+    func commandHelp(arguments: [String]) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 0)
+        #expect(result.output.hasPrefix("""
+            Move to an exact time.
+
+            Usage: havooch player seek <seconds|m:ss> [--window <id>] [--json]
+
+            Examples:
+              havooch player seek 12.5
+
+            """))
+        #expect(result.output.contains("Needs the lease."))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("a command's help says it needs the lease only when it does, and a mixed group marks the commands that do")
+    func leasePerCommand() {
+        #expect(!help("message", "state").contains("Needs the lease."))
+        #expect(help("message", "add").contains("Needs the lease."))
+        let group = help("message")
+        #expect(group.contains("      queue a message on a frame's thread (needs the lease)\n"))
+        #expect(group.contains("      say a message is working, done or failed\n"))
+        #expect(!group.contains("Needs the lease: havooch control take."))
+        #expect(!help("control").contains("lease first") && !help("control").contains("(needs the lease)"))
+    }
+
+    @Test("wrong usage prints the command's usage line and where its details are")
+    func wrongUsage() {
+        let run = Run()
+        defer { run.cleanUp() }
+        #expect(run("player", "seek") == CommandResult(
+            error: "havooch player seek: missing <seconds|m:ss>\n"
+                + "usage: havooch player seek <seconds|m:ss> [--window <id>] [--json]\n"
+                + "run havooch player seek --help for details\n",
+            exitCode: 2
+        ))
+    }
+
+    @Test("an unknown command names the closest command when one is near, and the usage lines", arguments: [
+        (["plyer", "play"], "havooch: unknown command `plyer play`; did you mean havooch player play?"),
+        (["player", "paus"], "havooch: unknown command `player paus`; did you mean havooch player pause?"),
+        (["stat"], "havooch: unknown command `stat`; did you mean havooch state?"),
+        (["mark", "m-f92cbb2a-1", "done"], "havooch: unknown command `mark`"),
+        (["rewind", "now"], "havooch: unknown command `rewind`"),
+    ])
+    func unknown(arguments: [String], line: String) {
+        let run = Run()
+        defer { run.cleanUp() }
+        let result = HavoochCLI.run(arguments, environment: run.environment)
+        #expect(result.exitCode == 2)
+        #expect(result.error.hasPrefix(line + "\nUsage: havooch <command> [options]\n"))
+        #expect(run.transport.sent.isEmpty)
+    }
+
+    @Test("help for a word that names nothing is wrong usage")
+    func helpForNothing() {
+        let run = Run()
+        defer { run.cleanUp() }
+        #expect(run("help", "plyer").exitCode == 2)
+        #expect(run("help", "plyer").error.contains("did you mean havooch help player"))
     }
 
     @Test("--version prints 0.5.1 without asking the app, as JSON with --json")
@@ -429,11 +511,12 @@ struct CommandTests {
         #expect(run.transport.sent.isEmpty)
     }
 
-    @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's name", arguments: [
+    @Test("a text that looks like an option is a word: with a space in it, after --, or -h after the command's first word", arguments: [
         (["reply", "t-f92cbb2a-1", "--region now takes pixels"], ControlRequest.reply(thread: "t-f92cbb2a-1", text: "--region now takes pixels")),
         (["message", "add", "--at is wrong here", "--at", "5"], .commentAdd(text: "--at is wrong here", at: 5)),
         (["message", "add", "--json is the default now"], .commentAdd(text: "--json is the default now", at: nil)),
-        (["message", "add", "-h"], .commentAdd(text: "-h", at: nil)),
+        (["message", "add", "--", "--help"], .commentAdd(text: "--help", at: nil)),
+        (["message", "add", "--", "-h"], .commentAdd(text: "-h", at: nil)),
         (["reply", "t-f92cbb2a-1", "-h"], .reply(thread: "t-f92cbb2a-1", text: "-h")),
         (["reply", "t-f92cbb2a-1", "--", "--region"], .reply(thread: "t-f92cbb2a-1", text: "--region")),
         (["reply", "--", "t-f92cbb2a-1", "--help"], .reply(thread: "t-f92cbb2a-1", text: "--help")),
