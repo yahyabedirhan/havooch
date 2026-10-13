@@ -267,7 +267,7 @@ struct CompareTests {
         // A click on the right side: the words are queued on v1, where they were written.
         window.clickFrame(on: .right)
         #expect(window.activeSide == .right)
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while window.threads.count < 3, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
         }

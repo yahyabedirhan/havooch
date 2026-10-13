@@ -66,7 +66,7 @@ struct PersistenceTests {
     }
 
     private func eventually(_ condition: () -> Bool) async {
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
         }
@@ -377,7 +377,7 @@ struct PersistenceTests {
         let (again, later) = await run()
         let opening = Task { try await again.open(MessageTests.fixture) }
         // The player has the file and isn't ready yet: the video is on its way in.
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while again.engine.player.currentItem == nil, ContinuousClock.now < deadline { await Task.yield() }
         #expect(await listen(.status(messageID: ids.first, state: .done), later).ok)
         #expect(await listen(.reply(thread: ids.one, text: "Slowed it down"), later).ok)

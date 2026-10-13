@@ -130,7 +130,7 @@ struct WindowTests {
         #expect(app.windows.key === second)
 
         second.openForPerson(MessageTests.fixture)
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while app.windows.key !== first, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }

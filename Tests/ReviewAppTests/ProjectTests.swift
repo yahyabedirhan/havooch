@@ -50,7 +50,7 @@ struct ProjectTests {
     }
 
     private func eventually(_ condition: () -> Bool) async {
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
         }

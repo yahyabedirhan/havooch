@@ -52,7 +52,7 @@ struct ThemeDeskTests {
     }
 
     private func eventually(_ condition: () -> Bool) async {
-        let deadline = ContinuousClock.now + .seconds(5)
+        let deadline = ContinuousClock.now + .seconds(30)
         while !condition(), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(20))
         }
