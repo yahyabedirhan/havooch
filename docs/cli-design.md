@@ -8,14 +8,14 @@ Read this document before you add, rename or remove a command or a flag, and cha
 
 ```text
 havooch
-├─ open  wait  ack  mark  reply  ask        get feedback: the listener's loop
+├─ open  wait  ack  reply  ask              get feedback: the listener's loop
 ├─ state  screenshot  help                   look and learn
 ├─ project    new add list
 ├─ app        status open quit home demo
 ├─ window     list new close resize
 ├─ control    take release
 ├─ player     load play pause seek mute unmute volume sound
-├─ message    add edit delete send
+├─ message    add edit delete send state
 ├─ context    set
 ├─ thread     answer choose
 ├─ popover    open
@@ -31,7 +31,7 @@ havooch
 └─ first-run  open next back pick demo skip
 ```
 
-Every command is `havooch <group> <verb>`, except the listener's loop and three utilities at the top. `havooch --help` shows the top help, `havooch <group>` a group's commands, and `havooch <group> <verb> --help` one command with examples. `havooch help --json` prints the whole table for an agent.
+Every command is `havooch <group> <verb>`, except the listener's loop and three utilities at the top. The listener sets a message's state with `havooch message state`. `havooch --help` shows the top help, `havooch <group>` a group's commands, and `havooch <group> <verb> --help` one command with examples. `havooch help --json` prints the whole table for an agent.
 
 ## 1. Requirements
 
@@ -44,7 +44,7 @@ Every command is `havooch <group> <verb>`, except the listener's loop and three 
 
 ### Jobs
 
-1. A listener should be able to wait for a send, acknowledge it, mark each message's state, reply and ask on a thread.
+1. A listener should be able to wait for a send, acknowledge it, set each message's state, reply and ask on a thread.
 2. An agent should be able to open a video for the person, make a project and add a version to it.
 3. An operator should be able to do every UI action through a command that runs the same code as the click.
 4. Anyone should be able to read the app's state and take a screenshot.
@@ -58,7 +58,7 @@ Each request has one role, in `ControlRequest.Role`. The help groups the command
 |---|---|---|
 | free | changes nothing anyone sees; no lease | `state`, `app status`, `window list`, `theme list`, `setup status`, `control take`, `control release` |
 | person | acts for the person, as their own click; no lease | `open`, `project new`, `project add` |
-| listener | the agent that receives sends; no lease | `wait`, `ack`, `mark`, `reply`, `ask` |
+| listener | the agent that receives sends; no lease | `wait`, `ack`, `message state`, `reply`, `ask` |
 | operator | drives the UI; needs the lease | every other command that reaches the app |
 
 ### Runtime
@@ -86,6 +86,7 @@ One meaning each, on every group that has the action.
 | `new` | make a new thing | `project`, `window` |
 | `add` | put a thing into a parent | `project` (a version), `message` (on a thread) |
 | `edit` / `delete` | change or remove an existing thing | `message` |
+| `state` | set a message's state, as the glossary names it | `message` |
 | `set` | change one value | `context`, `composer`, `theme`, `compare` |
 | `open` / `close` | bring up or dismiss the app, a video, a window, a panel or a popover | `open`, `app`, `window`, `popover`, `compare`, `tour`, `first-run` |
 | `show` / `hide` | put a view on screen or take it off | `sidebar`, `version` |
@@ -100,7 +101,9 @@ A panel inside a group opens with the group's verb and closes with `--close`: `p
 
 ### Top level
 
-Only the listener's loop (`open wait ack mark reply ask`), `state`, `screenshot` and `help`. An agent runs the loop in every session, so it stays short. Everything else lives in a group.
+Only the listener's loop (`open wait ack reply ask`), `state`, `screenshot` and `help`. An agent runs the loop in every session, so it stays short. Everything else lives in a group.
+
+`message state` is the one exception to the verb rule: its second word is the glossary's noun for a message's state, not a verb. It sits with the other commands on one message by its id (`message edit`, `message delete`), and it is the listener's only command in a group. The top-level `state` prints the app's state; `message state` sets one message's state.
 
 ### Targets
 
@@ -119,7 +122,6 @@ Every wait takes `--timeout <seconds>`: `wait`, `ask` and `control take`. With n
 open <path> [--project <slug>]
 wait [--video <path> | --project <slug>] [--timeout <seconds>]
 ack <send-id> [<text>]
-mark <message-id> working|done|failed [<text>]
 reply <thread> <text>
 ask <thread> <question> [--choice <text>]... [--timeout <seconds>]
 state
@@ -157,6 +159,7 @@ message add <text> [--at <time>] [--region x,y,w,h] [--thread <thread>]
 message edit <message-id> <text>
 message delete <message-id>
 message send
+message state <message-id> working|done|failed [<text>]
 
 context set <text>
 
@@ -247,7 +250,8 @@ Get feedback:
   open <path>               open a video for the person, playing
   wait                      wait for the person's next send and print it
   ack <send-id> [<text>]    say you have a send
-  mark <message-id> <state> say a message is working, done or failed
+  message state <message-id> <state>
+                            say a message is working, done or failed
   reply <thread> <text>     send a message on a thread
   ask <thread> <question>   ask a question and print the answer
   project                   make projects and add versions to them
@@ -261,7 +265,7 @@ Drive the app (take the lease first: havooch control take):
   window     list, open, close and resize windows
   control    take and release the lease
   player     load, play, seek and set the sound
-  message    queue, edit, delete and send messages
+  message    queue, edit, delete and send messages, and set their state
   context    set the open video's context note
   thread     answer the agent on a thread
   popover    open the comment popover
@@ -294,7 +298,7 @@ Agents: havooch help --json prints every command. havooch setup install installs
 
 ### A group's help
 
-`havooch <group> --help`, `havooch help <group>` and `havooch <group>` alone print it, and exit 0. Each command gets its full usage line and its summary under it. An operator group says it needs the lease, and the `--window` line appears only when the group's commands take it.
+`havooch <group> --help`, `havooch help <group>` and `havooch <group>` alone print it, and exit 0. Each command gets its full usage line and its summary under it. Each operator command is marked as needing the lease, from its role, so a group that mixes roles, such as `message`, shows which commands need it. The `--window` line appears only when the group's commands take it.
 
 ```text
 Load, play, seek and set the sound. Needs the lease: havooch control take.
@@ -346,7 +350,7 @@ Sources/ReviewCommand/
                           PopoverCommands, ComposerCommands, SidebarCommands, VersionCommands,
                           CompareCommands, ThemeCommands, ConfigCommands, SetupCommands,
                           ConnectCommands, TourCommands, FirstRunCommands, ProjectCommands
-  ListenerCommands.swift  open wait ack mark reply ask
+  ListenerCommands.swift  open wait ack reply ask
   LookCommands.swift      state screenshot
 ```
 
@@ -374,7 +378,7 @@ Breaking changes ship with a minor version before 1.0, with the guide, the site 
 
 | 0.5.1 | Now | Why |
 |---|---|---|
-| `status <message-id> …` | `mark <message-id> …` | `status` reads as `app status`; the glossary avoids "status" for a message's state |
+| `status <message-id> …` | `message state <message-id> …` | `status` reads as `app status`; the command sets a message's State, the glossary's word |
 | `player open <path>` | `player load <path>` | `open` opens a video playing for the person |
 | `comment add`, `comment edit`, `comment delete` | `message add`, `message edit`, `message delete` | the glossary's word is "message" |
 | `send` | `message send` | it sends the queued messages |
