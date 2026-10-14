@@ -11,6 +11,11 @@ struct SendPayloadTests {
         { thread in [SendPayload.Line(start: thread.time ?? 0, end: (thread.time ?? 0) + 1, text: "\(word) \(thread.number)")] }
     }
 
+    private static let titleCutOff = message(1)
+    private static let boxTooDark = message(2)
+    private static let tooFastHere = message(3)
+    private static let overallFine = message(4)
+
     private func firstSend() throws -> (Review, Send) {
         var review = newReview()
         try review.write(text: "The title is cut off", at: 10, now: now)
@@ -92,17 +97,18 @@ struct SendPayloadTests {
         try review.ask(on: thread(1), question: "Which box?", now: now)
         try review.answer(thread(1), text: "The left one", now: now)
         try review.reply(on: thread(1), text: "Fixed in 4e1c2aa", now: now)
-        for id in [1, 2, 3, 4] { try review.setState(message(id), .done) }
+        for id in [Self.titleCutOff, Self.boxTooDark, Self.tooFastHere, Self.overallFine] { try review.setState(id, .done) }
         try review.write(text: "Now make it lighter still", at: nil, to: thread(1), now: now)
         let followUp = try review.send(at: now, transcript: Self.lines("now"))
         try review.write(text: "Not sent yet", at: nil, to: thread(1), now: now)
 
+        let whichBox = message(6), theLeftOne = message(7), fixed = message(8), lighterStill = message(9)
         let payload = SendPayload.assemble(review: review, send: followUp, context: nil, images: Self.images)
 
         #expect(payload.threads.map(\.id) == [thread(1)])
         let entry = payload.threads[0]
-        #expect(entry.messages.map(\.id) == [message(9)])
-        #expect(entry.history.map(\.id) == [message(1), message(2), message(6), message(7), message(8)])
+        #expect(entry.messages.map(\.id) == [lighterStill])
+        #expect(entry.history.map(\.id) == [Self.titleCutOff, Self.boxTooDark, whichBox, theLeftOne, fixed])
         #expect(entry.history.map(\.author) == [.person, .person, .agent, .person, .agent])
         #expect(entry.history.map(\.kind) == [.message, .message, .question, .answer, .message])
         #expect(entry.history[1].region == Self.box && entry.history[1].cropPath == "/c/m-f92cbb2a-2.png")
@@ -115,16 +121,17 @@ struct SendPayloadTests {
     func redelivery() throws {
         let (first, sent) = try firstSend()
         var review = first
-        try review.setState(message(1), .done)
-        try review.setState(message(3), .failed)
-        try review.setState(message(4), .done)
+        try review.setState(Self.titleCutOff, .done)
+        try review.setState(Self.tooFastHere, .failed)
+        try review.setState(Self.overallFine, .done)
         try review.reply(on: thread(1), text: "Fixed the title", now: now)
+        let fixedTheTitle = message(5)
 
         let payload = SendPayload.assemble(review: review, send: sent, context: nil, images: Self.images)
 
         #expect(payload.threads.map(\.id) == [thread(1)])
-        #expect(payload.threads[0].messages.map(\.id) == [message(2)])
-        #expect(payload.threads[0].history.map(\.id) == [message(1), message(5)])
+        #expect(payload.threads[0].messages.map(\.id) == [Self.boxTooDark])
+        #expect(payload.threads[0].history.map(\.id) == [Self.titleCutOff, fixedTheTitle])
         #expect(payload.threads[0].transcript == [SendPayload.Line(start: 10, end: 11, text: "then 1")])
     }
 

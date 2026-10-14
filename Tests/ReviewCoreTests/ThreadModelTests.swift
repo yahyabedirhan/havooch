@@ -204,8 +204,10 @@ struct SessionNameTests {
         try review.reply(on: thread(1), text: "Slowed it", session: "Codex CLI", now: now)
         try review.reply(on: thread(1), text: "With no session", now: now)
 
+        let tooFast = message(1), onIt = message(2), whichPart = message(3)
+        let theStart = message(4), slowedIt = message(5), withNoSession = message(6)
         let messages = review.threads.flatMap(\.messages)
-        #expect(messages.map(\.id) == [2, 1, 3, 4, 5, 6].map(message))
+        #expect(messages.map(\.id) == [onIt, tooFast, whichPart, theStart, slowedIt, withNoSession])
         #expect(messages.map(\.sessionName) == ["Claude Code", nil, "Codex CLI", nil, "Codex CLI", nil])
 
         let read = try JSONDecoder().decode(Review.self, from: try JSONEncoder().encode(review))
