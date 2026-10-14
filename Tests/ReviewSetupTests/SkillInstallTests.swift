@@ -29,7 +29,6 @@ struct SkillInstallTests {
             .init(executable: "/bin/zsh", arguments: ["-l", "-c", "command -v npx"]),
             .init(executable: "/bin/zsh", arguments: ["-l", "-c", "exec env CI=true NO_COLOR=1 npx skills add yahyabedirhan/havooch-mate --skill havooch-mate -g -y -a codex"]),
         ])
-        // The search for npx isn't the install's log.
         #expect(lines.withLock { $0 } == ["Installing havooch-mate", "Done"])
     }
 

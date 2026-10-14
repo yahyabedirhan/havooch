@@ -5,11 +5,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// Going home from the player: `WindowModel.goHome`, which the Havooch mark
-/// in the header, File > Close Video and `app home` call, and `app demo`,
-/// which runs "Try the Demo". One model on a temporary support folder, with
-/// the server in front of it. No window: the header and the menu are
-/// checked through app control.
 @Suite("Going home from the player", .serialized)
 struct GoHomeTests {
     nonisolated static let agent = Holder(key: "agent-1", name: "Claude Code", place: "/work")
@@ -23,9 +18,6 @@ struct GoHomeTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// The app on the person's folder, with the fixture as its bundled demo
-    /// video unless `demoVideo` says otherwise, and the server in front of
-    /// it.
     private func run(
         environment: [String: String]? = nil, demoVideo: URL? = MessageTests.fixture
     ) -> (model: WindowModel, server: ControlServer) {
@@ -40,12 +32,10 @@ struct GoHomeTests {
         return (model, server)
     }
 
-    /// Counts observation's change calls, which come on a `Sendable` closure.
     nonisolated final class Changes: @unchecked Sendable {
         var count = 0
     }
 
-    /// The person's own video: a copy of the fixture, so it isn't the demo's file.
     private func ownVideo() throws -> URL {
         let folder = root.appendingPathComponent("Movies", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -61,8 +51,6 @@ struct GoHomeTests {
     private func object(_ output: String) throws -> [String: Any] {
         try #require(JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
     }
-
-    // MARK: - goHome
 
     @Test("going home saves the position, closes the video and shows home with the video on it")
     func goHome() async throws {
@@ -180,8 +168,6 @@ struct GoHomeTests {
         #expect(Set(queued) == ["Queued", "In the popover"])
         #expect(model.composerText.isEmpty)
     }
-
-    // MARK: - app home, app demo and screen
 
     @Test("app home goes home and says so; state then reports the home screen")
     func appHome() async throws {

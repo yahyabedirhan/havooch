@@ -2,11 +2,8 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// How a theme resolves to every token: its own values, the themes it
-/// extends, the default theme of its kind, then the overrides.
 @Suite("Theme resolution")
 struct ThemeTests {
-    /// A default theme with every token set to `colour`.
     private static func complete(_ name: String, _ kind: ThemeKind, _ colour: String) -> ThemeFile {
         ThemeFile(name: name, kind: kind, tokens: Dictionary(uniqueKeysWithValues: ThemeToken.allCases.map { ($0.rawValue, colour) }))
     }
@@ -51,7 +48,6 @@ struct ThemeTests {
         let catalog = ThemeCatalog(builtIn: [Self.light, Self.dark], user: [paper, lone])
 
         #expect(try catalog.resolve("Lone")[.window] == Self.colour("#ffffff"))
-        // Every token of the dark default is set, so nothing is left for the light one.
         #expect(try catalog.resolve("Paper")[.window] == Self.colour("#000000"))
     }
 
@@ -95,7 +91,6 @@ struct ThemeTests {
         #expect(catalog.names == ["Default Dark", "Default Light"])
         let theme = try catalog.resolve("Default Dark")
         #expect(theme[.accent] == Self.colour("#654321"))
-        // Its missing tokens still come from the built-in default it replaced.
         #expect(theme[.letterbox] == Self.colour("#000000"))
     }
 
@@ -125,10 +120,6 @@ struct ThemeTests {
         #expect(throws: ThemeFile.Unreadable.self) { try ThemeFile.decode(Data(#"{"name": "X", "kind": "sepia"}"#.utf8)) }
     }
 
-    // MARK: - System surfaces
-
-    /// A light default with its surfaces set to `system` and every other
-    /// token painted white.
     private static let nativeLight = ThemeFile(
         name: ThemeCatalog.defaultLight, kind: .light,
         tokens: Dictionary(uniqueKeysWithValues: ThemeToken.allCases.map {
@@ -155,11 +146,9 @@ struct ThemeTests {
         let paper = ThemeFile(name: "Paper", kind: .light, tokens: ["window": "#fafafa", "popover": "#eeeeee"])
         let catalog = ThemeCatalog(builtIn: [Self.nativeLight, Self.dark], user: [paper])
         let theme = try catalog.resolve("Paper")
-        // Painted.
         #expect(theme[.window] == Self.colour("#fafafa"))
         #expect(!theme.isSystem(.window))
         #expect(!theme.isSystem(.popover))
-        // Missing: the default's system value.
         #expect(theme.isSystem(.notice))
         #expect(theme[.notice] == nil)
         #expect(theme.isComplete)
@@ -193,8 +182,6 @@ struct ThemeTests {
         #expect(native[.field] == nil)
         #expect(native.isComplete)
     }
-
-    // MARK: - The fill of filled controls
 
     @Test("the contrast of two colours is the WCAG ratio: white on black is 21:1, white on #48689d about 5.6:1")
     func contrast() {

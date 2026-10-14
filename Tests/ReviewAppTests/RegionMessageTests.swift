@@ -7,8 +7,6 @@ import ReviewCore
 import ReviewWire
 import Testing
 
-/// The way between the stage's points and a region's frame coordinates:
-/// pure geometry, no window.
 @Suite("A region on the stage")
 struct VideoFrameGeometryTests {
     static let video = CGSize(width: 1920, height: 1080)
@@ -21,7 +19,6 @@ struct VideoFrameGeometryTests {
             == CGRect(x: 0, y: 100, width: 960, height: 540))
         #expect(VideoFrameGeometry(stage: CGSize(width: 1160, height: 540), video: Self.video).frame
             == CGRect(x: 100, y: 0, width: 960, height: 540))
-        // Before the video's size is known the picture is the stage.
         #expect(VideoFrameGeometry(stage: CGSize(width: 800, height: 600), video: .zero).frame
             == CGRect(x: 0, y: 0, width: 800, height: 600))
     }
@@ -34,12 +31,10 @@ struct VideoFrameGeometryTests {
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
         let geometry = VideoFrameGeometry(stage: stage, video: Self.video)
         let rect = geometry.rect(of: region)
-        // The rectangle's place as fractions of the picture, not of the stage.
         #expect(abs((rect.minX - geometry.frame.minX) / geometry.frame.width - 0.25) < 1e-9)
         #expect(abs((rect.minY - geometry.frame.minY) / geometry.frame.height - 0.2) < 1e-9)
         #expect(abs(rect.width / geometry.frame.width - 0.3) < 1e-9)
         #expect(abs(rect.height / geometry.frame.height - 0.25) < 1e-9)
-        // Drawn over that rectangle at this size, it's the same region again.
         #expect(geometry.region(from: rect.origin, to: CGPoint(x: rect.maxX, y: rect.maxY)) == region)
     }
 
@@ -56,12 +51,10 @@ struct VideoFrameGeometryTests {
     @Test("a drag that leaves the picture is kept inside it")
     func clamped() throws {
         let geometry = VideoFrameGeometry(stage: CGSize(width: 960, height: 740), video: Self.video)
-        // From the letterbox above the picture to past the stage's corner.
         #expect(geometry.region(from: CGPoint(x: 480, y: 20), to: CGPoint(x: 2000, y: 2000))
             == (try Region(x: 0.5, y: 0, w: 0.5, h: 1)))
         #expect(geometry.region(from: CGPoint(x: -50, y: -50), to: CGPoint(x: 96, y: 154))
             == (try Region(x: 0, y: 0, w: 0.1, h: 0.1)))
-        // Wholly in the letterbox: nothing of the picture.
         #expect(geometry.region(from: CGPoint(x: 100, y: 10), to: CGPoint(x: 400, y: 90)) == nil)
     }
 
@@ -88,22 +81,16 @@ struct VideoFrameGeometryTests {
     func composerPlacement() {
         let stage = CGSize(width: 1000, height: 560)
         let box = CGSize(width: 340, height: 150)
-        // Room on the right: beside the rectangle, level with its top.
         #expect(CommentPopover.placement(beside: CGRect(x: 100, y: 80, width: 300, height: 200), box: box, stage: stage)
             == CGPoint(x: 412, y: 80))
-        // None on the right: on the left.
         #expect(CommentPopover.placement(beside: CGRect(x: 600, y: 80, width: 300, height: 200), box: box, stage: stage)
             == CGPoint(x: 248, y: 80))
-        // A wide rectangle: below it.
         #expect(CommentPopover.placement(beside: CGRect(x: 50, y: 40, width: 900, height: 200), box: box, stage: stage)
             == CGPoint(x: 50, y: 252))
-        // Wide and low: above it.
         #expect(CommentPopover.placement(beside: CGRect(x: 50, y: 300, width: 900, height: 240), box: box, stage: stage)
             == CGPoint(x: 50, y: 138))
-        // The whole frame: the lower right corner.
         #expect(CommentPopover.placement(beside: CGRect(origin: .zero, size: stage), box: box, stage: stage)
             == CGPoint(x: 648, y: 398))
-        // A rectangle at the foot of the stage: the box stays inside.
         #expect(CommentPopover.placement(beside: CGRect(x: 100, y: 500, width: 200, height: 50), box: box, stage: stage)
             == CGPoint(x: 312, y: 398))
         for rect in [CGRect(x: 0, y: 0, width: 20, height: 20), CGRect(x: 980, y: 540, width: 20, height: 20),
@@ -114,8 +101,6 @@ struct VideoFrameGeometryTests {
     }
 }
 
-/// Region messages through the app's model, on the fixture video, in a
-/// temporary support folder. No window, no socket.
 @Suite("Messages on a region", .serialized)
 struct RegionMessageTests {
     let support = FileManager.default.temporaryDirectory
@@ -136,7 +121,6 @@ struct RegionMessageTests {
         return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
     }
 
-    /// The picture's pixels as RGBA bytes, whatever the file's layout.
     private func pixels(_ image: CGImage) throws -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
         let context = try #require(CGContext(
@@ -174,11 +158,9 @@ struct RegionMessageTests {
         #expect(crop.height == part.height)
         let same = try #require(keyframe.cropping(to: CGRect(x: part.x, y: part.y, width: part.width, height: part.height)))
         #expect(try pixels(crop) == pixels(same))
-        // It's a part of the picture, not the picture made small.
         #expect(crop.width < keyframe.width)
         #expect(model.state().threads.last?.messages == [comment])
 
-        // A message on the whole frame has neither.
         let plain = try await model.addMessage(text: "Too fast", at: 3).message
         #expect(plain.region == nil)
         #expect(plain.cropPath == nil)
@@ -191,7 +173,6 @@ struct RegionMessageTests {
         let region = try Region(x: 0.1, y: 0.55, w: 0.42, h: 0.3)
         let fromCLI = try await model.addMessage(text: "from the CLI", at: 12.5, region: region).message
 
-        // As a person does: at the same moment, drag, write, Return.
         try await model.seek(to: 12.5)
         model.beginRegion()
         model.endRegion(region)
@@ -203,7 +184,6 @@ struct RegionMessageTests {
         let thread = try #require(model.state().threads.last)
         let fromBox = try #require(thread.messages.first { $0.text == "from the box" })
 
-        // One frame, one thread.
         #expect(thread.messages.count == 2)
         #expect(fromBox.region == fromCLI.region)
         let (a, b) = (try image(try #require(fromCLI.cropPath)), try image(try #require(fromBox.cropPath)))
@@ -224,7 +204,6 @@ struct RegionMessageTests {
         #expect(model.isDrawingRegion)
         await eventually { !model.engine.isPlaying }
         #expect(!model.engine.isPlaying)
-        // No comment box until the pointer lets go.
         #expect(model.draft == nil)
 
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
@@ -242,14 +221,12 @@ struct RegionMessageTests {
         let model = try await model()
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
 
-        // While the rectangle is drawn: letting go afterwards opens nothing.
         model.beginRegion()
         #expect(model.escape())
         #expect(!model.isDrawingRegion)
         model.endRegion(region)
         #expect(model.draft == nil)
 
-        // With the comment box open: the box and the region go, and nothing is queued.
         model.beginRegion()
         model.endRegion(region)
         model.draft?.text = "never mind"
@@ -259,9 +236,7 @@ struct RegionMessageTests {
         #expect(model.state().queue.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: support.appendingPathComponent("videos").path))
 
-        // With nothing to cancel, Escape isn't taken.
         #expect(!model.escape())
-        // The key itself: Escape cancels unless a text view has it, where it's the editor's cancel.
         #expect(Shortcuts.action(keyCode: 53, modifiers: []) == .cancel)
         #expect(Shortcuts.action(keyCode: 53, modifiers: [], isTyping: true) == nil)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
@@ -276,11 +251,9 @@ struct RegionMessageTests {
         #expect(model.draft == nil)
         #expect(!model.isDrawingRegion)
 
-        // A click on the frame is for pointing: a still video stays still.
         model.clickFrame()
         try? await Task.sleep(for: .milliseconds(200))
         #expect(!model.engine.isPlaying)
-        // And a playing video plays on.
         model.togglePlay()
         await eventually { model.engine.isPlaying }
         model.clickFrame()
@@ -289,8 +262,6 @@ struct RegionMessageTests {
         model.togglePlay()
         await eventually { !model.engine.isPlaying }
 
-        // While the popover is open, a click on the frame is a click
-        // outside it: the popover closes and the frame stays where it is.
         model.startDraft()
         model.clickFrame()
         #expect(model.draft == nil)
@@ -308,20 +279,17 @@ struct RegionMessageTests {
 
         model.clickFrame()
         #expect(!(window.firstResponder is NSText))
-        // Space plays and pauses again, and C starts a comment.
         #expect(Shortcuts.action(keyCode: 49, modifiers: [], isTyping: window.firstResponder is NSText) == .togglePlay)
         #expect(Shortcuts.action(keyCode: 8, modifiers: [], isTyping: window.firstResponder is NSText) == .startMessage)
         #expect(model.composerText == "Half a thought")
         #expect(field.string == "Half a thought")
 
-        // The start of a drag takes them too.
         #expect(window.makeFirstResponder(field))
         model.beginRegion()
         #expect(!(window.firstResponder is NSText))
         model.endRegion(nil)
     }
 
-    /// A window for `model` with a text field in it, as the composer is.
     private func windowWithAField(for model: WindowModel) -> (NSWindow, NSTextView) {
         let window = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: true
@@ -343,12 +311,10 @@ struct RegionMessageTests {
         let third = try Region(x: 0.1, y: 0.1, w: 0.2, h: 0.2)
         model.beginRegion()
         model.endRegion(first)
-        // An empty popover goes with its region; the new one opens on the new region.
         model.beginRegion()
         #expect(model.draft == nil)
         model.endRegion(second)
         #expect(model.draft == WindowModel.Draft(time: 0, text: "", region: second))
-        // C with the popover open changes nothing.
         model.startDraft()
         #expect(model.draft?.region == second)
 
@@ -373,7 +339,6 @@ struct RegionMessageTests {
         _ = try await model.addMessage(text: "And this one", at: 12.5, region: other)
         _ = try await model.addMessage(text: "The whole frame", at: 12.5)
         let pointedID = try #require(ItemID(pointed.thread.id))
-        // The player is on #2's frame: one badge, two outlines.
         #expect(model.frameMarks == [WindowModel.FrameMark(thread: pointedID, number: 2, state: .queued, regions: [region, other])])
 
         model.showThread(try #require(ItemID(plain.thread.id)))
@@ -381,10 +346,8 @@ struct RegionMessageTests {
         #expect(model.frameMarks.map(\.number) == [1])
         #expect(model.frameMarks.first?.regions == [])
 
-        // Another frame isn't the one the threads were written on.
         try await model.seek(to: 14)
         #expect(model.frameMarks.isEmpty)
-        // One frame later is another frame too.
         try await model.seek(to: 12.5 + model.engine.frameDuration)
         #expect(model.frameMarks.isEmpty)
     }

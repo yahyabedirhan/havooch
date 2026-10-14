@@ -46,7 +46,6 @@ struct RegionTests {
         #expect(region.pixels(width: 1920, height: 1080) == (480, 216, 576, 270))
         #expect(region.pixels(width: 960, height: 540) == (240, 108, 288, 135))
         #expect(try Region(x: 0, y: 0, w: 1, h: 1).pixels(width: 1920, height: 1080) == (0, 0, 1920, 1080))
-        // A sliver still has a pixel, and the last pixel is still inside.
         #expect(try Region(x: 0.5, y: 0.5, w: 0.0001, h: 0.0001).pixels(width: 100, height: 100) == (50, 50, 1, 1))
         #expect(try Region(x: 0.999, y: 0.999, w: 0.001, h: 0.001).pixels(width: 100, height: 100) == (99, 99, 1, 1))
     }

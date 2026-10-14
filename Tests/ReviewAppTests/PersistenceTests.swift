@@ -8,9 +8,6 @@ import ReviewTranscript
 import ReviewWire
 import Testing
 
-/// What a restart keeps: one run of the app's model on a support folder,
-/// then a new model on the same folder, as the app is after `app quit` and
-/// `app open`. No window and no socket.
 @Suite("Threads and messages across restarts", .serialized)
 struct PersistenceTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -25,9 +22,6 @@ struct PersistenceTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// One run of the app on `support`: its model and the server in front
-    /// of it. With `reopening`, the person opens the last video again; a
-    /// launch opens none by itself.
     private func run(
         on support: URL? = nil, reopening: Bool = false, speech: any SpeechRecognizing = SlowRecognizer()
     ) async -> (WindowModel, ControlServer) {
@@ -40,8 +34,6 @@ struct PersistenceTests {
         return (model, server)
     }
 
-    /// A copy of the fixture video named `name` in `folder` under the
-    /// test's root, with the sidecars named.
     private func copy(to folder: String, as name: String = "sample.mp4", sidecars: [String] = []) throws -> URL {
         let target = root.appendingPathComponent(folder, isDirectory: true)
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
@@ -72,11 +64,6 @@ struct PersistenceTests {
         }
     }
 
-    /// A review as the acceptance scenario builds it: a send of two
-    /// messages on #1 and #2 (one on a region) that the listener took,
-    /// acknowledged, asked about and finished in part, a queued message on
-    /// #3, a popover frame on #2 and a note. Returns the ids of the send,
-    /// its two messages and their threads.
     private func build(
         _ model: WindowModel, _ server: ControlServer
     ) async throws -> (send: String, first: String, second: String, one: String, two: String) {
@@ -98,12 +85,9 @@ struct PersistenceTests {
         return (send.id, first.message.id, second.message.id, first.thread.id, two)
     }
 
-    /// The person's messages' states, in the threads' order.
     private func states(_ model: WindowModel) -> [MessageState?] {
         model.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) }
     }
-
-    // MARK: - A restart
 
     @Test("after a restart the last video opened again is paused at its start, with the same threads, messages, states, sends, popover frames and note")
     func restart() async throws {
@@ -129,19 +113,16 @@ struct PersistenceTests {
         #expect(again.engine.time == 0)
         #expect(!again.engine.isPlaying)
         #expect(again.problem == nil)
-        // The agent keeps its name; nobody listens yet.
         #expect(again.agentName == "Mate")
         #expect(again.listeners().report(at: Date()) == StateReport.Listener(
             presence: "absent", waitOpen: false, session: "Mate", pendingSends: 0, takenSends: 1
         ))
-        // Every picture the state names is still there.
         for thread in again.state().threads {
             if let keyframe = thread.keyframePath { #expect(FileManager.default.fileExists(atPath: keyframe)) }
             for message in thread.messages {
                 if let crop = message.cropPath { #expect(FileManager.default.fileExists(atPath: crop)) }
             }
         }
-        // The counters come back too: the next thread is #4.
         #expect(try await again.addMessage(text: "After the restart", at: 15).thread.number == 4)
     }
 
@@ -160,7 +141,6 @@ struct PersistenceTests {
         let before = try state(model)
         model.listeners().stop()
 
-        // The launch opens no video by itself (spec 0.3.0): one window on home.
         let app = AppModel(environment: demo, speech: SlowRecognizer())
         let again = app.makeWindow()
         #expect(app.isDemoRun)
@@ -169,7 +149,6 @@ struct PersistenceTests {
         #expect(app.windows.windows.count == 1)
         #expect(again.recents.first?.url == video.standardizedFileURL)
 
-        // The acceptance scenario's `player load` of the same file.
         try await again.open(video)
         let after = try state(again)
         for key in ["threads", "queue", "sends", "video"] {
@@ -195,7 +174,6 @@ struct PersistenceTests {
 
         _ = try await model.showThread("1")
         #expect(unread(model) == [false, false])
-        // A reply on the thread the sidebar shows is read as it comes; one on another isn't.
         #expect(await listen(.reply(thread: one, text: "And the title"), server).ok)
         #expect(await listen(.reply(thread: "0", text: "One left"), server).ok)
         #expect(unread(model) == [true, false])
@@ -207,9 +185,6 @@ struct PersistenceTests {
         #expect(unread(again) == [false, false])
     }
 
-    /// What a run wrote in the support folder, but the settings file and
-    /// its verdict: with `HAVOOCH_SUPPORT_DIR` set, `config.toml` is made
-    /// in its `config/` on launch.
     private func dataFiles(in folder: URL? = nil) throws -> [String] {
         let folder = folder ?? support
         guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
@@ -227,8 +202,6 @@ struct PersistenceTests {
 
         let video = try copy(to: "videos")
         try await empty.open(video)
-        // A video with no message yet has no review file. Opening it
-        // makes the first run done, in the settings file.
         #expect(try dataFiles() == ["recents.json", "settings.json"])
 
         let (again, _) = await run()
@@ -237,9 +210,6 @@ struct PersistenceTests {
         #expect(try dataFiles() == ["recents.json", "settings.json"])
     }
 
-    // MARK: - Recent videos
-
-    /// A second video, with content of its own.
     static let showcase = MessageTests.fixture.deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("showcase/lantern-teaser.mp4")
 
@@ -270,7 +240,6 @@ struct PersistenceTests {
         #expect((recents[1]["openedAt"] as? String).flatMap { try? Date($0, strategy: .iso8601) } != nil)
         #expect(model.state().lines.contains("recents: 2\n  lantern-teaser at 0:00"))
 
-        // A new run reads the same list.
         let (again, _) = await run()
         #expect(again.recents.map(\.path) == [Self.showcase.path, first.path])
         #expect(again.recents.map(\.position) == [0, 4])
@@ -289,7 +258,6 @@ struct PersistenceTests {
         #expect(model.recents.map(\.position) == [2.5])
         let (again, _) = await run()
         #expect(again.recents.map(\.position) == [2.5])
-        // Opening it again keeps the position and doesn't add a second entry.
         try await again.open(MessageTests.fixture)
         #expect(again.recents.map(\.position) == [2.5])
     }
@@ -329,8 +297,6 @@ struct PersistenceTests {
         #expect(demoAgain.recents.map(\.path) == [MessageTests.fixture.path])
     }
 
-    // MARK: - The same video elsewhere
-
     @Test("a renamed copy of the video in another folder shows the same history, and the review records where it is now")
     func renamedCopy() async throws {
         defer { cleanUp() }
@@ -354,14 +320,12 @@ struct PersistenceTests {
         #expect(video["title"] as? String == "renamed take 2.mov")
         #expect(video["contextNote"] as? String == "Look at the pricing page")
         #expect(video["contentHash"] as? String == (before["video"] as? [String: Any])?["contentHash"] as? String)
-        // One folder for the one content, and its review names the new path.
         #expect(try FileManager.default.contentsOfDirectory(atPath: support.appendingPathComponent("videos").path).count == 1)
         let hash = try #require(again.video?.contentHash)
         let kept = try #require(try Library(layout: SupportLayout(root: support)).load(.video(contentHash: hash)))
         #expect(kept.video.path == renamed.path)
         #expect(kept.video.title == "renamed take 2.mov")
 
-        // The history goes on under the new name.
         #expect(await listen(.status(messageID: ids.first, state: .done), later).ok)
         #expect(states(again) == [.queued, .done, .done])
     }
@@ -376,7 +340,6 @@ struct PersistenceTests {
 
         let (again, later) = await run()
         let opening = Task { try await again.open(MessageTests.fixture) }
-        // The player has the file and isn't ready yet: the video is on its way in.
         let deadline = ContinuousClock.now + .seconds(60)
         while again.engine.player.currentItem == nil, ContinuousClock.now < deadline { await Task.yield() }
         #expect(await listen(.status(messageID: ids.first, state: .done), later).ok)
@@ -410,14 +373,11 @@ struct PersistenceTests {
         #expect(real.listeners().outbox == Outbox())
         #expect(await listen(.status(messageID: ids.first, state: .done), realServer).error.contains("no message"))
         #expect(await listen(.wait(timeoutSeconds: 0), realServer).timedOut == true)
-        // The real folder holds nothing of the demo's: its own wait kept that an agent connected.
         #expect(try dataFiles() == ["outboxes", "outboxes/\(try #require(real.reviewKey).fileName).json", "recents.json", "settings.json"])
 
         let (again, _) = await run(on: demo, reopening: true)
         #expect(states(again).count == 3)
     }
-
-    // MARK: - The listener after a restart
 
     @Test("a send made with no listener before the quit is returned by a wait after the restart, with its keyframe, crop, transcript and context, with no video open")
     func pendingSend() async throws {
@@ -432,7 +392,6 @@ struct PersistenceTests {
         let key = try #require(model.reviewKey)
         model.listeners().stop()
 
-        // The next run opens no video: the listener names it.
         let (again, server) = await run()
         #expect(again.app.listeners.queue(for: key).outbox.pending.map(\.sendID.text) == [send.id])
         let reply = await listen(.wait(timeoutSeconds: 0, video: video.path), server)
@@ -454,7 +413,6 @@ struct PersistenceTests {
         for thread in threads {
             let keyframe = try #require(thread["keyframePath"] as? String)
             #expect(FileManager.default.fileExists(atPath: keyframe))
-            // The voiceover's scene times, as the send cut them.
             let lines = try #require(thread["transcript"] as? [[String: AnyHashable]])
             #expect(lines == [TranscriptDeliveryTests.pause, TranscriptDeliveryTests.send, TranscriptDeliveryTests.answer])
         }
@@ -463,7 +421,6 @@ struct PersistenceTests {
         #expect(FileManager.default.fileExists(atPath: crop))
         #expect(again.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [send.id])
 
-        // The listener answers it, still with no video open, and that's kept too.
         #expect(await listen(.ack(sendID: send.id, text: nil), server).ok)
         #expect(await listen(.status(messageID: first.message.id, state: .done), server).ok)
         #expect(await listen(.reply(thread: second.thread.id, text: "Looking"), server).ok)
@@ -505,26 +462,22 @@ struct PersistenceTests {
         let video = MessageTests.fixture.path
         model.listeners().stop()
 
-        // The same listener: it has the send, and gets nothing twice.
         let (same, sameServer) = await run()
         #expect(same.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [ids.send])
         #expect(await listen(.wait(timeoutSeconds: 0, video: video), sameServer).timedOut == true)
         #expect(same.app.listeners.queue(for: key).outbox.taken.map(\.sendID.text) == [ids.send])
         same.app.listeners.stop()
 
-        // A new listener session: the send is first in line again.
         let (again, againServer) = await run()
         let reply = await listen(.wait(timeoutSeconds: 0, video: video), againServer, as: Self.restarted)
         #expect(reply.ok)
         let payload = try object(reply.output)
         #expect((payload["send"] as? [String: Any])?["id"] as? String == ids.send)
-        // Only the message that wasn't finished, and the context again.
         let threads = try #require(payload["threads"] as? [[String: Any]])
         #expect(threads.flatMap { ($0["messages"] as? [[String: Any]]) ?? [] }.map { $0["id"] as? String } == [ids.first])
         #expect((payload["context"] as? String)?.contains("Look at the pricing page") == true)
         again.app.listeners.stop()
 
-        // The message went back to sent, and that's on disk as well.
         let (last, _) = await run(reopening: true)
         #expect(states(last) == [.queued, .sent, .done])
         #expect(last.listeners().outbox.session?.key == "listener-2")
@@ -547,13 +500,10 @@ struct PersistenceTests {
         #expect(await listen(.wait(timeoutSeconds: 0, video: MessageTests.fixture.path), server).ok)
     }
 
-    // MARK: - Files that go wrong
-
     @Test("a review that doesn't read keeps its video shut: the open video stays, the reason is given, and the file is left as it is")
     func unreadableReview() async throws {
         defer { cleanUp() }
         let other = try copy(to: "videos")
-        // Other content: the fixture with a byte more.
         var bytes = try Data(contentsOf: other)
         bytes.append(0)
         try bytes.write(to: other)

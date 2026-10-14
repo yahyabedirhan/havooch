@@ -3,7 +3,6 @@ import ReviewCore
 import ReviewStore
 import Testing
 
-/// What the library keeps on disk, in a temporary support folder.
 @Suite("The library")
 struct LibraryTests {
     static let hash = String(repeating: "a", count: 64)
@@ -14,20 +13,14 @@ struct LibraryTests {
 
     private func id(_ text: String) throws -> ItemID { try #require(ItemID(text)) }
 
-    /// The id of `kind` and `number` on the video with `hash`.
     private func item(_ kind: String, _ number: Int) throws -> ItemID {
         try item(kind, Self.hash, number)
     }
 
-    /// The id of `kind` and `number` on the video with `hash`.
     private func item(_ kind: String, _ hash: String, _ number: Int) throws -> ItemID {
         try id("\(kind)-\(hash.prefix(8))-\(number)")
     }
 
-    /// A review with everything a review can hold: a send of two messages
-    /// on two threads (one on a region, with a question and its answer and
-    /// a reply, done; one working), the acknowledgement on General, a
-    /// queued message on a third thread, a popover frame and a note.
     private func review(_ hash: String = hash, path: String = "/videos/sample.mp4") throws -> Review {
         var review = Review(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: path, frameRate: 30))
         let first = try review.write(text: "Too fast here", at: 10, now: at(1_800_000_000)).message.id
@@ -51,8 +44,6 @@ struct LibraryTests {
         ((try? FileManager.default.subpathsOfDirectory(atPath: folder.path)) ?? []).sorted()
     }
 
-    // MARK: - Reviews
-
     @Test("a review reads back the same in a new library: threads, messages, the region, states, sends, popover frames, the note and the frame rate")
     func reviewRoundTrip() throws {
         let scratch = try Scratch()
@@ -71,11 +62,9 @@ struct LibraryTests {
         #expect(read.general.messages.map(\.text) == ["On it"])
         let sent: [[ItemID]] = [[try item("m", 1), try item("m", 2)]]
         #expect(read.sends.map(\.messageIDs) == sent)
-        // The counters come back too: the next thread is #4.
         var next = read
         #expect(try next.write(text: "New", at: 1, now: at(1_800_000_010)).thread.number == 4)
         #expect(read.video.frameRate == 30)
-        // Only the one file, with nothing temporary left beside it.
         #expect(files(under: scratch.folder) == ["videos", "videos/\(Self.hash)", "videos/\(Self.hash)/review.json"])
     }
 
@@ -163,7 +152,6 @@ struct LibraryTests {
         #expect(library.key(of: try item("m", 1)) == nil)
         #expect(library.key(of: try item("m", Self.other, 1)) == .video(contentHash: Self.other))
 
-        // A folder copied by hand under another video's hash.
         let copied = library.layout.reviewFile(.video(contentHash: String(repeating: "c", count: 64)))
         try FileManager.default.createDirectory(at: copied.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: library.layout.reviewFile(.video(contentHash: Self.other)), to: copied)
@@ -171,8 +159,6 @@ struct LibraryTests {
         #expect(wrong?.reason.contains("another video") == true)
     }
 
-    /// Whether the tests run as root, which writes into a read-only folder
-    /// (a Linux container's default user).
     static var runsAsRoot: Bool { geteuid() == 0 }
 
     @Test("a save that can't be written throws with the reason, and the old file stays whole",
@@ -229,13 +215,9 @@ struct LibraryTests {
         #expect(files(under: demo).filter { !$0.hasPrefix("videos") } == ["outboxes", "outboxes/video-\(Self.hash).json", "recents.json"])
     }
 
-    // MARK: - The outboxes
-
     static let otherKey = ReviewKey.video(contentHash: other)
     static let mate = ListenerSession(key: "listener-1", name: "Mate", place: "/shop")
 
-    /// Two reviews on disk, each with unfinished sends: `s-1` of `hash`,
-    /// and `s-1` and `s-2` of `other`, sent later.
     private func twoReviews(in folder: URL) throws {
         try Library(layout: SupportLayout(root: folder)).save(try review())
         var second = try review(Self.other)
@@ -265,12 +247,10 @@ struct LibraryTests {
         #expect(read.session?.since == at(0))
         #expect(read.contextSent == outbox.contextSent)
         #expect(!read.isContextDue(for: Self.other, text: "The topic"))
-        // What belongs to one run isn't kept.
         #expect(!read.isWaitOpen)
         #expect(read.presence(at: at(1)) == .absent)
         let text = try String(contentsOf: SupportLayout(root: scratch.folder).outboxFile(Self.otherKey), encoding: .utf8)
         #expect(text.contains("\"schemaVersion\" : 1"))
-        // The other review's listener has its own line, and none of these sends.
         let own = Library(layout: SupportLayout(root: scratch.folder)).loadOutbox(Self.key)
         #expect(own.pending == [SendRef(sendID: try item("s", 1), contentHash: Self.hash)])
         #expect(own.session == nil)
@@ -315,13 +295,9 @@ struct LibraryTests {
         outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
         #expect(throws: Library.Failure.self) { try library.save(outbox, of: Self.key) }
         #expect(try Data(contentsOf: file) == newer)
-        // Another review's outbox is written as usual.
         try library.save(Outbox(), of: Self.otherKey)
     }
 
-    /// The one outbox a build before a listener per review kept, as it
-    /// wrote it: `s-1` of `hash` taken, `s-2` and `s-1` of `other` in
-    /// line, and the context of both videos sent to `mate`.
     private func formerOutbox() throws -> Outbox {
         var outbox = Outbox()
         outbox.enqueue(SendRef(sendID: try item("s", 1), contentHash: Self.hash))
@@ -354,7 +330,6 @@ struct LibraryTests {
         #expect(!first.isContextDue(for: Self.hash, text: "First"))
         #expect(first.contextSent.keys.sorted() == [Self.hash])
         let second = Library(layout: layout).loadOutbox(Self.otherKey)
-        // The line keeps its own order, not the order sent.
         #expect(second.pending == [
             SendRef(sendID: try item("s", Self.other, 2), contentHash: Self.other),
             SendRef(sendID: try item("s", Self.other, 1), contentHash: Self.other),
@@ -363,7 +338,6 @@ struct LibraryTests {
         #expect(second.session?.key == Self.mate.key)
         #expect(!second.isContextDue(for: Self.other, text: "Second"))
 
-        // Once: a second run finds nothing to split, and a review's own outbox stays.
         try Library(layout: layout).save(Outbox(), of: Self.key)
         Library(layout: layout).migrateFormerOutbox()
         #expect(Library(layout: layout).loadOutbox(Self.key).taken.isEmpty)
@@ -384,14 +358,10 @@ struct LibraryTests {
         #expect(Library(layout: layout).loadOutbox(Self.key).pending.count == 1)
     }
 
-    // MARK: - Recent videos
-
-    /// The content hash numbered `number`: 64 hex digits.
     private func hash(_ number: Int) -> String {
         String(format: "%064x", number)
     }
 
-    /// The library on `folder`, as a new run reads it.
     private func reread(_ folder: URL) -> Library {
         Library(layout: SupportLayout(root: folder))
     }
@@ -531,7 +501,6 @@ struct LibraryTests {
 }
 
 extension Outbox {
-    /// Hands the next send to the open `wait` and has its reply written.
     fileprivate mutating func deliver(at now: Date) -> SendRef? {
         guard let ref = handOut(at: now) else { return nil }
         written(ref)

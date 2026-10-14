@@ -8,9 +8,6 @@ import ReviewWire
 import Synchronization
 import Testing
 
-/// The transcript window in the payload: the app's model on the fixture
-/// video and on copies of it with fewer sidecars, and the control server in
-/// front of it. No window, no socket, and no real speech recognition.
 @Suite("The transcript window of each thread", .serialized)
 struct TranscriptDeliveryTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -36,8 +33,6 @@ struct TranscriptDeliveryTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// A copy of the fixture video in a folder of its own, with only the
-    /// sidecars named.
     private func copy(sidecars: [String]) throws -> URL {
         let folder = support.appendingPathComponent("video", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -50,7 +45,6 @@ struct TranscriptDeliveryTests {
         return folder.appendingPathComponent("sample.mp4")
     }
 
-    /// The model with `video` open, and the server in front of it.
     private func app(_ video: URL, speech: SlowRecognizer = SlowRecognizer()) async throws -> (WindowModel, ControlServer) {
         let model = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: speech).makeWindow()
         try await model.open(video)
@@ -72,8 +66,6 @@ struct TranscriptDeliveryTests {
         }
     }
 
-    /// Sends the queue and takes it as the listener: each thread's
-    /// transcript in the payload `wait` prints, in time order.
     private func delivered(_ server: ControlServer, as listener: Holder = listener) async throws -> [[[String: AnyHashable]]] {
         let sent = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         #expect(sent.reply.ok)
@@ -89,8 +81,6 @@ struct TranscriptDeliveryTests {
         return state["transcript"] as? [String: AnyHashable]
     }
 
-    // MARK: - Sidecars
-
     @Test("the fixture with voiceover.json: a comment gets the narration of its scene, with the scene's times, and of the scenes within 15 s")
     func voiceover() async throws {
         defer { cleanUp() }
@@ -100,9 +90,7 @@ struct TranscriptDeliveryTests {
 
         let transcripts = try await delivered(server)
 
-        // 10 s is in the scene from 6.067 s to 14.333 s; the whole video is within 15 s of it.
         #expect(transcripts[0] == [Self.pause, Self.send, Self.answer])
-        // At 21.2 s the first scene ended more than 15 s ago.
         #expect(transcripts[1] == [Self.send, Self.answer])
         #expect(try await transcriptState(server) == ["source": "voiceover", "complete": true, "lines": 3, "problem": NSNull()])
     }
@@ -120,11 +108,8 @@ struct TranscriptDeliveryTests {
         #expect(transcripts[0] == [Self.pause, Self.send, Self.answer])
         #expect(transcripts[1] == [Self.send, Self.answer])
         #expect(try await transcriptState(server) == ["source": "subtitles", "complete": true, "lines": 3, "problem": NSNull()])
-        // A video with a sidecar is never transcribed from its sound.
         #expect(speech.runs == 0)
     }
-
-    // MARK: - Speech
 
     @Test("a video with no sidecar is transcribed in the background; a comment sent before that's done gets the lines that exist then")
     func beforeTheTranscriptIsReady() async throws {
@@ -135,20 +120,15 @@ struct TranscriptDeliveryTests {
         #expect(speech.runs == 1)
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 0, "problem": NSNull()])
 
-        // Nothing is transcribed yet: the comment isn't held back, and gets no lines.
         _ = try await model.addMessage(text: "Right away", at: 3)
         #expect(try await delivered(server) == [[]])
 
-        // The first line is there, the rest isn't.
         speech.say(TranscriptLine(start: 0.2, end: 5.1, text: "This is Havooch."))
         await eventually { model.transcript?.lines == 1 }
         _ = try await model.addMessage(text: "A little later", at: 4)
         #expect(try await delivered(server) == [[["start": 0.2, "end": 5.1, "text": "This is Havooch."]]])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": false, "lines": 1, "problem": NSNull()])
 
-        // A send made now and taken only once the transcript is whole gets
-        // the lines of its window as they were when it was sent: the window
-        // is cut at send time and kept.
         _ = try await model.addMessage(text: "Taken later", at: 5)
         _ = await server.reply(to: ControlRequest.send.sent(by: Self.operatorAgent))
         speech.say(TranscriptLine(start: 6.4, end: 13.4, text: "Your comments queue up."))
@@ -160,8 +140,6 @@ struct TranscriptDeliveryTests {
         #expect((thread["transcript"] as? [[String: AnyHashable]])?.map { $0["text"] } == ["This is Havooch."])
         #expect(try await transcriptState(server) == ["source": "speech", "complete": true, "lines": 3, "problem": NSNull()])
 
-        // A new listener session gets the three unfinished sends again, each
-        // with the lines it kept.
         var kept: [[[String: AnyHashable]]] = []
         for _ in 0..<3 {
             let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.restarted))
@@ -170,7 +148,6 @@ struct TranscriptDeliveryTests {
         }
         #expect(kept == [[], [["start": 0.2, "end": 5.1, "text": "This is Havooch."]], try #require(thread["transcript"] as? [[String: AnyHashable]])])
 
-        // The next send cuts its window from the whole transcript.
         _ = try await model.addMessage(text: "Sent once it's whole", at: 6)
         #expect(try await delivered(server, as: Self.restarted) == [[
             ["start": 0.2, "end": 5.1, "text": "This is Havooch."], ["start": 6.4, "end": 13.4, "text": "Your comments queue up."],
@@ -218,8 +195,6 @@ struct TranscriptDeliveryTests {
         #expect(lines.contains("transcript: speech, 0 lines, stopped: no model for this language\n"))
     }
 
-    // MARK: - The state report and the chip
-
     @Test("state has transcript null with no video, and one line for it")
     func state() async throws {
         defer { cleanUp() }
@@ -253,12 +228,10 @@ struct TranscriptDeliveryTests {
     }
 }
 
-/// A recognizer the test drives: lines arrive when the test says them.
 final class SlowRecognizer: SpeechRecognizing {
     private typealias Stream = AsyncThrowingStream<TranscriptLine, any Error>
     private struct State {
         var runs = 0
-        /// Whether a run already reads `stream`: the next run gets a new one.
         var isTaken = false
         var stream: Stream
         var continuation: Stream.Continuation
@@ -271,7 +244,6 @@ final class SlowRecognizer: SpeechRecognizing {
         state = Mutex(State(stream: stream, continuation: continuation))
     }
 
-    /// How many times a transcription started.
     var runs: Int { state.withLock { $0.runs } }
 
     func lines(of file: URL) -> AsyncThrowingStream<TranscriptLine, any Error> {
@@ -287,7 +259,6 @@ final class SlowRecognizer: SpeechRecognizing {
         state.withLock { _ = $0.continuation.yield(line) }
     }
 
-    /// Ends the run, with `error` when it fails.
     func finish(throwing error: (any Error)? = nil) {
         state.withLock { $0.continuation.finish(throwing: error) }
     }

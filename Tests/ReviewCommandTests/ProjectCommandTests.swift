@@ -3,16 +3,10 @@ import ReviewCommand
 import ReviewWire
 import Testing
 
-/// `project new`, `project add` and `project list`. `new` and `add` go
-/// through the app with no lease, and make paths absolute. `add` brings the
-/// app's process to the front, as `open` does.
-/// `list` reads `config.toml` itself and needs no app.
 @Suite("The project commands")
 struct ProjectCommandTests {
     static let pid: Int32 = 4242
 
-    /// A run whose fake app answers every request, with two video files
-    /// in its folder.
     private func makeRun() throws -> (run: Run, cut1: URL, cut2: URL) {
         let run = Run { message, _ in
             switch message.request {

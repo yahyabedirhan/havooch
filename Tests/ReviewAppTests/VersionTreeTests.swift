@@ -3,17 +3,11 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// A project's thread list by version (thread-list V5), as a
-/// pure value: General, then the last three versions newest first, the
-/// one on screen and the versions picked from "All versions"; the
-/// versions with no section and their open threads; and the menu of
-/// every version with its search.
 @Suite("Thread list by version, as a value")
 struct VersionTreeTests {
     static let hash8 = "f92cbb2a"
     static let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    /// A project of `count` versions, `/Movies/cut1.mp4` first; v2 has a label.
     static func outline(_ count: Int) -> ProjectOutline {
         ProjectOutline(
             slug: "launch-video", title: "Launch video",
@@ -21,8 +15,6 @@ struct VersionTreeTests {
         )
     }
 
-    /// Thread `number` on version `version` (nil for General, 0 for a
-    /// removed version), with one message of the person's in `state`.
     static func thread(_ number: Int, on version: Int?, _ state: MessageState = .done) -> ReviewThread {
         let message = Message(
             id: MessageID(.message, hash8: hash8, number: number), author: .person, kind: .message,
@@ -54,11 +46,9 @@ struct VersionTreeTests {
         #expect(tree.sections.map(\.isPicked) == [false, false, false, false])
         #expect(tree.sections[0].threads.map(\.number) == [4, 5])
         #expect(tree.sections[2].threads.isEmpty)
-        // A thread whose version left the list stays, in its own section.
         #expect(tree.sections[3].threads.map(\.number) == [6])
         #expect(tree.showing == "Showing v4 to v6")
         #expect(tree.older == [3, 2, 1])
-        // v1's queued thread is open; v2's is done.
         #expect(tree.stillOpen.map(\.number) == [1])
     }
 
@@ -79,7 +69,6 @@ struct VersionTreeTests {
         #expect(tree.sections.map(\.kind) == [.version(6), .version(5), .version(4), .version(2), .removed])
         #expect(tree.sections.map(\.isOnScreen) == [false, false, false, true, false])
         #expect(tree.sections.map(\.isPicked) == [false, false, false, false, false])
-        // A picked number outside the list is left out.
         #expect(tree.older == [3, 1])
     }
 

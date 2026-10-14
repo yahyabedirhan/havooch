@@ -3,8 +3,6 @@ import Foundation
 import ReviewWire
 import Testing
 
-/// The contract between the command table and its help: the help is made
-/// from the table, so what it shows is what the code runs.
 @Suite("The help and the command table agree")
 struct HelpContractTests {
     @Test("every example parses as its own command, and asks for what the command's role says")
@@ -94,8 +92,6 @@ struct HelpContractTests {
         try Self.matches(help("player"), snapshot: "player-help.txt")
     }
 
-    /// Compares `text` with the stored snapshot `name`. With
-    /// `HAVOOCH_RECORD_SNAPSHOTS=1` it writes the snapshot instead.
     static func matches(_ text: String, snapshot name: String) throws {
         let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("Snapshots", isDirectory: true).appendingPathComponent(name)
@@ -107,8 +103,6 @@ struct HelpContractTests {
         #expect(text == stored, "the help differs from Snapshots/\(name)")
     }
 
-    /// `line` split into words as a shell splits it: at spaces, with a
-    /// double-quoted text one word.
     static func words(_ line: String) -> [String] {
         var words: [String] = []
         var word = ""

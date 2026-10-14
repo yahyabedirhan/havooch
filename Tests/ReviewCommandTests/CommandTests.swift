@@ -120,7 +120,6 @@ struct CommandTests {
         let run = Run { _, _ in .success(.done("done\n")) }
         defer { run.cleanUp() }
         let result = HavoochCLI.run(arguments, environment: run.environment)
-        // `--window` before the command's name isn't the command's.
         if arguments.first == "--window" {
             #expect(result.exitCode == 2)
             return
@@ -153,7 +152,6 @@ struct CommandTests {
         ["player", "play"], ["control", "take"], ["screenshot", "/tmp/shot.png"],
     ])
     func leaseRefused(arguments: [String]) throws {
-        // What the app answers a second holder: the lease's own words.
         var lease = ControlLease()
         let first = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
         _ = lease.use(by: first, at: Date(timeIntervalSince1970: 0))
@@ -289,9 +287,6 @@ struct CommandTests {
         #expect(run.launcher.launches.isEmpty)
     }
 
-    // MARK: - wait
-
-    /// The time `wait` counts by, moved on by each of its rests.
     final class Clock: Sendable {
         private let time = Mutex(Date(timeIntervalSince1970: 0))
 
@@ -301,7 +296,6 @@ struct CommandTests {
         }
     }
 
-    /// `run`'s environment with a clock that only the command's rests move.
     private func timed(_ run: Run, _ clock: Clock) -> CommandEnvironment {
         var environment = run.environment
         environment.now = { clock.now }
@@ -370,7 +364,6 @@ struct CommandTests {
         let demo = run.folder.appendingPathComponent("demo", isDirectory: true)
         run.transport.answer = { _, socket in
             if clock.now == Date(timeIntervalSince1970: 1), DemoPointer.recorded(in: run.support) == nil {
-                // The demo starts while the command rests.
                 try? FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
                 try? FileManager.default.createDirectory(at: run.support, withIntermediateDirectories: true)
                 try? DemoPointer.record(demo, in: run.support)
@@ -381,8 +374,6 @@ struct CommandTests {
         #expect(HavoochCLI.run(["wait"], environment: timed(run, clock)) == CommandResult(output: "{}\n"))
         #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)
     }
-
-    // MARK: - ask
 
     @Test("ask prints the person's answer, exit 0, and may be held for its whole wait, or with no limit without one")
     func askPrintsTheAnswer() {
@@ -529,7 +520,6 @@ struct CommandTests {
         let result = HavoochCLI.run(arguments, environment: run.environment)
         #expect(result == CommandResult(output: "done\n"))
         #expect(run.transport.requests == [request])
-        // The text's `--json` isn't the command's.
         #expect(run.transport.sent.map(\.message.json) == [false])
     }
 
@@ -541,7 +531,6 @@ struct CommandTests {
         _ = run("message", "add", "--json", "--at", "5", "--", "Too fast here")
         #expect(run.transport.requests == [.commentAdd(text: "Too fast here", at: 5), .commentAdd(text: "Too fast here", at: 5)])
         #expect(run.transport.sent.map(\.message.json) == [true, true])
-        // A word too many is still refused, also after --.
         #expect(run("reply", "t-f92cbb2a-1", "--", "--region", "--json").exitCode == 2)
         #expect(run("reply", "t-f92cbb2a-1", "--region").exitCode == 2)
     }
@@ -560,8 +549,6 @@ struct CommandTests {
 struct AppCommandTests {
     static let status = "running: \(AppIdentity.appName)\n"
 
-    /// An app that runs on the support folders in `running`, quits when
-    /// asked and starts on the launcher's folder when launched.
     final class FakeApps: Sendable {
         private struct State {
             var running: Set<String> = []
@@ -570,13 +557,11 @@ struct AppCommandTests {
 
         private let state = Mutex(State())
 
-        /// The support folders' paths.
         var running: Set<String> {
             get { state.withLock { $0.running } }
             set { state.withLock { $0.running = newValue } }
         }
 
-        /// The lease the app's reply to a quit carries.
         var lease: LeaseTerm? {
             get { state.withLock { $0.lease } }
             set { state.withLock { $0.lease = newValue } }
@@ -646,7 +631,6 @@ struct AppCommandTests {
         #expect(FileManager.default.fileExists(atPath: demo.path))
         #expect(DemoPointer.recorded(in: run.support)?.path == demo.path)
 
-        // Later commands reach the demo's socket once it's there.
         try Data().write(to: ControlSocket.url(in: demo))
         _ = run("player", "play")
         #expect(run.transport.sent.last?.socket.path == ControlSocket.url(in: demo).path)

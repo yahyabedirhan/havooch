@@ -7,7 +7,6 @@ import Testing
 struct ControlMessageTests {
     static let holder = Holder(key: "CLAUDE_CODE_SESSION_ID=abc", name: "Claude Code", place: "/Users/me/shop")
 
-    /// A message as a client of any build could write it.
     private func raw(_ fields: [String: Any]) -> Data {
         try! JSONSerialization.data(withJSONObject: fields)
     }
@@ -104,7 +103,6 @@ struct ControlMessageTests {
     func rectangle() {
         #expect(ControlRequest.Rectangle("0.25,0.2,0.3,0.25") == .init(x: 0.25, y: 0.2, w: 0.3, h: 0.25))
         #expect(ControlRequest.Rectangle("0, 0, 1, 1") == .init(x: 0, y: 0, w: 1, h: 1))
-        // Numbers outside the frame still read: the app refuses them in words.
         #expect(ControlRequest.Rectangle("0.9,0.2,0.3,0.25") != nil)
     }
 
@@ -139,7 +137,6 @@ struct ControlMessageTests {
 
     @Test("another version is refused before its other fields are read")
     func otherVersionWithOtherShape() {
-        // A later build may shape the holder differently, or drop it.
         let other = Version.controlProtocol + 1
         #expect(refusal(["version": other, "command": 7, "holder": "someone"]) == .otherVersion(other))
         #expect(refusal(["version": other]) == .otherVersion(other))
@@ -280,7 +277,6 @@ struct ControlMessageTests {
         #expect(try ControlReply.decode(ControlReply.refused("no video is open").encoded())
             == ControlReply(ok: false, error: "no video is open"))
         #expect(throws: ControlProtocolError.self) { try ControlReply.decode(Data("nothing".utf8)) }
-        // A wait that ran out says so, and only it does.
         #expect(try ControlReply.decode(ControlReply.ranOut.encoded()) == ControlReply(ok: false, timedOut: true))
         #expect(!String(decoding: reply.encoded(), as: UTF8.self).contains("timedOut"))
     }

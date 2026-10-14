@@ -5,8 +5,6 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The fake app's setup: the command line linked, Claude Code with its
-/// skill, Codex without, and an install that starts and stops at once.
 extension ControlServerTests.FakeApp {
     static let fakeSetup = StateReport.Setup(
         commandLine: .init(

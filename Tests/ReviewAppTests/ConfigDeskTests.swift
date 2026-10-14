@@ -6,12 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// `config.toml` as the app runs it: made from the header on
-/// the first launch, a valid save applied at once, a broken one rejected
-/// with the last valid settings kept, the verdict in `config-status.json`,
-/// the one-time move of an older build's settings, and app state kept out
-/// of the file. Every run is on a scratch support folder, so the settings
-/// are in its `config/`, never in the person's `~/.config/havooch`.
 @Suite("The settings file in the app", .serialized)
 struct ConfigDeskTests {
     let root = FileManager.default.temporaryDirectory
@@ -37,7 +31,6 @@ struct ConfigDeskTests {
     }
 
     private func save(_ text: String) throws {
-        // As most editors save: a new file renamed over the old one.
         try Data(text.utf8).write(to: location.file, options: .atomic)
     }
 
@@ -95,14 +88,12 @@ struct ConfigDeskTests {
         #expect(model.config.notice?.lines.first?.hasPrefix("Line 4: invalid TOML") == true)
         #expect(model.config.notice?.lines.first?.hasSuffix("..") == false)
 
-        // The same problems again don't come up again; theme set doesn't write over the file.
         #expect(model.app.dismissConfigNotice())
         #expect(!model.app.dismissConfigNotice())
         #expect(model.config.reload() == .rejected)
         #expect(model.config.notice == nil)
         #expect(throws: AppRefusal.self) { try model.app.setTheme("Default Dark") }
 
-        // A new problem comes up; a file that reads again takes it away.
         try save("version = 1\ntheme = 4\n")
         await eventually { model.config.notice != nil }
         #expect(model.config.notice?.lines.first == "Line 2: `theme` must be a string.")
@@ -143,14 +134,12 @@ struct ConfigDeskTests {
         #expect(try Settings.load(layout) == Settings(sidebarWidth: 300))
         #expect(model.config.notes.count == 2)
         #expect(model.config.notes.contains { $0.hasPrefix("The 2 token overrides in settings.json no longer apply. To keep them,") })
-        // A notice in the window, never a modal alert.
         #expect(model.problem == nil)
         #expect(model.config.notice == ConfigDesk.Notice(kind: .moved, title: "Your settings moved to config.toml", lines: model.config.notes))
         let config = try #require(try object(model.state().json)["config"] as? [String: Any])
         #expect(config["notes"] as? [String] == model.config.notes)
         #expect((config["notice"] as? [String: Any])?["kind"] as? String == "moved")
 
-        // Once: the next launch has nothing to move.
         let again = self.model()
         #expect(again.config.notes.isEmpty)
         #expect(again.config.notice == nil)

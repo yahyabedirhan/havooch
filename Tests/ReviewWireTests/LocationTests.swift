@@ -4,7 +4,6 @@ import Testing
 
 @Suite("Where the app and its socket are")
 struct LocationTests {
-    /// A new empty folder, removed when the test ends.
     private func withFolder(_ body: (URL) throws -> Void) throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -20,8 +19,6 @@ struct LocationTests {
         #expect(Version.app == "0.6.0")
     }
 
-    /// Whether the tests run on the Mac, where the support folder is
-    /// Application Support's.
     static var onMac: Bool {
         #if os(macOS)
         true
@@ -81,7 +78,6 @@ struct LocationTests {
             try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
             #expect(ControlSocket.locate(support: support) == ControlSocket.url(in: support))
 
-            // A demo that quit: its pointer is there, its socket isn't.
             try DemoPointer.record(demo, in: support)
             #expect(ControlSocket.locate(support: support) == ControlSocket.url(in: support))
 

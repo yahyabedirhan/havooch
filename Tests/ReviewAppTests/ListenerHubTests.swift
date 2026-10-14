@@ -6,12 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// One listener per window: each video's review has its
-/// own `ListenerQueue` and outbox, `wait --video` binds to that video's
-/// review and a bare `wait` to the key window's, the listener's other
-/// commands find their review by the id prefix, and a new agent on a
-/// review takes over from the one that was there. The app model and its
-/// control server, with no scene and no socket; no video plays.
 @Suite("A listener per window", .serialized)
 struct ListenerHubTests {
     static let claude = Holder(key: "claude-1", name: "Claude Code", place: "/Users/me/shop")
@@ -24,9 +18,6 @@ struct ListenerHubTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// The app on a fresh folder with two windows, the sample in `w1` and
-    /// the launch video in `w2` (key), each with one queued message, and
-    /// the server in front of them.
     private func run() async throws -> (app: AppModel, sample: WindowModel, launch: WindowModel, server: ControlServer) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
         let sample = app.makeWindow()
@@ -43,7 +34,6 @@ struct ListenerHubTests {
         return (app, sample, launch, server)
     }
 
-    /// A `wait` held open in the background, as `holder`'s.
     private func waiting(_ server: ControlServer, _ holder: Holder, video: URL?) -> Task<ControlServer.Answer, Never> {
         Task { await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 30, video: video?.path).sent(by: holder)) }
     }
@@ -78,13 +68,11 @@ struct ListenerHubTests {
         let payload = try object(answer.reply.output)
         #expect((payload["video"] as? [String: Any])?["path"] as? String == MessageTests.fixture.standardizedFileURL.path)
 
-        // The other agent still waits, with nothing: the send was never its.
         #expect(launch.listeners().outbox.isWaitOpen)
         #expect(launch.listeners().outbox.pending.isEmpty)
         #expect(launch.listeners().outbox.session?.name == "Codex")
         #expect(sample.listeners().outbox.taken.map(\.sendID.text) == [send.id])
 
-        // Each window's state and the window list name their own listener.
         let state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.claude, json: true)).reply.output)
         let listed = try #require(state["windows"] as? [[String: Any]])
         #expect(listed.map { ($0["listener"] as? [String: Any])?["session"] as? String } == ["Claude Code", "Codex"])
@@ -96,7 +84,6 @@ struct ListenerHubTests {
         #expect(launch.state().listener.session == "Codex")
         #expect(windows[0].line.hasSuffix("listener working (Claude Code)"))
 
-        // The launch window's send goes to Codex.
         let second = try await launch.sendQueue()
         #expect(await onLaunch.value.delivered?.sendID.text == second.id)
         app.listeners.stop()
@@ -130,7 +117,6 @@ struct ListenerHubTests {
         let thread = try #require(sample.threads.last)
         let message = try #require(thread.messages.first)
 
-        // The launch window is key; the ids name the sample's review.
         #expect(app.windows.key === launch)
         #expect(await listen(.ack(sendID: send.id, text: "On it"), server, as: Self.claude).ok)
         #expect(await listen(.status(messageID: message.id.text, state: .working, text: "Slowing it"), server, as: Self.claude).ok)
@@ -138,11 +124,9 @@ struct ListenerHubTests {
         #expect(sample.listeners().activity(on: thread.id, at: Date())?.text == "Slowing it")
         #expect(launch.listeners().activities(at: Date()).isEmpty)
         #expect(sample.threads.last?.messages.map(\.text) == ["Too fast here", "Slower now"])
-        // The notices go up in the window that holds the review, not the key one.
         #expect(sample.notices.map(\.kind) == [.acknowledgement, .message])
         #expect(launch.notices.isEmpty)
 
-        // A bare number is a thread of the key window's video, which has none sent.
         let bare = await listen(.reply(thread: "1", text: "Hi"), server, as: Self.claude)
         #expect(!bare.ok)
         _ = try await launch.sendQueue()
@@ -170,7 +154,6 @@ struct ListenerHubTests {
         #expect(sample.state().listener.session == "Codex")
         #expect(sample.state().lines.contains("listener: listening (Codex, took over from Claude Code)"))
 
-        // Codex listens now: the window's send is its.
         let send = try await sample.sendQueue()
         #expect(await second.value.delivered?.sendID.text == send.id)
     }
@@ -179,12 +162,10 @@ struct ListenerHubTests {
     func noTakeoverFromAnAbsentListener() async throws {
         defer { cleanUp() }
         let (_, sample, _, server) = try await run()
-        // Claude Code listened once, then went away.
         #expect(await listen(.wait(timeoutSeconds: 0, video: MessageTests.fixture.path), server, as: Self.claude).timedOut == true)
         let gone = Date().addingTimeInterval(Outbox.listeningGrace + 1)
         #expect(sample.listeners().presence(at: gone) == .absent)
 
-        // The same agent again: replaced, no notice.
         let first = waiting(server, Self.claude, video: MessageTests.fixture)
         await eventually { sample.listeners().outbox.isWaitOpen }
         let again = waiting(server, Self.claude, video: MessageTests.fixture)
@@ -205,7 +186,6 @@ struct ListenerHubTests {
             hashes = [try #require(sample.video?.contentHash), try #require(launch.video?.contentHash)]
             app.listeners.stop()
         }
-        // As a build before this one left the folder: one outbox for every video.
         let layout = SupportLayout(root: support)
         var former = Outbox()
         for hash in hashes {

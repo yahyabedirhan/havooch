@@ -6,9 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The version switcher's words and numbers (version-switcher V5),
-/// pure: the last three versions as segments, the field for older ones,
-/// the picker's search and its highlight.
 @Suite("The version switcher")
 struct VersionSwitchTests {
     static func versions(_ count: Int, current: Int?, labels: [Int: String] = [:]) -> VersionSwitch {
@@ -42,7 +39,6 @@ struct VersionSwitchTests {
         let fifty = Self.versions(50, current: 12)
         #expect(fifty.isOld)
         #expect(fifty.field == "v12")
-        // A removed version on screen selects nothing.
         let removed = Self.versions(50, current: nil)
         #expect(!removed.isOld)
         #expect(removed.field == "All 50")
@@ -113,7 +109,6 @@ struct VersionSwitchTests {
             video: URL(fileURLWithPath: "/demo/cut.mp4"), isDemo: true, project: HeaderWords.Project(title: "Launch", version: "v1")
         )
         #expect(demo.folder == "Demo")
-        // A plain video has no project words, and no switcher.
         let plain = HeaderWords(video: URL(fileURLWithPath: "/Users/me/Movies/sample.mp4"), isDemo: false, home: "/Users/me")
         #expect(!plain.isProject)
         #expect(plain.folder == nil)
@@ -121,10 +116,6 @@ struct VersionSwitchTests {
     }
 }
 
-/// The version switcher in a window, through the app model and its
-/// control server with no scene and no socket: `version show` keeps the
-/// playhead's time, the field names an older version, the picker opens
-/// with a search, and a plain video has no switcher.
 @Suite("Switching versions", .serialized)
 struct VersionSwitcherTests {
     static let operatorHolder = Holder(key: "codex-1", name: "Codex", place: "/Users/me/shop")
@@ -138,10 +129,6 @@ struct VersionSwitcherTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// The app on a fresh folder with the lease held, the server in front
-    /// of it, and `w1` holding the project `launch-video`: v1 the sample,
-    /// v2 the launch video, then `more` copies of the sample, the last on
-    /// screen.
     private func run(more: Int = 0) async throws -> (app: AppModel, window: WindowModel, server: ControlServer) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"], speech: SlowRecognizer())
         let window = app.makeWindow()
@@ -196,11 +183,9 @@ struct VersionSwitcherTests {
         #expect(switcher["picker"] is NSNull)
         #expect(await ask(.state, server).output.contains("switcher: [v1] v2\n"))
 
-        // The version on screen again changes nothing; one outside the list is refused.
         #expect(await ask(.versionShow(number: 1), server).ok)
         #expect(abs(window.engine.time - 1.5) < 0.05)
         #expect(await ask(.versionShow(number: 9), server).error == "the project launch-video has no v9; it has v1 to v2")
-        // A project of two versions has no picker.
         #expect(await ask(.versionPick(), server).error
             == "the project has 2 versions, each one a segment; the picker is for a project of more than 3")
         app.listeners.stop()
@@ -210,7 +195,6 @@ struct VersionSwitcherTests {
     func playsOnAndClamps() async throws {
         defer { cleanUp() }
         let (app, window, _) = try await run()
-        // v2 is the launch video, longer than v1, the sample.
         try await window.switchVersion(to: 1)
         let shorter = window.engine.duration
         try await window.switchVersion(to: 2)
@@ -264,7 +248,6 @@ struct VersionSwitcherTests {
         #expect(picker["matches"] as? [Int] == [3])
         #expect(picker["highlighted"] as? Int == 3)
 
-        // Typing and Up and Down, as the picker's field takes them.
         window.typeVersionQuery("")
         window.moveVersionHighlight(by: 3)
         #expect(window.state().project?.switcher?.picker?.highlighted == 2)
@@ -276,17 +259,14 @@ struct VersionSwitcherTests {
         #expect(window.versionNumber == 2)
         #expect(window.versionPicker == nil)
 
-        // v1 is older than the segments: the field names it.
         #expect(await ask(.versionShow(number: 1), server).ok)
         switcher = try #require(window.versionSwitch)
         #expect(switcher.isOld)
         #expect(switcher.field == "v1")
         #expect(await ask(.state, server).output.contains("switcher: v3 v4 v5, [v1]\n"))
-        // The thread list agrees: v1 on screen has its own marked section.
         #expect(window.state().sidebar?.versions?.onScreen == 1)
         #expect(window.state().sidebar?.versions?.sections.contains(1) == true)
 
-        // A thread of another version shown from the list moves the switcher with it.
         try await window.switchVersion(to: 2)
         _ = try await window.addMessage(text: "Logo too small", at: 1)
         #expect(await ask(.versionShow(number: 5), server).ok)
@@ -296,7 +276,6 @@ struct VersionSwitcherTests {
         #expect(window.state().project?.switcher?.selected == 2)
         #expect(window.state().sidebar?.versions?.onScreen == 2)
 
-        // Escape and version close close the picker.
         _ = try window.openVersionPicker()
         #expect(window.escape())
         #expect(window.versionPicker == nil)

@@ -6,7 +6,6 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The fake app answers each first-run action with a fixed window.
 extension ControlServerTests.FakeApp {
     func firstRun(_ action: FirstRunAction) async throws(AppRefusal) -> (line: String, firstRun: StateReport.FirstRun) {
         calls.append("firstRun \(action)")
@@ -17,12 +16,6 @@ extension ControlServerTests.FakeApp {
     }
 }
 
-/// The first-run window: it shows at launch until the person
-/// uses the app, every step can be passed or skipped, Tools and Connect act on the
-/// Connect view's setup, the demo prompt takes the picked harness's form,
-/// and Open the Demo opens the bundled video for the person, whose sends
-/// are marked as the demo's. The app model and its control server, with
-/// setup on a file system in memory; no scene and no socket.
 @Suite("The first-run window", .serialized)
 struct FirstRunTests {
     static let agent = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
@@ -35,8 +28,6 @@ struct FirstRunTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// Setup as the probe finds it: Claude Code with its skill, the Codex
-    /// app without it; the command not linked.
     private func setup() -> SetupDesk {
         SetupDesk(
             environment: ["HOME": SetupDeskTests.home, "SHELL": "/bin/zsh"], bundle: SetupDeskTests.bundle,
@@ -49,7 +40,6 @@ struct FirstRunTests {
         )
     }
 
-    /// The app on the test's folder, the demo video bundled as `demoVideo`.
     private func app(environment: [String: String] = [:], demoVideo: URL? = WindowTests.launch) -> AppModel {
         AppModel(
             environment: [SupportFolder.overrideVariable: support.path].merging(environment) { $1 }, speech: SlowRecognizer(),
@@ -92,13 +82,11 @@ struct FirstRunTests {
         let next = app()
         #expect(next.showFirstRunOnFirstLaunch())
 
-        // Quit as the app quits: the positions are saved, nothing else.
         next.savePositions()
         #expect(!next.firstRunDone)
         #expect(app().showFirstRunOnFirstLaunch())
     }
 
-    /// The first run is done on `app`, and the next launch doesn't show it.
     private func expectDone(_ app: AppModel, sourceLocation: SourceLocation = #_sourceLocation) {
         #expect(app.firstRunDone, sourceLocation: sourceLocation)
         #expect(app.firstRunReport.done, sourceLocation: sourceLocation)
@@ -225,7 +213,6 @@ struct FirstRunTests {
         let app = app()
         let server = server(app)
         _ = await reply(server, .firstRunShow())
-        // Before a pick: the harness whose skill and app are detected.
         #expect(app.firstRunReport.harness == "claude-code")
         #expect(app.firstRunReport.readiness == "ready")
         #expect(app.firstRunReport.prompt == "/havooch-mate use Havooch to open the demo video and listen for my feedback")
@@ -292,11 +279,9 @@ struct FirstRunTests {
         #expect(!app.firstRun.isShowing)
         let window = try #require(app.windows.window("w1"))
         #expect(window.video?.contentHash == DemoVideo.contentHash)
-        // On the person's own data, as `havooch open` opens it.
         #expect(!app.isDemo)
         try window.pause()
 
-        // The agent the demo prompt started listens to it, and its first send says it's the demo.
         let wait = Task { await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 30, video: WindowTests.launch.path).sent(by: Self.agent)) }
         _ = try await window.addMessage(text: "Make the title bigger", at: 3)
         _ = try await window.sendQueue()
@@ -315,8 +300,6 @@ struct FirstRunTests {
     }
 }
 
-/// Where the first-run window opens: centered over the player window in
-/// front, kept on that window's screen; centered on the screen with none.
 @Suite("The first-run window's place")
 struct FirstRunPlaceTests {
     let screen = CGRect(x: 0, y: 0, width: 1512, height: 944)

@@ -6,9 +6,6 @@ import ReviewCore
 import ReviewWire
 import Testing
 
-/// Messages on threads through the app's model, on the fixture video, in a
-/// temporary support folder: the path a click and a CLI command share. No
-/// window, no socket.
 @Suite("Messages on threads", .serialized)
 struct MessageTests {
     static let fixture = URL(fileURLWithPath: #filePath)
@@ -34,7 +31,6 @@ struct MessageTests {
         return (image.width, image.height)
     }
 
-    /// Waits until `condition` holds: the person's gestures finish in a task.
     private func eventually(_ condition: () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {
@@ -70,7 +66,6 @@ struct MessageTests {
         #expect(size.width == Int(natural.width))
         #expect(size.height == Int(natural.height))
 
-        // As a person would: paused on the thread's frame, the thread selected.
         #expect(model.engine.time == 10)
         #expect(!model.engine.isPlaying)
         #expect(model.selection?.text == added.thread.id)
@@ -79,7 +74,6 @@ struct MessageTests {
         #expect(state.threads[1].messages == [added.message])
         #expect(state.threads[1].state == "queued")
         #expect(state.queue == [added.message.id])
-        // Only the keyframe and nothing pending is left in the frames folder.
         #expect(pngs() == ["\(hash)/frames/t-\(hash8)-1.png"])
     }
 
@@ -97,13 +91,11 @@ struct MessageTests {
         #expect(moment.message.cropPath == nil)
         let crop = try #require(box.message.cropPath)
         #expect(crop.hasSuffix("/crops/\(box.message.id).png"))
-        // 0.29 × 0.15 of 1920 × 1080.
         #expect(try size(of: crop) == (557, 162))
         #expect(try size(of: #require(other.message.cropPath)) == (960, 540))
         let threads = model.state().threads
         #expect(threads.map(\.number) == [0, 1, 2])
         #expect(threads[1].messages.map(\.id) == [moment.message.id, box.message.id, other.message.id])
-        // One keyframe per thread, one crop per region message.
         #expect(pngs().count == 2 + 3)
     }
 
@@ -113,7 +105,6 @@ struct MessageTests {
         let model = try await model()
         try await model.seek(to: 4)
         let first = try await model.addMessage(text: "Here", at: nil)
-        // 4.02 s is still the frame that starts at 4 s, at 30 frames a second.
         try await model.seek(to: 4.02)
         let second = try await model.addMessage(text: "Same frame", at: nil)
         let third = try await model.addMessage(text: "Same frame by time", at: 4.03)
@@ -143,7 +134,6 @@ struct MessageTests {
         #expect(general.thread.number == 0)
         #expect(general.thread.time == nil)
         #expect(general.thread.keyframePath == nil)
-        // General has no frame: the player stays.
         #expect(model.engine.time == 5)
         #expect(model.state().threads.map(\.number) == [0, 1])
     }
@@ -191,7 +181,6 @@ struct MessageTests {
         #expect(model.draft == WindowModel.Draft(time: 12.5, text: ""))
         #expect(model.state().popover == StateReport.Popover(thread: 1, time: 12.5, text: ""))
 
-        // No words: Return leaves the popover open.
         model.commitDraft()
         #expect(model.draft != nil)
 
@@ -204,7 +193,6 @@ struct MessageTests {
         #expect(thread.messages.map(\.text) == ["From the popover"])
         #expect(try size(of: #require(thread.keyframePath)).width > 0)
 
-        // The popover still open names the thread it now continues.
         #expect(model.state().popover?.thread == 1)
         #expect(model.draftThread?.messages.map(\.text) == ["From the popover"])
         model.draft?.text = "never mind"
@@ -225,16 +213,13 @@ struct MessageTests {
         #expect(try model.editMessage(early.message.id, text: "earlier").text == "earlier")
         #expect(model.state().threads[1].messages.map(\.text) == ["earlier", "also early"])
 
-        // The region message goes with its crop; its thread stays with its keyframe.
         #expect(try model.deleteMessage(early.message.id).id == early.message.id)
         #expect(!FileManager.default.fileExists(atPath: try #require(early.message.cropPath)))
         #expect(FileManager.default.fileExists(atPath: try #require(early.thread.keyframePath)))
 
-        // The last message of #1 (at 15 s) goes, and the thread with it.
         _ = try model.deleteMessage(late.message.id)
         #expect(model.state().threads.map(\.number) == [0, 2])
         #expect(!FileManager.default.fileExists(atPath: try #require(late.thread.keyframePath)))
-        // Its number isn't given again.
         #expect(try await model.addMessage(text: "new", at: 15).thread.number == 3)
     }
 
@@ -255,7 +240,6 @@ struct MessageTests {
         model.jumpToMarker(forward: true)
         await eventually { model.engine.time == 15 }
         #expect(model.selection?.text == second.thread.id)
-        // No pin after the last one; General has none.
         model.jumpToMarker(forward: true)
         #expect(model.selection?.text == second.thread.id)
         model.jumpToMarker(forward: false)
@@ -286,16 +270,13 @@ struct MessageTests {
     @Test("a thread's key is the start of the frame on screen, raised to the next millisecond")
     func frameTimes() {
         let thirty = 1.0 / 30
-        // A frame at 30 a second starts at 7.2333… s: 7.233 would name the frame before it.
         #expect(PlayerEngine.frameTime(of: 217.0 / 30, frameDuration: thirty, duration: 21.233) == 7.234)
         #expect(PlayerEngine.frameTime(of: 7.25, frameDuration: thirty, duration: 21.233) == 7.234)
         #expect(PlayerEngine.frameTime(of: 10, frameDuration: thirty, duration: 21.233) == 10)
         #expect(PlayerEngine.frameTime(of: 10.000_000_000_2, frameDuration: thirty, duration: 21.233) == 10)
         #expect(PlayerEngine.frameTime(of: 10.033, frameDuration: thirty, duration: 21.233) == 10)
-        // The end is past the last frame (637 frames), which it names.
         #expect(PlayerEngine.frameTime(of: 21.233, frameDuration: thirty, duration: 21.233) == 21.2)
         #expect(PlayerEngine.frameTime(of: -0.01, frameDuration: thirty, duration: 21.233) == 0)
-        // At 29.97 frames a second the third frame starts at 0.066733… s.
         #expect(PlayerEngine.frameTime(of: 0.07, frameDuration: 1001.0 / 30000, duration: 10) == 0.067)
     }
 
@@ -309,9 +290,6 @@ struct MessageTests {
 
     @Test("the player and the keyframe are asked for a time to the millisecond, so both show the thread's frame")
     func exactTime() {
-        // At 29.97 frames a second the third frame starts at 0.066733… s, and
-        // its thread is at 0.067 s. A coarser time (0.0666… s in 600ths)
-        // would name the frame before it.
         let frameStart = 2 * 1001.0 / 30000
         #expect(PlayerEngine.exact(0.067) == CMTime(value: 4020, timescale: 60_000))
         #expect(PlayerEngine.exact(0.067).seconds >= frameStart)
@@ -331,14 +309,11 @@ struct MessageTests {
         #expect(end.leading == 1000 - CommentPopover.width - 10)
         #expect(end.notch == CommentPopover.width - 22)
 
-        // The track sits in the bar between its buttons, not under the
-        // stage's whole width: the playhead is on the track.
         let stage = CGRect(x: 12, y: 40, width: 1000, height: 560)
         let track = CGRect(x: 160, y: 620, width: 700, height: 30)
         #expect(CommentPopover.playhead(fraction: 0, track: track, stage: stage) == 148)
         #expect(CommentPopover.playhead(fraction: 0.5, track: track, stage: stage) == 498)
         #expect(CommentPopover.playhead(fraction: 1, track: track, stage: stage) == 848)
-        // Before the track is laid out, the stage stands for it.
         #expect(CommentPopover.playhead(fraction: 0.5, track: .zero, stage: stage) == 500)
     }
 }

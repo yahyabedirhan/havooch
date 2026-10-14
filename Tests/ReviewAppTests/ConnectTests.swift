@@ -6,12 +6,6 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The Connect view: its three entry points, the outbox banner
-/// after Send with no agent, the picked harness's readiness and prompt,
-/// the listener card's Disconnect, reconnecting after a relaunch with
-/// Forget, and the connect button's dot. The app model and its control
-/// server on the fixture video, with setup on a file system in memory; no
-/// scene and no socket.
 @Suite("The Connect view", .serialized)
 struct ConnectTests {
     static let claude = Holder(key: "claude-1", name: "Claude Code", place: "/Users/me/shop")
@@ -24,8 +18,6 @@ struct ConnectTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// Setup as the probe finds it: Claude Code with its skill, the Codex
-    /// app without it, Pi nowhere; linked when `linked`.
     private func setup(linked: Bool = false) -> SetupDesk {
         var items: [String: FileItem] = [
             SetupDeskTests.command: .file,
@@ -39,8 +31,6 @@ struct ConnectTests {
         )
     }
 
-    /// The app on the test's folder with the fixture open in one window,
-    /// and the server in front of it.
     private func run(linked: Bool = false) async throws -> (window: WindowModel, server: ControlServer) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], setup: setup(linked: linked))
         let window = app.makeWindow()
@@ -90,7 +80,6 @@ struct ConnectTests {
         #expect(answer.reply.ok)
         #expect(window.outboxBanner == .delivered(messages: 3, to: "Claude Code"))
         #expect(window.outboxBanner?.text == "Delivered 3 messages to Claude Code")
-        // Connected: the listener card, and setup counts as working.
         #expect(window.sidebarReport.connect?.phase == "connected")
         #expect(window.sidebarReport.connect?.listener?.agent == "Claude Code")
         #expect(window.sidebarReport.connect?.listener?.place == "/Users/me/shop")
@@ -99,7 +88,6 @@ struct ConnectTests {
         #expect(window.app.agentConnectedOnce)
         #expect(!window.app.setupReport.needsFinishing)
         #expect(!window.showsConnectDot)
-        // Kept for the next launch.
         let next = AppModel(environment: [SupportFolder.overrideVariable: support.path], setup: setup())
         #expect(next.agentConnectedOnce)
     }
@@ -132,7 +120,6 @@ struct ConnectTests {
         #expect(window.sidebarReport.connect?.reason == "header")
         #expect(window.escape())
         #expect(window.connect == nil)
-        // Back from the Connect view goes to the thread view it covered.
         _ = try await window.addMessage(text: "Too fast here", at: 2)
         let thread = try #require(window.frameThreads.first)
         window.showThread(thread.id)
@@ -151,7 +138,6 @@ struct ConnectTests {
         defer { cleanUp() }
         let (window, _) = try await run()
         let video = MessageTests.fixture.lastPathComponent
-        // With nothing picked: the harness whose skill and app are detected.
         #expect(window.connectHarness.agent == .claude)
 
         var connect = try #require(try window.pickHarness(named: "claude-code").connect)
@@ -180,7 +166,6 @@ struct ConnectTests {
         defer { cleanUp() }
         let (window, _) = try await run(linked: false)
         #expect(window.showsConnectDot)
-        // Codex is found without the skill: the skill step isn't done.
         #expect(!window.app.setup.isSkillDetected)
         #expect(window.app.setup.isLinked == false)
     }
@@ -211,19 +196,16 @@ struct ConnectTests {
         let (window, server) = try await run()
         _ = try await window.addMessage(text: "Too fast here", at: 2)
         _ = try await window.sendQueue()
-        // The agent takes the send and works on it: no wait is open.
         let taken = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.claude))
         #expect(taken.reply.ok)
         #expect(window.listenerPhase(at: Date()) != .none)
 
         #expect(try window.disconnectAgent() == "Claude Code")
-        // Its send is first in line again, for the next agent.
         #expect(window.listeners().outbox.pending.count == 1)
         let next = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.claude))
         #expect(next.reply == .refused(
             "the person disconnected you from this video or project in Havooch: stop listening and tell the person"
         ))
-        // Only once: the person may connect it again.
         let again = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: Self.claude))
         #expect(again.reply.ok)
     }
@@ -237,7 +219,6 @@ struct ConnectTests {
         window.app.listeners.stop()
         _ = await wait.value
 
-        // The next launch, on the same data.
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], setup: setup())
         let relaunched = app.makeWindow()
         try await relaunched.open(MessageTests.fixture)

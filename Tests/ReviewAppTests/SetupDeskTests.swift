@@ -5,8 +5,6 @@ import ReviewWire
 import Synchronization
 import Testing
 
-/// A file system in memory, as `lstat` reads each path; a link is followed
-/// once. Paths in `failing` can't be made.
 final class MemoryFileSystem: SetupFileSystem {
     let items: Mutex<[String: FileItem]>
     let failing: Set<String>
@@ -40,9 +38,6 @@ final class MemoryFileSystem: SetupFileSystem {
     func remove(at path: String) throws { items.withLock { $0[path] = nil } }
 }
 
-/// A process runner that runs nothing: `npx` is found when `hasNode`; the
-/// install writes `lines`, may "install" the skill on the file system, and
-/// ends with `status`, or with `holds` runs until cancelled.
 final class ScriptedRunner: ProcessRunner {
     let hasNode: Bool
     let lines: [String]
@@ -109,7 +104,6 @@ struct SetupDeskTests {
             "/havooch-mate listen for my feedback on cut2.mp4", "/skill:havooch-mate listen for my feedback on cut2.mp4",
             "Use the havooch-mate skill to listen for my feedback on cut2.mp4",
         ])
-        // OpenCode reads Claude Code's skills folder too.
         #expect(setup.line == "setup: command line not detected; skill detected for Claude Code, OpenCode")
     }
 
@@ -229,7 +223,6 @@ struct SetupDeskTests {
 }
 
 extension StateReport {
-    /// The install as `state --json` reports it.
     fileprivate typealias Install = Setup.Install
 }
 

@@ -38,7 +38,6 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: 42, modifiers: [], isTyping: true) == nil)
     }
 
-    /// Return and the keypad's Enter.
     @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app",
           arguments: [36, 76] as [UInt16])
     func sendKey(keyCode: UInt16) {
@@ -52,10 +51,8 @@ struct ShortcutsTests {
 
     @Test("Return alone starts a comment, and Cmd with another key isn't a send")
     func returnAlone() {
-        // Return alone still starts a comment, and is the text view's while typing.
         #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
         #expect(Shortcuts.action(keyCode: 36, modifiers: [], isTyping: true) == nil)
-        // Cmd with another key isn't a send.
         #expect(Shortcuts.action(keyCode: 49, modifiers: .command, isTyping: true) == nil)
     }
 
@@ -74,12 +71,10 @@ struct ShortcutsTests {
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.insertTab(_:)), shift: false) == .nextControl)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.insertBacktab(_:)), shift: true) == .previousControl)
-        // Every other command is the text view's own: typing, moving, deleting.
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.deleteBackward(_:)), shift: false) == nil)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.moveLeft(_:)), shift: false) == nil)
     }
 
-    /// Space, Return and the keypad's Enter.
     @Test("while a control has the keyboard focus, Space and Return press it; other keys stay the player's",
           arguments: [49, 36, 76] as [UInt16])
     func focusedControlKeys(keyCode: UInt16) {
@@ -116,14 +111,11 @@ struct ShortcutsTests {
         #expect(model.pressFocusedControl())
         #expect(pressed == ["notice"])
 
-        // Tab gives the next control the focus before the last one hears
-        // that it lost it: the late loss leaves the new control focused.
         model.focusControl(symbol) { pressed.append("symbol") }
         model.blurControl(notice)
         #expect(model.pressFocusedControl())
         #expect(pressed == ["notice", "symbol"])
 
-        // The focus leaves for the video: Space is the player's again.
         model.blurControl(symbol)
         #expect(!model.isControlFocused)
         #expect(!model.pressFocusedControl())
@@ -140,18 +132,15 @@ struct ShortcutsTests {
         let row = UUID(), stop = UUID()
 
         model.focusControl(row) { pressed.append("row") }
-        // The agent-control popover opens, and its Stop button takes the focus.
         model.focusControl(stop) { pressed.append("stop") }
         #expect(model.pressFocusedControl())
         #expect(pressed == ["stop"])
 
-        // The popover closes: the row in the player's window has the focus again.
         model.blurControl(stop)
         #expect(model.isControlFocused)
         #expect(model.pressFocusedControl())
         #expect(pressed == ["stop", "row"])
 
-        // A control that takes the focus again is the one Space presses.
         model.focusControl(stop) { pressed.append("stop") }
         model.focusControl(row) { pressed.append("row") }
         model.blurControl(row)
@@ -170,7 +159,6 @@ struct ShortcutsTests {
         #expect(Shortcuts.isControlFocused(reported: true, firstResponderIsControl: false, keyboardNavigation: false))
         #expect(Shortcuts.isControlFocused(reported: true, firstResponderIsControl: true, keyboardNavigation: false))
         #expect(!Shortcuts.isControlFocused(reported: false, firstResponderIsControl: false, keyboardNavigation: true))
-        // With keyboard navigation off and nothing reported, Space plays and pauses.
         let focused = Shortcuts.isControlFocused(reported: false, firstResponderIsControl: true, keyboardNavigation: false)
         #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: focused) == .togglePlay)
     }

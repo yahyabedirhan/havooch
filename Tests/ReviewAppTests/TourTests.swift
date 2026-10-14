@@ -6,11 +6,6 @@ import ReviewSetup
 import ReviewWire
 import Testing
 
-/// The setup tour  and "Finish setup": when the button shows and
-/// what it counts, the five steps and the part each one rings, the sidebar
-/// each step shows, what moves a step on by itself, and Skip, Close and
-/// Finish. The app model and its control server on the fixture video, with
-/// setup on a file system in memory; no scene and no socket.
 @Suite("The setup tour", .serialized)
 struct TourTests {
     static let claude = Holder(key: "claude-1", name: "Claude Code", place: "/Users/me/shop")
@@ -22,8 +17,6 @@ struct TourTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// Setup as the probe finds it: Claude Code with its skill, linked
-    /// when `linked`; the Codex app without the skill unless `skilled`.
     private func setup(linked: Bool = false, skilled: Bool = false) -> SetupDesk {
         var items: [String: FileItem] = [
             SetupDeskTests.command: .file,
@@ -74,7 +67,6 @@ struct TourTests {
         #expect(window.setupItemsLeft == 3)
         #expect(window.tourReport.finishSetup)
         #expect(window.state().tour?.setupItemsLeft == 3)
-        // The same rule as the connect button's dot.
         #expect(window.showsConnectDot)
 
         let wait = waiting(server)
@@ -83,7 +75,6 @@ struct TourTests {
         #expect(!window.showsFinishSetup)
         #expect(!window.showsConnectDot)
         #expect(window.setupItemsLeft == 2)
-        // The wait ends with a send.
         _ = try await window.addMessage(text: "Too fast here", at: 2)
         _ = try await window.sendQueue()
         _ = await wait.value
@@ -97,7 +88,6 @@ struct TourTests {
         #expect(!window.showsFinishSetup)
         #expect(!window.showsConnectDot)
         #expect(window.setupItemsLeft == 1)
-        // An open tour keeps its button, so the button that closes it stays.
         _ = try window.showTour()
         #expect(window.showsFinishSetup)
     }
@@ -157,7 +147,6 @@ struct TourTests {
         var tour = try window.closeTour()
         #expect(!tour.open && tour.step == "connect")
         #expect(window.tourRings.isEmpty)
-        // Finish setup opens it where it was left.
         window.toggleTour()
         #expect(window.tour.isOpen && window.tour.step == .connect)
         window.toggleTour()
@@ -183,7 +172,6 @@ struct TourTests {
         #expect(window.tour.step == .write)
         #expect(window.tourAgentName == "Claude Code")
 
-        // Write an Example puts the words in the composer, as `composer set` does.
         window.writeTourExample()
         #expect(window.composerText == WindowModel.tourExample)
 
@@ -206,7 +194,6 @@ struct TourTests {
         #expect(window.tourReplyThread?.text == added.thread.id)
         #expect(window.tourReport.replied)
 
-        // Finish ends the tour.
         let tour = try window.nextTourStep()
         #expect(!tour.open && tour.step == "tools")
     }

@@ -4,9 +4,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The home screen: when the stage shows it, what each recent-video card
-/// says, which frame its thumbnail is, and what a click on a card does.
-/// No window: the views are checked through app control.
 @Suite("The home screen", .serialized)
 struct HomeScreenTests {
     let support = FileManager.default.temporaryDirectory
@@ -25,7 +22,6 @@ struct HomeScreenTests {
         }
     }
 
-    /// A recent video whose file is not on the disk.
     private func gone(_ hash: String = "gone") -> StateReport.Recent {
         StateReport.Recent(RecentVideo(path: "/nowhere/\(hash).mp4", contentHash: hash, openedAt: Date(), position: 4))
     }
@@ -75,7 +71,6 @@ struct HomeScreenTests {
         #expect(RecentCard.openedLabel(now.addingTimeInterval(-20), now: now, locale: locale) == "Just now")
         #expect(RecentCard.openedLabel(now.addingTimeInterval(-2 * 3600), now: now, locale: locale) == "2 hours ago")
         #expect(RecentCard.openedLabel(now.addingTimeInterval(-3 * 86400), now: now, locale: locale) == "3 days ago")
-        // A clock that went back reads as now, never as the future.
         #expect(RecentCard.openedLabel(now.addingTimeInterval(600), now: now, locale: locale) == "Just now")
     }
 
@@ -127,14 +122,11 @@ struct HomeScreenTests {
         await thumbnails.load(recent)
         let image = try #require(thumbnails.image(for: recent))
         #expect(image.size.width > 0)
-        // A second load keeps the same image.
         await thumbnails.load(recent)
         #expect(thumbnails.image(for: recent) === image)
-        // Another position is another frame.
         var moved = recent
         moved.position = 4
         #expect(thumbnails.image(for: moved) == nil)
-        // Nothing is written to the support folder.
         let written = (try? FileManager.default.contentsOfDirectory(atPath: support.path)) ?? []
         #expect(!written.contains { $0.lowercased().contains("thumb") })
     }

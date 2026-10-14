@@ -16,7 +16,6 @@ struct PlayerBarTests {
         ReviewThread(id: ItemID(.thread, hash8: "f92cbb2a", number: number), time: time, messages: messages)
     }
 
-    /// A palette with the question colour and the working colour apart.
     private static let palette = Palette(theme: ResolvedTheme(name: "Test", kind: .light, colors: [
         .question: ThemeColor("#00aaaa")!, .stateWorking: ThemeColor("#aa8800")!,
     ]))
@@ -73,7 +72,6 @@ struct PlayerBarTests {
         #expect(answered.color(in: Self.palette) == Self.palette[.stateWorking])
         #expect(answered.color(in: Self.palette) != Self.palette[.question])
 
-        // A question on a thread whose work is still queued fills the ring.
         let queued = ThreadPin.Look(Self.thread(5, at: 1, [Self.message(5), question]))
         #expect(!queued.isSquare)
         #expect(!queued.isRing)

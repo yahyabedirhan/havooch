@@ -6,9 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The comparison's rules (compare-control V4), pure: it opens on
-/// the previous version and the one on screen, a side given the other
-/// side's version swaps them, and the slider stays inside the picture.
 @Suite("The compare session")
 struct CompareSessionTests {
     @Test("Compare opens on the previous version and the one on screen", arguments: [
@@ -66,15 +63,10 @@ struct CompareSessionTests {
         #expect(CompareSession.name(of: .right, in: .flip) == "B")
         #expect(CompareSession.name(of: .right, in: .slider) == "Right")
         #expect(CompareLayout.allCases.map(CompareSession.words) == ["Side by side", "Flip", "Slider"])
-        // Never the stacked-layers symbol.
         #expect(CompareLayout.allCases.allSatisfy { !CompareSession.symbol($0).contains("stack") })
     }
 }
 
-/// Compare in a window, through the app model and its
-/// control server with no scene and no socket: the popover's choice, two
-/// players on one playhead, messages on the side the person picks, and
-/// back to one version.
 @Suite("Comparing versions", .serialized)
 struct CompareTests {
     static let operatorHolder = Holder(key: "codex-1", name: "Codex", place: "/Users/me/shop")
@@ -88,10 +80,6 @@ struct CompareTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// The app on a fresh folder with the lease held, the server in front
-    /// of it, and `w1` holding the project `launch-video`: v1 the sample,
-    /// v2 the launch video, then `more` copies of the sample, the last on
-    /// screen.
     private func run(more: Int = 0) async throws -> (app: AppModel, window: WindowModel, server: ControlServer) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
         let window = app.makeWindow()
@@ -121,7 +109,6 @@ struct CompareTests {
         try #require(try JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
     }
 
-    /// The window's `project.compare` in `state --json`.
     private func compare(_ server: ControlServer) async throws -> [String: Any]? {
         let state = try object(await ask(.state, server, json: true).output)
         return (state["project"] as? [String: Any])?["compare"] as? [String: Any]
@@ -139,7 +126,6 @@ struct CompareTests {
         #expect(opened.output == "compare: popover, v3 on the left and v4 on the right, side by side\n")
         #expect(window.compare?.phase == .choosing)
 
-        // A click on the left side opens its picker; typing searches.
         let picked = await ask(.comparePick(side: .left, query: "alt"), server)
         #expect(picked.output.hasSuffix("  picker left \"alt\": 1 match, v3 highlighted\n"))
         let shown = try #require(try await compare(server))
@@ -148,7 +134,6 @@ struct CompareTests {
         #expect(picker["matches"] as? [Int] == [3])
         #expect(shown["active"] is NSNull)
 
-        // Return picks the highlighted row; the version on the other side swaps the sides.
         window.typeCompareQuery("")
         window.moveCompareHighlight(by: 0)
         #expect(await ask(.compareSet(CompareChange(left: 1)), server).ok)
@@ -159,12 +144,10 @@ struct CompareTests {
         #expect(await ask(.compareSwap, server).output == "compare: popover, v1 on the left and v4 on the right, side by side\n")
         #expect(await ask(.compareSet(CompareChange(layout: .slider, slider: 0.25)), server).output
             == "compare: popover, v1 on the left and v4 on the right, slider at 25%\n")
-        // The side messages go to is picked on the stage; a version outside the list is refused.
         #expect(await ask(.compareSet(CompareChange(side: .left)), server).error
             == "the side messages go to is picked on the stage, once the window compares")
         #expect(await ask(.compareSet(CompareChange(right: 9)), server).error == "the project has no v9; it has v1 to v4")
 
-        // Escape closes the side picker, then the popover; compare exit is Cancel.
         try window.pickCompareSide(.right)
         #expect(window.escape())
         #expect(window.compare?.picker == nil)
@@ -194,10 +177,8 @@ struct CompareTests {
         #expect(abs(pair.left.time - 1.5) < 0.05)
         #expect(abs(pair.right.time - 1.5) < 0.05)
         #expect(!window.canCompare)
-        // Only the active side is heard.
         #expect(!pair.right.player.isMuted)
         #expect(pair.left.player.isMuted)
-        // The app's level is both sides'; muted, neither plays a sound.
         app.setVolume(0.3)
         #expect(pair.left.player.volume == 0.3)
         #expect(pair.right.player.volume == 0.3)
@@ -205,7 +186,6 @@ struct CompareTests {
         #expect(pair.left.player.volume == 0)
         #expect(pair.right.player.volume == 0)
 
-        // One playhead: a seek moves both, play plays both, pause pauses both.
         try await window.seek(to: 0.5)
         #expect(abs(pair.left.time - 0.5) < 0.05)
         #expect(abs(pair.right.time - 0.5) < 0.05)
@@ -219,7 +199,6 @@ struct CompareTests {
         #expect(!pair.left.isPlaying)
         #expect(!pair.right.isPlaying)
         #expect(abs(pair.left.player.currentTime().seconds - pair.right.player.currentTime().seconds) < 0.05)
-        // The speed is both sides'.
         window.setSpeed(1.5)
         #expect(pair.left.speed == 1.5)
         #expect(pair.right.speed == 1.5)
@@ -251,20 +230,16 @@ struct CompareTests {
         try await window.seek(to: 1)
         #expect(await ask(.compareStart, server).ok)
 
-        // The right side, v2, takes the first message.
         let first = try await window.addMessage(text: "Logo too small", at: 1)
         #expect(first.thread.version?.number == 2)
 
-        // A drag on the left side draws on v1.
         window.beginRegion(on: .left)
         #expect(window.activeSide == .left)
         #expect(window.versionNumber == 1)
-        // The sound follows the active side.
         #expect(window.pair?.left.player.isMuted == false)
         #expect(window.pair?.right.player.isMuted == true)
         window.endRegion(try Region(x: 0.1, y: 0.1, w: 0.3, h: 0.3))
         window.draft?.text = "Crop the title"
-        // A click on the right side: the words are queued on v1, where they were written.
         window.clickFrame(on: .right)
         #expect(window.activeSide == .right)
         let deadline = ContinuousClock.now + .seconds(60)
@@ -274,22 +249,18 @@ struct CompareTests {
         let onV1 = try #require(window.threads.first { $0.anchor?.path == Self.sample.path })
         #expect(onV1.messages.first?.text == "Crop the title")
         #expect(onV1.messages.first?.region != nil)
-        // Each side's frame shows its own version's thread.
         #expect(window.frameMarks.map(\.number) == [first.thread.number])
         #expect(window.frameMarks(on: .left).map(\.number) == [onV1.number])
 
-        // The composer writes to the active side.
         _ = try window.compose(text: "And the colour", region: nil, general: false)
         #expect(try await window.writeComposer() == .reply)
         #expect(window.threads.first { $0.number == first.thread.number }?.messages.count == 2)
 
-        // A thread of the other side's version makes that side active, without leaving Compare.
         _ = try await window.showThread(onV1.id.text)
         #expect(window.isComparing)
         #expect(window.activeSide == .left)
         #expect(await ask(.state, server).output.contains("messages go to v1 on the left"))
 
-        // compare set --side does what a click does.
         #expect(await ask(.compareSet(CompareChange(side: .right)), server).ok)
         #expect(window.activeSide == .right)
         app.listeners.stop()
@@ -310,7 +281,6 @@ struct CompareTests {
         #expect(await ask(.compareSet(CompareChange(side: .left)), server).ok)
         #expect(window.compare?.showing == .left)
 
-        // A swap keeps the picture: the version showing stays, on the other side.
         #expect(await ask(.compareSwap, server).output
             == "compare: v2 on the left and v1 on the right, flip showing the right, messages go to v1 on the right\n")
         #expect(window.versionNumber == 1)
@@ -334,18 +304,14 @@ struct CompareTests {
         #expect(await ask(.compareStart, server).ok)
         #expect((window.compare?.number(.left), window.compare?.number(.right)) == (2, 3))
 
-        // The left side, not active, takes v1.
         #expect(await ask(.compareSet(CompareChange(left: 1)), server).ok)
         #expect(window.companion?.url == Self.sample)
         #expect(abs((window.pair?.left.time ?? 0) - 1) < 0.05)
-        // The right side, active, takes v2: the version on screen changes with it.
         #expect(await ask(.compareSet(CompareChange(right: 2)), server).ok)
         #expect(window.versionNumber == 2)
         #expect(window.video?.url == Self.launch)
-        // A side's new player is heard only when its side is active.
         #expect(window.pair?.right.player.isMuted == false)
         #expect(window.pair?.left.player.isMuted == true)
-        // v1 on the right swaps the sides; v2 stays active, now on the left.
         #expect(await ask(.compareSet(CompareChange(right: 1)), server).ok)
         #expect((window.compare?.number(.left), window.compare?.number(.right)) == (2, 1))
         #expect(window.activeSide == .left)
@@ -353,25 +319,21 @@ struct CompareTests {
         #expect(window.pair?.left.player.isMuted == false)
         #expect(window.pair?.right.player.isMuted == true)
 
-        // version show of a side's version makes that side active.
         #expect(await ask(.versionShow(number: 1), server).ok)
         #expect(window.isComparing)
         #expect(window.activeSide == .right)
         #expect(await ask(.versionShow(number: 2), server).ok)
         #expect(window.activeSide == .left)
 
-        // Escape ends Compare: the right side's version is on screen.
         #expect(window.escape())
         #expect(!window.isComparing)
         #expect(window.versionNumber == 1)
 
-        // Another version ends a comparison and comes on screen.
         #expect(await ask(.compareStart, server).ok)
         #expect(await ask(.versionShow(number: 3), server).ok)
         #expect(!window.isComparing)
         #expect(window.versionNumber == 3)
 
-        // Closing the window ends a comparison: the inactive side's player lets its video go.
         #expect(await ask(.compareStart, server).ok)
         let companion = try #require(window.pair?.engine(window.activeSide?.other ?? .left))
         app.windowClosed(window)

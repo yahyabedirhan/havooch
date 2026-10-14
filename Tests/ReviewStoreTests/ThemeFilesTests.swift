@@ -3,10 +3,8 @@ import ReviewCore
 import ReviewStore
 import Testing
 
-/// The shipped theme files, the person's theme folder and `settings.json`.
 @Suite("Theme files and settings")
 struct ThemeFilesTests {
-    /// `Packaging/Themes/`, which `make bundle` copies into the app.
     static let shipped = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Packaging/Themes", isDirectory: true)
@@ -103,12 +101,10 @@ struct ThemeFilesTests {
         }
     }
 
-    /// A saturated hue between magenta and rose.
     private static func isPink(_ color: ThemeColor) -> Bool {
         let (r, g, b) = (Double(color.red) / 255, Double(color.green) / 255, Double(color.blue) / 255)
         let high = max(r, g, b), low = min(r, g, b)
         guard high - low > 0.08, high == r else { return false }
-        // Red is highest; pink leans to blue more than to green.
         let hue = 60 * ((g - b) / (high - low))
         let degrees = hue < 0 ? hue + 360 : hue
         return degrees > 290 && degrees < 350
@@ -130,8 +126,6 @@ struct ThemeFilesTests {
         #expect(reading.problems.first?.contains("a.json") == true)
     }
 
-    /// The surface tokens 0.1.0 had and the one-surface window removed, and
-    /// `controlPressed`, which the native buttons left with no view.
     static let removedSurfaces = ["stage", "bar", "sidebar", "sidebarSection", "sidebarRowHover", "sidebarRowSelected", "header", "controlPressed"]
 
     @Test("the window is one surface: no token or built-in theme names a surface of its own for the header, the stage, the bar or the sidebar")

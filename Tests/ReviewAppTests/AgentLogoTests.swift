@@ -4,9 +4,6 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// Every known agent's logo is a file the app bundles: an agent added to
-/// `KnownAgent`, or a logo renamed, without its PDF in `AgentLogos` would
-/// show an empty mark.
 @Suite("Agent logos")
 struct AgentLogoTests {
     @Test("every known agent's logo loads, in light and dark mode, and a template logo is a template image", arguments: KnownAgent.allCases)
