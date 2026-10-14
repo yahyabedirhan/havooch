@@ -151,7 +151,7 @@ final class SoundPanelClicks {
         stop()
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { [weak self] event in
             let isKey = event.type == .keyDown
-            if isKey, event.keyCode != 53 { return event }
+            if isKey, event.keyCode != KeyCode.escape { return event }
             let swallow = MainActor.assumeIsolated { () -> Bool in
                 if isKey {
                     close()

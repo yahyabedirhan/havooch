@@ -237,8 +237,8 @@ struct RegionMessageTests {
         #expect(!FileManager.default.fileExists(atPath: support.appendingPathComponent("videos").path))
 
         #expect(!model.escape())
-        #expect(Shortcuts.action(keyCode: 53, modifiers: []) == .cancel)
-        #expect(Shortcuts.action(keyCode: 53, modifiers: [], isTyping: true) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.escape, modifiers: []) == .cancel)
+        #expect(Shortcuts.action(keyCode: KeyCode.escape, modifiers: [], isTyping: true) == nil)
         #expect(MessageEditor.keyAction(for: #selector(NSResponder.cancelOperation(_:)), shift: false) == .cancel)
     }
 
@@ -275,12 +275,12 @@ struct RegionMessageTests {
         let (window, field) = windowWithAField(for: model)
         _ = try model.compose(text: "Half a thought", region: nil, general: false)
         #expect(window.makeFirstResponder(field))
-        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isTyping: window.firstResponder is NSText) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: [], isTyping: window.firstResponder is NSText) == nil)
 
         model.clickFrame()
         #expect(!(window.firstResponder is NSText))
-        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isTyping: window.firstResponder is NSText) == .togglePlay)
-        #expect(Shortcuts.action(keyCode: 8, modifiers: [], isTyping: window.firstResponder is NSText) == .startMessage)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: [], isTyping: window.firstResponder is NSText) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.c, modifiers: [], isTyping: window.firstResponder is NSText) == .startMessage)
         #expect(model.composerText == "Half a thought")
         #expect(field.string == "Half a thought")
 

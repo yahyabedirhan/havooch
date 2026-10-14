@@ -7,39 +7,39 @@ import Testing
 struct ShortcutsTests {
     @Test("Space and K play and pause, the arrows move 5 s, with Shift one frame")
     func keys() {
-        #expect(Shortcuts.action(keyCode: 49, modifiers: []) == .togglePlay)
-        #expect(Shortcuts.action(keyCode: 40, modifiers: []) == .togglePlay)
-        #expect(Shortcuts.action(keyCode: 123, modifiers: []) == .skip(seconds: -5))
-        #expect(Shortcuts.action(keyCode: 124, modifiers: []) == .skip(seconds: 5))
-        #expect(Shortcuts.action(keyCode: 123, modifiers: .shift) == .step(frames: -1))
-        #expect(Shortcuts.action(keyCode: 124, modifiers: .shift) == .step(frames: 1))
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: []) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.k, modifiers: []) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.leftArrow, modifiers: []) == .skip(seconds: -5))
+        #expect(Shortcuts.action(keyCode: KeyCode.rightArrow, modifiers: []) == .skip(seconds: 5))
+        #expect(Shortcuts.action(keyCode: KeyCode.leftArrow, modifiers: .shift) == .step(frames: -1))
+        #expect(Shortcuts.action(keyCode: KeyCode.rightArrow, modifiers: .shift) == .step(frames: 1))
     }
 
     @Test("J and L move 10 s, the comma and the period one frame")
     func quickTimeKeys() {
-        #expect(Shortcuts.action(keyCode: 38, modifiers: []) == .skip(seconds: -10))
-        #expect(Shortcuts.action(keyCode: 37, modifiers: []) == .skip(seconds: 10))
-        #expect(Shortcuts.action(keyCode: 43, modifiers: []) == .step(frames: -1))
-        #expect(Shortcuts.action(keyCode: 47, modifiers: []) == .step(frames: 1))
+        #expect(Shortcuts.action(keyCode: KeyCode.j, modifiers: []) == .skip(seconds: -10))
+        #expect(Shortcuts.action(keyCode: KeyCode.l, modifiers: []) == .skip(seconds: 10))
+        #expect(Shortcuts.action(keyCode: KeyCode.comma, modifiers: []) == .step(frames: -1))
+        #expect(Shortcuts.action(keyCode: KeyCode.period, modifiers: []) == .step(frames: 1))
     }
 
     @Test("Up and Down jump between markers, C and Return start a comment")
     func commentKeys() {
-        #expect(Shortcuts.action(keyCode: 126, modifiers: []) == .marker(forward: false))
-        #expect(Shortcuts.action(keyCode: 125, modifiers: []) == .marker(forward: true))
-        #expect(Shortcuts.action(keyCode: 8, modifiers: []) == .startMessage)
-        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
+        #expect(Shortcuts.action(keyCode: KeyCode.upArrow, modifiers: []) == .marker(forward: false))
+        #expect(Shortcuts.action(keyCode: KeyCode.downArrow, modifiers: []) == .marker(forward: true))
+        #expect(Shortcuts.action(keyCode: KeyCode.c, modifiers: []) == .startMessage)
+        #expect(Shortcuts.action(keyCode: KeyCode.returnKey, modifiers: []) == .startMessage)
     }
 
     @Test("backslash flips Compare's Flip, and is no key while the person types")
     func flipKey() {
-        #expect(Shortcuts.action(keyCode: 42, modifiers: []) == .flip)
-        #expect(Shortcuts.action(keyCode: 42, modifiers: .shift) == nil)
-        #expect(Shortcuts.action(keyCode: 42, modifiers: [], isTyping: true) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.backslash, modifiers: []) == .flip)
+        #expect(Shortcuts.action(keyCode: KeyCode.backslash, modifiers: .shift) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.backslash, modifiers: [], isTyping: true) == nil)
     }
 
     @Test("Cmd+Return sends the queue, also while the person types; with any other modifier it's no key of the app",
-          arguments: [36, 76] as [UInt16])
+          arguments: [KeyCode.returnKey, KeyCode.keypadEnter])
     func sendKey(keyCode: UInt16) {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command) == .send)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isTyping: true) == .send)
@@ -51,12 +51,15 @@ struct ShortcutsTests {
 
     @Test("Return alone starts a comment, and Cmd with another key isn't a send")
     func returnAlone() {
-        #expect(Shortcuts.action(keyCode: 36, modifiers: []) == .startMessage)
-        #expect(Shortcuts.action(keyCode: 36, modifiers: [], isTyping: true) == nil)
-        #expect(Shortcuts.action(keyCode: 49, modifiers: .command, isTyping: true) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.returnKey, modifiers: []) == .startMessage)
+        #expect(Shortcuts.action(keyCode: KeyCode.returnKey, modifiers: [], isTyping: true) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: .command, isTyping: true) == nil)
     }
 
-    @Test("while the person types, no key reaches the player", arguments: [49, 40, 38, 37, 43, 47, 123, 124, 125, 126, 8, 36, 76] as [UInt16])
+    @Test("while the person types, no key reaches the player", arguments: [
+        KeyCode.space, KeyCode.k, KeyCode.j, KeyCode.l, KeyCode.comma, KeyCode.period, KeyCode.leftArrow, KeyCode.rightArrow,
+        KeyCode.downArrow, KeyCode.upArrow, KeyCode.c, KeyCode.returnKey, KeyCode.keypadEnter,
+    ])
     func typing(keyCode: UInt16) {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != nil)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true) == nil)
@@ -76,7 +79,7 @@ struct ShortcutsTests {
     }
 
     @Test("while a control has the keyboard focus, Space and Return press it; other keys stay the player's",
-          arguments: [49, 36, 76] as [UInt16])
+          arguments: [KeyCode.space, KeyCode.returnKey, KeyCode.keypadEnter])
     func focusedControlKeys(keyCode: UInt16) {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isControlFocused: true) == .pressControl)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: .numericPad, isControlFocused: true) == .pressControl)
@@ -84,15 +87,15 @@ struct ShortcutsTests {
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: .command, isControlFocused: true) != .pressControl)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: [], isTyping: true, isControlFocused: true) == nil)
         #expect(Shortcuts.action(keyCode: keyCode, modifiers: []) != .pressControl)
-        #expect(Shortcuts.action(keyCode: 125, modifiers: [], isControlFocused: true) == .marker(forward: true))
-        #expect(Shortcuts.action(keyCode: 40, modifiers: [], isControlFocused: true) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.downArrow, modifiers: [], isControlFocused: true) == .marker(forward: true))
+        #expect(Shortcuts.action(keyCode: KeyCode.k, modifiers: [], isControlFocused: true) == .togglePlay)
     }
 
     @Test("Space on a focused control presses it and doesn't play; with no control focused, Space plays and pauses")
     func spaceOnFocusedControl() {
-        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: true) == .pressControl)
-        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: false) == .togglePlay)
-        #expect(Shortcuts.action(keyCode: 36, modifiers: [], isControlFocused: false) == .startMessage)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: [], isControlFocused: true) == .pressControl)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: [], isControlFocused: false) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.returnKey, modifiers: [], isControlFocused: false) == .startMessage)
     }
 
     @Test("Space presses the control that has the keyboard focus: a notice card, a symbol button, a chip or a row")
@@ -160,14 +163,14 @@ struct ShortcutsTests {
         #expect(Shortcuts.isControlFocused(reported: true, firstResponderIsControl: true, keyboardNavigation: false))
         #expect(!Shortcuts.isControlFocused(reported: false, firstResponderIsControl: false, keyboardNavigation: true))
         let focused = Shortcuts.isControlFocused(reported: false, firstResponderIsControl: true, keyboardNavigation: false)
-        #expect(Shortcuts.action(keyCode: 49, modifiers: [], isControlFocused: focused) == .togglePlay)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: [], isControlFocused: focused) == .togglePlay)
     }
 
     @Test("a key with Command, Option or Control, or any other key, is left alone")
     func others() {
-        #expect(Shortcuts.action(keyCode: 49, modifiers: .command) == nil)
-        #expect(Shortcuts.action(keyCode: 124, modifiers: .option) == nil)
-        #expect(Shortcuts.action(keyCode: 123, modifiers: [.control, .shift]) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.space, modifiers: .command) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.rightArrow, modifiers: .option) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.leftArrow, modifiers: [.control, .shift]) == nil)
         #expect(Shortcuts.action(keyCode: 0, modifiers: []) == nil)
     }
 }
