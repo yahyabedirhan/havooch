@@ -3,13 +3,6 @@ import ReviewConfig
 import Testing
 import TOMLDecoder
 
-// The published schema (`schema/config.schema.json`) is the contract agents
-// check their edits against with `taplo check`. These tests check it with a
-// small validator that covers the JSON Schema keywords the file uses, after
-// Swift Lab's schema tests (yahyabedirhan/swift-lab at ccb82cb,
-// `Tests/LabConfigTests/ConfigurationSchemaTests.swift`).
-
-/// This checkout: three folders up from this file.
 private let checkout = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
@@ -18,7 +11,6 @@ private func loadSchema() throws -> [String: Any] {
     return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 }
 
-/// A TOML value in the shape JSON Schema sees it.
 private indirect enum Value {
     case object([String: Value])
     case array([Value])
@@ -49,7 +41,6 @@ private func value(of array: TOMLArray) -> Value {
     })
 }
 
-/// The schema violations in `text`, as "path: problem".
 private func violations(_ text: String, schema: [String: Any]) throws -> [String] {
     var found: [String] = []
     check(value(of: try TOMLTable(source: text)), against: schema, at: "", into: &found)
@@ -94,7 +85,6 @@ private func check(_ value: Value, against schema: [String: Any], at path: Strin
     }
 }
 
-/// Every property path the schema declares, such as `projects[].slug`.
 private func declaredPaths(_ schema: [String: Any], at path: String = "") -> Set<String> {
     var paths: Set<String> = []
     if let properties = schema["properties"] as? [String: Any] {
@@ -110,7 +100,6 @@ private func declaredPaths(_ schema: [String: Any], at path: String = "") -> Set
     return paths
 }
 
-/// Every key path set in a TOML value, in the same notation.
 private func setPaths(_ value: Value, at path: String = "") -> Set<String> {
     switch value {
     case .object(let object):

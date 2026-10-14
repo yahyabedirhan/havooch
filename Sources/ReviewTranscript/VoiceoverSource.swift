@@ -41,7 +41,6 @@ public struct VoiceoverSource: Transcriber {
         var lines: [TranscriptLine] = []
         var frame = 0.0
         for scene in voiceover.scenes {
-            // 247.5 frames are 248; 248 frames with a float's noise aren't 249.
             let frames = max(0, ((scene.durationSeconds + (scene.paddingSeconds ?? 0)) * frameRate - 1e-6).rounded(.up))
             let text = (scene.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {

@@ -1,22 +1,12 @@
 import SwiftUI
 
-/// A command Havooch runs in the login shell, shown in full before it runs
-/// (connect-view V3): the line on top, then a footer bar under a hairline
-/// with where it runs, a copy icon and Run Command. While it runs, the
-/// line dims and the footer holds the live log line and Cancel instead.
-/// It has the shape of `CopyBox`.
 struct RunBox: View {
     let text: String
     let running: Bool
-    /// The last line the running command wrote.
     var log = ""
-    /// Whether Run Command can start it now: false while another command runs.
     var canRun = true
-    /// The player window whose key monitor a focused button tells; nil
-    /// outside a player window.
     let keysWindow: WindowModel?
     let run: () -> Void
-    /// Cancel in the footer while it runs; none without it.
     var cancel: (() -> Void)?
 
     @State private var copied = false
@@ -91,7 +81,6 @@ struct RunBox: View {
         }
     }
 
-    /// A footer button's label: semibold caption on a soft fill of `colour`.
     private func pill(_ label: some View, _ colour: Color) -> some View {
         label
             .font(.caption.weight(.semibold))

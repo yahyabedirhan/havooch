@@ -111,8 +111,6 @@ public struct ConfigIssue: Equatable, Sendable, CustomStringConvertible {
         line.map { "line \($0): \(message)" } ?? message
     }
 
-    /// TOMLDecoder's parse errors carry the line only in their description,
-    /// as "(Line 3) Syntax error: …".
     init(invalidTOML error: any Error) {
         let (line, detail) = Self.splitLine(from: String(describing: error))
         self.init(line: line, message: "invalid TOML: \(detail)")

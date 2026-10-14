@@ -1,8 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch composer set`: the composer at the sidebar's foot, written in
-/// as the person types.
 enum ComposerCommands {
     static let group = CommandGroup(
         name: "composer", summary: "write in the sidebar's composer", section: .drive, commands: [

@@ -83,12 +83,8 @@ public struct ThemeCatalog: Equatable, Sendable {
         public var name: String { file.name }
     }
 
-    /// The themes that can be used, by name.
     public private(set) var entries: [Entry]
-    /// The themes left out, each with its reason, as a line.
     public private(set) var problems: [String] = []
-    /// The built-in default themes, the last fallback even when a user
-    /// theme replaces one of them.
     private var builtInDefaults: [ThemeKind: ThemeFile] = [:]
 
     /// `user` themes replace the `builtIn` ones of the same name (without
@@ -128,7 +124,6 @@ public struct ThemeCatalog: Equatable, Sendable {
     public func resolve(_ name: String, overrides: [String: String] = [:]) throws(ThemeRefusal) -> ResolvedTheme {
         guard let entry = entry(named: name) else { throw .unknown(name) }
         let byKey = Dictionary(uniqueKeysWithValues: entries.map { (Self.key($0.name), $0) })
-        // The catalog only keeps themes whose chain resolves.
         var files = ((try? Self.chain(of: entry, in: byKey)) ?? [entry]).map(\.file)
         if let base = byKey[Self.key(Self.defaultName(of: entry.file.kind))], let baseChain = try? Self.chain(of: base, in: byKey) {
             files += baseChain.map(\.file)
@@ -146,7 +141,6 @@ public struct ThemeCatalog: Equatable, Sendable {
                 system.insert(token)
             }
         }
-        // Where each token's value came from: its file's place in `files`.
         var source: [ThemeToken: Int] = [:]
         for token in ThemeToken.allCases {
             for (index, file) in files.enumerated() {
@@ -162,9 +156,6 @@ public struct ThemeCatalog: Equatable, Sendable {
             set(token, value)
             overridden.insert(token)
         }
-        // The fill follows the theme's own accent: a theme (or an override)
-        // that sets `accent` nearer than `accentFill` gets a fill made
-        // from that accent, not the fallback's fill in another hue.
         let accentIsNearer = if overridden.contains(.accentFill) {
             false
         } else if overridden.contains(.accent) {
@@ -178,13 +169,10 @@ public struct ThemeCatalog: Equatable, Sendable {
         return ResolvedTheme(name: entry.name, kind: entry.file.kind, colors: colors, system: system)
     }
 
-    /// What a token's text in a theme file counts as.
     private enum Value {
         case painted(ThemeColor)
         case system
 
-        /// A colour that reads, or `system` on a surface token; nil
-        /// (missing) for anything else.
         init?(_ text: String, for token: ThemeToken) {
             if text == ThemeCatalog.system {
                 guard ThemeToken.systemSurfaces.contains(token) else { return nil }
@@ -215,13 +203,10 @@ public struct ThemeCatalog: Equatable, Sendable {
         kind == .light ? defaultLight : defaultDark
     }
 
-    // MARK: - The chain
-
     private struct Broken: Error {
         var reason: String
     }
 
-    /// `entry`, then each theme it extends, in order.
     private static func chain(of entry: Entry, in byKey: [String: Entry]) throws(Broken) -> [Entry] {
         var chain = [entry]
         var seen: Set<String> = [key(entry.name)]

@@ -2,11 +2,8 @@ import Foundation
 import ReviewConfig
 import Testing
 
-/// `config.toml` as Havooch reads it: every key, the problems that reject a
-/// file, each on its line, and the warnings that don't.
 @Suite("Reading config.toml")
 struct ConfigFileTests {
-    /// A file that sets every key Havooch reads.
     static let everyKey = """
         #:schema \(ConfigFile.schemaURL)
         version = 1
@@ -137,8 +134,6 @@ struct ConfigFileTests {
     }
 }
 
-/// Where the file is: a moved support folder first, then
-/// `XDG_CONFIG_HOME`, then `~/.config`.
 @Suite("Where config.toml is")
 struct ConfigLocationTests {
     @Test("~/.config/havooch by default, with config.toml and themes/ in it")

@@ -1,17 +1,11 @@
 import ReviewCore
 import SwiftUI
 
-/// The brief notices in the stage's top-right corner: what the agent just
-/// said, under a line that names the thread (`#3 · Claude Code`). Every
-/// notice fades by itself after a few seconds, a question too: the question
-/// stays open on its thread, where the person answers it. A click
-/// opens the thread it's on.
 struct Notices: View {
     let model: WindowModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let width: CGFloat = 300
-    /// The most notices shown at once: the newest ones.
     static let most = 3
 
     var body: some View {
@@ -19,7 +13,6 @@ struct Notices: View {
             ForEach(model.notices.suffix(Self.most)) { notice in
                 NoticeCard(notice: notice) { model.openNotice(notice.id) }
                     .pressedByKeys(in: model) { model.openNotice(notice.id) }
-                    // In from the edge, and out as a fade.
                     .transition(.asymmetric(
                         insertion: reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity),
                         removal: .opacity
@@ -32,7 +25,6 @@ struct Notices: View {
     }
 }
 
-/// One notice: who said what, on which thread.
 private struct NoticeCard: View {
     let notice: Notice
     let open: () -> Void
@@ -69,8 +61,6 @@ private struct NoticeCard: View {
             )
             .contentShape(shape)
         }
-        // A native borderless button: the card dims while pressed and
-        // takes the focus ring under keyboard navigation.
         .buttonStyle(.borderless)
         .help(help)
         .accessibilityElement(children: .combine)
@@ -88,7 +78,6 @@ private struct NoticeCard: View {
         }
     }
 
-    /// The symbol an unknown agent's notice shows.
     private var symbol: String {
         switch notice.kind {
         case .acknowledgement: "checkmark"

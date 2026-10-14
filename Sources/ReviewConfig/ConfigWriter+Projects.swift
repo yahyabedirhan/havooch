@@ -1,10 +1,5 @@
 import Foundation
 
-// The two project writes of `config.toml`: append a
-// `[[projects]]` table, and append a version to one project's `versions`.
-// Like the theme line, each changes only its own lines, and is refused
-// unless the result reads back as the file's settings with only that change.
-
 extension ConfigWriter {
     /// `text` with a new `[[projects]]` table at its end: `slug`, `title`
     /// when there is one, and `versions` holding `firstVersion`, which is
@@ -31,7 +26,6 @@ extension ConfigWriter {
         if let title { table.append("title = \(ConfigReader.tomlString(title))") }
         table += versionsArray([firstVersion], lead: "")
         var lines = text.components(separatedBy: "\n")
-        // The file ends on one empty line; the table goes after a blank one.
         while lines.last == "" { lines.removeLast() }
         if !lines.isEmpty { lines.append("") }
         lines += table + [""]
@@ -64,7 +58,6 @@ extension ConfigWriter {
         try needAbsolute(version.path)
         let project = before.config.projects[index]
         let map = TOMLSourceMap(text)
-        // A file that reads has every project, in the file's order.
         let table: ConfigPath = [.key("projects"), .index(index)]
         guard map.entries.contains(where: { $0.isHeader && $0.path == table }) else {
             throw ConfigWriteFailure("the project `\(slug)` isn't written as a [[projects]] table")
@@ -79,7 +72,6 @@ extension ConfigWriter {
             let end = inTable.map(\.endLine).max() ?? lines.count
             var body = ["[[projects.versions]]", "path = \(ConfigReader.tomlString(version.path))"]
             if let label = version.label { body.append("label = \(ConfigReader.tomlString(label))") }
-            // After the project's last version, past its trailing blank lines.
             var at = end
             while at > 0, lines[at - 1].trimmingCharacters(in: .whitespaces).isEmpty { at -= 1 }
             lines.insert(contentsOf: [""] + body, at: at)
@@ -98,9 +90,6 @@ extension ConfigWriter {
         return edited
     }
 
-    // MARK: - Helpers
-
-    /// `versions = [` with one `{ path, label }` per line, then `]`.
     static func versionsArray(_ versions: [ProjectEntry.Version], lead: String) -> [String] {
         let items = versions.map { version in
             let label = version.label.map { ", label = \(ConfigReader.tomlString($0))" } ?? ""
@@ -123,7 +112,6 @@ extension ConfigWriter {
         }
     }
 
-    /// Refused unless `edited` reads as `expected`, with the same warnings.
     private static func readsBack(
         _ edited: String, as expected: ConfigFile, warnings: [ConfigIssue], change: String
     ) throws(ConfigWriteFailure) {

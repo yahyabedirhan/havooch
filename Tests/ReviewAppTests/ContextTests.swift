@@ -5,10 +5,6 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// The video context: where it's read from, and when a send carries it.
-/// The app's model on a copy of the fixture video in a temporary folder,
-/// whose sidecar files the tests write, and the control server in front of
-/// it. No window, no socket.
 @Suite("The video context", .serialized)
 struct ContextDeliveryTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -19,7 +15,6 @@ struct ContextDeliveryTests {
 
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
-    /// The folder the video is in, beside its sidecars.
     let folder = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
 
@@ -35,8 +30,6 @@ struct ContextDeliveryTests {
         try text.write(to: folder.appendingPathComponent(name), atomically: true, encoding: .utf8)
     }
 
-    /// The model with a copy of the fixture open as `clip.mp4`, and the
-    /// server in front of it.
     private func app() async throws -> (WindowModel, ControlServer) {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: video.path) {
@@ -55,8 +48,6 @@ struct ContextDeliveryTests {
         try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
     }
 
-    /// Sends one message and takes it with a `wait`: the
-    /// payload's `context`, nil for `null`.
     private func contextOfNextSend(
         _ model: WindowModel, _ server: ControlServer, as holder: Holder = listener
     ) async throws -> String? {
@@ -65,15 +56,12 @@ struct ContextDeliveryTests {
         return try await contextOfWait(server, as: holder)
     }
 
-    /// The `context` of the payload the next `wait` gets, nil for `null`.
     private func contextOfWait(_ server: ControlServer, as holder: Holder = listener) async throws -> String? {
         let answer = await server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: holder))
         let payload = try object(answer.reply.output)
         #expect(payload.keys.contains("context"))
         return payload["context"] as? String
     }
-
-    // MARK: - Where the context is read from
 
     @Test("the sidecar is <video base name>.context.md in the video's folder, else context.md, else none")
     func sidecarLookup() throws {
@@ -85,7 +73,6 @@ struct ContextDeliveryTests {
         try write("\nFor every video here\n\n", to: "context.md")
         #expect(ContextReader.sidecar(beside: video)
             == .init(file: folder.appendingPathComponent("context.md"), text: "For every video here"))
-        // Another video's own sidecar isn't this one's.
         try write("About another clip", to: "other.context.md")
         #expect(ContextReader.sidecar(beside: video)?.text == "For every video here")
 
@@ -93,7 +80,6 @@ struct ContextDeliveryTests {
         #expect(ContextReader.sidecar(beside: video)
             == .init(file: folder.appendingPathComponent("clip.context.md"), text: "About the clip"))
 
-        // A blank file of the video's own: it opts out of the folder's.
         try write("  \n", to: "clip.context.md")
         #expect(ContextReader.sidecar(beside: video)?.text == "")
         #expect(ContextReader.text(sidecar: ContextReader.sidecar(beside: video)?.text, note: "") == nil)
@@ -118,8 +104,6 @@ struct ContextDeliveryTests {
         #expect(ContextReader.noteHeading == Self.noteHeading)
     }
 
-    // MARK: - When a send carries it
-
     @Test("the first send of a listener session has the context, the next has null, and a new note or a changed sidecar puts it in again")
     func oncePerSession() async throws {
         defer { cleanUp() }
@@ -129,7 +113,6 @@ struct ContextDeliveryTests {
         #expect(try await contextOfNextSend(model, server) == "About the clip")
         #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The note, as an operator sets it.
         let set = await server.reply(to: ControlRequest.contextSet(text: " Mind the intro\n").sent(by: Self.operatorAgent))
         #expect(set.reply == .done("context note set (14 characters)\n"))
         let state = try object(await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output)
@@ -137,12 +120,10 @@ struct ContextDeliveryTests {
         #expect(try await contextOfNextSend(model, server) == "About the clip\n\n\(Self.noteHeading)\n\nMind the intro")
         #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The sidecar changes on disk: nothing watches it, the next send reads it.
         try write("About the clip, second cut\n", to: "clip.context.md")
         #expect(try await contextOfNextSend(model, server) == "About the clip, second cut\n\n\(Self.noteHeading)\n\nMind the intro")
         #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The note cleared is a change too.
         let cleared = await server.reply(to: ControlRequest.contextSet(text: "").sent(by: Self.operatorAgent))
         #expect(cleared.reply == .done("context note cleared\n"))
         #expect(try await contextOfNextSend(model, server) == "About the clip, second cut")
@@ -156,7 +137,6 @@ struct ContextDeliveryTests {
         #expect(try await contextOfNextSend(model, server) == "About the clip")
         #expect(try await contextOfNextSend(model, server) == nil)
 
-        // The listener restarts under another key: both sends are in line again.
         #expect(try await contextOfWait(server, as: Self.restarted) == "About the clip")
         #expect(try await contextOfWait(server, as: Self.restarted) == nil)
         #expect(model.listeners().outbox.session?.key == Self.restarted.key)
@@ -202,8 +182,6 @@ struct ContextDeliveryTests {
         #expect(try await contextOfNextSend(model, server) == "For every video here")
     }
 
-    // MARK: - The note
-
     @Test("the note is kept per video, without the space around it, and is back when the video opens again")
     func notePerVideo() async throws {
         defer { cleanUp() }
@@ -214,8 +192,6 @@ struct ContextDeliveryTests {
         #expect(model.contextNote == "Mind the intro")
         #expect(model.state().video?.contextNote == "Mind the intro")
 
-        // The same content under another name, in another folder, is the
-        // same video: its note is back.
         try await model.open(MessageTests.fixture)
         #expect(model.contextNote == "Mind the intro")
         #expect(model.sidecar?.file.lastPathComponent == "sample.context.md")
@@ -230,8 +206,6 @@ struct ContextDeliveryTests {
         }
     }
 
-    // MARK: - The popover
-
     @Test("the popover's Save goes the way context set goes, and closes the popover")
     func saveFromThePopover() async throws {
         defer { cleanUp() }
@@ -239,7 +213,6 @@ struct ContextDeliveryTests {
         let (model, server) = try await app()
         #expect(try await contextOfNextSend(model, server) == "About the clip")
         model.isContextShown = true
-        // The file changed since the video opened: the popover reads it again.
         try write("About the clip, second cut\n", to: "clip.context.md")
         model.readSidecar()
         #expect(model.sidecar?.text == "About the clip, second cut")

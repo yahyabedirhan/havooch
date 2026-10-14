@@ -1,22 +1,11 @@
 import ReviewCore
 import SwiftUI
 
-/// The words of the context popover: what the agent is told about the
-/// video, and when.
 struct ContextWords: Equatable {
-    /// Where the sidecar's text comes from: the file's name, or that the
-    /// video has none.
     var source: String
-    /// When the agent gets the context.
     var delivery: String
-    /// The toolbar button's tooltip.
     var help: String
 
-    /// - Parameters:
-    ///   - sidecar: the name of the sidecar file that serves the video.
-    ///   - names: the names a sidecar of this video may have.
-    ///   - hasContext: whether there's anything to tell: a sidecar's text or a note.
-    ///   - isDue: whether the listener's next send carries the context.
     init(sidecar: String?, names: [String], hasContext: Bool, isDue: Bool) {
         source = sidecar ?? "No \(names.joined(separator: " or ")) beside this video"
         if !hasContext {
@@ -32,13 +21,8 @@ struct ContextWords: Equatable {
     }
 }
 
-/// The toolbar's Context button, with the popover it opens. Its glyph is
-/// filled while the video has a context to send, and pulses while this Mac
-/// transcribes the video's speech.
 struct ContextButton: View {
     @Bindable var model: WindowModel
-    /// The transcript's words, read again each second: speech arrives with
-    /// no event.
     @State private var transcript: TranscriptChip?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
@@ -60,7 +44,6 @@ struct ContextButton: View {
                 .popoverSurface(palette)
         }
         .task {
-            // Ends when the button leaves the toolbar with the video.
             while !Task.isCancelled {
                 let now = model.transcript.map { TranscriptChip($0) }
                 if now != transcript { transcript = now }
@@ -70,18 +53,11 @@ struct ContextButton: View {
     }
 }
 
-/// What the agent is told about the video: the sidecar file's text, which
-/// is read-only here, the person's own note under it, and where the
-/// transcript around each message comes from. Save and Return keep the
-/// note; Escape closes the popover and drops the change.
 struct ContextPopover: View {
     let model: WindowModel
-    /// The note as it's being written; the model's until it's saved.
     @State private var note = ""
 
     static let width: CGFloat = 400
-    /// The sidecar's text scrolls in a box of one height, so the popover
-    /// doesn't change size with the file.
     static let sidecarHeight: CGFloat = 140
     @Environment(\.palette) private var palette
     private static let partShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -136,12 +112,10 @@ struct ContextPopover: View {
         .accessibilityLabel("Context for the agent")
     }
 
-    /// Whether the note in the editor differs from the saved one.
     private var isChanged: Bool {
         note.trimmingCharacters(in: .whitespacesAndNewlines) != model.contextNote
     }
 
-    /// The sidecar's part: the file's name and folder, and its text.
     private func sidecar(_ words: ContextWords) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -175,7 +149,6 @@ struct ContextPopover: View {
         }
     }
 
-    /// The person's note, in the same text view a message is written in.
     private var noteEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -196,8 +169,6 @@ struct ContextPopover: View {
         }
     }
 
-    /// Where the transcript around each message comes from, and how far it
-    /// is. Read again each second, since speech arrives with no event.
     private var transcriptPart: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             if let transcript = model.transcript {

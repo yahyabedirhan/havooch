@@ -2,11 +2,6 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// A project's review: a plain video's
-/// review moves into a project with its ids, every thread anchored to v1;
-/// threads are anchored to the version they were raised on and found by
-/// frame per version; a path that left the list is a removed version; the
-/// payload carries the project.
 @Suite("A project's review")
 struct ProjectReviewTests {
     static let cut1 = VersionAnchor(path: "/Movies/cut1.mp4")
@@ -18,7 +13,6 @@ struct ProjectReviewTests {
         versions: [.init(path: cut1.path), .init(path: cut2.path, label: "tighter intro")]
     )
 
-    /// The sample's review with one thread at 0:10, adopted into the project as v1.
     private func adopted() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast here", at: 10, now: now)
@@ -48,7 +42,6 @@ struct ProjectReviewTests {
         #expect(written.thread.anchor == Self.cut2)
         #expect(review.thread(atFrame: 10, on: Self.cut1)?.id == thread(1))
         #expect(review.thread(atFrame: 10, on: Self.cut2)?.id == thread(2))
-        // A follow-up joins its thread wherever it's anchored.
         let followUp = try review.write(text: "Still too fast", at: nil, to: thread(1), on: Self.cut2, now: now)
         #expect(followUp.thread.id == thread(1))
         #expect(review.video(at: Self.cut2.path)?.contentHash == "0badc0de99")
@@ -112,7 +105,6 @@ struct ProjectReviewTests {
         #expect(payload.project?.versions.map(\.label) == [nil, "tighter intro"])
         #expect(payload.threads.map(\.version?.number) == [2, 1])
 
-        // A path that left the list: the thread names its file with no number.
         let edited = ProjectOutline(slug: "launch-video", title: "Launch video", versions: [.init(path: Self.cut2.path)])
         let later = SendPayload.assemble(review: review, send: sent, context: nil, images: images, project: edited)
         #expect(later.threads.map(\.version?.number) == [1, nil])

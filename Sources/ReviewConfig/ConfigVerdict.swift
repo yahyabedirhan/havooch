@@ -98,7 +98,6 @@ extension ConfigVerdict: Encodable {
         try container.encode(warnings, forKey: .warnings)
     }
 
-    /// `date` in UTC, truncated to the second as `date -r` prints a file's time.
     static func wholeSeconds(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.timeZone = TimeZone(identifier: "UTC")
@@ -112,7 +111,6 @@ extension ConfigIssue: Encodable {
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        // An explicit null rather than a missing key: easier for an agent to read.
         try container.encode(line, forKey: .line)
         try container.encode(message, forKey: .message)
     }
@@ -138,8 +136,6 @@ extension ConfigLocation {
 
     /// The file's verdict now, and what it reads as when it reads.
     public func check(at checked: Date = Date()) -> (verdict: ConfigVerdict, decoded: ConfigFile.Decoded?) {
-        // Taken before the bytes: a save in between gets a later time, so
-        // the verdict never claims a newer file than was read.
         let modified = modified
         do throws(ConfigProblems) {
             let decoded = try read()

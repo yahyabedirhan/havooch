@@ -1,10 +1,6 @@
 import ReviewSetup
 import SwiftUI
 
-/// Step 3, your agent: a harness picker, what Havooch detects of
-/// the picked harness, and its prompt to copy, which stays primary
-/// whatever is detected. Copying it is not a state: there is no "waiting
-/// for you". The step says nobody listens until an agent does.
 struct AgentStep: View {
     let model: WindowModel
     let isActive: Bool
@@ -27,8 +23,6 @@ struct AgentStep: View {
     }
 }
 
-/// The harnesses' logos in a row; the picked one on a soft fill. A harness
-/// Havooch didn't find is dimmed, and can still be picked.
 struct HarnessPicker: View {
     let model: any SetupSteering
     @Environment(\.palette) private var palette
@@ -62,16 +56,11 @@ struct HarnessPicker: View {
         }
     }
 
-    /// The name under a logo: "Claude" for Claude Code, else the name.
     static func short(_ harness: Harness) -> String {
         harness.agent == .claude ? "Claude" : harness.name
     }
 }
 
-/// What Havooch detects of the picked harness, and its prompt: ready
-/// with the skill detected; else a neutral line, the install offered (its
-/// command in a `RunBox` when the harness is found, to copy when it isn't),
-/// and the prompt at full size all the same.
 struct HarnessReadiness: View {
     let model: any SetupSteering
     let harness: Harness
@@ -89,7 +78,6 @@ struct HarnessReadiness: View {
             StepDetail(text: "If it's installed another way, paste the prompt and your agent will take it from there. If not, install it first:")
             let install = model.setup.install
             let running = install?.state == .running
-            // The box runs only while the install that runs is this harness's.
             let mine = running && install?.install.harnesses.contains(harness) == true
             RunBox(
                 text: SkillInstall(for: [harness]).commandLine, running: mine, log: install?.log.last ?? "",

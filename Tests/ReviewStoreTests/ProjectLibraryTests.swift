@@ -3,10 +3,6 @@ import ReviewCore
 import ReviewStore
 import Testing
 
-/// A project's review on disk: `project new` moves a plain
-/// video's review, keyframes and crops to `projects/<slug>/`, its ids
-/// still finding it; a new library reads both kinds of review; and when
-/// each project was last opened is app state in `recents.json`.
 @Suite("Projects in the library")
 struct ProjectLibraryTests {
     static let hash = String(repeating: "a", count: 64)
@@ -38,13 +34,11 @@ struct ProjectLibraryTests {
         #expect(FileManager.default.fileExists(atPath: layout.transcriptFile(Self.hash).path))
         #expect(library.key(of: written.message.id) == Self.project)
 
-        // A new library finds the project's review and its unfinished send.
         let again = Library(layout: layout)
         #expect(again.key(of: sent.id) == Self.project)
         #expect(try again.load(Self.project) == adopted)
         #expect(try again.load(Self.video) == nil)
         #expect(again.loadOutbox(Self.project).pending == [SendRef(sendID: sent.id, review: Self.project)])
-        // The prefix is the project's now: a new plain review of the video needs another.
         #expect(again.isTaken("aaaaaaaa", by: Self.video))
         #expect(!again.isTaken("aaaaaaaa", by: Self.project))
     }

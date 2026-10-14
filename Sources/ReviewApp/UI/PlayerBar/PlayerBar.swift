@@ -1,10 +1,6 @@
 import ReviewWire
 import SwiftUI
 
-/// The fixed bar under the stage: play or pause, the time
-/// and the duration, the timeline with a pin per thread, the Comment button,
-/// the speaker that opens the sound panel (`SoundPanel`) and the speed. It never floats over the video, and it is as tall as the
-/// sidebar's footer beside it, so the two meet on one line.
 struct PlayerBar: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -35,8 +31,6 @@ struct PlayerBar: View {
                 model: model, time: engine.time, duration: engine.duration, threads: model.frameThreads,
                 selection: model.selection, scrub: { model.scrub(to: $0) }, select: { model.openThread($0) }
             )
-            // Where the track is, for the popover's notch to point
-            // at the playhead from the stage above.
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.trackArea = $0 }
 
             Button {
@@ -75,12 +69,10 @@ struct PlayerBar: View {
         .background(palette[.window])
     }
 
-    /// `seconds` as the bar shows it: whole seconds, `m:ss`.
     static func clock(_ seconds: Double) -> String {
         TimeCode.text(seconds.rounded(.down))
     }
 
-    /// `1×`, `1.25×`, with the decimal mark of `locale`.
     static func label(_ speed: Double, locale: Locale = .current) -> String {
         speed.formatted(.number.precision(.fractionLength(0...2)).locale(locale)) + "×"
     }

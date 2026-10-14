@@ -1,21 +1,14 @@
 import Foundation
 import ReviewWire
 
-/// The help of `havooch`, all of it read from `CommandTable`: the top
-/// help, a group's, a command's, and `help --json` with every command. So
-/// the help never lists a command the code doesn't have.
 enum Help {
-    /// Where a person reads more than the help says.
     static let guide = "https://github.com/yahyabedirhan/havooch/blob/main/docs/guide.md"
 
-    /// The usage lines the top help starts with, and an unknown command prints.
     static let usageLines = """
         Usage: havooch <command> [options]
                havooch <group> <verb> [options]
         """
 
-    /// What `help` prints for `topic`: the top help with no words, else the
-    /// command or the group they name; all of it as JSON with `json`.
     static func answer(_ topic: [String], json: Bool, groups: [CommandGroup] = CommandTable.groups) -> CommandResult {
         if topic.isEmpty {
             return json ? ConfigCommands.encoded(Table(groups: groups.map(Group.init))) : CommandResult(output: top(groups))
@@ -32,14 +25,8 @@ enum Help {
         )
     }
 
-    // MARK: - The top help
-
-    /// `havooch --help`: the commands at the top level and the groups, by
-    /// section, each with its summary.
     static func top(_ groups: [CommandGroup] = CommandTable.groups) -> String {
         let sections = HelpSection.allCases.map { section in (section, entries(in: section, groups)) }
-        // The sections that list commands line up together; one of groups
-        // only lines up on its own names, which are short.
         let listsCommands = sections.filter { $0.1.contains { $0.isCommand } }
         let commandWidth = listsCommands.flatMap(\.1).map(\.label.count).max() ?? 0
         let listed = sections.filter { !$0.1.isEmpty }.map { section, entries in
@@ -77,15 +64,12 @@ enum Help {
             """
     }
 
-    /// One line of the top help: a command or a group, and its summary.
     private struct Line {
         var label: String
         var summary: String
         var isCommand: Bool
     }
 
-    /// The lines of `section`: its commands at the top level, then the
-    /// commands of other groups listed there, then its groups.
     private static func entries(in section: HelpSection, _ groups: [CommandGroup]) -> [Line] {
         let commands = groups.flatMap { group in
             group.commands.filter { command in
@@ -101,11 +85,6 @@ enum Help {
             + named.map { Line(label: $0.name ?? "", summary: $0.summary, isCommand: false) }
     }
 
-    // MARK: - A group's help
-
-    /// `havooch player --help`: each command's usage with its summary under
-    /// it. The lease is named for the whole group when each of its commands
-    /// needs it, else on each command that does.
     static func help(for group: CommandGroup) -> String {
         let name = group.name ?? ""
         let operators = group.commands.filter { $0.role == .operator }.count
@@ -135,10 +114,6 @@ enum Help {
             """
     }
 
-    // MARK: - A command's help
-
-    /// `havooch player seek --help`: its summary, its usage, its examples,
-    /// then what else it does, whether it needs the lease, and how it fails.
     static func help(for command: Command) -> String {
         let examples = command.examples.map { "  havooch \(command.name)" + ($0.isEmpty ? "" : " " + $0) }
         let lease = command.role == .operator ? "Needs the lease." : ""
@@ -153,13 +128,10 @@ enum Help {
         return parts.joined(separator: "\n\n") + "\n"
     }
 
-    /// The command's whole usage line, with the options every command or
-    /// its window takes: what wrong usage prints.
     static func usageLine(_ command: Command) -> String {
         "havooch \(command.usage)" + (command.takesWindow ? " [\(Command.windowOption) <id>]" : "") + " [--json]"
     }
 
-    /// `text` in lines of at most `width` columns, broken between words.
     static func wrapped(_ text: String, width: Int = 80) -> String {
         var lines: [String] = []
         var line = ""
@@ -173,20 +145,15 @@ enum Help {
         return (lines + [line]).joined(separator: "\n")
     }
 
-    /// `summary` as a sentence: a capital first and a full stop last.
     private static func sentence(_ summary: String) -> String {
         summary.prefix(1).uppercased() + summary.dropFirst() + (summary.hasSuffix(".") ? "" : ".")
     }
 
-    // MARK: - help --json
-
-    /// Every group, in the help's order.
     private struct Table: Encodable {
         var groups: [Group]
     }
 
     private struct Group: Encodable {
-        /// Absent for the commands at the top level.
         var name: String?
         var summary: String
         var section: String
@@ -222,7 +189,6 @@ enum Help {
         }
     }
 
-    /// The role as `help --json` names it.
     static func name(of role: ControlRequest.Role) -> String {
         switch role {
         case .free: "free"

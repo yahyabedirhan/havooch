@@ -27,16 +27,9 @@ public final class Library {
         }
     }
 
-    /// The review on disk with each id prefix: a listener's command names
-    /// an id, whose prefix names its review.
     private var index: [String: ReviewKey] = [:]
-    /// The content hash of each plain video with a review on disk, by the
-    /// path its review records: `recent.json` named a path only.
     private var paths: [String: String] = [:]
-    /// The sends on disk with a message the listener hasn't finished, in
-    /// the order they were sent, as the reviews read at launch.
     private var unfinished: [SendRef] = []
-    /// The reviews whose outbox file a newer build wrote: each is left as it is.
     private var newerOutboxes: Set<ReviewKey> = []
 
     /// Reads every review under `layout` once, the plain videos' and the
@@ -50,7 +43,6 @@ public final class Library {
         let keys = videos.map { ReviewKey.video(contentHash: $0.lastPathComponent) }
             + projects.map { ReviewKey.project(slug: $0.lastPathComponent) }
         for key in keys {
-            // A review that doesn't read stays out; opening it says why.
             guard let review = try? load(key) else { continue }
             note(review)
             for send in review.sends where !review.isFinished(send.id) {
@@ -59,8 +51,6 @@ public final class Library {
         }
         unfinished = sent.sorted { $0.0 < $1.0 }.map(\.1)
     }
-
-    // MARK: - Reviews
 
     /// The review on disk whose ids carry `prefix`; nil when there's none.
     public func key(prefix: String) -> ReviewKey? {
@@ -85,7 +75,6 @@ public final class Library {
         let file = layout.reviewFile(key)
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let kept: Kept<Review> = try read(file)
-        // A folder that was copied or renamed by hand isn't that review's.
         guard kept.content.key == key else {
             throw Failure(reason: "\(file.path) is the review of another video or project (\(Self.name(kept.content.key)))")
         }
@@ -110,7 +99,6 @@ public final class Library {
             guard let files = try? fileManager.contentsOfDirectory(at: from, includingPropertiesForKeys: nil) else { continue }
             try? fileManager.createDirectory(at: to, withIntermediateDirectories: true)
             for file in files {
-                // A picture that can't move stays; the review file says what's kept.
                 try? fileManager.moveItem(at: file, to: to.appendingPathComponent(file.lastPathComponent))
             }
             try? fileManager.removeItem(at: from)
@@ -125,15 +113,12 @@ public final class Library {
         if let contentHash = review.key.contentHash { paths[review.video.path] = contentHash }
     }
 
-    /// `the video <hash>` or `the project <slug>`.
     private static func name(_ key: ReviewKey) -> String {
         switch key {
         case .video(let contentHash): "the video \(contentHash)"
         case .project(let slug): "the project \(slug)"
         }
     }
-
-    // MARK: - The outboxes
 
     /// The outbox of the review `key` as the last run left it, made to
     /// agree with the reviews on disk (`Outbox.reconcile`): with no file,
@@ -197,36 +182,26 @@ public final class Library {
             do throws(Failure) {
                 try write(Kept(content: former.part(for: key)), to: layout.outboxFile(key))
             } catch {
-                // Tried again on the next launch; nothing is lost meanwhile.
                 return
             }
         }
         try? FileManager.default.removeItem(at: file)
     }
 
-    // MARK: - Recent videos
-
     /// How many recent videos are kept.
     public static let recentLimit = 10
 
     private struct Recents: Codable {
         var videos: [RecentVideo]
-        /// When each project was last opened, by slug: the most recently
-        /// used project opens a video two projects list.
         var projects: [String: Date]?
     }
 
-    /// The last open video, as `recent.json` kept it before the list.
     private struct FormerRecent: Codable {
         var path: String
     }
 
-    /// The recent videos, the newest first, as the last save left them;
-    /// nil until the first read.
     private var recentList: [RecentVideo]?
-    /// When each project was last opened, as the last save left it.
     private var projectUses: [String: Date] = [:]
-    /// Whether `recents.json` is a newer build's, which is left as it is.
     private var recentsAreNewer = false
 
     /// The recent videos, the newest first: at most `recentLimit`. Empty
@@ -287,8 +262,6 @@ public final class Library {
         try? write(Kept(content: Recents(videos: list, projects: projectUses.isEmpty ? nil : projectUses)), to: layout.recentsFile)
     }
 
-    // MARK: - Projects used
-
     /// When each project was last opened, by slug. Empty when none was,
     /// or `recents.json` doesn't read.
     public func projectsUsed() -> [String: Date] {
@@ -304,10 +277,6 @@ public final class Library {
         saveRecents(list)
     }
 
-    /// The one entry `recent.json` gives, then `recent.json` deleted. Its
-    /// content hash is the one of the review that records its path, else
-    /// the file's own; a video that's neither gives no entry. A newer
-    /// build's file is left as it is.
     private func migrateFormerRecent() -> [RecentVideo] {
         let file = layout.formerRecentFile
         guard FileManager.default.fileExists(atPath: file.path), !isNewer(file) else { return [] }
@@ -319,7 +288,6 @@ public final class Library {
             do throws(Failure) {
                 try write(Kept(content: Recents(videos: list)), to: layout.recentsFile)
             } catch {
-                // Read again next time.
                 return list
             }
         }
@@ -335,11 +303,6 @@ public final class Library {
         #endif
     }
 
-    // MARK: - Files
-
-    /// A file's content with the schema version beside its own keys:
-    ///
-    ///     { "schemaVersion": 1, "video": { … }, "threads": [ … ], … }
     private struct Kept<Content: Codable>: Codable {
         var schemaVersion = Library.schemaVersion
         var content: Content
@@ -374,7 +337,6 @@ public final class Library {
         var schemaVersion: Int?
     }
 
-    /// Whether the file at `file` says a newer build wrote it.
     private func isNewer(_ file: URL) -> Bool {
         guard let data = try? Data(contentsOf: file), let versioned = try? Self.decoder.decode(Versioned.self, from: data)
         else { return false }
@@ -397,7 +359,6 @@ public final class Library {
         do {
             let data = try Self.encoder.encode(kept)
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            // To a temporary file, then renamed over the old one.
             try data.write(to: file, options: .atomic)
         } catch {
             throw Failure(reason: "couldn't write \(file.path): \(Self.words(of: error))")
@@ -414,8 +375,6 @@ public final class Library {
         }
     }
 
-    /// Times are written as ISO 8601 with milliseconds, so a person can
-    /// read the files.
     private static let timeStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     private static var encoder: JSONEncoder {

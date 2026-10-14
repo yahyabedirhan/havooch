@@ -5,12 +5,6 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// A project's thread list by version (thread-list V5),
-/// through the app model and its control server: `state` reports the
-/// sections, the older versions and their open threads; `version menu`
-/// opens "All versions" with its search; `version section <n>` adds an older
-/// version's section and `--remove` takes it out; a plain video's list
-/// stays by group.
 @Suite("Thread list by version", .serialized)
 struct VersionListTests {
     static let claude = Holder(key: "claude-1", name: "Claude Code", place: "/Users/me/shop")
@@ -22,9 +16,6 @@ struct VersionListTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// The sample open in `w1` with a message queued at 0:02, made the
-    /// project `launch-video`, then three more versions added: copies of
-    /// the sample, so v4 is on screen and v1 has an open thread.
     private func project() async throws -> (window: WindowModel, server: ControlServer) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path], speech: SlowRecognizer())
         let window = app.makeWindow()
@@ -49,7 +40,6 @@ struct VersionListTests {
         await server.replyWritten(to: request.sent(by: Self.claude, json: json)).reply
     }
 
-    /// `sidebar.versions` of `state --json`.
     private func versions(_ server: ControlServer) async throws -> [String: Any] {
         let output = await ask(.state, server, json: true).output
         let state = try #require(try JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
@@ -92,7 +82,6 @@ struct VersionListTests {
         #expect(menu["stillOpen"] as? [Int] == [1])
         #expect(menu["older"] as? [Int] == [1])
 
-        // The search keeps its words when it opens again with none.
         #expect(await ask(.threadVersionsOpen(search: nil), server).ok)
         #expect(window.versionMenu == "v1")
         #expect(await ask(.threadVersionsOpen(search: ""), server).ok)
@@ -102,7 +91,6 @@ struct VersionListTests {
         #expect(await ask(.threadVersionsClose, server).ok)
         #expect(try await versions(server)["menu"] is NSNull)
 
-        // Escape closes it too.
         #expect(await ask(.threadVersionsOpen(search: nil), server).ok)
         #expect(window.escape())
         #expect(window.versionMenu == nil)
@@ -117,7 +105,6 @@ struct VersionListTests {
         window.typeVersionSearch("v")
         #expect(window.versionMenu == "v")
         #expect(await ask(.threadVersion(number: 1, remove: false), server).ok)
-        // The field, torn down with the menu, writes back what it shows.
         window.typeVersionSearch("")
         #expect(window.versionMenu == nil)
         #expect(try await versions(server)["menu"] is NSNull)
@@ -140,17 +127,14 @@ struct VersionListTests {
         #expect(versions["showing"] as? String == "Showing v2 to v4, v1")
         #expect(versions["menu"] is NSNull)
         #expect(window.versionJump?.number == 1)
-        // v1's thread keeps its state in its section.
         let section = try #require(window.versionTree?.sections.last)
         #expect(section.threads.map(\.number) == [1])
         #expect(section.threads.first?.state == .queued)
 
-        // A recent version only scrolls: it has its section already.
         #expect(await ask(.threadVersion(number: 3, remove: false), server).ok)
         #expect(window.pickedVersions == [1])
         #expect(window.versionJump?.number == 3)
 
-        // Only a picked version leaves the list.
         let recent = await ask(.threadVersion(number: 3, remove: true), server)
         #expect(recent.error.contains("v3 isn't picked from All versions"))
         let outside = await ask(.threadVersion(number: 9, remove: false), server)
@@ -175,7 +159,6 @@ struct VersionListTests {
         #expect(versions["sections"] as? [Int] == [4, 3, 2, 1])
         #expect(versions["onScreen"] as? Int == 1)
         #expect(versions["picked"] as? [Int] == [])
-        // A version on screen has no close button.
         let removed = await ask(.threadVersion(number: 1, remove: true), server)
         #expect(!removed.ok)
         window.app.listeners.stop()

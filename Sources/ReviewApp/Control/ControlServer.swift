@@ -3,7 +3,6 @@ import ReviewCore
 import ReviewLease
 import ReviewWire
 
-/// Why the app refuses an action, as the one line the command prints.
 nonisolated struct AppRefusal: Error, Equatable {
     var reason: String
 
@@ -12,245 +11,117 @@ nonisolated struct AppRefusal: Error, Equatable {
     }
 }
 
-/// The app as the control server drives it: its windows, and what isn't
-/// one window's. `AppModel` is the real one; the server's tests use a fake.
 protocol AppControlling: AnyObject {
-    /// What the window `window` names shows, else the key window's, with
-    /// every window. Refused for a window that isn't there.
     func state(window: String?) throws(AppRefusal) -> StateReport
-    /// The window an operator command acts on: the one `id` names, else
-    /// the key window. With `making`, a new window when there is none.
     func controlledWindow(_ id: String?, making: Bool) throws(AppRefusal) -> any WindowControlling
-    /// `havooch open`: opens the video for the person, in the project
-    /// `project` or the one that lists it, plays it and brings its window
-    /// and the app to the front: the window that holds it, else an empty
-    /// key window, else a new one. A file that doesn't play changes nothing.
     @discardableResult
     func openInFront(_ url: URL, project: String?) async throws(AppRefusal) -> any WindowControlling
-    /// The review a `wait` listens to: the one the video at `video`
-    /// (`--video`) opens in, or the project `project`, else the key
-    /// window's. Refused for a path with no file, an unknown project, and
-    /// with neither when the key window holds no video.
     func listenedReview(video: String?, project: String?) async throws(AppRefusal) -> ReviewKey
-    /// `havooch project new`: the project in `config.toml`, v1 the video,
-    /// with the video's review moved into it.
     func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project
-    /// `havooch project add`: the next version, shown in the project's
-    /// window, in front.
     @discardableResult
     func projectAdd(_ slug: String, video url: URL, label: String?) async throws(AppRefusal) -> any WindowControlling
-    /// Every window, in the order they were made.
     func windowList() -> [StateReport.Window]
-    /// A new empty window, as File › New Window makes one.
     func openWindow() -> StateReport.Window
-    /// Closes the window `id` names, else the key window.
     func closeWindow(_ id: String?) throws(AppRefusal) -> StateReport.Window
-    /// Every theme, and the files left out.
     func themeList() -> StateReport.ThemeList
-    /// Pins the theme called `name`, or follows the system for `system`.
     func setTheme(_ name: String) throws(AppRefusal) -> StateReport.Theme
-    /// What Havooch detects of the setup, read from disk again.
     func setupStatus() -> StateReport.Setup
-    /// Links the `havooch` command in `~/.local/bin`, as Link does, or
-    /// with `dryRun` says what it would do; the line says which.
     func linkCommand(dryRun: Bool) throws(AppRefusal) -> (line: String, setup: StateReport.Setup)
-    /// Starts installing the skill for the harnesses `harnesses` name, or
-    /// every harness found without it, as Run Command does; with `dryRun` only
-    /// plans it.
     func installSkill(harnesses: [String], dryRun: Bool) throws(AppRefusal) -> StateReport.Setup.Install
-    /// Stops the running install, as Cancel does, once it has stopped.
     func cancelInstall() async throws(AppRefusal) -> StateReport.Setup.Install
-    /// Closes the settings notice, as its close button does; false when
-    /// none was up.
     func dismissConfigNotice() -> Bool
-    /// Acts in the first-run window as the person's click does; the line
-    /// the command prints, and the window as `state` reports it.
     func firstRun(_ action: FirstRunAction) async throws(AppRefusal) -> (line: String, firstRun: StateReport.FirstRun)
-    /// Mutes, unmutes or sets the volume in every window, as the person
-    /// does in the player bar; the sound after it, with the key window's
-    /// panel.
     func changeSound(_ change: SoundChange) -> StateReport.Sound
 }
 
-/// What `player mute`, `player unmute` and `player volume` change.
 enum SoundChange: Equatable {
     case mute, unmute
-    /// The level from 0 to 100; 0 mutes.
     case volume(percent: Int)
 }
 
-/// One window as the control server drives it: the actions an operator
-/// can take in it. `WindowModel` is the real one.
 protocol WindowControlling: AnyObject {
-    /// The window's name for `--window`: `w1`.
     var id: String { get }
-    /// The AppKit window that shows it, for a screenshot; nil off screen.
     var nsWindow: NSWindow? { get }
-    /// Sets the content width, subject to the view's minimum.
     func resize(width: Int) async throws(AppRefusal) -> Int
-    /// Shows or hides the sidebar, as the header's control does.
     func setSidebarVisible(_ visible: Bool)
     func state() -> StateReport
     func open(_ url: URL) async throws(AppRefusal)
-    /// Goes home, as a click on the Havooch mark does: the video closes
-    /// and an in-app demo is left.
     func goHome() async
-    /// Runs the demo in the window, as "Try the Demo" does.
     func openDemo() async throws(AppRefusal)
     func play() throws(AppRefusal)
     func pause() throws(AppRefusal)
     func seek(to seconds: Double) async throws(AppRefusal)
-    /// Opens or closes the sound panel over the stage, as a click on the
-    /// speaker does. Opening it needs a video.
     func setSoundPanel(open: Bool) throws(AppRefusal)
-    /// The sound as `state` reports it, with this window's panel.
     var soundReport: StateReport.Sound { get }
-    /// Queues a message on the thread of the frame at `at`, or at the
-    /// player's time, or on `thread`, on `region` of the frame when it has
-    /// one, once the keyframe and the crop are on disk.
     func addMessage(
         text: String, at: Double?, region: Region?, thread: String?
     ) async throws(AppRefusal) -> (message: StateReport.Message, thread: StateReport.Thread)
-    /// Opens the popover at the player's frame, on `region` when
-    /// it has one, with `text` in its field, as C or a drawn rectangle does.
     func openPopover(text: String, region: Region?) throws(AppRefusal) -> StateReport.Popover
     func editMessage(_ id: String, text: String) throws(AppRefusal) -> StateReport.Message
     func deleteMessage(_ id: String) throws(AppRefusal) -> StateReport.Message
-    /// Sets the open video's context note, without the space around it,
-    /// and returns it as it's kept. An empty text clears the note.
     func setContextNote(_ text: String) throws(AppRefusal) -> String
-    /// Sends every queued message as one send, and hands it to the
-    /// listener queue.
     func sendQueue() async throws(AppRefusal) -> StateReport.Send
-    /// Answers the open question on a thread, as the answer field does.
     func answer(_ thread: String, text: String) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
-    /// Answers the open question on a thread with its quick-reply choice
-    /// `number` (from 1), as a click on that choice's button does.
     func choose(_ thread: String, choice number: Int) throws(AppRefusal) -> (message: StateReport.Message, number: Int)
-    /// Opens a thread's popover on its frame, as a click on its pin does,
-    /// first keeping it at `frame` when there is one.
     func openThread(_ thread: String, frame: PopoverFrame?) async throws(AppRefusal) -> StateReport.Popover
-    /// Shows a thread's view in the sidebar, as a click on its row does:
-    /// the player pauses on the thread's frame.
     func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int)
-    /// Shows the thread list in the sidebar, as Back does.
     func showThreadList() -> StateReport.Sidebar
-    /// Opens "All versions" over a project's thread list, with `search`.
     func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar
-    /// Closes "All versions".
     func closeVersionMenu() -> StateReport.Sidebar
-    /// Picks a version in "All versions": an older one adds its section.
     func pickVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar
-    /// Takes a picked version's section out of the thread list.
     func removePickedVersion(_ number: Int) throws(AppRefusal) -> StateReport.Sidebar
-    /// Puts words, a region chip and the General toggle in the composer at
-    /// the sidebar's foot, as the person types, draws and clicks.
     func compose(text: String, region: Region?, general: Bool) throws(AppRefusal) -> StateReport.Sidebar.Composer
-    /// Shows the Connect view in the sidebar, as the connect button does.
     func showConnect() throws(AppRefusal) -> StateReport.Sidebar
-    /// Picks a harness in the Connect view, as a click on its logo does.
     func pickHarness(named name: String) throws(AppRefusal) -> StateReport.Sidebar
-    /// Lets the connected agent go, as Disconnect does; its name.
     func disconnectAgent() throws(AppRefusal) -> String
-    /// Stops waiting for the agent that reconnects, as Forget does; its name.
     func forgetAgent() throws(AppRefusal) -> String
-    /// Shows the setup tour, as "Finish setup" does.
     func showTour() throws(AppRefusal) -> StateReport.Tour
-    /// The tour's next step, as Next does; after the last one it ends.
     func nextTourStep() throws(AppRefusal) -> StateReport.Tour
-    /// Ends the tour, as Skip Tour does.
     func skipTour() throws(AppRefusal) -> StateReport.Tour
-    /// Closes the tour's panel, as its close button does; it keeps its step.
     func closeTour() throws(AppRefusal) -> StateReport.Tour
-    /// Shows the project's version `number`, as its segment does; the
-    /// playhead keeps its time.
     func switchVersion(to number: Int) async throws(AppRefusal)
-    /// Opens the version picker with `query` typed, as a click on the
-    /// switcher's field and typing do.
     func openVersionPicker(query: String) throws(AppRefusal) -> VersionSwitch
-    /// Closes the version picker, as Escape does; false when it was closed.
     func closeVersionPicker() -> Bool
-    /// Opens the compare popover on the previous version and the one on
-    /// screen, as the Compare button does.
     func openCompare() throws(AppRefusal)
-    /// Opens one side's version picker in the popover with `query` typed.
     func pickCompareSide(_ side: CompareSide, query: String) throws(AppRefusal)
-    /// Changes the comparison, in the popover or on the stage.
     func setCompare(_ change: CompareChange) async throws(AppRefusal)
-    /// Exchanges left and right, as the swap button does.
     func swapCompare() throws(AppRefusal)
-    /// Compares the two versions on one playhead.
     func startCompare() async throws(AppRefusal)
-    /// Back to one version, the right side's; false when Compare wasn't open.
     @discardableResult
     func exitCompare() -> Bool
 }
 
-/// App control's server: it decodes each request, checks the lease and
-/// dispatches it, one JSON request per connection with one reply. The
-/// socket, each connection and the heartbeat are `SocketListener`'s, which
-/// reads each request off the main actor and hands it here
-/// (`reply(to:)`). Every refusal is a reply, so the `havooch`
-/// command always has a line to print. The server owns the one lease: an
-/// operator request asks it first, and a `take`'s reply granting it that
-/// can't be written (its client gone) gives it up at once. A listener's
-/// requests go to the `ListenerHub`, with no lease: a `wait` and an `ask`
-/// are held like a `take` in line, and a send whose reply can't be written
-/// goes back to the front of the listener's line.
 final class ControlServer {
-    /// A reply, whether the app quits once it's written, and what only the
-    /// client would know, undone when the reply can't be written
-    /// (`undelivered`): the lease a `control take`'s reply grants, and the
-    /// send a `wait`'s reply carries.
     nonisolated struct Answer: Equatable {
         var reply: ControlReply
         var quits = false
         var granted: LeaseTerm?
         var delivered: SendRef?
-        /// Nothing is written: the connection just closes, as it does when
-        /// the app isn't there, so a `wait` connects again.
         var silent = false
     }
 
     let socket: URL
     private let app: any AppControlling
-    /// The listeners on the data the app is on now, one per review: the open `wait`s
-    /// and the sends in line. Asked at each request, since an in-app demo
-    /// switches the app's data.
     private let currentListeners: @MainActor () -> ListenerHub
-    /// The listener's side on the data the app is on now.
     private var listeners: ListenerHub { currentListeners() }
-    /// The queue that handed out each send whose reply is being written:
-    /// its `written` or `undelivered` goes back there, also when the app
-    /// switched its data meanwhile.
     private var deliveredBy: [SendRef: ListenerQueue] = [:]
     private let screenshotter: any Screenshotting
     private let quit: @MainActor () -> Void
-    /// The time the lease is decided at, and the zone its refusals name it in.
     private let now: @MainActor () -> Date
     private let timeZone: TimeZone
-    /// App control's lease: who may send operator requests, and until when.
-    /// Each change is shown (`indicator`) and its end looked out for.
     private(set) var lease: ControlLease {
         didSet { leaseChanged() }
     }
-    /// The agent-control icon, which follows the lease.
     let indicator: AgentControlIcon
-    /// Ends the lease once it runs out, when no request comes to.
     private var settling: Task<Void, Never>?
-    /// The `take`s waiting in line, each holding its connection open until
-    /// it gets the lease or its wait runs out.
     private var waiters: [UUID: Waiter] = [:]
     private var listener: SocketListener?
 
-    /// A `take` waiting in line: who sent it, how long it waits, and how it
-    /// gets its answer.
     private struct Waiter {
         var holder: Holder
         var seconds: Int
         var json: Bool
         var answer: CheckedContinuation<Answer, Never>
-        /// Ends the wait when it runs out; cancelled once it's answered.
         var timeout: Task<Void, Never>?
     }
 
@@ -274,22 +145,9 @@ final class ControlServer {
         self.now = now
         self.timeZone = timeZone
         self.quit = quit
-        // `didSet` doesn't run in `init`: a lease a relaunch handed over is
-        // shown, and its end looked out for, from the start.
         leaseChanged()
     }
 
-    // MARK: - Dispatch
-
-    /// The answer to one request as the client sent it. A request that
-    /// doesn't read, or speaks another version, is refused before anything
-    /// is done. An operator request asks the lease first: refused for
-    /// anyone but its holder, with nothing done. A quit hands the lease
-    /// back in its reply, for a relaunch to pass on. A `take` that waits in
-    /// line is answered once it gets the lease or its wait runs out, other
-    /// requests answered meanwhile; so is a listener's `wait`, once a send
-    /// is made. `connection` names the connection the request came over,
-    /// so a held `wait` ends when its client goes away (`connectionClosed`).
     func reply(to data: Data, connection: UUID? = nil) async -> Answer {
         let message: ControlMessage
         do throws(ControlProtocolError) {
@@ -306,8 +164,6 @@ final class ControlServer {
             case .failure(let refusal): return Answer(reply: .refused(refusal.message(at: time, timeZone: timeZone)))
             }
         }
-        // The window an operator command acts on: `--window`, else the key
-        // window; one that shows something makes a window when there's none.
         let window = message.window
         func inWindow(making: Bool = false) throws(AppRefusal) -> any WindowControlling {
             try app.controlledWindow(window, making: making)
@@ -317,7 +173,6 @@ final class ControlServer {
             case .controlTake(let seconds):
                 return await take(by: message.holder, waiting: seconds, json: json)
             case .controlRelease:
-                // The next waiter's take is answered as the lease changes (`leaseChanged`).
                 _ = lease.release(by: message.holder, at: now())
                 return done("released \(AppIdentity.appName)", Output(released: true), json)
             case .appStatus, .appOpen:
@@ -399,7 +254,6 @@ final class ControlServer {
                     : "sound panel closed"
                 return done(line, Output(sound: sound), json)
             case .screenshot(let path, let appearance, let hideAgentIndicator, let which):
-                // A player window is the one `--window` names, else the key one.
                 let player = which == .main ? try inWindow() : nil
                 try await screenshotter.capture(
                     to: URL(fileURLWithPath: path), appearance: appearance, hideAgentIndicator: hideAgentIndicator, window: which,
@@ -486,7 +340,6 @@ final class ControlServer {
                 let count = send.messageIds.count
                 return done("\(send.id) acknowledged, \(count) message\(count == 1 ? "" : "s")", Output(send: send), json)
             case .status(let messageID, let status, let text):
-                // Every status is a message state of the same name.
                 let state = MessageState(rawValue: status.rawValue) ?? .working
                 let message = try listeners.status(messageID, state, text: text)
                 return done("\(message.id) \(message.state ?? status.rawValue)", Output(message: message), json)
@@ -511,7 +364,6 @@ final class ControlServer {
                 let answered = try inWindow().choose(thread, choice: choice)
                 return done("#\(answered.number) answered: \(answered.message.text)", Output(message: answered.message), json)
             case .threadOpen(let thread, let rectangle):
-                // A frame is a rectangle of the video area, checked as a region is.
                 let frame = try Self.region(rectangle).map { PopoverFrame(x: $0.x, y: $0.y, w: $0.w, h: $0.h) }
                 let popover = try await inWindow().openThread(thread, frame: frame)
                 let number = popover.thread.map { "#\($0)" } ?? thread
@@ -651,7 +503,6 @@ final class ControlServer {
                     "\(URL(fileURLWithPath: path).lastPathComponent) added to \(slug) as \(number), shown in \(shown.id)",
                     Output(window: shown.id, video: state.video, project: state.project), json
                 )
-                // The command brings this process to the front, as for `open`.
                 answer.reply.pid = ProcessInfo.processInfo.processIdentifier
                 return answer
             case .firstRunShow(let step):
@@ -675,10 +526,8 @@ final class ControlServer {
         }
     }
 
-    /// What an action prints with `--json`: only the parts it changed.
     private struct Output: Encodable {
         var app: StateReport.App?
-        /// The window the command acted on: its id.
         var window: String?
         var windows: [StateReport.Window]?
         var screen: StateReport.Screen?
@@ -706,22 +555,18 @@ final class ControlServer {
         var dismissed: Bool?
         var firstRun: StateReport.FirstRun?
 
-        /// The thread a message went on: its id and its number.
         struct ThreadRef: Encodable {
             var id: String
             var number: Int
         }
     }
 
-    /// `volume 40%` or `muted`; in a run muted for a check, that it is
-    /// the run's level, which plays no sound.
     private static func soundLine(_ sound: StateReport.Sound) -> String {
         let level = sound.volume == 0 ? "muted" : "volume \(sound.volume)%"
         guard sound.mutedForCheck else { return level }
         return "\(level) for this run, which plays no sound: it started muted for an agent check (\(MutedRun.variable)=1)"
     }
 
-    /// `#3` for a thread a command named, or nil when it isn't one.
     private static func name(_ ref: ReviewCore.ThreadRef?) -> String? {
         switch ref {
         case .number(let number): "#\(number)"
@@ -730,8 +575,6 @@ final class ControlServer {
         }
     }
 
-    /// A compare action's answer: the comparison's line, or with `--json`
-    /// the window, the player and the project with its `compare`.
     private func compared(_ shown: any WindowControlling, _ json: Bool) -> Answer {
         let state = shown.state()
         return done(
@@ -740,12 +583,10 @@ final class ControlServer {
         )
     }
 
-    /// A first-run action's answer: its line, or with `--json` the window.
     private func firstRunDone(_ answer: (line: String, firstRun: StateReport.FirstRun), _ json: Bool) -> Answer {
         done(answer.line, Output(firstRun: answer.firstRun), json)
     }
 
-    /// What the Connect view says of a harness's readiness, as words.
     private static func words(readiness: String) -> String {
         switch Readiness(rawValue: readiness) {
         case .ready: "ready, the skill is detected"
@@ -755,8 +596,6 @@ final class ControlServer {
         }
     }
 
-    /// The region `rectangle` names. Numbers that aren't a region of the
-    /// frame are refused before the app is asked for anything.
     private static func region(_ rectangle: ControlRequest.Rectangle?) throws(AppRefusal) -> Region? {
         guard let rectangle else { return nil }
         do throws(ReviewRefusal) {
@@ -766,8 +605,6 @@ final class ControlServer {
         }
     }
 
-    /// What the window `window` names (else the key window) shows, with
-    /// the lease and the listener as they are now.
     private func state(window: String?) throws(AppRefusal) -> StateReport {
         var state = try app.state(window: window)
         state.lease = lease.status(at: now())
@@ -778,18 +615,10 @@ final class ControlServer {
         Answer(reply: .done(output))
     }
 
-    /// Done: `line`, or `output` as JSON when the caller passed `--json`.
     private func done(_ line: String, _ output: Output, _ json: Bool) -> Answer {
         Answer(reply: .done(json ? StateReport.json(output) : line + "\n"))
     }
 
-    // MARK: - Taking turns
-
-    /// `control take`: held to the cap at once when the lease is the
-    /// holder's or free. While another holds it, refused at once without a
-    /// wait; with one, the take waits in line, suspended so the main actor
-    /// answers other requests (the holder's release among them), until
-    /// `leaseChanged` finds the lease handed to it or its wait runs out.
     private func take(by holder: Holder, waiting seconds: Int?, json: Bool) async -> Answer {
         let time = now()
         let decision = lease.take(by: holder, at: time, waitingUntil: seconds.map { time.addingTimeInterval(TimeInterval($0)) })
@@ -801,7 +630,6 @@ final class ControlServer {
         case .failure(let refusal):
             return Answer(reply: .refused(refusal.message(at: time, timeZone: timeZone)))
         }
-        // Queued only with a wait after now.
         let seconds = seconds ?? 0
         let deadline = time.addingTimeInterval(TimeInterval(seconds))
         let ticket = UUID()
@@ -814,39 +642,25 @@ final class ControlServer {
         }
     }
 
-    /// A waiting `take`'s wait ran out (unless it was answered already): it
-    /// leaves the line, answered as a wait that ran out with who still holds
-    /// the lease, or holding it should it be free by now.
     private func waitRanOut(_ ticket: UUID, deadline: Date) {
         guard let waiter = waiters.removeValue(forKey: ticket) else { return }
-        // Never before the deadline the take was given, whatever the clock says.
         let time = max(now(), deadline)
         switch lease.giveUp(by: waiter.holder, waited: waiter.seconds, at: time).answer {
         case .success(let term):
             waiter.answer.resume(returning: granting(term, json: waiter.json))
         case .failure(let refusal) where refusal.isWaitedOut:
-            // Its whole wait ran out: the command exits as a wait that ran out.
             waiter.answer.resume(returning: Answer(reply: .ranOut(refusal.message(at: time, timeZone: timeZone))))
         case .failure(let refusal):
             waiter.answer.resume(returning: Answer(reply: .refused(refusal.message(at: time, timeZone: timeZone))))
         }
     }
 
-    /// A `take`'s answer holding the lease to `term`'s end, which it grants.
     private func granting(_ term: LeaseTerm, json: Bool) -> Answer {
         var answer = done(term.held(timeZone: timeZone), Output(lease: lease.status(at: now())), json)
         answer.granted = term
         return answer
     }
 
-    /// A `take`'s reply that granted the lease couldn't be written: its
-    /// client has gone (stopped, or cut off by its harness's timeout while
-    /// it waited in line), so nobody knows they hold it. The lease is given
-    /// up for that holder at once, and the next waiter gets it as usual,
-    /// rather than it sitting unused until it runs out. A lease that has
-    /// moved on meanwhile (another holder's, or a new one) is left alone.
-    /// A `wait`'s reply that carried a send and couldn't be written: the
-    /// listener never got the send, so it's first in its line again.
     func undelivered(_ answer: Answer) {
         if let ref = answer.delivered { handedBack(ref).undelivered(ref) }
         guard let granted = answer.granted, let term = lease.current(at: now()),
@@ -854,47 +668,26 @@ final class ControlServer {
         _ = lease.release(by: granted.holder, at: now())
     }
 
-    /// A reply was written to its client: a send it carried is taken from
-    /// now on.
     func written(_ answer: Answer) {
         if let ref = answer.delivered { handedBack(ref).written(ref) }
     }
 
-    /// The queue that handed out `ref`, which hears how its reply went.
     private func handedBack(_ ref: SendRef) -> ListenerQueue {
         deliveredBy.removeValue(forKey: ref) ?? listeners.queue(for: ref.review)
     }
 
-    /// The client of `connection` closed its socket while its request was
-    /// held: a `wait` or an `ask` on it is over.
     func connectionClosed(_ connection: UUID) {
         listeners.connectionClosed(connection)
     }
 
-    // MARK: - The person taking the app back
-
-    /// The agent-control icon's Stop: the holder's lease ends and it's
-    /// barred for five minutes (`ControlLease.stop`), and the first waiter
-    /// in line gets the lease, its `take` answered as the lease changes. The person's only
-    /// way into the lease.
     func stopLease() {
         _ = lease.stop(at: now())
     }
 
-    // MARK: - The lease's end
-
-    /// Ends the lease if it has run out by now, handing it to the first
-    /// waiter in line, and lifts the bars that have ended. A timer calls it
-    /// at the next of those ends, so the agent-control icon goes, and the
-    /// waiter gets the lease, with no request.
     func settleLease() {
         _ = lease.settle(at: now())
     }
 
-    /// The one place a change to the lease is applied: it's shown as it is
-    /// now, a holder that got it from the line has its waiting `take`s
-    /// answered, and its next end (the lease's or a bar's) is looked out
-    /// for, the timer set for the last change replaced by one for this one.
     private func leaseChanged() {
         if indicator.lease != lease { indicator.lease = lease }
         settling?.cancel()
@@ -910,17 +703,12 @@ final class ControlServer {
         guard let next = lease.nextEnd(after: time) else { return }
         let left = next.timeIntervalSince(time)
         settling = Task { [weak self] in
-            // A wake before the end settles nothing, and sets the timer again.
             try? await Task.sleep(for: .seconds(left))
             guard !Task.isCancelled else { return }
             self?.settleLease()
         }
     }
 
-    // MARK: - Listening
-
-    /// Starts listening on `socket` (`SocketListener.open`), with a
-    /// heartbeat every `heartbeat` on each held connection.
     func start(heartbeat: Duration = SocketListener.heartbeat) throws(SocketListener.Failure) {
         guard listener == nil else { return }
         listener = try SocketListener.open(at: socket, heartbeat: heartbeat) { [weak self] data, connection in
@@ -936,20 +724,16 @@ final class ControlServer {
         }
     }
 
-    /// Stops listening and removes the socket, so the `havooch`
-    /// command finds the app gone.
     func stop() {
         listener?.close()
         listener = nil
         settling?.cancel()
         settling = nil
-        // A take waiting in line hears why, rather than a dropped connection.
         for waiter in waiters.values {
             waiter.timeout?.cancel()
             waiter.answer.resume(returning: Answer(reply: .refused("\(AppIdentity.appName) is quitting")))
         }
         waiters = [:]
-        // An open `wait` ends with no reply: its command connects again.
         listeners.stop()
     }
 }

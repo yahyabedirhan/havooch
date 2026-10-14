@@ -36,8 +36,6 @@ public struct ThemeColor: Equatable, Hashable, Sendable {
     }
 }
 
-// MARK: - Contrast
-
 extension ThemeColor {
     public static let white = ThemeColor(red: 255, green: 255, blue: 255)
 

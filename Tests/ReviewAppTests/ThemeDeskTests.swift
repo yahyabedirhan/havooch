@@ -7,10 +7,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The theme as the app runs it: the built-in themes, the person's own in
-/// `themes/` beside `config.toml`, the pin in `config.toml`, the reload on
-/// a change, and `theme list`, `theme set` and `state` over the control
-/// server.
 @Suite("Themes in the app", .serialized)
 struct ThemeDeskTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -18,7 +14,6 @@ struct ThemeDeskTests {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
     var layout: SupportLayout { SupportLayout(root: root.appendingPathComponent("support", isDirectory: true)) }
-    /// Where `HAVOOCH_SUPPORT_DIR` puts the settings: the support folder's `config/`.
     var location: ConfigLocation { ConfigLocation(folder: layout.root.appendingPathComponent("config"), home: root) }
 
     private func cleanUp() {
@@ -87,11 +82,9 @@ struct ThemeDeskTests {
         #expect(theme["pinned"] as? String == "Dimmed")
         #expect(theme["appearance"] as? String == "light")
 
-        // Only the theme line is written: the header's comments stay.
         #expect(try configText() == ConfigFile.header.replacingOccurrences(of: "version = 1\n", with: "version = 1\ntheme = \"Dimmed\"\n"))
         #expect(!FileManager.default.fileExists(atPath: layout.settingsFile.path))
 
-        // A new run reads the pin from config.toml.
         let (again, againServer) = self.model()
         #expect(again.themes.theme.name == "Dimmed")
 
@@ -180,7 +173,6 @@ struct ThemeDeskTests {
             }
         }
         #expect(found.isEmpty, "prominent buttons that skip filledButton:\n\(found.joined(separator: "\n"))")
-        // Send, Open a Video… twice, the two Saves and the rest.
         #expect(filled >= 6)
     }
 
@@ -210,10 +202,8 @@ struct ThemeDeskTests {
             }
         }
         #expect(inline.isEmpty, "split buttons built inline:\n\(inline.joined(separator: "\n"))")
-        // White text on the fill filledButton uses, which reads at 4.5:1 or more.
         #expect(control.contains(".background(palette[.accentFill])"))
         #expect(control.contains(".foregroundStyle(palette.textOnFill)"))
-        // The comment popover's Queue or Answer.
         #expect(uses >= 1)
     }
 
@@ -236,7 +226,6 @@ struct ThemeDeskTests {
         await eventually { model.themes.theme.name == "Brown" }
         #expect(model.themes.theme[.accent] == ThemeColor("#c08a5b"))
 
-        // Edited in place, as an editor that doesn't replace the file saves it.
         let file = location.themesFolder.appendingPathComponent("brown.json")
         let handle = try FileHandle(forWritingTo: file)
         try handle.truncate(atOffset: 0)
@@ -245,7 +234,6 @@ struct ThemeDeskTests {
         await eventually { model.themes.theme[.accent] == ThemeColor("#a0522d") }
         #expect(model.themes.theme[.accent] == ThemeColor("#a0522d"))
 
-        // A broken file falls back to the default of the appearance.
         try Data("{ broken".utf8).write(to: file)
         await eventually { model.themes.theme.name == "Default Light" }
         #expect(model.themes.theme.name == "Default Light")
@@ -263,7 +251,6 @@ struct ThemeDeskTests {
         }
         let before = model.themes.reloads
 
-        // Replaced, as the outbox is saved, then written in place.
         try Data("{}".utf8).write(to: layout.formerOutboxFile, options: .atomic)
         try Data("{}".utf8).write(to: layout.formerOutboxFile)
         try? await Task.sleep(for: .milliseconds(500))
@@ -325,34 +312,23 @@ struct ThemeDeskTests {
     }
 }
 
-/// The ways Swift code names a colour without a theme token.
 enum RawColour {
     private static let patterns = [
-        // A colour made or named on the type: Color.black, Color(red:…), Color(nsColor:).
         #"\bColor\s*(\.(?!clear\b)\w|\()"#,
         #"\bNSColor\b"#, #"\bCGColor\b"#,
-        // A named colour or hierarchical style:.white,.secondary, …
         #"(?<!weight: )\.(white|black|gray|grey|red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown|primary|secondary|tertiary|quaternary|quinary|accentColor)\b(?!\s*:)"#,
-        // The tint as a style (the `.tint(…)` modifier is fine).
         #"\.tint\b(?!\s*\()"#,
         #"\b\w*Material\b"#,
     ].map { try! NSRegularExpression(pattern: $0) }
 
-    /// What `Palette.swift` alone may write: a colour from a theme's
-    /// numbers (and the grey of a missing token), the `NSColor` it returns,
-    /// a `system` surface through `systemColor` or the ultra-thick material,
-    /// and the system's focus ring.
     private static let paletteAllowances = [
         #"\bColor\(\s*($|\.sRGB\b|nsColor:\s*Self\.systemColor\(|nsColor:\s*\.keyboardFocusIndicatorColor\))"#,
         #"\bNSColor\(\s*($|(srgbRed|white):)"#,
         #"->\s*NSColor\b"#,
-        // A theme colour's own components.
         #"\bcolor\.(red|green|blue|alpha)\b"#,
         #"AnyShapeStyle\(\.ultraThickMaterial\)"#,
     ].map { try! NSRegularExpression(pattern: $0) }
 
-    /// Whether `code` names a raw colour; in the palette, after taking out
-    /// what the palette alone may write.
     static func matches(_ code: String, inPalette: Bool = false) -> Bool {
         var code = code
         if inPalette {

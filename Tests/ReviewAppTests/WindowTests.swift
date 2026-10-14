@@ -5,14 +5,9 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// Any number of windows, each with one video or none: which
-/// window an open goes to, what each window keeps of its own, and the
-/// window commands. The app model and its control server, with no scene
-/// and no socket: a window made here has no AppKit window.
 @Suite("Windows", .serialized)
 struct WindowTests {
     static let agent = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
-    /// A second video, with other content than `MessageTests.fixture`.
     static let launch = MessageTests.fixture.deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("launch/havooch-demo.mp4")
 
@@ -23,9 +18,6 @@ struct WindowTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// The app on a fresh folder with its first window, as a launch shows
-    /// it, and the server in front of it. `fronts` counts the times the app
-    /// came to the front.
     private func run() -> (app: AppModel, first: WindowModel, server: ControlServer, fronts: Fronts) {
         let app = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"], speech: SlowRecognizer())
         let fronts = Fronts()
@@ -50,8 +42,6 @@ struct WindowTests {
         try #require(try JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
     }
 
-    // MARK: - Where a video opens
-
     @Test("havooch open takes the empty key window, makes a new one for another video, and brings the holder forward for an open one")
     func openFindsItsWindow() async throws {
         defer { cleanUp() }
@@ -69,7 +59,6 @@ struct WindowTests {
         #expect(second.video?.url == Self.launch.standardizedFileURL)
         #expect(app.windows.key === second)
 
-        // The first video again: its window comes forward, and no third one opens.
         first.engine.pause()
         let again = await send(.open(path: MessageTests.fixture.path), server)
         #expect(again.output.hasSuffix(") in w1, playing\n"))
@@ -139,8 +128,6 @@ struct WindowTests {
         #expect(second.video == nil)
     }
 
-    // MARK: - What each window keeps
-
     @Test("each window keeps its own player, popover, queue, sidebar and notices")
     func eachWindowHasItsOwn() async throws {
         defer { cleanUp() }
@@ -170,7 +157,6 @@ struct WindowTests {
         #expect(first.state().sidebar?.thread == nil)
 
         _ = try await second.sendQueue()
-        // The agent's reply on the second video shows in the second window only.
         let thread = try #require(second.threads.first { $0.number == 1 })
         _ = try app.listeners.reply(on: thread.id.text, text: "On it")
         #expect(second.notices.count == 1)
@@ -194,8 +180,6 @@ struct WindowTests {
         #expect(second.queuedCount == 1)
     }
 
-    // MARK: - Closing
-
     @Test("closing a window pauses its video, keeps its position, and leaves the other windows and the app")
     func closeOne() async throws {
         defer { cleanUp() }
@@ -212,7 +196,6 @@ struct WindowTests {
         #expect(!first.engine.isPlaying)
         #expect(app.windows.windows.map(\.id) == ["w2"])
         #expect(app.recents.first { $0.contentHash == first.video?.contentHash }?.position ?? 0 >= 2)
-        // The next window's id is new.
         #expect(app.newWindow().id == "w3")
     }
 
@@ -234,8 +217,6 @@ struct WindowTests {
         #expect(app.windows.windows.count == 1)
     }
 
-    // MARK: - The window commands
-
     @Test("window new, list and close, and --window on an operator command")
     func windowCommands() async throws {
         defer { cleanUp() }
@@ -254,7 +235,6 @@ struct WindowTests {
         #expect((windows[0]["video"] as? [String: Any])?["title"] as? String == "sample.mp4")
         #expect(windows[1]["video"] is NSNull)
 
-        // Without --window the key window, w2, has no video; with it, w1 plays.
         #expect(!(await send(.playerPlay, server)).ok)
         #expect(await send(.playerPlay, server, window: "w1").ok)
         #expect(first.engine.isPlaying)
@@ -262,7 +242,6 @@ struct WindowTests {
 
         #expect(await send(.windowResize(width: 780), server, window: "w1") == .refused("window `w1` is not on screen"))
 
-        // state names its window and lists them all.
         let state = try object(await send(.state, server, window: "w1", json: true).output)
         #expect(state["window"] as? String == "w1")
         #expect(state["screen"] as? String == "player")
@@ -293,7 +272,6 @@ struct WindowTests {
         let made = app.newWindow()
         #expect(opened == [nil])
         #expect(app.sceneAppeared(target: nil) === made)
-        // A scene with no window waiting (the Dock icon, a launch) gets a new one.
         let fresh = app.sceneAppeared(target: nil)
         #expect(fresh !== made)
         #expect(fresh !== first)

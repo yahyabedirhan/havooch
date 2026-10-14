@@ -61,7 +61,6 @@ public enum ConfigWriter {
             } else if firstHeader != Int.max {
                 lines.insert(contentsOf: [line, ""], at: firstHeader - 1)
             } else {
-                // Comments only, or nothing: at the end, on a line of its own.
                 if lines.last == "" { lines.removeLast() }
                 lines.append(line)
                 lines.append("")
@@ -69,7 +68,6 @@ public enum ConfigWriter {
         }
         let edited = lines.joined(separator: "\n")
 
-        // Read back: only the theme may change.
         var expected = before.config
         expected.theme = name
         guard let after = try? ConfigFile.decode(edited), after.config == expected, after.warnings == before.warnings else {
@@ -78,9 +76,6 @@ public enum ConfigWriter {
         return edited
     }
 
-    /// A `theme = "…"` line split around its string value: what comes
-    /// before the value, and what comes after it (a comment). Nil when the
-    /// value isn't one quoted string.
     static func themeLine(_ line: String) -> (lead: String, rest: String)? {
         guard let equals = line.firstIndex(of: "=") else { return nil }
         var index = line.index(after: equals)
@@ -88,7 +83,6 @@ public enum ConfigWriter {
         guard index < line.endIndex else { return nil }
         let quote = line[index]
         guard quote == "\"" || quote == "'" else { return nil }
-        // A triple-quoted string may span lines: not one string on one line.
         if line[index...].hasPrefix(String(repeating: quote, count: 3)) { return nil }
         var end = line.index(after: index)
         while end < line.endIndex, line[end] != quote {
@@ -110,7 +104,6 @@ extension ConfigLocation {
         guard !fileManager.fileExists(atPath: file.path) else { return false }
         do {
             try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
-            // `withoutOverwriting`: a file an editor wrote meanwhile wins.
             try Data(ConfigFile.header.utf8).write(to: file, options: .withoutOverwriting)
             return true
         } catch {
@@ -129,9 +122,6 @@ extension ConfigLocation {
         try edit { text throws(ConfigWriteFailure) in try ConfigWriter.settingTheme(name, in: text) }
     }
 
-    /// Runs one targeted edit: `change` gets the file's text and gives the
-    /// new text. Nothing is written when the text is the same, or when the
-    /// file changed after it was read.
     func edit(_ change: (String) throws(ConfigWriteFailure) -> String) throws(ConfigWriteFailure) {
         let handle: FileHandle
         do {
@@ -140,7 +130,6 @@ extension ConfigLocation {
             throw ConfigWriteFailure("couldn't open \(file.path): \(error.localizedDescription)")
         }
         defer { try? handle.close() }
-        // Writers take turns on a lock of the file itself.
         flock(handle.fileDescriptor, LOCK_EX)
         defer { flock(handle.fileDescriptor, LOCK_UN) }
         do {

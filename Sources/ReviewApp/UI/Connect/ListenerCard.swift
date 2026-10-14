@@ -1,15 +1,9 @@
 import ReviewCore
 import SwiftUI
 
-/// The listener card: the agent's logo and harness, where it runs
-/// and since when, Copy Path, Disconnect, and the prompt that makes it
-/// listen again later. After a relaunch, while the agent the last run had
-/// hasn't come back yet: "Reconnecting to <harness>…" for about 30 s, with
-/// Forget.
 struct ListenerCard: View {
     let model: WindowModel
     let phase: ListenerQueue.Phase
-    /// The time the card is drawn at, for the countdown.
     let time: Date
 
     @State private var copiedPath = false

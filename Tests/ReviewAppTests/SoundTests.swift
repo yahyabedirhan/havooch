@@ -5,10 +5,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The sound: one level for the whole app, 0 to 1, where 0 is
-/// muted; mute and unmute go between 0 and the last level; the level stays
-/// across launches in `settings.json`; and a run started with
-/// `HAVOOCH_MUTED=1` plays no sound and keeps the person's level as it was.
 @Suite("The sound")
 struct SoundTests {
     let support = FileManager.default.temporaryDirectory
@@ -18,8 +14,6 @@ struct SoundTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// A launch of the app on the test's folder, muted for an agent check
-    /// when `muted`.
     private func launch(muted: Bool = false) -> AppModel {
         var environment = [SupportFolder.overrideVariable: support.path]
         if muted { environment[MutedRun.variable] = "1" }
@@ -71,7 +65,6 @@ struct SoundTests {
         app.mute()
         app.unmute()
         #expect(app.sound.level == 0.4)
-        // Dragged up from 0: that level, and unmute later brings it back.
         app.setVolume(0)
         app.setVolume(0.25)
         app.mute()
@@ -117,16 +110,13 @@ struct SoundTests {
         let second = app.makeWindow()
         #expect(first.engine.player.volume == 0)
         #expect(second.engine.player.volume == 0)
-        // An agent's command changes the run's level, and still nothing plays.
         app.setVolume(0.5)
         app.unmute()
         #expect(app.sound.level == 0.5)
         #expect(app.sound.isMuted)
         #expect(first.engine.player.volume == 0)
-        // The person can't change it in that run.
         app.toggleMuteForPerson()
         #expect(app.sound.level == 0.5)
-        // Nothing of the run is kept: the next launch has the person's level.
         app.keepSidebarWidth(420)
         let next = launch()
         #expect(next.sound.level == 0.8)
@@ -187,11 +177,8 @@ struct SoundTests {
         #expect(!window.escape())
     }
 
-    // MARK: - The commands
-
     static let operatorHolder = Holder(key: "codex-1", name: "Codex", place: "/Users/me/shop")
 
-    /// The control server in front of `app`, with the lease held.
     private func server(_ app: AppModel) async -> ControlServer {
         let server = ControlServer(
             socket: URL(fileURLWithPath: "/nowhere/control.sock"), app: app, listeners: { app.listeners },
@@ -205,7 +192,6 @@ struct SoundTests {
         await server.replyWritten(to: request.sent(by: Self.operatorHolder, json: json)).reply
     }
 
-    /// `sound` in `state --json`.
     private func sound(_ server: ControlServer) async throws -> [String: AnyHashable] {
         let state = try #require(try JSONSerialization.jsonObject(with: Data(await ask(.state, server, json: true).output.utf8)) as? [String: Any])
         return try #require(state["sound"] as? [String: AnyHashable])
@@ -229,7 +215,6 @@ struct SoundTests {
         let json = try #require(try JSONSerialization.jsonObject(with: Data(await ask(.playerUnmute, server, json: true).output.utf8)) as? [String: Any])
         #expect(json["sound"] as? [String: AnyHashable] == ["volume": 40, "muted": false, "mutedForCheck": false, "panelOpen": false])
         #expect(await ask(.state, server).output.contains("\nsound: 40%\n"))
-        // Kept for the next launch.
         #expect(launch().sound.level == 0.4)
         app.listeners.stop()
     }

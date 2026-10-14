@@ -6,9 +6,6 @@
 /// (`Packaging/Themes/`); the test of the shipped themes fails until both
 /// defaults have it.
 public enum ThemeToken: String, CaseIterable, Codable, Sendable {
-    // Surfaces: the whole window is one surface; hairlines and space, not
-    // background colours, separate its parts.
-
     /// The one surface of the window: the header, the stage, the player
     /// bar, the sidebar and its footer.
     case window
@@ -33,15 +30,11 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     /// A sidebar row or a message under the pointer.
     case controlHover
 
-    // Text.
-
     case textPrimary
     case textSecondary
     case textTertiary
     /// Text and glyphs drawn on a filled accent or state colour.
     case textOnAccent
-
-    // Accent.
 
     /// The app's accent: the scrubber, a selection, a ring, a pin. No text
     /// sits on it.
@@ -57,8 +50,6 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     /// sidebar, the threads and the footer.
     case separator
 
-    // Messages.
-
     /// The person's avatar.
     case person
     /// The agent's avatar and its notices.
@@ -69,16 +60,12 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     case bubbleAgent
     case bubbleQuestion
 
-    // The frame.
-
     case regionOutline
     /// The frame outside a region.
     case regionDim
     case badge
     case badgeText
     case sizeLabel
-
-    // Message states, on pins, rows and badges.
 
     case stateQueued
     case stateSent
@@ -87,13 +74,9 @@ public enum ThemeToken: String, CaseIterable, Codable, Sendable {
     case stateDone
     case stateFailed
 
-    // The listener's presence, in the footer.
-
     case presenceListening
     case presenceWorking
     case presenceAbsent
-
-    // Notices.
 
     case notice
     case noticeText

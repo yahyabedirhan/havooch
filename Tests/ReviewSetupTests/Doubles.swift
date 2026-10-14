@@ -2,8 +2,6 @@ import Foundation
 import ReviewSetup
 import Synchronization
 
-/// A file system in memory: each path's item as `lstat` reads it. A link is
-/// followed once, to its destination's item. Every path read is recorded.
 final class FakeFileSystem: SetupFileSystem {
     private let state: Mutex<(items: [String: FileItem], reads: [String], failing: Set<String>)>
 
@@ -52,10 +50,6 @@ struct FakeFailure: LocalizedError {
     var errorDescription: String? { "Operation not permitted" }
 }
 
-/// A process runner that runs nothing: each call is recorded, and answered
-/// by `answer` with its lines and its exit status. With `holds`, the
-/// install's run is held until its task is cancelled, as a running program
-/// is, so a test can cancel it.
 final class FakeRunner: ProcessRunner {
     struct Call: Equatable {
         var executable: String
@@ -79,7 +73,6 @@ final class FakeRunner: ProcessRunner {
         let (lines, status) = answer(call)
         lines.forEach(line)
         if holds, arguments.last?.hasPrefix("exec ") == true {
-            // Held as a running program is, until cancelled.
             await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
                     state.withLock { state in
@@ -98,6 +91,5 @@ final class FakeRunner: ProcessRunner {
         return status
     }
 
-    /// Whether a run is held now.
     var isHolding: Bool { state.withLock { $0.held != nil } }
 }

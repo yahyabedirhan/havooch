@@ -25,7 +25,6 @@ struct TranscriptWindowTests {
         ]
         let kept = TranscriptWindow.cut(lines, around: 40, duration: 120)
         #expect(kept.map(\.text) == ["reaches into the window", "inside", "reaches out of the window"])
-        // Whole: with its own times, not the window's.
         #expect(kept.first == TranscriptLine(start: 22, end: 26, text: "reaches into the window"))
         #expect(kept.last == TranscriptLine(start: 54, end: 70, text: "reaches out of the window"))
     }
@@ -42,7 +41,6 @@ struct TranscriptWindowTests {
         let atTen = TranscriptWindow.cut(Fixture.narration, around: 10, duration: 21.233)
         #expect(atTen.contains { $0.text.contains("Press command enter") })
         #expect(TranscriptWindow.cut(Fixture.narration, to: 5...7) == [Fixture.pause, Fixture.send])
-        // Only at the very end is the first scene more than 15 s away.
         #expect(TranscriptWindow.cut(Fixture.narration, around: 21.2, duration: 21.233) == [Fixture.send, Fixture.answer])
     }
 }
@@ -58,7 +56,6 @@ struct VoiceoverSourceTests {
     @Test("the frame rate decides where a scene ends")
     func frameRate() throws {
         let data = Data(#"{"scenes":[{"text":"One","durationSeconds":1.01,"paddingSeconds":0.5},{"text":"Two","durationSeconds":2}]}"#.utf8)
-        // 1.51 s is 46 frames at 30 a second (1.533 s) and 16 at 10 (1.6 s). No padding is none.
         #expect(VoiceoverSource.lines(from: data, frameRate: 30) == [
             TranscriptLine(start: 0, end: 1.533, text: "One"), TranscriptLine(start: 1.533, end: 3.533, text: "Two"),
         ])
@@ -69,7 +66,6 @@ struct VoiceoverSourceTests {
 
     @Test("a length that is a whole number of frames isn't raised by a float's noise, and a silent scene takes its time")
     func wholeFramesAndSilence() {
-        // 0.1 + 0.2 is 0.30000000000000004: 9 frames at 30, not 10.
         let data = Data(#"{"scenes":[{"text":"","durationSeconds":0.1,"paddingSeconds":0.2},{"text":"Said","durationSeconds":1,"paddingSeconds":0}]}"#.utf8)
         #expect(VoiceoverSource.lines(from: data, frameRate: 30) == [TranscriptLine(start: 0.3, end: 1.3, text: "Said")])
     }
@@ -156,7 +152,6 @@ struct SubtitleSourceTests {
         infinity:00 --> 00:00:12,000
         From nowhere
         """
-        // A time that isn't a finite number is no time: the payload's JSON has no way to write it.
         #expect(SubtitleSource.parse(text).map(\.text) == ["First", "Second"])
         #expect(SubtitleSource.parse("just some words").isEmpty)
     }
@@ -164,7 +159,6 @@ struct SubtitleSourceTests {
 
 @Suite("The source order")
 struct TranscriptSourcesTests {
-    /// The standard sources, with a speech source that never says a line.
     private func standard(_ recognizer: SlowRecognizer = SlowRecognizer()) -> TranscriptSources {
         TranscriptSources.standard(speech: SpeechSource(recognizer: recognizer))
     }
@@ -263,7 +257,6 @@ struct SpeechSourceTests {
 
         recognizer.say(TranscriptLine(start: 0.00049, end: 4.9996, text: " Hello there. "))
         await eventually { source.transcript(of: video)?.lines.count == 1 }
-        // Times to the millisecond, text without the space around it.
         #expect(source.transcript(of: video) == Transcript(
             source: .speech, lines: [TranscriptLine(start: 0, end: 5, text: "Hello there.")], complete: false
         ))
@@ -288,7 +281,6 @@ struct SpeechSourceTests {
         source.prepare(video)
         source.prepare(video)
         recognizer.say(TranscriptLine(start: 1, end: 2, text: "Only line."))
-        // Nothing is kept until the transcript is whole.
         await eventually { source.transcript(of: video)?.lines.count == 1 }
         #expect(saved.all.isEmpty)
         recognizer.finish()
@@ -298,7 +290,6 @@ struct SpeechSourceTests {
         let whole = Transcript(source: .speech, lines: [TranscriptLine(start: 1, end: 2, text: "Only line.")], complete: true)
         #expect(saved.all == ["abc": whole])
 
-        // The next run of the app: the cache answers, the recognizer isn't asked.
         let later = SlowRecognizer()
         let again = SpeechSource(recognizer: later, cache: saved.cache)
         again.prepare(video)

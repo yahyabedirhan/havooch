@@ -24,7 +24,6 @@ struct SupportLayoutTests {
         #expect(layout.keyframe(thread, of: .video(contentHash: "abc")).path == "/support/videos/abc/frames/t-f92cbb2a-1.png")
         #expect(layout.crop(message, of: .video(contentHash: "abc")).path == "/support/videos/abc/crops/m-f92cbb2a-2.png")
         #expect(layout.pendingImage("x", of: .video(contentHash: "abc")).path == "/support/videos/abc/frames/.pending-x.png")
-        // A project's review keeps its pictures in its own folder; the transcript stays the video's.
         let project = ReviewKey.project(slug: "launch-video")
         #expect(layout.reviewFile(project).path == "/support/projects/launch-video/review.json")
         #expect(layout.keyframe(thread, of: project).path == "/support/projects/launch-video/frames/t-f92cbb2a-1.png")

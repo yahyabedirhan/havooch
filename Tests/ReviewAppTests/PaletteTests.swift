@@ -4,12 +4,8 @@ import ReviewCore
 import ReviewStore
 import Testing
 
-/// The palette as the views see it: a `system` surface is the native macOS
-/// colour, a painted one its theme colour, and in every shipped theme the
-/// text reads on each surface as the window draws it.
 @Suite("The palette")
 struct PaletteTests {
-    /// `Packaging/Themes/`, which `make bundle` copies into the app.
     static let shipped = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Packaging/Themes", isDirectory: true)
@@ -54,8 +50,6 @@ struct PaletteTests {
                 let glyph = Self.contrast(colour(.textOnAccent), colour(token))
                 #expect(glyph >= 3, "\(name): textOnAccent on \(token) is \(glyph):1")
             }
-            // The question's pin on the player bar stands apart from every
-            // state's pin, and shows on the window's surface as a mark should (3:1).
             let questionOnWindow = Self.contrast(colour(.question), colour(.window))
             #expect(questionOnWindow >= 3, "\(name): question on window is \(questionOnWindow):1")
             for state in states {
@@ -71,15 +65,10 @@ struct PaletteTests {
         }
     }
 
-    // MARK: - Colour arithmetic
-
-    /// sRGB components, 0 to 1.
     struct RGB: Equatable {
         var red, green, blue: Double
     }
 
-    /// `color` in sRGB as a window of `kind` draws it: a system colour
-    /// resolves in that appearance.
     static func components(_ color: NSColor, kind: ThemeKind) -> RGB {
         var rgb = RGB(red: 0, green: 0, blue: 0)
         NSAppearance(named: kind == .dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
@@ -93,7 +82,6 @@ struct PaletteTests {
         RGB(red: Double(color.red) / 255, green: Double(color.green) / 255, blue: Double(color.blue) / 255)
     }
 
-    /// The WCAG contrast ratio of two opaque colours, from 1 to 21.
     static func contrast(_ one: RGB, _ other: RGB) -> Double {
         let (a, b) = (luminance(one), luminance(other))
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
@@ -107,7 +95,6 @@ struct PaletteTests {
         0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
     }
 
-    /// How far apart two colours look: the CIE76 distance in CIELAB.
     static func distance(_ one: RGB, _ other: RGB) -> Double {
         let (a, b) = (lab(one), lab(other))
         return ((a.0 - b.0) * (a.0 - b.0) + (a.1 - b.1) * (a.1 - b.1) + (a.2 - b.2) * (a.2 - b.2)).squareRoot()

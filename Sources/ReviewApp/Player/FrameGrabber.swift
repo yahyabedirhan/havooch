@@ -2,21 +2,13 @@ import AVFoundation
 import ReviewCore
 import ReviewStore
 
-/// A message's pictures: the keyframe, which is the frame of the video at
-/// its thread's time, and the crop of its region. Both are read from the
-/// asset and not from the window. A message from the UI and one from the
-/// CLI therefore get the same pixels, at the video's own size, whatever the
-/// window's size, and with no screen permission.
 enum FrameGrabber {
-    /// The frame of `asset` on screen at `seconds`.
     nonisolated static func keyframe(
         of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double
     ) async throws(AppRefusal) -> CGImage {
-        // The video's end is past its last frame: ask inside that frame.
         let inside = min(max(seconds, 0), max(duration - frameDuration / 2, 0))
         var attempt = 1
         while true {
-            // A new generator for each try, so a try starts with a new decoder.
             let generator = AVAssetImageGenerator(asset: asset)
             generator.requestedTimeToleranceBefore = .zero
             generator.requestedTimeToleranceAfter = .zero
@@ -32,17 +24,12 @@ enum FrameGrabber {
         }
     }
 
-    /// How many times a frame is read before its error is given up on.
     nonisolated static let readAttempts = 3
 
-    /// Whether a frame read that failed with `error` on try `attempt` is
-    /// tried again: only when the decoder failed, which a Mac under load
-    /// can do for a moment, and up to `readAttempts` tries in all.
     nonisolated static func readsAgain(after error: any Error, attempt: Int) -> Bool {
         (error as? AVError)?.code == .decodeFailed && attempt < readAttempts
     }
 
-    /// The part of `keyframe` inside `region`: the keyframe's own pixels.
     nonisolated static func crop(_ keyframe: CGImage, to region: Region) throws(AppRefusal) -> CGImage {
         let pixels = region.pixels(width: keyframe.width, height: keyframe.height)
         guard let crop = keyframe.cropping(to: CGRect(x: pixels.x, y: pixels.y, width: pixels.width, height: pixels.height)) else {
@@ -51,9 +38,6 @@ enum FrameGrabber {
         return crop
     }
 
-    /// The keyframe written as a PNG at `file` when it's given, and the
-    /// crop of `region` at `cropFile` when both are given, off the main
-    /// actor. When either can't be written, neither is left behind.
     @concurrent
     nonisolated static func writeImages(
         of asset: AVAsset, at seconds: Double, duration: Double, frameDuration: Double,

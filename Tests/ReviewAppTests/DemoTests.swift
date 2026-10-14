@@ -6,9 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The demo in the same window: one model on the person's support folder
-/// switches to a demo folder and back, through the methods "Try the Demo",
-/// the Open panel, a drop and going home call. No window and no socket.
 @Suite("The demo in the same window", .serialized)
 struct DemoTests {
     nonisolated static let listener = Holder(key: "listener-1", name: "Mate", place: "/shop")
@@ -22,9 +19,6 @@ struct DemoTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// The app on the person's folder, moved there as a check's scratch
-    /// folder is, or on the launch `environment` names, with the demo
-    /// folder under the test's root, and the server in front of it.
     private func run(environment: [String: String]? = nil) -> (WindowModel, ControlServer) {
         let model = AppModel(
             environment: environment ?? [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo
@@ -36,7 +30,6 @@ struct DemoTests {
         return (model, server)
     }
 
-    /// The person's own video: a copy of the fixture, so it isn't the demo's file.
     private func ownVideo() throws -> URL {
         let folder = root.appendingPathComponent("Movies", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -65,7 +58,6 @@ struct DemoTests {
     func enter() async throws {
         defer { cleanUp() }
         let (model, _) = run()
-        // A moved support folder with no demo mark is a normal run on it.
         #expect(!model.isDemo)
         #expect(!model.state().app.demo)
 
@@ -106,7 +98,6 @@ struct DemoTests {
         #expect(model.support.path == person.path)
         #expect(model.engine.duration == 0)
 
-        // The same content on the person's data starts with no threads.
         try await model.open(try ownVideo())
         #expect(model.frameThreads.isEmpty)
         #expect(model.threads.flatMap(\.messages).isEmpty)
@@ -235,7 +226,6 @@ struct DemoTests {
         defer { cleanUp() }
         let (model, _) = run()
         let mine = try ownVideo()
-        // The refusal the open ended with, if any.
         let opening = Task { () async -> String? in
             do throws(AppRefusal) {
                 try await model.open(mine)
@@ -253,7 +243,6 @@ struct DemoTests {
         #expect(Library(layout: SupportLayout(root: demo)).recents().map(\.path) == [MessageTests.fixture.standardizedFileURL.path])
     }
 
-    /// The listener as `state` reports it through the server.
     private func listener(_ server: ControlServer) async throws -> [String: Any] {
         let output = await server.reply(to: ControlRequest.state.sent(by: Self.listener, json: true)).reply.output
         let state = try #require(JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])

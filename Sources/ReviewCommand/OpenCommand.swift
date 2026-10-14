@@ -1,13 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch open <path> [--project <slug>]`: the person's open, for a
-/// person or an agent. The video opens playing and the app comes to the
-/// front: in the project `--project` names, else in the most recently
-/// used project that lists it, else as a plain video. The app is launched
-/// when it doesn't run. It takes no lease, so the agent-control icon never
-/// shows for it; `player load` stays the operator's leased open. The
-/// command is listed with the listener's loop.
 enum OpenCommand {
     static let command = Command(
         name: "open", arguments: "<path> [--project <slug>]",
@@ -17,30 +10,17 @@ enum OpenCommand {
         examples: ["~/Movies/launch.mp4", "renders/v3.mp4 --project launch-video"], role: .person,
         valuedOptions: ["--project"]
     ) { arguments, environment throws(UsageError) in
-        // Made absolute here: the app runs in another folder.
         let path = try arguments.one("<path>")
         return .open(URL(fileURLWithPath: path, relativeTo: environment.workingDirectory).standardizedFileURL, project: arguments.options["--project"])
     }
 
-    /// How long a launched app gets to answer, and how often it's looked
-    /// at meanwhile: often, since a cold open has 2 seconds in all.
     static let wait: TimeInterval = 10
     static let interval: TimeInterval = 0.05
 
-    /// Asks the running app to open `file`, in the project `project` when
-    /// it's set. When none runs, the app is launched in front and asked
-    /// once it answers. A path with no file is refused before anything is
-    /// launched; a file that doesn't play is the app's refusal, with
-    /// nothing opened.
     static func run(_ file: URL, project: String? = nil, _ context: AppCommands.Context) -> CommandResult {
         ask(.open(path: file.path, project: project), about: file, named: "open", inFront: true, context)
     }
 
-    /// Asks the running app for `request`, which is about the video
-    /// `file`, launching the app (`inFront`, or in the background) when
-    /// none runs. A path with no file is refused first, by the command
-    /// `name`. With `inFront`, the process the reply names comes to the
-    /// front, as `open` brings it.
     static func ask(
         _ request: ControlRequest, about file: URL, named name: String, inFront: Bool, _ context: AppCommands.Context
     ) -> CommandResult {
@@ -60,8 +40,6 @@ enum OpenCommand {
         } catch {
             return .refused("havooch \(name): \(error.reason)")
         }
-        // Asked only once the app answers, so the request is made once:
-        // a look that times out would otherwise open the file twice.
         var look = context.client
         look.timeout = AppCommands.lookTimeout
         for _ in 0..<Int(wait / interval) {

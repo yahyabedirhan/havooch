@@ -17,7 +17,6 @@ public enum TimeCode {
         var unit = 60.0
         for (index, part) in parts.dropLast().reversed().enumerated() {
             guard let value = number(part, fraction: false) else { return nil }
-            // Minutes under an hours part stay below 60; the first part is free.
             if index == 0, parts.count == 3, value >= 60 { return nil }
             total += value * unit
             unit *= 60
@@ -42,10 +41,6 @@ public enum TimeCode {
         return text
     }
 
-    /// `text` as a number of digits, with one decimal point when `fraction`
-    /// allows it: no sign, no exponent, no spaces. Digits too many for a
-    /// number are refused: they'd read as infinity, which no request can
-    /// carry.
     private static func number(_ text: String, fraction: Bool) -> Double? {
         guard !text.isEmpty, text.first != ".", text.last != "." else { return nil }
         let points = text.filter { $0 == "." }.count

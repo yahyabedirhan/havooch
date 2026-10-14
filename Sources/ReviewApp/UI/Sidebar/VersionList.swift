@@ -1,16 +1,6 @@
 import ReviewCore
 import SwiftUI
 
-// A project's thread list by version, built from Swift Lab's
-// `project-versions` session, component `thread-list`, variant V5 "Final:
-// Jump menu" (`docs/prototypes/2026-10-08-lab/project-versions/thread-list-V5/`).
-
-/// A project's thread list: the bar with what it shows and "All
-/// versions", General, then a section per version of `VersionTree` under
-/// a header that stays at the top while the list scrolls, and a footer
-/// with the older versions and a way to each open thread on them. Every
-/// row is today's row, with its state chip, and works as it does on any
-/// version.
 struct VersionList: View {
     let model: WindowModel
     let tree: VersionTree
@@ -49,7 +39,6 @@ struct VersionList: View {
                 }
                 .onChange(of: model.versionJump) { _, jump in
                     guard let jump else { return }
-                    // The section a pick added is laid out first.
                     Task { @MainActor in
                         withAnimation(.snappy(duration: 0.3)) {
                             proxy.scrollTo(VersionTree.Section.Kind.version(jump.number), anchor: .top)
@@ -61,7 +50,6 @@ struct VersionList: View {
         .overlay(alignment: .topTrailing) {
             if model.allVersionsMenu != nil {
                 ZStack(alignment: .topTrailing) {
-                    // A click outside the menu closes it.
                     palette[.window].opacity(0.001)
                         .onTapGesture { _ = model.closeVersionMenu() }
                         .accessibilityHidden(true)
@@ -74,8 +62,6 @@ struct VersionList: View {
     }
 }
 
-/// The bar over the list: which versions it shows, and "All versions"
-/// with the number of open threads on the versions it doesn't.
 private struct AllVersionsBar: View {
     let model: WindowModel
     let tree: VersionTree
@@ -136,8 +122,6 @@ private struct AllVersionsBar: View {
     private static let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
 }
 
-/// "All versions": a search field, then the versions in the list, the
-/// older versions with open threads, and every older version.
 private struct AllVersionsMenuView: View {
     let model: WindowModel
 
@@ -157,7 +141,6 @@ private struct AllVersionsMenuView: View {
                 .font(.callout)
                 .focused($isSearchFocused)
                 .onSubmit {
-                    // Return picks the first version the search finds.
                     guard let first = (menu?.inList.first ?? menu?.older.first) else { return }
                     _ = try? model.pickVersion(first.number)
                 }
@@ -217,8 +200,6 @@ private struct AllVersionsMenuView: View {
     }
 }
 
-/// One version in "All versions": its number, its label, a mark when it
-/// is on screen, its open threads by group and how many threads it has.
 private struct MenuLine: View {
     let line: AllVersionsMenu.Line
     let action: () -> Void
@@ -271,9 +252,6 @@ private struct MenuLine: View {
     }
 }
 
-/// A version's header: its name, its label, "On screen" for the version
-/// on screen, its threads counted by who acts next, and a close button
-/// for a version picked from "All versions".
 private struct VersionHeader: View {
     let model: WindowModel
     let section: VersionTree.Section
@@ -331,8 +309,6 @@ private struct VersionHeader: View {
     }
 }
 
-/// One glyph and count per group of who acts next, as a version's header
-/// and a line of "All versions" show them.
 private struct StateCounts: View {
     let threads: [ReviewThread]
 
@@ -357,8 +333,6 @@ private struct StateCounts: View {
     }
 }
 
-/// The end of the list: how many versions are older, and a chip for each
-/// open thread on them, which adds its version's section, so none hides.
 private struct OlderFooter: View {
     let model: WindowModel
     let tree: VersionTree
@@ -413,7 +387,6 @@ private struct OlderFooter: View {
 }
 
 extension ThreadGroup {
-    /// The group's colour: the state's that it holds.
     func color(_ palette: Palette) -> Color {
         switch self {
         case .needsYou: palette[.question]

@@ -2,10 +2,6 @@ import AppKit
 import ReviewCore
 import SwiftUI
 
-/// Who wrote a message, as the conversation shows it: "You", or the
-/// agent's name with its harness for the logo. An agent's message keeps the
-/// name of the listener session that wrote it; one kept before names were
-/// takes `listener`, the name of the session listening now.
 struct MessageWriter: Equatable {
     var name: String
     var agent: KnownAgent?
@@ -20,9 +16,6 @@ struct MessageWriter: Equatable {
     }
 }
 
-/// Where a message sits in a run of the agent's messages: the agent's name
-/// shows once at the start of a run, its avatar once at the end, beside the
-/// last bubble. A person's message is in no run.
 struct ChatRun: Equatable {
     var startsRun = false
     var endsRun = false
@@ -34,8 +27,6 @@ struct ChatRun: Equatable {
     }
 }
 
-/// What VoiceOver reads for a message: its writer, its kind and its state,
-/// then its words. `You, message, Queued, on a region: Too fast`.
 enum MessageVoice {
     static func text(_ message: Message, writer: String, isOpenQuestion: Bool) -> String {
         var parts = [writer]
@@ -52,8 +43,6 @@ enum MessageVoice {
     }
 }
 
-/// What a message's menu (and VoiceOver's actions) offer: Edit and Delete
-/// on a queued message only, since a sent one is a record; Copy on all.
 enum MessageAction: CaseIterable, Identifiable {
     case edit, delete, copy
 
@@ -80,43 +69,24 @@ enum MessageAction: CaseIterable, Identifiable {
     }
 }
 
-/// One message of a thread as a chat (from variant 02 of the
-/// prototype). The person's messages are trailing, in `bubblePerson` with a
-/// tail, and a quiet line under the bubble holds the state, the region tag
-/// and the time; a queued one has a dashed outline, Edit and Delete on
-/// hover, and is edited in place; an answer is tinted with `question`. The
-/// agent's messages are leading, in `bubbleAgent`, with its harness logo at
-/// the end of a run and its name at the start; a question is a card in
-/// `bubbleQuestion` headed "<agent> asks". A region message shows its crop
-/// as an attachment under its bubble. A right-click offers Edit, Delete and
-/// Copy where they apply.
 struct MessageBubble: View {
     let model: WindowModel
     let message: Message
     var isOpenQuestion = false
     var run: ChatRun
 
-    /// The text being edited; nil while the message only shows.
     @State private var edited: String?
     @State private var isHovered = false
-    /// Whether Edit or Delete has the keyboard focus: they show then as on
-    /// hover, so Space never presses a button the person can't see.
     @State private var isEditFocused = false
     @State private var isDeleteFocused = false
     @Environment(\.palette) private var palette
 
     static let avatar: CGFloat = 24
-    /// The room a person's message leaves at the leading side, and an
-    /// agent's at the trailing side, so who wrote it reads from its place.
     static let personInset: CGFloat = 46
     static let agentInset: CGFloat = 34
-    /// The space above a message: half of it inside a run of the agent's.
-    /// A conversation adds it once more at its foot.
     static let gap: CGFloat = 8
-    /// The bubble's corners, and the small one its tail is.
     static let corner: CGFloat = 16
     static let tail: CGFloat = 5
-    /// The largest a crop shows in the conversation.
     private static let cropSize = CGSize(width: 220, height: 140)
 
     var body: some View {
@@ -152,11 +122,8 @@ struct MessageBubble: View {
         }
     }
 
-    // MARK: - The person's message
-
     private var isQueued: Bool { message.isWork && message.state?.isEditable == true }
 
-    /// Edit and Delete show on hover, and while either has the keyboard focus.
     private var areActionsShown: Bool { isHovered || isEditFocused || isDeleteFocused }
 
     @ViewBuilder
@@ -194,9 +161,6 @@ struct MessageBubble: View {
         }
     }
 
-    /// The bubble behind a person's words: `bubblePerson` with its tail at
-    /// the trailing foot; a queued message is a dashed outline, filled on
-    /// hover; an answer is tinted with `question`.
     @ViewBuilder
     private var personBubble: some View {
         let shape = Self.bubble(tailLeading: false)
@@ -211,8 +175,6 @@ struct MessageBubble: View {
         }
     }
 
-    /// The quiet line under a person's message: its state (an answer says
-    /// it went at once), the region tag, and the time.
     private var personLine: some View {
         HStack(spacing: 8) {
             if message.kind == .answer {
@@ -234,8 +196,6 @@ struct MessageBubble: View {
         .lineLimit(1)
         .fixedSize()
     }
-
-    // MARK: - The agent's message
 
     private func agent(_ writer: MessageWriter) -> some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -265,15 +225,9 @@ struct MessageBubble: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.trailing, Self.agentInset)
-        // A run's later messages sit closer to the one before.
         .padding(.top, run.startsRun ? Self.gap : Self.gap / 2)
     }
 
-    /// The agent's question: its words alone, in `bubbleQuestion` with a
-    /// border in `question`. The writer's name above the bubble and the
-    /// question colour say who asks, so the card carries no header; the
-    /// words "<agent> asks" stay for VoiceOver. One already answered is
-    /// quieter.
     private func question(_ writer: MessageWriter) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: 14, bottomLeadingRadius: Self.tail, bottomTrailingRadius: 14, topTrailingRadius: 14, style: .continuous
@@ -292,12 +246,8 @@ struct MessageBubble: View {
 
     private var isQuestion: Bool { message.author == .agent && message.kind == .question }
 
-    /// The avatar's fill with no logo: the agent's colour, or a question's.
     private var avatarFill: Color { isQuestion ? palette[.question] : palette[.agent] }
 
-    // MARK: - Shared parts
-
-    /// The words in a bubble's padding, hugging them as in a chat.
     private var words: some View {
         Text(message.text)
             .font(.body)
@@ -307,8 +257,6 @@ struct MessageBubble: View {
             .padding(.vertical, 7)
     }
 
-    /// A bubble: round corners, and the small one its tail is at the foot
-    /// of the side its writer is on.
     static func bubble(tailLeading: Bool) -> UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: corner, bottomLeadingRadius: tailLeading ? tail : corner,
@@ -322,7 +270,6 @@ struct MessageBubble: View {
             .foregroundStyle(palette[.textTertiary])
     }
 
-    /// The crop of a region message, as an attachment under its bubble.
     private func crop(_ file: URL) -> some View {
         SidebarPicture(file: file, side: Self.cropSize.width, shape: 16 / 9)
             .frame(maxWidth: Self.cropSize.width, maxHeight: Self.cropSize.height, alignment: .trailing)
@@ -331,7 +278,6 @@ struct MessageBubble: View {
             .padding(.top, 2)
     }
 
-    /// The queued message edited in place: Return saves, Escape cancels.
     private func editor(_ text: String) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             MessageField(text: binding(text), placeholder: "Message", commit: save, cancel: { edited = nil })
@@ -363,8 +309,6 @@ struct MessageBubble: View {
     }
 }
 
-/// A message's state: its glyph and its name, in its colour, so a state is
-/// never told by colour alone.
 struct StateChip: View {
     let state: MessageState
     var font: Font = .caption.weight(.medium)
@@ -384,7 +328,6 @@ struct StateChip: View {
     }
 }
 
-/// A native borderless symbol button beside a message.
 struct RowButton: View {
     @Environment(\.palette) private var palette
 

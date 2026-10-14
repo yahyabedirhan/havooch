@@ -1,12 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// One project on the home screen (story 48): its latest version's
-/// thumbnail at 16:9 with the version's number on it, the project's title,
-/// and how many versions it has and when it was last opened. A click opens
-/// the latest version in the project, as `havooch open <path> --project
-/// <slug>` does. A project whose latest file isn't there is dimmed and
-/// does nothing.
 struct ProjectCard: View {
     let model: WindowModel
     let project: StateReport.HomeProject
@@ -14,7 +8,6 @@ struct ProjectCard: View {
     @State private var isHovered = false
     @Environment(\.palette) private var palette
 
-    /// `3 versions, opened 2 hours ago`, or `1 version` before it was opened.
     nonisolated static func detail(_ project: StateReport.HomeProject, now: Date) -> String {
         let count = "\(project.versions) version\(project.versions == 1 ? "" : "s")"
         guard project.available else { return "\(count), unavailable" }

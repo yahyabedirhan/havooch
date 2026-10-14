@@ -11,13 +11,8 @@ public struct ReviewThread: Codable, Equatable, Sendable, Identifiable {
     /// The frame time the thread is about, in seconds; nil for General.
     public let time: Double?
     public internal(set) var messages: [Message]
-    /// Where the person left the thread's popover; nil until they move or
-    /// resize it.
     public internal(set) var popoverFrame: PopoverFrame?
-    /// When the person last opened the thread's view; nil until they do.
     public internal(set) var lastSeen: Date?
-    /// The version of a project the thread was raised on; nil
-    /// on a plain video, and for General, which is the whole project's.
     public internal(set) var anchor: VersionAnchor?
 
     public init(

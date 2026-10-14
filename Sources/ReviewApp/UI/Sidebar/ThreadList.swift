@@ -1,11 +1,6 @@
 import ReviewCore
 import SwiftUI
 
-/// The sidebar's thread list: the title "Threads" with a summary
-/// line, then, for a plain video, the threads in their groups
-/// (`ThreadGroup`) under headers that stay at the top while the list
-/// scrolls; for a project, the threads by version (`VersionList`). A
-/// click on a row shows the thread's view.
 struct ThreadList: View {
     let model: WindowModel
 
@@ -24,7 +19,6 @@ struct ThreadList: View {
         .accessibilityLabel("Threads")
     }
 
-    /// A plain video's list: the threads in their groups.
     private var groups: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
@@ -44,7 +38,6 @@ struct ThreadList: View {
         }
     }
 
-    /// "Threads" and the summary line under it.
     private var heading: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("Threads")
@@ -62,10 +55,6 @@ struct ThreadList: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Under General while no frame has a thread: how one starts. The
-    /// compact form of the native empty state: a symbol, a headline
-    /// and a callout, since `ContentUnavailableView`'s large title is too
-    /// heavy for a narrow sidebar under a row.
     private var empty: some View {
         VStack(spacing: 6) {
             Image(systemName: "text.bubble")
@@ -89,15 +78,10 @@ struct ThreadList: View {
     }
 }
 
-/// Rows of the thread list in the order given, with a hairline between
-/// two, under the words only, as in Mail. A group of a plain video's list
-/// and a version section of a project's both use it.
 struct ThreadRows: View {
     let model: WindowModel
     let threads: [ReviewThread]
-    /// Whether each row shows its version's tag: not under a version's header.
     var showsVersion = true
-    /// Whether the rows' version is another than the one on screen.
     var isOffVersion = false
 
     var body: some View {
@@ -109,25 +93,17 @@ struct ThreadRows: View {
                 model: model, thread: thread, isOnStage: thread.id == stageThread, showsVersion: showsVersion,
                 isOffVersion: isOffVersion && !thread.isGeneral
             )
-            // A small gap between rows, so two filled rows (the one on the
-            // stage and the one under the pointer) never touch; the
-            // hairline sits in it.
             .padding(.top, index > 0 ? Self.rowGap : 0)
             .overlay(alignment: .top) {
                 if index > 0 { rowHairline }
             }
-            // The tour's reply step rings the answered thread,
-            // closer than elsewhere: the list's margin is 8 points.
             .coachRing(isRinged, radius: 10, padding: CoachRing.tightPadding)
-            // A lazy stack draws a row it made once again only when its
-            // identity changes: a row whose thread changed is a new one.
             .id(RowIdentity(
                 thread: thread, agent: model.agentName, isOnStage: thread.id == stageThread, isRinged: isRinged
             ))
         }
     }
 
-    /// The space between two rows of a group.
     static let rowGap: CGFloat = 2
 
     private var rowHairline: some View {
@@ -137,12 +113,10 @@ struct ThreadRows: View {
     }
 }
 
-/// What a row shows, as one value: the row is drawn again when it changes.
 private struct RowIdentity: Hashable {
     var summary: ThreadSummary
     var regions: Int
     var isOnStage: Bool
-    /// Whether the tour's reply step rings the row.
     var isRinged: Bool
 
     init(thread: ReviewThread, agent: String, isOnStage: Bool, isRinged: Bool) {
@@ -153,9 +127,6 @@ private struct RowIdentity: Hashable {
     }
 }
 
-/// A group's header in the thread list: its glyph, its name and its count,
-/// on the window's surface so the rows scroll under it. Queued says how to
-/// send them.
 private struct GroupHeader: View {
     let section: ThreadGroup.Section
     @Environment(\.palette) private var palette

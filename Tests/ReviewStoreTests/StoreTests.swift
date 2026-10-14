@@ -8,7 +8,6 @@ import ReviewStore
 import Synchronization
 import Testing
 
-/// A temporary folder, removed with `cleanUp`.
 struct Scratch {
     let folder = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
@@ -130,7 +129,6 @@ struct ImageFilesTests {
     func refused() throws {
         let scratch = try Scratch()
         defer { scratch.cleanUp() }
-        // A file where the folder should be.
         let blocker = scratch.folder.appendingPathComponent("videos")
         try Data().write(to: blocker)
         let id = try #require(ItemID("t-f92cbb2a-1"))

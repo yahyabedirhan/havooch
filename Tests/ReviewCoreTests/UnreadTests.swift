@@ -4,7 +4,6 @@ import Testing
 
 @Suite("Unread agent messages")
 struct UnreadTests {
-    /// A review with thread 1 sent, so the agent can write on it.
     private func sentReview() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 10, now: now)

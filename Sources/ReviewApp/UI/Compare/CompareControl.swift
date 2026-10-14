@@ -1,9 +1,6 @@
 import ReviewWire
 import SwiftUI
 
-/// The header's Compare button (compare-control V4 "Live search
-/// picker"): it opens the compare popover, a two-pane mini window of what
-/// the screen will show. Shown in a project of two versions or more.
 struct CompareButton: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -36,7 +33,6 @@ struct CompareButton: View {
         }
     }
 
-    /// Open while the model's popover is; closing it is Cancel.
     private var popoverShown: Binding<Bool> {
         Binding(
             get: { model.compare?.phase == .choosing },
@@ -45,8 +41,6 @@ struct CompareButton: View {
     }
 }
 
-/// The header while the window compares: the two versions on a filled
-/// capsule with the layout's icon, and Exit Compare with its key.
 struct ComparingBadge: View {
     let model: WindowModel
     let session: CompareSession
@@ -90,13 +84,8 @@ struct ComparingBadge: View {
     }
 }
 
-/// The compare popover: the title, the layout's segments, the mini window
-/// with a chip per side and the swap button between them, and the
-/// footer with the opening note, Cancel and the action.
 private struct ComparePopover: View {
     let model: WindowModel
-    /// The playhead's time when the popover opened: the mini window's
-    /// pictures are of that moment.
     @State private var time: Double
     @Environment(\.palette) private var palette
 
@@ -148,7 +137,6 @@ private struct ComparePopover: View {
     }
 }
 
-/// Side by side, Flip and Slider, as a segmented row of icon and words.
 private struct LayoutPicker: View {
     let model: WindowModel
     let layout: CompareLayout
@@ -188,10 +176,6 @@ private struct LayoutPicker: View {
     }
 }
 
-/// The comparison window in miniature: a title strip, the two pictures in
-/// the layout, a chip per side with the swap button between them, and
-/// the shared playhead under it. A picture and a chip open their side's
-/// picker.
 private struct MiniWindow: View {
     let model: WindowModel
     let session: CompareSession
@@ -288,8 +272,6 @@ private struct MiniWindow: View {
         }
     }
 
-    /// A side's picture with its name and version on it; a click opens
-    /// the side's picker.
     private func frame(_ side: CompareSide) -> some View {
         let number = session.number(side)
         let isOpen = session.picker?.side == side
@@ -313,8 +295,6 @@ private struct MiniWindow: View {
     }
 }
 
-/// A frame of the project's version `number` at `time`, made when it
-/// first shows; the letterbox until then.
 private struct VersionStill: View {
     let model: WindowModel
     let number: Int
@@ -340,8 +320,6 @@ private struct VersionStill: View {
     }
 }
 
-/// A side's chip under the mini window: its name, the version and its
-/// label, and a chevron; a click opens its picker, hung under it.
 private struct SideChip: View {
     let model: WindowModel
     let session: CompareSession
@@ -389,7 +367,6 @@ private struct SideChip: View {
         }
     }
 
-    /// Open while the model's picker is this side's.
     private var pickerShown: Binding<Bool> {
         Binding(
             get: { model.compare?.picker?.side == side },
@@ -398,10 +375,6 @@ private struct SideChip: View {
     }
 }
 
-/// A side's version picker: "Left side shows" with the count, a search
-/// field, every version newest first with its picture and label, the one
-/// chosen checked, the one on screen and the one on the other side
-/// tagged, and the keys. Up and Down move, Return picks, Escape closes.
 private struct ComparePickerPanel: View {
     let model: WindowModel
     let side: CompareSide

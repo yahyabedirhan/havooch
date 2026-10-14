@@ -1,14 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// The listener's loop, which needs no lease: `havooch open | wait | ack
-/// | reply | ask`, and `message state` in the message group. `open` is the
-/// person's open, run by `OpenCommand`. `wait [--video <path> | --project
-/// <slug>] [--timeout <seconds>]` is a long-poll: it exits 0 with the next
-/// send of one review as JSON, and the window that holds the review shows
-/// the listener while it's open. `ack`, `reply` and `ask` answer in the
-/// player, on the video their id names; `ask` is held until the person
-/// answers, and exits 0 with the answer.
 enum ListenerCommands {
     static let group = CommandGroup(
         name: nil, summary: "get feedback: wait for the person's sends and answer them", section: .feedback,
@@ -26,7 +18,6 @@ enum ListenerCommands {
         valuedOptions: ["--timeout", "--video", "--project"]
     ) { arguments, environment throws(UsageError) in
         try arguments.none()
-        // Made absolute here: the app runs in another folder.
         let video = arguments.options["--video"].map {
             URL(fileURLWithPath: $0, relativeTo: environment.workingDirectory).standardizedFileURL
         }
@@ -80,25 +71,15 @@ enum ListenerCommands {
         return .send(.ask(thread: words[0], question: words[1], waitSeconds: wait, choices: choices))
     }
 
-    /// How long `wait` rests before it looks for the app again.
     static let retry: TimeInterval = 1
 
-    /// Waits for the next send of the review the video at `video` opens
-    /// in, or of the project `project`, else of the key window's, for
-    /// `timeout` seconds or with no limit.
-    /// The payload is JSON with or without `--json`. While the app isn't
-    /// running, or quits, the command connects again each second, so a
-    /// listener can start before the app and outlive its restart. Exit 0
-    /// with the send, 124 when the time ran out, 1 when the app refuses.
     static func wait(
         timeout: Int?, video: URL? = nil, project: String? = nil, client: ControlClient, environment: CommandEnvironment
     ) -> CommandResult {
         let deadline = timeout.map { environment.now().addingTimeInterval(TimeInterval($0)) }
         var client = client
         while true {
-            // The app may have come back on other data: a demo, or the person's own.
             client.socket = ControlSocket.locate(support: SupportFolder.app(environment: environment.variables))
-            // What's left of the time, rounded up: the app holds the request for it.
             let left = deadline.map { max(Int($0.timeIntervalSince(environment.now()).rounded(.up)), 0) }
             switch client.send(.wait(timeoutSeconds: left, video: video?.path, project: project)) {
             case .success(let reply) where reply.timedOut == true:

@@ -2,69 +2,41 @@ import Foundation
 import ReviewCore
 import SwiftUI
 
-/// The version switcher of a project's window (version-switcher V5,
-/// "Recent plus picker"), as words and numbers: the last three versions
-/// as segments, and a field after them for the older ones, which names
-/// an older version while it is on screen and opens a searchable picker
-/// of every version. Pure, so the switcher is tested without a window.
 nonisolated struct VersionSwitch: Equatable {
-    /// One version as the switcher and the picker show it.
     struct Entry: Equatable, Identifiable {
-        /// From 1.
         var number: Int
         var label: String?
-        /// How many threads are on a frame of it.
         var threads: Int
-        /// When its file was made, as the picker says it (`today`,
-        /// `yesterday`, `Oct 6`); nil when the file can't be read.
         var made: String?
 
         var id: Int { number }
-        /// `v12`.
         var name: String { "v\(number)" }
-        /// The header's line under the project's title: `v12 · alt
-        /// opening`, else `v12 · Oct 6`, else `v12`.
         var line: String { ([name] + [label ?? made].compactMap(\.self)).joined(separator: " · ") }
     }
 
-    /// How many of the newest versions are segments.
     static let recentCount = 3
 
-    /// v1 first.
     var versions: [Entry]
-    /// The number of the version on screen; nil for a removed version.
     var current: Int?
 
-    /// The segments: the last three versions, oldest first.
     var recent: [Entry] { Array(versions.suffix(Self.recentCount)) }
-    /// Whether the project has versions older than the segments, so the
-    /// field and its picker show.
     var hasOlder: Bool { versions.count > Self.recentCount }
-    /// Whether the version on screen is older than the segments: the field
-    /// names it and is the selected one.
     var isOld: Bool {
         guard let current else { return false }
         return !recent.contains { $0.number == current }
     }
-    /// The field's words: the older version on screen (`v12`), else
-    /// `All 50`; nil when the project has no older version.
     var field: String? {
         guard hasOlder else { return nil }
         if isOld, let current { return "v\(current)" }
         return "All \(versions.count)"
     }
 
-    /// The version on screen; nil for a removed version.
     var onScreen: Entry? { current.flatMap(entry) }
 
-    /// The version numbered `number`; nil outside the list.
     func entry(_ number: Int) -> Entry? {
         versions.indices.contains(number - 1) ? versions[number - 1] : nil
     }
 
-    /// The picker's rows for `query`, newest first: every version with no
-    /// query, else those whose number starts with it (`1`, `v1`; `v`
-    /// alone is every one) or whose label holds it, in any case.
     func matches(_ query: String) -> [Entry] {
         let typed = query.trimmingCharacters(in: .whitespaces).lowercased()
         let all = Array(versions.reversed())
@@ -75,8 +47,6 @@ nonisolated struct VersionSwitch: Equatable {
         }
     }
 
-    /// When a file made at `date` was made, as the picker says it:
-    /// `today`, `yesterday`, else the month and the day (`Oct 6`).
     static func made(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now) { return "today" }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
@@ -88,22 +58,15 @@ nonisolated struct VersionSwitch: Equatable {
     }
 }
 
-/// The version picker while it is open: what is typed in its search
-/// field, and the row Up and Down moved to.
 nonisolated struct VersionPicker: Equatable {
     var query = ""
-    /// The number of the highlighted version; nil highlights the first row.
     var highlighted: Int?
 
-    /// The row Return opens among `matches`: the one moved to while it
-    /// still matches, else the first.
     func highlight(in matches: [VersionSwitch.Entry]) -> Int? {
         if let highlighted, matches.contains(where: { $0.number == highlighted }) { return highlighted }
         return matches.first?.number
     }
 
-    /// The row `steps` rows below the highlighted one (above, below 0),
-    /// kept inside `matches`.
     func moved(by steps: Int, in matches: [VersionSwitch.Entry]) -> VersionPicker {
         guard !matches.isEmpty else { return self }
         let at = highlight(in: matches).flatMap { number in matches.firstIndex { $0.number == number } } ?? 0
@@ -113,9 +76,6 @@ nonisolated struct VersionPicker: Equatable {
     }
 }
 
-/// The switcher on the header's first line, after the project's title:
-/// the last three versions as segments, then the field that opens the
-/// picker. A plain video has none (the title shows no switcher).
 struct VersionSwitcher: View {
     let model: WindowModel
     let versions: VersionSwitch
@@ -155,14 +115,11 @@ struct VersionSwitcher: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// `v12, alt opening, 3 threads`.
     static func help(_ version: VersionSwitch.Entry) -> String {
         let threads = "\(version.threads) thread\(version.threads == 1 ? "" : "s")"
         return [version.name, version.label, threads].compactMap(\.self).joined(separator: ", ")
     }
 
-    /// `v12` and the chevrons while an older version is on screen, else
-    /// `All 50`; it opens the picker.
     private var field: some View {
         let isOpen = model.versionPicker != nil
         return Button {
@@ -199,14 +156,11 @@ struct VersionSwitcher: View {
         }
     }
 
-    /// Open while the model's picker is; closing the popover closes it.
     private var pickerShown: Binding<Bool> {
         Binding(get: { model.versionPicker != nil }, set: { if !$0 { model.closeVersionPicker() } })
     }
 }
 
-/// The raised look of the segment on screen: a light fill in a light
-/// theme, a lighter veil in a dark one, from the theme's tokens.
 private struct RaisedSegment: View {
     @Environment(\.palette) private var palette
 
@@ -217,9 +171,6 @@ private struct RaisedSegment: View {
     }
 }
 
-/// The searchable picker: "Go to version…", then every version, newest
-/// first, typing filtering them by number or label. Up and Down move the
-/// highlight, Return opens it, Escape closes the picker.
 private struct VersionPickerPanel: View {
     let model: WindowModel
     let versions: VersionSwitch
@@ -320,8 +271,6 @@ private struct VersionPickerPanel: View {
     }
 }
 
-/// One version in the picker: a check on the one on screen, its name,
-/// its label, its threads and when it was made.
 private struct VersionRow: View {
     let version: VersionSwitch.Entry
     let isCurrent: Bool

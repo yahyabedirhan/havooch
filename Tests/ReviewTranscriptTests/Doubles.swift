@@ -2,7 +2,6 @@ import Foundation
 import ReviewTranscript
 import Synchronization
 
-/// The sample fixture's folder, and its narration as the README times it.
 enum Fixture {
     static let folder = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -22,9 +21,6 @@ enum Fixture {
     static let narration = [pause, send, answer]
 }
 
-/// A temporary folder that stands for a video's folder: `sample.mp4` (no
-/// real video; the sidecar sources only look beside it) and the sidecars a
-/// test copies in.
 struct VideoFolder {
     let folder = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-transcript-tests-\(UUID().uuidString)", isDirectory: true)
@@ -52,12 +48,10 @@ struct VideoFolder {
     }
 }
 
-/// A recognizer the test drives: lines arrive when the test says them.
 final class SlowRecognizer: SpeechRecognizing {
     private typealias Stream = AsyncThrowingStream<TranscriptLine, any Error>
     private struct State {
         var runs = 0
-        /// Whether a run already reads `stream`: the next run gets a new one.
         var isTaken = false
         var stream: Stream
         var continuation: Stream.Continuation
@@ -70,7 +64,6 @@ final class SlowRecognizer: SpeechRecognizing {
         state = Mutex(State(stream: stream, continuation: continuation))
     }
 
-    /// How many times a transcription started.
     var runs: Int { state.withLock { $0.runs } }
 
     func lines(of file: URL) -> AsyncThrowingStream<TranscriptLine, any Error> {
@@ -86,13 +79,11 @@ final class SlowRecognizer: SpeechRecognizing {
         state.withLock { _ = $0.continuation.yield(line) }
     }
 
-    /// Ends the run, with `error` when it fails.
     func finish(throwing error: (any Error)? = nil) {
         state.withLock { $0.continuation.finish(throwing: error) }
     }
 }
 
-/// A cache in memory: what a speech source kept.
 final class Saved: Sendable {
     private let transcripts = Mutex<[String: Transcript]>([:])
 
@@ -111,7 +102,6 @@ struct NoModel: LocalizedError {
     var errorDescription: String? { "no model for this language" }
 }
 
-/// Waits until `condition` holds: speech arrives on its own task.
 func eventually(_ condition: () -> Bool) async {
     let deadline = ContinuousClock.now + .seconds(60)
     while !condition(), ContinuousClock.now < deadline {

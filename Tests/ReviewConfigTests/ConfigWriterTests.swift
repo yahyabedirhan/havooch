@@ -2,8 +2,6 @@ import Foundation
 import ReviewConfig
 import Testing
 
-/// The targeted writes: the header for a missing file and the theme line.
-/// Every other line and comment stays as it was.
 @Suite("Writing config.toml")
 struct ConfigWriterTests {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-config-\(UUID().uuidString)", isDirectory: true)
@@ -68,8 +66,6 @@ struct ConfigWriterTests {
     }
 }
 
-/// The verdict `config check` prints and the app writes to
-/// `config-status.json`.
 @Suite("The verdict on config.toml")
 struct ConfigVerdictTests {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent("havooch-verdict-\(UUID().uuidString)", isDirectory: true)

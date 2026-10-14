@@ -8,11 +8,8 @@ import Testing
 @Suite("havooch open")
 struct OpenCommandTests {
     static let opened = "opened cut2.mp4 (0:21.233), playing\n"
-    /// The fake app's process, which its reply to `open` names.
     static let pid: Int32 = 4242
 
-    /// A run with a video file at `cut2.mp4` in its folder, against an app
-    /// that answers once `running` is true. A launch starts it.
     private func makeRun(running: Bool) throws -> (run: Run, video: URL) {
         let state = Running(running)
         let run = Run { message, _ in
@@ -29,7 +26,6 @@ struct OpenCommandTests {
         return (run, video)
     }
 
-    /// Whether the fake app runs.
     private final class Running: Sendable {
         let value: Mutex<Bool>
 
@@ -77,7 +73,6 @@ struct OpenCommandTests {
         #expect(run.launcher.launches == [[:]])
         #expect(run.launcher.inFront == [true])
         #expect(run.launcher.fronted == [Self.pid])
-        // The open is asked for once, after the app answered a status.
         #expect(run.transport.requests == [.open(path: video.path), .appStatus, .open(path: video.path)])
     }
 

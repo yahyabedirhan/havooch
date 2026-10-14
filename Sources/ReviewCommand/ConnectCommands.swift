@@ -1,12 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch connect pick <harness> | disconnect | forget`: the Connect
-/// view's own actions, each the operator's, as the person's clicks are.
-/// `sidebar show connect` shows the view and `sidebar show threads` is
-/// Back; Link, Run Command and Cancel are `setup link`,
-/// `setup install` and `setup cancel`. Copying a prompt or a path changes
-/// nothing in the app: `state --json` has the text under `sidebar.connect`.
 enum ConnectCommands {
     static let group = CommandGroup(
         name: "connect", summary: "pick, disconnect and forget an agent", section: .drive, commands: [

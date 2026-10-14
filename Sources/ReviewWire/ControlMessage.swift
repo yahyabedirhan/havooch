@@ -56,7 +56,6 @@ public struct ControlMessage: Equatable, Sendable {
                 command: "screenshot", path: path, appearance: appearance?.rawValue,
                 hideAgentIndicator: hideAgentIndicator ? true : nil
             )
-            // A player window goes by its id, or unsaid for the key one.
             wire.window = window == .main ? self.window : window.rawValue
         case .commentAdd(let text, let at, let region, let thread):
             wire = Wire(command: "comment.add", text: text, at: at, region: region, thread: thread)
@@ -76,7 +75,6 @@ public struct ControlMessage: Equatable, Sendable {
         case .reply(let thread, let text): wire = Wire(command: "reply", text: text, thread: thread)
         case .ask(let thread, let question, let waitSeconds, let choices):
             wire = Wire(command: "ask", waitSeconds: waitSeconds, text: question, thread: thread)
-            // A question with no choices goes as it went before them.
             wire.choices = choices.isEmpty ? nil : choices
         case .threadAnswer(let thread, let text): wire = Wire(command: "thread.answer", text: text, thread: thread)
         case .threadChoose(let thread, let choice): wire = Wire(command: "thread.choose", thread: thread, choice: choice)
@@ -153,7 +151,6 @@ public struct ControlMessage: Equatable, Sendable {
         wire.json = json
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        // Encoding a struct of strings, numbers and booleans can't fail.
         return try! encoder.encode(wire)
     }
 
@@ -161,8 +158,6 @@ public struct ControlMessage: Equatable, Sendable {
     /// another version (naming both), no holder, a command this build
     /// doesn't know, a field that's missing or invalid.
     public static func decode(_ data: Data) throws(ControlProtocolError) -> ControlMessage {
-        // The version is read alone first: a message of another version may
-        // shape its other fields differently.
         guard let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else {
             throw .unreadable("the request isn't a control request")
         }
@@ -174,7 +169,6 @@ public struct ControlMessage: Equatable, Sendable {
             throw .unreadable("the control command `\(wire.command)` needs its `holder`")
         }
         let request = try request(wire)
-        // A screenshot's `window` names Settings, the About panel, or a player window.
         var window = wire.window
         if case .screenshot(_, _, _, let which) = request, which != .main || window == ControlRequest.Window.main.rawValue {
             window = nil
@@ -182,7 +176,6 @@ public struct ControlMessage: Equatable, Sendable {
         return ControlMessage(request, holder: holder, json: wire.json ?? false, window: window)
     }
 
-    /// The request `wire` names, with the fields its command needs.
     private static func request(_ wire: Wire) throws(ControlProtocolError) -> ControlRequest {
         switch wire.command {
         case "app.status": return .appStatus
@@ -229,7 +222,6 @@ public struct ControlMessage: Equatable, Sendable {
                 }
                 appearance = known
             }
-            // Any other name is a player window's id, which the app looks up.
             let window = wire.window.flatMap(ControlRequest.Window.init(rawValue:)) ?? .main
             return .screenshot(
                 path: path, appearance: appearance, hideAgentIndicator: wire.hideAgentIndicator ?? false, window: window
@@ -351,7 +343,6 @@ public struct ControlMessage: Equatable, Sendable {
         }
     }
 
-    /// The side `name` names.
     private static func side(_ name: String, of wire: Wire) throws(ControlProtocolError) -> CompareSide {
         guard let side = CompareSide(rawValue: name) else {
             throw .unreadable("the control command `\(wire.command)` names no side `\(name)`; it is `left` or `right`")
@@ -359,7 +350,6 @@ public struct ControlMessage: Equatable, Sendable {
         return side
     }
 
-    /// `compare.set`'s change: at least one field, each one readable.
     private static func change(of wire: Wire) throws(ControlProtocolError) -> CompareChange {
         var change = CompareChange(left: wire.left, right: wire.right, slider: wire.slider)
         for number in [wire.left, wire.right].compactMap(\.self) where number < 1 {
@@ -379,13 +369,11 @@ public struct ControlMessage: Equatable, Sendable {
         return change
     }
 
-    /// A field the command needs.
     private static func field(_ value: String?, _ name: String, of wire: Wire) throws(ControlProtocolError) -> String {
         guard let value else { throw .unreadable("the control command `\(wire.command)` needs its `\(name)`") }
         return value
     }
 
-    /// The command's `path`, absolute since the app runs in another folder.
     private static func absolute(_ wire: Wire) throws(ControlProtocolError) -> String {
         guard let path = wire.path else {
             throw .unreadable("the control command `\(wire.command)` needs its `path`")
@@ -396,14 +384,10 @@ public struct ControlMessage: Equatable, Sendable {
         return path
     }
 
-    /// What every version of the protocol has.
     private struct Envelope: Decodable {
         var version: Int
     }
 
-    /// Every request's fields, each optional but `version` and `command`.
-    /// `holder` is optional here only so a request without one is refused
-    /// in words.
     private struct Wire: Codable {
         var version = Version.controlProtocol
         var command: String
@@ -413,11 +397,8 @@ public struct ControlMessage: Equatable, Sendable {
         var seconds: Double?
         var appearance: String?
         var waitSeconds: Int?
-        /// `player volume`: the level, 0 to 100.
         var volume: Int?
         var hideAgentIndicator: Bool?
-        /// `--window`: the player window a request acts on, by its id; for
-        /// `screenshot`, also `settings` or `about`.
         var window: String?
         var id: String?
         var text: String?
@@ -427,41 +408,22 @@ public struct ControlMessage: Equatable, Sendable {
         var state: String?
         var name: String?
         var thread: String?
-        /// `popover open --thread --frame`: where the thread's popover is kept.
         var frame: ControlRequest.Rectangle?
-        /// `composer set --general`: the composer writes to General.
         var general: Bool?
-        /// `ask --choice`: the question's quick replies; left out with none.
         var choices: [String]?
-        /// `thread choose`: the number (from 1) of the choice pressed.
         var choice: Int?
-        /// `setup link` and `setup install --dry-run`: say what it would
-        /// do, and do nothing.
         var dryRun: Bool?
-        /// `setup install --harness`: the harnesses named; left out with none.
         var harnesses: [String]?
-        /// A project's slug: `open --project`, `wait --project`, and the
-        /// project `project new` and `project add` name.
         var project: String?
-        /// `project new --title`: the project's title.
         var title: String?
-        /// `project add --label`: the version's label.
         var label: String?
-        /// `version section <n>` and `version show <n>`: the version's
-        /// number, from 1.
         var number: Int?
-        /// `window resize`: the content width in points.
         var width: Int?
-        /// `version section --remove`: the picked version leaves the list.
         var remove: Bool?
-        /// `compare find` and `compare set --side`: a side, `left` or `right`.
         var side: String?
-        /// `compare set --left` and `--right`: a side's version, from 1.
         var left: Int?
         var right: Int?
-        /// `compare set --layout`: `side-by-side`, `flip` or `slider`.
         var layout: String?
-        /// `compare set --slider`: the left side's share of the width.
         var slider: Double?
     }
 }

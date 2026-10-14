@@ -33,10 +33,7 @@ public struct Message: Codable, Equatable, Sendable, Identifiable {
     /// The part of the keyframe a person's message points at; nil for the
     /// whole frame, and for every other message.
     public let region: Region?
-    /// The state of a person's message of the kind `message`; nil for
-    /// every other message.
     public internal(set) var state: MessageState?
-    /// The send a person's message went out in; nil while it's queued.
     public internal(set) var sendID: SendID?
     /// The name of the listener session an agent's message was written
     /// under, so a later listener doesn't rename it; nil for the person's

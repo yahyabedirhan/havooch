@@ -4,9 +4,6 @@ import ReviewConfig
 import ReviewWire
 import Testing
 
-/// `config path` and `config check` read the file themselves: no request
-/// reaches the app, and they answer while it isn't running. With
-/// `HAVOOCH_SUPPORT_DIR` set, the file is in that folder's `config/`.
 @Suite("The config commands")
 struct ConfigCommandTests {
     private func file(_ run: Run) -> URL {

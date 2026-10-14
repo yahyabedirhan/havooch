@@ -4,10 +4,6 @@ import ReviewCore
 import ReviewWire
 import Testing
 
-/// The comment popover's close rules through the app's model, on the
-/// fixture video: a click outside queues, the × and
-/// Escape discard, an empty popover only closes, and a change of the moment
-/// queues the words at the popover's own frame and region.
 @Suite("The comment popover closes by its rules", .serialized)
 struct PopoverCloseTests {
     let support = FileManager.default.temporaryDirectory
@@ -23,7 +19,6 @@ struct PopoverCloseTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// Waits until `condition` holds: queueing from the popover finishes in a task.
     private func eventually(_ condition: () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {
@@ -31,13 +26,11 @@ struct PopoverCloseTests {
         }
     }
 
-    /// Opens the popover at `time`, on `region` when there is one, with `text`.
     private func open(_ model: WindowModel, at time: Double, region: Region? = nil, text: String) async throws {
         try await model.seek(to: time)
         _ = try model.openPopover(text: text, region: region)
     }
 
-    /// The only queued message, once it's queued.
     private func queued(_ model: WindowModel) async throws -> (message: StateReport.Message, time: Double?) {
         await eventually { model.state().queue.count == 1 }
         let state = model.state()
@@ -82,7 +75,6 @@ struct PopoverCloseTests {
         #expect(!FileManager.default.fileExists(atPath: support.appendingPathComponent("videos").path))
     }
 
-    /// Each way the person or the operator changes the moment.
     enum Move: String, CaseIterable, CustomTestStringConvertible {
         case seek, scrub, play, togglePlay, frameStep, skip, threadClick
 
@@ -105,7 +97,6 @@ struct PopoverCloseTests {
     func momentChangeQueues(move: Move) async throws {
         defer { cleanUp() }
         let model = try await model()
-        // A thread elsewhere, for the timeline click to go to.
         let elsewhere = try await model.addMessage(text: "Elsewhere", at: 3)
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
         try await open(model, at: 12.5, region: region, text: "On this frame")
@@ -194,7 +185,6 @@ struct PopoverCloseTests {
         #expect(OutsideClicks.isOutside(CGPoint(x: 1000, y: 300), stage: stage))
         #expect(OutsideClicks.isOutside(CGPoint(x: 300, y: 600), stage: stage))
         #expect(!OutsideClicks.isOutside(CGPoint(x: 300, y: 300), stage: stage))
-        // Before the stage is laid out, no click is outside it.
         #expect(!OutsideClicks.isOutside(CGPoint(x: 300, y: 300), stage: .zero))
     }
 }

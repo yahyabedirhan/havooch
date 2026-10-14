@@ -6,9 +6,6 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// The agent's answers on threads: the app's model on the fixture video and
-/// the control server in front of it, asked as a listener and an operator
-/// ask it. No window; the real socket for the last test only.
 @Suite("Agent answers and questions on threads", .serialized)
 struct AnswerTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -21,17 +18,12 @@ struct AnswerTests {
         try? FileManager.default.removeItem(at: support)
     }
 
-    /// What a test works with: the model with the fixture open, the server
-    /// in front of it, and a send of two messages on #1 and #2 that the
-    /// listener took.
     private struct Taken {
         var model: WindowModel
         var server: ControlServer
         var send: String
-        /// The threads' ids.
         var one: String
         var two: String
-        /// The messages' ids.
         var first: String
         var second: String
         var general: String
@@ -73,17 +65,13 @@ struct AnswerTests {
         await app.server.reply(to: request.sent(by: Self.operatorAgent, json: json)).reply
     }
 
-    /// The thread `id` of the open video, as the model has it.
     private func thread(_ id: String, _ app: Taken) throws -> ReviewThread {
         try #require(app.model.threads.first { $0.id.text == id })
     }
 
-    /// The person's messages' states, in the threads' order.
     private func states(_ app: Taken) -> [MessageState?] {
         app.model.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) }
     }
-
-    // MARK: - ack
 
     @Test("ack sets the messages of the send to acknowledged, and takes no lease")
     func ack() async throws {
@@ -96,7 +84,6 @@ struct AnswerTests {
         #expect(states(app) == [.acknowledged, .acknowledged])
         #expect(try thread(app.general, app).messages.isEmpty)
         #expect(app.server.lease.current(at: Date()) == nil)
-        // The acknowledgement shows in the player, on General.
         #expect(app.model.notices.map(\.kind) == [.acknowledgement])
         #expect(app.model.notices.first?.title == "General · Mate")
         #expect(app.model.notices.first?.text == "It got your 2 messages.")
@@ -145,8 +132,6 @@ struct AnswerTests {
         #expect(app.model.notices.isEmpty)
     }
 
-    // MARK: - status
-
     @Test("each status shows on its message and thread, and the send's last finished message returns the listener to listening")
     func status() async throws {
         defer { cleanUp() }
@@ -164,7 +149,6 @@ struct AnswerTests {
         #expect((failed["message"] as? [String: Any])?["id"] as? String == app.second)
         #expect(try thread(app.two, app).state == .failed)
 
-        // Nothing is left of the send: the listener isn't working any more.
         #expect(app.model.listeners().outbox.taken.isEmpty)
         let listening = app.server
         let wait = Task { await listening.replyWritten(to: ControlRequest.wait(timeoutSeconds: nil).sent(by: Self.listener)) }
@@ -189,7 +173,6 @@ struct AnswerTests {
         #expect(line(two) == nil)
         #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping the box"), app).ok)
 
-        // The newest first, as `state` reports it and the footer shows it.
         let state = try object(await operate(.state, app, json: true).output)
         let activity = try #require((state["listener"] as? [String: Any])?["activity"] as? [[String: Any]])
         #expect(activity.map { $0["text"] as? String } == ["Cropping the box", "Rendering 0:14 to 0:21"])
@@ -197,7 +180,6 @@ struct AnswerTests {
         #expect(activity.map { $0["message"] as? String } == [app.second, app.first])
         #expect(await operate(.state, app).output.contains("  now on \(app.two): Cropping the box\n"))
 
-        // A status with no text keeps the line; done and failed clear it.
         #expect(await listen(.status(messageID: app.first, state: .working), app).ok)
         #expect(line(one) == "Rendering 0:14 to 0:21")
         #expect(await listen(.status(messageID: app.first, state: .done), app).ok)
@@ -219,12 +201,10 @@ struct AnswerTests {
         #expect(listeners.activity(on: one, at: Date()) == nil)
 
         #expect(await listen(.status(messageID: app.second, state: .working, text: "Cropping"), app).ok)
-        // The agent went quiet: past the grace, nothing it said still shows.
         let later = Date().addingTimeInterval(Outbox.workingGrace + 1)
         #expect(listeners.activities(at: later).isEmpty)
         #expect(listeners.activity(on: try thread(app.two, app).id, at: later) == nil)
 
-        // Another listener takes the unfinished send over: its work starts again.
         let other = Holder(key: "listener-2", name: "Mate", place: "/shop")
         #expect(await app.server.replyWritten(to: ControlRequest.wait(timeoutSeconds: 0).sent(by: other)).reply.ok)
         #expect(listeners.activities(at: Date()).isEmpty)
@@ -241,7 +221,6 @@ struct AnswerTests {
             "\(app.first) is done and can't move to working: a message only moves forward (sent, acknowledged, working, then done or failed)"
         ))
         #expect(await listen(.status(messageID: app.first, state: .failed), app).ok == false)
-        // Saying it again changes nothing.
         #expect(await listen(.status(messageID: app.first, state: .done), app).ok)
         for id in ["m-00000000-1", app.send, "nonsense"] {
             #expect(await listen(.status(messageID: id, state: .done), app)
@@ -249,8 +228,6 @@ struct AnswerTests {
         }
         #expect(states(app) == [.done, .sent])
     }
-
-    // MARK: - reply
 
     @Test("reply shows on its thread and as a notice that names it, and marks the thread until the person looks")
     func reply() async throws {
@@ -267,7 +244,6 @@ struct AnswerTests {
         #expect(message.kind == .message)
         #expect(message.text == "Slowed the intro down")
         #expect(try thread(app.two, app).messages.count == 1)
-        // The thread's state is still its person message's.
         #expect(try thread(app.one, app).state == .sent)
 
         let notice = try #require(app.model.notices.first)
@@ -275,7 +251,6 @@ struct AnswerTests {
         #expect(notice.kind == .message)
         #expect(notice.title == "#1 · Mate")
 
-        // A click on the notice: it goes, and the thread's popover opens on its frame.
         app.model.openNotice(notice.id)
         #expect(app.model.notices.isEmpty)
         #expect(app.model.selection == ItemID(app.one))
@@ -295,7 +270,6 @@ struct AnswerTests {
         #expect(try thread(app.general, app).messages.map(\.text) == ["Both fixed in one commit"])
         #expect(app.model.notices.first?.title == "General · Mate")
 
-        // General has no frame: a click on its notice shows its thread view.
         let notice = try #require(app.model.notices.first)
         app.model.openNotice(notice.id)
         #expect(app.model.shown == ItemID(app.general))
@@ -335,8 +309,6 @@ struct AnswerTests {
         #expect(app.model.notices.map(\.kind) == [.question])
     }
 
-    // MARK: - ask and answer
-
     @Test("ask --timeout exits with the answer that thread answer gives, and the thread keeps each message's author and kind")
     func askAnsweredByTheOperator() async throws {
         defer { cleanUp() }
@@ -356,12 +328,10 @@ struct AnswerTests {
         #expect(reply == .done("The left one\n"))
         #expect(app.model.listeners().outbox.openAsks == 0)
         #expect(try thread(app.two, app).openQuestion == nil)
-        // The question's notice goes with its answer.
         #expect(app.model.notices.isEmpty)
         let messages = try thread(app.two, app).messages
         #expect(messages.map(\.author) == [.person, .agent, .person])
         #expect(messages.map(\.kind) == [.message, .question, .answer])
-        // An answer is never queued.
         #expect(app.model.state().queue.isEmpty)
         #expect(app.server.lease.current(at: Date())?.holder.key == "operator")
     }
@@ -405,7 +375,6 @@ struct AnswerTests {
         let threads = try #require(state["threads"] as? [[String: Any]])
         let messages = try #require(threads.first { $0["id"] as? String == two }?["messages"] as? [[String: Any]])
         #expect(messages.last?["choices"] as? [String] == ["The left one", "The right one"])
-        // Only a question with choices names them.
         #expect(messages.first?["choices"] == nil)
 
         #expect(await operate(.threadChoose(thread: "2", choice: 3), app) == .refused(ReviewRefusal.noChoice(try #require(ItemID(two)), 3).line))
@@ -478,7 +447,6 @@ struct AnswerTests {
         #expect(await operate(.threadAnswer(thread: "t-00000000-1", text: "Yes"), app).ok == false)
         #expect(await operate(.threadAnswer(thread: app.one, text: " "), app) == .refused("a message needs text"))
 
-        // The answer field says why it didn't take an answer.
         #expect(!app.model.answerQuestion(try #require(ItemID(app.two)), text: "Yes"))
         #expect(app.model.problem?.title == "The answer wasn't sent")
     }
@@ -516,7 +484,6 @@ struct AnswerTests {
     func anotherVideoOpen() async throws {
         defer { cleanUp() }
         let app = try await taken()
-        // The same film with other content: another video to the app.
         let other = support.appendingPathComponent("other.mp4")
         var bytes = try Data(contentsOf: MessageTests.fixture)
         bytes.append(Data(repeating: 0, count: 16))
@@ -531,18 +498,14 @@ struct AnswerTests {
         let status = try object(await listen(.status(messageID: app.first, state: .done), app, json: true).output)
         _ = await listen(.ask(thread: app.two, question: "Which box?", waitSeconds: 0), app)
         #expect(await operate(.threadAnswer(thread: app.two, text: "The left one"), app).ok)
-        // A bare number names the open video's thread, which has none.
         #expect(await listen(.reply(thread: "1", text: "Done"), app).ok == false)
 
         #expect((status["message"] as? [String: Any])?["state"] as? String == "done")
         let review = try #require(app.model.desk.review(of: .video(contentHash: first)))
         #expect(review.threads.flatMap { $0.messages.filter(\.isWork).map(\.state) } == [.done, .acknowledged])
         #expect(review.threads.map(\.messages.count) == [1, 2, 3])
-        // The open video's review is untouched.
         #expect(app.model.state().threads.map(\.messages.count) == [0])
     }
-
-    // MARK: - Over the socket
 
     @Test("over the real socket, an ask is held until thread answer, and an ask whose client goes away stops waiting")
     func overTheSocket() async throws {
@@ -568,7 +531,6 @@ struct AnswerTests {
         #expect(try answered.get().ok)
         #expect(try await asked.get() == .done("The intro\n"))
 
-        // An `ask` that's stopped: it sent its request, then its process ended.
         let descriptor = UnixSocket.make()
         let address = try #require(UnixSocket.address(socket.path))
         #expect(UnixSocket.connectSocket(descriptor, to: address) == 0)

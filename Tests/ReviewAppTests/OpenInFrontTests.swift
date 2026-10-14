@@ -5,9 +5,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// `havooch open` in the app: the person's open, playing and in front,
-/// through the control server as the command sends it. No window and no
-/// socket; the launch and the activation are the app's (`bringToFront`).
 @Suite("havooch open in the app", .serialized)
 struct OpenInFrontTests {
     static let agent = Holder(key: "agent-1", name: "Claude Code", place: "/Users/me/shop")
@@ -21,8 +18,6 @@ struct OpenInFrontTests {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// The app on the person's folder, the demo's under the test's root,
-    /// counting each time it's brought to the front.
     private func run() -> (WindowModel, ControlServer, Fronts) {
         let model = AppModel(
             environment: [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo,
@@ -41,7 +36,6 @@ struct OpenInFrontTests {
         var count = 0
     }
 
-    /// A copy of the fixture under the test's root, named `name`.
     private func video(_ name: String) throws -> URL {
         let folder = root.appendingPathComponent("Movies", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -50,7 +44,6 @@ struct OpenInFrontTests {
         return copy
     }
 
-    /// A file named like a video that isn't one.
     private func notAVideo() throws -> URL {
         let folder = root.appendingPathComponent("Movies", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -127,11 +120,6 @@ struct OpenInFrontTests {
         #expect(ControlRequest.playerOpen(path: cut.path).role == .operator)
     }
 
-    // MARK: - Finder's Open With, a drop on the Dock icon and open -a
-
-    /// The app on the person's folder with no window, as a launch leaves it
-    /// before its first scene appears, counting each time it's brought to
-    /// the front.
     private func launch() -> (AppModel, Fronts) {
         let app = AppModel(
             environment: [SupportFolder.overrideVariable: person.path], speech: SlowRecognizer(), demoFolder: demo,
@@ -195,7 +183,6 @@ struct OpenInFrontTests {
         #expect(app.windows.key === second)
         #expect(fronts.count == 2)
 
-        // The same file again brings the window that holds it forward.
         await app.openFromFinder([one])?.value
         #expect(app.windows.windows.count == 2)
         #expect(app.windows.key === home)

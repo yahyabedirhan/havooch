@@ -1,19 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// One joined split control at the small size, on the theme's `accentFill`
-/// with white text, the pair `filledButton` uses: the main part
-/// runs `action`, the chevron opens `menu`. Drawn by hand because a
-/// `Menu` with a primary action ignores the prominent fill and draws grey,
-/// even in the key window.
 struct SplitButton<MenuContent: View>: View {
     private let title: String
     private let helpText: String?
     private let isOn: Bool
     private let action: () -> Void
     private let menu: MenuContent
-    /// The player window whose keys press the main part while it has the
-    /// keyboard focus; set with `pressedByKeys(in:)`.
     private var keys: WindowModel?
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var environmentEnabled
@@ -23,9 +16,6 @@ struct SplitButton<MenuContent: View>: View {
     static var height: CGFloat { 22 }
     static var corner: CGFloat { 6 }
 
-    /// `title` on the main part, which runs `action`; `menu` behind the
-    /// arrow; `help` as the tooltip. Off when `isEnabled` is false or the
-    /// environment turns it off.
     init(
         _ title: String, help: String? = nil, isEnabled: Bool = true,
         action: @escaping () -> Void,
@@ -38,8 +28,6 @@ struct SplitButton<MenuContent: View>: View {
         self.menu = menu()
     }
 
-    /// Lets Space and Return press the main part while it has the keyboard
-    /// focus, as other buttons do (`View.pressedByKeys`).
     func pressedByKeys(in model: WindowModel?) -> Self {
         var copy = self
         copy.keys = model
@@ -98,7 +86,6 @@ struct SplitButton<MenuContent: View>: View {
     }
 }
 
-/// The main part: no chrome of its own, a darker fill on hover and press.
 private struct SplitPart: ButtonStyle {
     let palette: Palette
     let hovers: Bool

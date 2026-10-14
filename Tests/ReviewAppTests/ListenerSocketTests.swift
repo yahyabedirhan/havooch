@@ -5,10 +5,6 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// The listener's whole round over the real socket: the app's model on the
-/// fixture video and the control server listening on `control.sock`, asked
-/// by `ControlClient`s as the `havooch` command asks it, an operator
-/// and a listener in two shells.
 @Suite("The listener over the real socket", .serialized)
 struct ListenerSocketTests {
     nonisolated static let operatorAgent = Holder(key: "operator", name: "Claude Code", place: "/work")
@@ -17,7 +13,6 @@ struct ListenerSocketTests {
 
     let support = FileManager.default.temporaryDirectory
         .appendingPathComponent("havooch-tests-\(UUID().uuidString)", isDirectory: true)
-    /// A folder short enough for a socket's path.
     let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         .appendingPathComponent("havooch-\(UUID().uuidString.prefix(8))", isDirectory: true)
 
@@ -26,8 +21,6 @@ struct ListenerSocketTests {
         try? FileManager.default.removeItem(at: folder)
     }
 
-    /// The model with the fixture open, two messages queued on #1 and #2,
-    /// and the server listening in front of it.
     private struct Running {
         var model: WindowModel
         var server: ControlServer
@@ -53,7 +46,6 @@ struct ListenerSocketTests {
         )
     }
 
-    /// One `havooch` command as `holder`, over the socket.
     private func command(
         _ request: ControlRequest, as holder: Holder, json: Bool = false, _ app: Running
     ) async throws -> ControlReply {
@@ -74,7 +66,6 @@ struct ListenerSocketTests {
         }
     }
 
-    /// `state --json` as the listener asks it.
     private func state(_ app: Running) async throws -> [String: Any] {
         try object(try await command(.state, as: Self.listener, json: true, app).output)
     }
@@ -83,8 +74,6 @@ struct ListenerSocketTests {
         (try await state(app)["listener"] as? [String: Any])?["presence"] as? String
     }
 
-    /// The listener's `wait` in its own shell, and the operator's `message send`
-    /// while it's held: the send's payload.
     private func waitThenSend(_ app: Running, as holder: Holder = listener) async throws -> [String: Any] {
         let socket = app.server.socket
         async let waited = LeaseServerTests.sending {
@@ -95,7 +84,6 @@ struct ListenerSocketTests {
         #expect(try await command(.send, as: Self.operatorAgent, app).ok)
         let reply = try await waited.get()
         #expect(reply.ok)
-        // Taken once the socket wrote the reply.
         await eventually { app.model.listeners().outbox.inFlight.isEmpty && !app.model.listeners().outbox.taken.isEmpty }
         return try object(reply.output)
     }
@@ -135,7 +123,6 @@ struct ListenerSocketTests {
         #expect(replied.author == .agent)
         #expect(replied.text == "Moved it")
 
-        // The send's last message finishes it: nothing is taken any more.
         #expect(try await command(.status(messageID: app.second, state: .failed), as: Self.listener, app).ok)
         #expect(app.model.listeners().outbox.taken.isEmpty)
         let listener = try #require(try await state(app)["listener"] as? [String: Any])
@@ -158,7 +145,6 @@ struct ListenerSocketTests {
         }
         await eventually { app.model.listeners().outbox.openAsks == 1 }
         #expect(app.model.threads[1].openQuestion?.text == "Which part?")
-        // A second question on the thread is refused while the first is open.
         #expect(try await command(.ask(thread: one, question: "And?", waitSeconds: 0), as: Self.listener, app).ok == false)
 
         let answered = try await command(.threadAnswer(thread: one, text: "The intro"), as: Self.operatorAgent, app)
@@ -169,7 +155,6 @@ struct ListenerSocketTests {
         #expect(app.model.threads[1].messages.map(\.kind) == [.message, .question, .answer])
         #expect(app.model.review?.queue.isEmpty == true)
         #expect(app.model.listeners().outbox.pending.isEmpty)
-        // No question is open now: an answer is refused.
         #expect(try await command(.threadAnswer(thread: one, text: "Again"), as: Self.operatorAgent, app).ok == false)
     }
 
@@ -220,13 +205,11 @@ struct ListenerSocketTests {
         _ = try await command(.status(messageID: app.first, state: .done), as: Self.listener, app)
         _ = try await command(.status(messageID: app.second, state: .working), as: Self.listener, app)
 
-        // The listener's process ends; a new one, another holder, waits.
         let again = try await command(.wait(timeoutSeconds: 5), as: Self.restarted, app)
 
         #expect(again.ok)
         let payload = try object(again.output)
         #expect((payload["send"] as? [String: String])?["id"] == send)
-        // The finished thread is left out; the unfinished message is delivered again, with the context.
         let threads = try #require(payload["threads"] as? [[String: Any]])
         #expect(threads.map { $0["id"] as? String } == [app.two])
         #expect((threads[0]["messages"] as? [[String: Any]])?.map { $0["id"] as? String } == [app.second])

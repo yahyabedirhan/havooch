@@ -1,17 +1,10 @@
 import ReviewCore
 import SwiftUI
 
-/// The timeline in the player bar: the played part of the
-/// video and the playhead, which a press or a drag moves, with a pin above
-/// the track for each thread and a thin stem down to the thread's frame.
-/// Light time labels with short ticks sit under the track when the bar has
-/// the room. A click on a pin goes to its thread's frame.
 struct Timeline: View {
-    /// Told which pin has the keyboard focus, so Space and Return press it.
     let model: WindowModel
     let time: Double
     let duration: Double
-    /// The threads on a frame, in time order. General has no pin.
     let threads: [ReviewThread]
     let selection: ThreadID?
     let scrub: (Double) -> Void
@@ -26,21 +19,16 @@ struct Timeline: View {
     private static let knob: CGFloat = 12
     private static let heldKnob: CGFloat = 15
     private static let mark: CGFloat = 10
-    /// The square a pin takes the press in.
     private static let pinBox: CGFloat = 16
-    /// The pins' row, above the track's: the marks and their stems.
     private static let pinRow: CGFloat = 18
     private static let trackRow: CGFloat = 12
-    /// The time labels' row, under the track's.
     private static let labelRow: CGFloat = 11
-    /// The least room a time label takes along the track.
     private static let labelSpacing: CGFloat = 56
 
     private static var markCentre: CGFloat { pinBox / 2 }
     private static var trackCentre: CGFloat { pinRow + trackRow / 2 }
 
     var body: some View {
-        // With the time labels when the bar is tall enough, else without.
         ViewThatFits(in: .vertical) {
             content(labelled: true)
             content(labelled: false)
@@ -65,15 +53,9 @@ struct Timeline: View {
             .frame(width: width, height: height, alignment: .topLeading)
         }
         .frame(height: height)
-        // Up by what the pins add over the labels, so the track, not the
-        // whole timeline, sits on the bar's centre line.
         .offset(y: height / 2 - Self.trackCentre)
     }
 
-    /// The track, the played part and the knob. The whole timeline's height
-    /// takes the press, so it is easy to hit; the pins sit over it. It
-    /// answers on the press: the knob grows and the track thickens while
-    /// it's held, and it follows the pointer 1:1.
     private func scrubber(width: CGFloat, height: CGFloat) -> some View {
         let played = Self.place(of: time, in: duration, width: width)
         let track = isHeld ? Self.heldTrackHeight : Self.trackHeight
@@ -112,8 +94,6 @@ struct Timeline: View {
         }
     }
 
-    /// A thin line from each pin down to its frame on the track, in the
-    /// pin's colour, soft unless the thread is in focus.
     private func stems(width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(threads) { thread in
@@ -130,7 +110,6 @@ struct Timeline: View {
         .accessibilityHidden(true)
     }
 
-    /// A thread's pin at the head of its stem.
     private func pin(_ thread: ReviewThread, width: CGFloat) -> some View {
         let look = ThreadPin.Look(thread)
         let isSelected = thread.id == selection
@@ -145,11 +124,9 @@ struct Timeline: View {
         .pressedByKeys(in: model) { select(thread.id) }
         .help(look.help)
         .position(x: Self.place(of: look.time, in: duration, width: width), y: Self.markCentre)
-        // The thread in focus stays on top of its neighbours.
         .zIndex(isSelected ? 1 : 0)
     }
 
-    /// Small, quiet time labels under the track, each beside a short tick.
     private func labels(width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Self.ticks(in: duration, width: width), id: \.self) { tick in
@@ -168,8 +145,6 @@ struct Timeline: View {
         .accessibilityHidden(true)
     }
 
-    /// The times to label: a round step that leaves each label its room,
-    /// without one too near the track's end to fit.
     static func ticks(in duration: Double, width: CGFloat) -> [Double] {
         guard duration > 0, width > labelSpacing else { return [] }
         let most = Double(Int(width / labelSpacing))
@@ -180,7 +155,6 @@ struct Timeline: View {
         }
     }
 
-    /// Where `time` is along a track `width` wide.
     private static func place(of time: Double, in duration: Double, width: CGFloat) -> CGFloat {
         duration > 0 ? CGFloat(min(max(0, time / duration), 1)) * width : 0
     }

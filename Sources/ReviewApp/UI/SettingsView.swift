@@ -2,11 +2,6 @@ import AppKit
 import ReviewWire
 import SwiftUI
 
-/// The Settings window (⌘,): the cat mark, the name and the version,
-/// the theme picker, the same choice as View › Theme and `havooch theme
-/// set`, and where the settings file is with the verdict of its last
-/// reload. It takes the pinned theme's appearance, as the
-/// player's window does, and the theme's accent.
 struct SettingsView: View {
     let model: AppModel
 
@@ -37,7 +32,6 @@ struct SettingsView: View {
             ConfigSection(config: model.config)
         }
         .formStyle(.grouped)
-        // One short section: the window fits it, with nothing to scroll.
         .scrollDisabled(true)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
@@ -47,8 +41,6 @@ struct SettingsView: View {
     }
 }
 
-/// Follow the system appearance, or pin one theme: in View › Theme and in
-/// Settings. A choice that fails says why in the player's window.
 struct ThemePicker: View {
     let model: AppModel
 
@@ -76,20 +68,13 @@ struct ThemePicker: View {
     }
 }
 
-/// The Settings window for app control: `screenshot --window settings`
-/// opens it as ⌘, does and finds it. SwiftUI opens Settings only from a
-/// view (`openSettings`), so the player's window hands its action over
-/// (`SettingsOpener`).
 final class SettingsWindow {
-    /// Opens Settings; set once the player's window is on screen.
     var open: (() -> Void)?
 
-    /// The Settings window while it's on screen.
     var window: NSWindow? {
         NSApp.windows.first { $0.isVisible && Self.isSettings($0) }
     }
 
-    /// Opens Settings and waits, up to two seconds, until it's on screen.
     func show() async throws(AppRefusal) {
         guard let open else { throw AppRefusal("the player's window isn't on screen to open Settings from") }
         if window == nil { open() }
@@ -99,15 +84,11 @@ final class SettingsWindow {
         guard window != nil else { throw AppRefusal("the Settings window didn't open") }
     }
 
-    /// Whether `window` is SwiftUI's Settings window, whose identifier
-    /// names it.
     static func isSettings(_ window: NSWindow) -> Bool {
         window.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false
     }
 }
 
-/// Hands SwiftUI's `openSettings` to `SettingsWindow`, from a view in the
-/// player's window.
 struct SettingsOpener: ViewModifier {
     let settings: SettingsWindow
     @Environment(\.openSettings) private var openSettings
@@ -120,9 +101,6 @@ struct SettingsOpener: ViewModifier {
     }
 }
 
-/// Where the settings file is, and whether its last save applied: each
-/// problem with its line while it didn't, and what the move from an older
-/// build did. A person and their agents edit the file itself.
 private struct ConfigSection: View {
     let config: ConfigDesk
     @Environment(\.palette) private var palette
@@ -142,7 +120,6 @@ private struct ConfigSection: View {
                 )
                 .foregroundStyle(config.verdict.accepted ? palette[.textSecondary] : palette[.question])
             }
-            // Ids from the words: offsets would repeat across the two lists in one section.
             ForEach(config.verdict.problems, id: \.description) { problem in
                 Text(problem.description)
                     .font(.callout)

@@ -2,8 +2,6 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// When a send carries the video context: once per listener session and
-/// video, and again when the text changed.
 @Suite("The context, once per listener session")
 struct ContextTests {
     static let one = ListenerSession(key: "listener-1", name: "Claude Code", place: "/work")
@@ -22,7 +20,6 @@ struct ContextTests {
 
         #expect(!outbox.isContextDue(for: "abc", text: "About the sample"))
         #expect(outbox.context(for: "abc", text: "About the sample") == nil)
-        // A wait from the same session keeps what it has.
         outbox.waitOpened(by: Self.one, at: at(10))
         #expect(outbox.context(for: "abc", text: "About the sample") == nil)
     }
@@ -36,9 +33,7 @@ struct ContextTests {
         let longer = "About the sample\n\n## Note from the reviewer\n\nMind the intro"
         #expect(outbox.context(for: "abc", text: longer) == longer)
         #expect(outbox.context(for: "abc", text: longer) == nil)
-        // One letter is a change, at the same length too.
         #expect(outbox.context(for: "abc", text: "About the simple") == "About the simple")
-        // Back to a text the session had before: it's a change again.
         #expect(outbox.context(for: "abc", text: "About the sample") == "About the sample")
     }
 
@@ -47,7 +42,6 @@ struct ContextTests {
         var outbox = Outbox()
         outbox.waitOpened(by: Self.one, at: at(0))
         #expect(outbox.context(for: "abc", text: "About the sample") == "About the sample")
-        // Another video with the same words: this session hasn't had it for that video.
         #expect(outbox.context(for: "def", text: "About the sample") == "About the sample")
         #expect(outbox.context(for: "abc", text: "About the sample") == nil)
         #expect(outbox.context(for: "def", text: "About the sample") == nil)
@@ -78,7 +72,6 @@ struct ContextTests {
         #expect(outbox.contextSent.isEmpty)
 
         _ = outbox.context(for: "abc", text: "About the sample")
-        // The sidecar goes and comes back unchanged: the session still has its text.
         #expect(outbox.context(for: "abc", text: nil) == nil)
         #expect(outbox.context(for: "abc", text: "About the sample") == nil)
     }
@@ -94,7 +87,6 @@ struct ContextTests {
 
         outbox.undelivered(Self.send)
 
-        // The listener never read that payload: the next one carries the text.
         #expect(outbox.context(for: "abc", text: "About the sample") == "About the sample")
         #expect(outbox.context(for: "def", text: "About the other") == nil)
     }

@@ -25,7 +25,6 @@ struct MessageStateTests {
         #expect(MessageState.allCases.filter(\.isOpen) == [.queued, .sent, .acknowledged, .working])
     }
 
-    /// Three messages on thread #1, sent together.
     private func sentThree() throws -> Review {
         var review = newReview()
         for text in ["a", "b", "c"] { try review.write(text: text, at: 10, now: now) }
@@ -38,7 +37,6 @@ struct MessageStateTests {
         var review = try sentThree()
         try review.setState(message(1), .working)
         try review.setState(message(3), .done)
-        // m-2 is the latest open one, still sent.
         #expect(review.thread(thread(1))?.state == .sent)
         try review.setState(message(2), .working)
         #expect(review.thread(thread(1))?.state == .working)
@@ -74,7 +72,6 @@ struct MessageStateTests {
 
 @Suite("The listener's answers on a review")
 struct ListenerAnswerTests {
-    /// Two messages on #1 and one on #2, sent together, and one queued on #1.
     private func sent() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 5, now: now)
@@ -145,7 +142,6 @@ struct ListenerAnswerTests {
         let answered = try review.answer(thread(1), text: "The left one", now: now)
         #expect(answered.author == .person && answered.kind == .answer && answered.state == nil)
         #expect(review.thread(thread(1))?.openQuestion == nil)
-        // An answer is never queued.
         #expect(review.queue.map(\.id) == [message(4)])
     }
 

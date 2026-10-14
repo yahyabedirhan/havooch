@@ -1,12 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch version show | find | menu | section`: a project's versions in
-/// its window. `show` and `find` are the version switcher's: a segment or
-/// a row in its picker, and the picker with a query typed in. `menu` and
-/// `section` are All versions over the thread list, and the older
-/// version's section a pick in it adds. Each is the operator's, as the
-/// person's clicks are.
 enum VersionCommands {
     static let group = CommandGroup(
         name: "version", summary: "show and find a project's versions", section: .drive, commands: [
@@ -58,7 +52,6 @@ enum VersionCommands {
         ].map { $0.onAWindow() }
     )
 
-    /// The number of `3` or `v3`; nil for anything else, and below 1.
     static func versionNumber(_ text: String) -> Int? {
         let bare = text.lowercased().hasPrefix("v") ? String(text.dropFirst()) : text
         guard !bare.isEmpty, bare.allSatisfy(\.isASCII), let number = Int(bare), number >= 1 else { return nil }

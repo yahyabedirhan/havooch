@@ -2,7 +2,6 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// The fixture's content hash starts with these digits; any hex will do.
 let hash = "f92cbb2a0123456789abcdef"
 let now = Date(timeIntervalSince1970: 1_790_000_000)
 
@@ -197,16 +196,15 @@ struct SessionNameTests {
     @Test("a reply, a question and an acknowledgement keep the name of the listener session they were written under")
     func kept() throws {
         var review = newReview()
-        try review.write(text: "Too fast", at: 10, now: now)                                   // m-1
+        try review.write(text: "Too fast", at: 10, now: now)
         let sent = try review.send(at: now)
-        try review.acknowledge(sent.id, text: "On it", session: "Claude Code", now: now)        // m-2 on General
-        try review.ask(on: thread(1), question: "Which part?", session: "Codex CLI", now: now)  // m-3
-        try review.answer(thread(1), text: "The start", now: now)                               // m-4
-        try review.reply(on: thread(1), text: "Slowed it", session: "Codex CLI", now: now)      // m-5
-        try review.reply(on: thread(1), text: "With no session", now: now)                       // m-6
+        try review.acknowledge(sent.id, text: "On it", session: "Claude Code", now: now)
+        try review.ask(on: thread(1), question: "Which part?", session: "Codex CLI", now: now)
+        try review.answer(thread(1), text: "The start", now: now)
+        try review.reply(on: thread(1), text: "Slowed it", session: "Codex CLI", now: now)
+        try review.reply(on: thread(1), text: "With no session", now: now)
 
         let messages = review.threads.flatMap(\.messages)
-        // General first: the acknowledgement, then thread 1 in the order written.
         #expect(messages.map(\.id) == [2, 1, 3, 4, 5, 6].map(message))
         #expect(messages.map(\.sessionName) == ["Claude Code", nil, "Codex CLI", nil, "Codex CLI", nil])
 
@@ -226,7 +224,6 @@ struct SessionNameTests {
 
 @Suite("Quick-reply choices on a question")
 struct ChoiceTests {
-    /// A review whose thread 1 was sent, so the listener may ask on it.
     private func sentReview() throws -> Review {
         var review = newReview()
         try review.write(text: "Too fast", at: 10, now: now)

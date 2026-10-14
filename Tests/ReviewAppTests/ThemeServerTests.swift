@@ -4,7 +4,6 @@ import ReviewLease
 import ReviewWire
 import Testing
 
-/// The fake app's theme: Default Light, with Dimmed to pin.
 extension ControlServerTests.FakeApp {
     func themeList() -> StateReport.ThemeList {
         StateReport.ThemeList(
@@ -21,7 +20,6 @@ extension ControlServerTests.FakeApp {
         return StateReport.Theme(active: "Dimmed", kind: "dark", pinned: "Dimmed", appearance: "light")
     }
 
-    /// The fake app has no settings notice to close.
     func dismissConfigNotice() -> Bool { false }
 }
 

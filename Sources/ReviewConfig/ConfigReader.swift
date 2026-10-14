@@ -1,32 +1,21 @@
 import Foundation
 import TOMLDecoder
 
-// After Swift Lab's reader (yahyabedirhan/swift-lab at ccb82cb,
-// `Sources/LabConfig/ConfigurationReader.swift`), itself after Shipyard's:
-// TOMLDecoder parses the text, this walks it key by key, and
-// `TOMLSourceMap` places each problem on its line.
-
-/// Walks the parsed file key by key, filling a `ConfigFile`, collecting
-/// errors (which reject the file) and warnings (which do not).
 final class ConfigReader {
     private let map: TOMLSourceMap
     private(set) var errors: [ConfigIssue] = []
     private(set) var warnings: [ConfigIssue] = []
 
-    /// The keys at the top of the file, which the schema lists too.
     static let topKeys = ["version", "theme", "projects"]
     static let projectKeys = ["slug", "title", "versions"]
     static let versionKeys = ["path", "label"]
 
     init(map: TOMLSourceMap) { self.map = map }
 
-    /// A table and where it sits in the file.
     struct Node {
         let table: TOMLTable
         let path: ConfigPath
     }
-
-    // MARK: The file's shape
 
     func config(from root: TOMLTable) -> ConfigFile {
         let node = Node(table: root, path: [])
@@ -41,7 +30,6 @@ final class ConfigReader {
                 )
             }
         } else if !node.table.keys.isEmpty, !node.table.contains(key: "version") {
-            // An empty file is every default; a written one says its version.
             errors.append(ConfigIssue(
                 line: map.entries.first?.line,
                 message: "the file needs `version = \(ConfigFile.supportedVersion)` at its top"
@@ -62,10 +50,6 @@ final class ConfigReader {
         return config
     }
 
-    // MARK: [[projects]]
-
-    /// Each `[[projects]]` table in file order. A table with a problem is
-    /// left out, and its problem rejects the file.
     private func projects(_ nodes: [Node]) -> [ProjectEntry] {
         var projects: [ProjectEntry] = []
         var firstUse: [String: Int] = [:]
@@ -102,8 +86,6 @@ final class ConfigReader {
         return projects
     }
 
-    /// Each version of a project, in order. A version with a problem is
-    /// left out, and its problem rejects the file.
     private func versions(_ nodes: [Node]) -> [ProjectEntry.Version] {
         var versions: [ProjectEntry.Version] = []
         for version in nodes {
@@ -126,11 +108,6 @@ final class ConfigReader {
         return versions
     }
 
-    // MARK: Typed reads
-    //
-    // Each returns nil when the key is absent, and records an error (and
-    // returns nil) when it is there with the wrong type.
-
     func int(_ node: Node, _ key: String) -> Int? {
         guard node.table.contains(key: key) else { return nil }
         do {
@@ -151,8 +128,6 @@ final class ConfigReader {
         }
     }
 
-    /// An array of tables, such as `[[projects]]` or an array of inline
-    /// tables, each with its index in its path.
     func tables(_ node: Node, _ key: String, form: String) -> [Node]? {
         guard node.table.contains(key: key) else { return nil }
         do {
@@ -168,10 +143,6 @@ final class ConfigReader {
         }
     }
 
-    // MARK: Recording
-
-    /// Warns about each key of `node` that is not `known`, on its line,
-    /// with the known key it most likely meant.
     private func warnUnknownKeys(in node: Node, known: [String]) {
         for key in node.table.keys.sorted() where !known.contains(key) {
             let path = node.path + [.key(key)]
@@ -190,7 +161,6 @@ final class ConfigReader {
         errors.append(ConfigIssue(line: map.line(for: path), message: message))
     }
 
-    /// A TOML basic string with `"`, `\` and control characters escaped.
     static func tomlString(_ value: String) -> String {
         var out = "\""
         for scalar in value.unicodeScalars {
@@ -212,11 +182,7 @@ final class ConfigReader {
     }
 }
 
-/// Picks the valid key a misspelt one most likely meant.
 enum Suggestion {
-    /// The closest candidate, if it is close enough to be a plausible typo:
-    /// the same letters ignoring case and `-`/`_`, or within an edit
-    /// distance of about a third of its length (at least 2).
     static func nearest(to input: String, in candidates: [String]) -> String? {
         let normalized = normalize(input)
         if let same = candidates.first(where: { normalize($0) == normalized }) { return same }
@@ -229,7 +195,6 @@ enum Suggestion {
         text.lowercased().filter { $0 != "-" && $0 != "_" }
     }
 
-    /// Levenshtein distance.
     static func distance(_ a: String, _ b: String) -> Int {
         let a = Array(a), b = Array(b)
         if a.isEmpty { return b.count }

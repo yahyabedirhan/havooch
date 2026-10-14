@@ -1,12 +1,6 @@
 import SwiftUI
 
-/// The settings notice at the top of the window: what the move
-/// into `config.toml` did, or the problems of a save the app didn't apply.
-/// It never blocks the window or the control socket: the person reads it
-/// and closes it, or `havooch config close-notice` does. A full soft fill and
-/// an icon set it apart, never a coloured edge.
 struct ConfigBanner: View {
-    /// The window it shows in: every window shows the app's one notice.
     let model: WindowModel
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

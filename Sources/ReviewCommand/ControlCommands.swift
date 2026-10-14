@@ -1,10 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch control take [--timeout <seconds>] | release`: holding the
-/// lease on purpose and giving it up. Both are free commands: `take` is how
-/// an agent asks for the lease, and `release` from anyone but the holder
-/// changes nothing.
 enum ControlCommands {
     static let group = CommandGroup(
         name: "control", summary: "take and release the lease", section: .drive, commands: [

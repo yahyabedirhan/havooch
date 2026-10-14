@@ -3,8 +3,6 @@ import ReviewCore
 import Testing
 
 extension Outbox {
-    /// Hands the next send to the open `wait` and has its reply written:
-    /// the whole delivery, for a test that isn't about the in-flight step.
     mutating func deliver(at now: Date) -> SendRef? {
         guard let ref = handOut(at: now) else { return nil }
         written(ref)
@@ -12,7 +10,6 @@ extension Outbox {
     }
 }
 
-/// The listener's outbox, driven by the time the test gives it.
 @Suite("The listener's outbox")
 struct OutboxTests {
     static let first = SendRef(sendID: ItemID("s-00000000-1")!, contentHash: "abc")
@@ -34,7 +31,6 @@ struct OutboxTests {
 
         #expect(outbox.pending.isEmpty)
         #expect(outbox.taken == [Self.first])
-        // The wait was answered: the next send needs the next wait.
         #expect(!outbox.isWaitOpen)
         outbox.enqueue(Self.second)
         #expect(outbox.deliver(at: at(6)) == nil)
@@ -96,13 +92,10 @@ struct OutboxTests {
         outbox.waitOpened(by: Self.one, at: at(0))
         _ = outbox.deliver(at: at(0))
 
-        // Its name or place may change; its key tells it's the same session.
         let again = ListenerSession(key: Self.one.key, name: "Claude Code", place: "Herdr pane w1-2")
         #expect(outbox.waitOpened(by: again, at: at(10)).isEmpty)
         #expect(outbox.taken == [Self.first])
-        // It keeps the time it started.
         #expect(outbox.session == ListenerSession(key: again.key, name: again.name, place: again.place, since: at(0)))
-        // The first session of all has nothing to requeue either.
         var fresh = Outbox()
         #expect(fresh.waitOpened(by: Self.one, at: at(0)).isEmpty)
     }
@@ -118,7 +111,6 @@ struct OutboxTests {
         #expect(outbox.pending == [Self.first, Self.second])
         #expect(outbox.taken.isEmpty)
         #expect(outbox.inFlight == [Self.first: Self.one.key])
-        // Another wait meanwhile never gets the send in flight.
         outbox.waitOpened(by: Self.one, at: at(1))
         #expect(outbox.handOut(at: at(1)) == Self.second)
 
@@ -126,7 +118,6 @@ struct OutboxTests {
         #expect(outbox.pending == [Self.second])
         #expect(outbox.taken == [Self.first])
         #expect(outbox.inFlight == [Self.second: Self.one.key])
-        // What's in flight isn't kept: a restart finds the send in line.
         let read = try JSONDecoder().decode(Outbox.self, from: try JSONEncoder().encode(outbox))
         #expect(read.inFlight.isEmpty)
         #expect(read.pending == [Self.second])
@@ -146,7 +137,6 @@ struct OutboxTests {
         #expect(outbox.inFlight.isEmpty)
         #expect(outbox.pending == [Self.first, Self.second])
         #expect(outbox.isContextDue(for: "abc", text: "About"))
-        // A send that isn't in flight stays where it is.
         outbox.undelivered(Self.third)
         #expect(outbox.pending == [Self.first, Self.second])
 
@@ -154,7 +144,6 @@ struct OutboxTests {
         _ = outbox.deliver(at: at(1))
         outbox.finished(Self.first)
         #expect(outbox.taken.isEmpty)
-        // A finished send isn't requeued for the next session.
         #expect(outbox.waitOpened(by: Self.two, at: at(2)).isEmpty)
 
         outbox.discard(Self.second)
@@ -169,7 +158,6 @@ struct OutboxTests {
         #expect(outbox.handOut(at: at(0)) == Self.first)
 
         outbox.waitOpened(by: Self.two, at: at(1))
-        // Still in flight to the old session: the new one waits for the write to end.
         #expect(outbox.handOut(at: at(1)) == nil)
         outbox.written(Self.first)
 
@@ -188,7 +176,6 @@ struct OutboxTests {
         _ = outbox.handOut(at: at(0))
         outbox.finished(Self.first)
         #expect(outbox.pending.isEmpty && outbox.taken.isEmpty && outbox.inFlight.isEmpty)
-        // Its reply written late takes nothing.
         outbox.written(Self.first)
         #expect(outbox.taken.isEmpty)
     }
@@ -200,12 +187,10 @@ struct OutboxTests {
 
         outbox.waitOpened(by: Self.one, at: at(0))
         #expect(outbox.presence(at: at(0)) == .listening)
-        // An open wait is alive however long it's open.
         #expect(outbox.presence(at: at(3600)) == .listening)
 
         outbox.waitClosed(at: at(3600))
         #expect(!outbox.isWaitOpen)
-        // A listener that runs wait in a loop doesn't flicker between two.
         #expect(outbox.presence(at: at(3604.9)) == .listening)
         #expect(outbox.presence(at: at(3605)) == .absent)
         outbox.waitOpened(by: Self.one, at: at(3610))
@@ -222,10 +207,8 @@ struct OutboxTests {
         #expect(outbox.presence(at: at(10)) == .working)
         #expect(outbox.presence(at: at(129.9)) == .working)
         #expect(outbox.presence(at: at(130)) == .absent)
-        // Any command of the listener says it's alive.
         outbox.heard(at: at(200))
         #expect(outbox.presence(at: at(319)) == .working)
-        // Waiting again while it works: still working, for as long as it waits.
         outbox.waitOpened(by: Self.one, at: at(400))
         #expect(outbox.presence(at: at(4000)) == .working)
         outbox.waitClosed(at: at(4000))
@@ -293,13 +276,10 @@ struct OutboxTests {
         _ = outbox.deliver(at: at(0))
         let before = outbox
 
-        // All is as the reviews say: nothing moves.
         outbox.reconcile(unfinished: [Self.first, Self.second])
         #expect(outbox == before)
         #expect(outbox.isKeptAs(before))
 
-        // The taken send was finished and the outbox wasn't saved after;
-        // a send was made and the outbox wasn't saved after.
         outbox.reconcile(unfinished: [Self.second, Self.third])
         #expect(outbox.taken.isEmpty)
         #expect(outbox.pending == [Self.second, Self.third])
@@ -345,7 +325,6 @@ struct OutboxTests {
         #expect(outbox.pending == [Self.first, Self.second])
         #expect(outbox.taken.isEmpty)
         #expect(outbox.isContextDue(for: "abc", text: "About"))
-        // The same agent's next wait is a session of its own, from its own time.
         #expect(outbox.waitOpened(by: Self.one, at: at(40)).isEmpty)
         #expect(outbox.session?.since == at(40))
         #expect(outbox.deliver(at: at(40)) == Self.first)

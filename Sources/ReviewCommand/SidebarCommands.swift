@@ -1,9 +1,5 @@
 import ReviewWire
 
-/// `havooch sidebar show [threads | thread <thread> | connect] | hide`: the
-/// sidebar and its views. `show` alone shows the sidebar, as the header
-/// control does; with a view it shows that view in it, as the person's
-/// clicks do.
 enum SidebarCommands {
     static let group = CommandGroup(
         name: "sidebar", summary: "show the sidebar's views", section: .drive, commands: [

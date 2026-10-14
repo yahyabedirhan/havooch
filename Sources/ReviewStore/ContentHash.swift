@@ -1,4 +1,3 @@
-// CryptoKit exists on Apple platforms only; elsewhere the module builds without the hash.
 #if canImport(CryptoKit)
 import CryptoKit
 import Foundation
@@ -20,7 +19,6 @@ public enum ContentHash {
             } catch {
                 return nil
             }
-            // At the file's end there is no chunk.
             guard let chunk, !chunk.isEmpty else { break }
             hasher.update(data: chunk)
         }
@@ -35,7 +33,6 @@ public enum ContentHash {
 /// video opened again (`havooch open` on a file already seen) skips reading
 /// the whole file; a file written over gets a new hash.
 public final class ContentHashCache: Sendable {
-    /// What a hash was worked out from: the file's size and modification time.
     private struct Stamp: Equatable {
         var size: Int
         var modified: Date

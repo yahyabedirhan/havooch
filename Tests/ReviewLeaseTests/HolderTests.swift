@@ -4,7 +4,6 @@ import Testing
 
 @Suite("Who sends a request")
 struct HolderTests {
-    /// A process table of the records given, read as the process `current`.
     struct FakeProcesses: ProcessTable {
         var currentPID: Int32
         var records: [ProcessRecord]
@@ -17,7 +16,6 @@ struct HolderTests {
     static let folder = URL(fileURLWithPath: "/Users/me/shop", isDirectory: true)
     static let started = Date(timeIntervalSince1970: 1_700_000_000)
 
-    /// `havooch` (300) run by zsh (200) run by `codex` (100).
     static let processes = FakeProcesses(currentPID: 300, records: [
         ProcessRecord(pid: 300, parent: 200, started: started, name: "havooch"),
         ProcessRecord(pid: 200, parent: 100, started: started, name: "-zsh"),
@@ -49,7 +47,6 @@ struct HolderTests {
     @Test("with two sessions set, the harness that runs the command is the holder: its process is the nearer ancestor")
     func nestedHarness() {
         let both = ["CLAUDE_CODE_SESSION_ID": "abc", "CODEX_THREAD_ID": "019a-thread"]
-        // Codex run inside Claude Code: Codex's shell inherits Claude Code's session.
         let codexInClaude = FakeProcesses(currentPID: 300, records: [
             ProcessRecord(pid: 300, parent: 200, started: Self.started, name: "havooch"),
             ProcessRecord(pid: 200, parent: 100, started: Self.started, name: "zsh"),
@@ -64,7 +61,6 @@ struct HolderTests {
             ProcessRecord(pid: 50, parent: 1, started: Self.started, name: "codex"),
         ])
         #expect(Holder.find(variables: both, workingDirectory: Self.folder, processes: claudeInCodex).name == "Claude Code")
-        // Neither harness among the ancestors: the first in the table.
         let neither = FakeProcesses(currentPID: 300, records: [])
         #expect(Holder.find(variables: both, workingDirectory: Self.folder, processes: neither).key == "CLAUDE_CODE_SESSION_ID=abc")
     }

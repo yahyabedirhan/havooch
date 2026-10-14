@@ -3,10 +3,6 @@ import Foundation
 import ReviewCore
 import Testing
 
-/// The conversation as a chat, apart from how it looks: who wrote
-/// each message and with which logo, where a run of the agent's messages
-/// starts and ends, what VoiceOver reads, and which actions a message's
-/// menu has.
 @Suite("The conversation as a chat")
 struct ChatTests {
     static let now = Date(timeIntervalSince1970: 1_790_000_000)

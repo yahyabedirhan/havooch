@@ -1,12 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// A command or a prompt to copy: the text on top at full width, then
-/// a footer bar under a hairline with what it is and its Copy button.
-/// Copying changes no state in the app: the button says "Copied" for
-/// a moment, and that is all.
 struct CopyBox: View {
-    /// What the box holds: a command for a terminal, or a prompt for an agent.
     enum Kind {
         case command, prompt
     }
@@ -73,7 +68,6 @@ struct CopyBox: View {
         }
     }
 
-    /// Puts `text` on the pasteboard.
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

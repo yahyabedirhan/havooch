@@ -6,10 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The composer at the sidebar's foot, through the app's model on the
-/// fixture video: where its words go in the thread list and in a thread
-/// view, the answer path, the drafts per thread, the region chip and the
-/// General toggle, and `composer set`.
 @Suite("The composer at the sidebar's foot", .serialized)
 struct ComposerTests {
     let support = FileManager.default.temporaryDirectory
@@ -33,7 +29,6 @@ struct ComposerTests {
         try #require(model.composerTarget)
     }
 
-    /// Thread 1 at 5 s, sent, with the agent's open question on it.
     private func asked(_ model: WindowModel) async throws -> ThreadID {
         let added = try await model.addMessage(text: "One", at: 5)
         _ = try await model.sendQueue()
@@ -97,10 +92,8 @@ struct ComposerTests {
         #expect(model.threadGroups.first { $0.group == .queued }?.threads.map(\.number) == [1])
         #expect(model.shown == nil)
         #expect(model.composerText.isEmpty)
-        // The playhead is on the new thread's frame now: the composer replies on it.
         #expect(try resolved(model).label == "Reply on #1")
 
-        // Empty words are none.
         model.composerText = "   "
         await #expect(throws: AppRefusal.self) { try await model.writeComposer() }
     }
@@ -132,7 +125,6 @@ struct ComposerTests {
         #expect(model.engine.time == 15)
         #expect(model.shown == id)
 
-        // General's view follows up on General.
         _ = try await model.showThread("0")
         #expect(try resolved(model).label == "Follow up on General")
         #expect(try resolved(model).placeholder == "Write to the agent…")
@@ -157,7 +149,6 @@ struct ComposerTests {
         #expect(target.toolbarLabel == "Answer #1, goes at once")
         #expect(model.threadGroups.first?.group == .needsYou)
         model.composerText = "The intro"
-        // An answer is not counted for the queue.
         #expect(model.sendCount == 0)
 
         #expect(try await model.writeComposer() == .answer)
@@ -181,7 +172,6 @@ struct ComposerTests {
         #expect(target.kind == .answer)
         #expect(target.thread == id)
         model.composerText = "The intro"
-        // Cmd+Return with nothing queued: the answer goes at once all the same.
         #expect(!model.canSend)
         model.send()
         #expect(try thread(1, model).messages.last?.kind == .answer)
@@ -220,7 +210,6 @@ struct ComposerTests {
         model.showThread(one)
         #expect(model.composerText == "For one")
 
-        // The list on thread one's frame writes on thread one: the same draft.
         _ = model.showThreadList()
         await eventually { model.engine.frameTime(of: model.engine.time) == (try? thread(1, model).time) }
         #expect(model.composerText == "For one")
@@ -248,12 +237,10 @@ struct ComposerTests {
         try await model.seek(to: 12)
         let region = try Region(x: 0.25, y: 0.2, w: 0.3, h: 0.25)
 
-        // Drawn: the popover opens on it, and the composer shows it too.
         model.beginRegion()
         model.endRegion(region)
         #expect(model.draft?.region == region)
         #expect(model.composerRegion == region)
-        // A click into the composer closes the empty popover; the chip stays.
         model.closePopover(.clickOutside)
         #expect(model.composerRegion == region)
         model.composerText = "This box"
@@ -262,19 +249,16 @@ struct ComposerTests {
         #expect(try thread(1, model).messages.first?.region == region)
         #expect(model.composerRegion == nil)
 
-        // The × on the chip.
         model.startDraft(region: region)
         model.closePopover(.clickOutside)
         model.removeComposerRegion()
         #expect(model.composerRegion == nil)
 
-        // Escape in the popover drops the region everywhere.
         model.startDraft(region: region)
         #expect(model.composerRegion == region)
         model.closePopover(.discard)
         #expect(model.composerRegion == nil)
 
-        // Words in the popover take the region.
         model.startDraft(region: region)
         model.draft?.text = "Here"
         model.commitDraft()
@@ -301,12 +285,10 @@ struct ComposerTests {
         model.toggleComposerGeneral()
         #expect(model.composerRegion == region)
 
-        // Off its frame the chip goes.
         try await model.seek(to: 20)
         #expect(model.composerRegion == nil)
         #expect(try resolved(model).kind == .newThread)
 
-        // Back on it, a follow-up with the region in the thread view.
         _ = try await model.showThread(id.text)
         target = try resolved(model)
         #expect(target.kind == .followUp)
@@ -363,7 +345,6 @@ struct ComposerTests {
         #expect(reported["region"] is NSNull)
     }
 
-    /// Waits until `condition` holds: a click moves the player in a task.
     private func eventually(_ condition: () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {

@@ -4,8 +4,6 @@ import ReviewLease
 import ReviewWire
 import Synchronization
 
-/// The app, in memory: answers each message with `answer`, by the socket it
-/// was sent to, and records every one.
 final class FakeTransport: ControlTransport {
     typealias Answer = @Sendable (ControlMessage, URL) -> Result<ControlReply, ControlTransportFailure>
 
@@ -35,7 +33,6 @@ final class FakeTransport: ControlTransport {
             $0.sent.append((message, socket))
             return $0.answer
         }
-        // Answered outside the lock: an answer may read the test's other doubles.
         switch answer(message, socket) {
         case .success(let reply): return reply.encoded()
         case .failure(let failure): throw failure
@@ -43,7 +40,6 @@ final class FakeTransport: ControlTransport {
     }
 }
 
-/// Records each launch, and runs `launched` so a test can start its fake app.
 final class FakeLauncher: AppLaunching {
     private struct State {
         var launches: [[String: String]] = []
@@ -68,10 +64,8 @@ final class FakeLauncher: AppLaunching {
         set { state.withLock { $0.launched = newValue } }
     }
 
-    /// The processes brought to the front, in order.
     var fronted: [Int32] { state.withLock { $0.fronted } }
 
-    /// Whether bringing a process to the front works.
     var frontWorks: Bool {
         get { state.withLock { $0.frontWorks } }
         set { state.withLock { $0.frontWorks = newValue } }
@@ -84,7 +78,6 @@ final class FakeLauncher: AppLaunching {
         }
     }
 
-    /// Whether each launch asked for the app in front, in order.
     var inFront: [Bool] { state.withLock { $0.inFront } }
 
     func launch(environment: [String: String], inFront: Bool) throws(AppLaunchFailure) {
@@ -103,7 +96,6 @@ struct NoProcesses: ProcessTable {
     func process(_ pid: Int32) -> ProcessRecord? { nil }
 }
 
-/// A command run in a temporary support folder, removed with `cleanUp`.
 struct Run {
     let folder: URL
     let support: URL
@@ -136,7 +128,6 @@ struct Run {
     }
 }
 
-/// What `havooch <words> --help` prints: a group's help, or a command's.
 func help(_ words: String...) -> String {
     let run = Run()
     defer { run.cleanUp() }

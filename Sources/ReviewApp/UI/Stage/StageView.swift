@@ -2,16 +2,9 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The stage: the video on its black letterbox, the layer that takes the
-/// mouse and shows regions, the popover over it while a message is written
-/// or a thread is open, the threads on the frame, and the notices of what
-/// the agent says. A click on the frame points and never plays; a
-/// drag draws a region. While the window compares two versions,
-/// the two pictures in their layout (`CompareStage`).
 struct StageView: View {
     let model: WindowModel
 
-    /// The stage in the window, as it was last laid out.
     @State private var area: CGRect = .zero
 
     var body: some View {
@@ -22,17 +15,12 @@ struct StageView: View {
                 ZStack(alignment: .topLeading) {
                     StagePane(model: model, engine: model.engine)
                     StagePopoverLayer(model: model)
-                    // What the agent just said, over everything on the stage.
                     Notices(model: model)
                 }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Metrics.stageCorner, style: .continuous))
-        // The tour's write step rings the frame; the ring stands in the gutter.
         .coachRing(model.tourRings(.stage), radius: Metrics.stageCorner)
-        // Where a click is on the stage, which closes the popover by its own
-        // gestures; a click anywhere else is outside it (`OutsideClicks`).
-        // Side by side, the active side's pane is the stage (`CompareStage`).
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { area in
             self.area = area
             keepArea()
@@ -43,23 +31,16 @@ struct StageView: View {
         .accessibilityLabel("Video")
     }
 
-    /// The whole stage is where a click is on the stage, but side by side.
     private func keepArea() {
         guard !(model.isComparing && model.compare?.layout == .sideBySide) else { return }
         model.stageArea = area
     }
 }
 
-/// One picture on the stage: the video of `engine` on its letterbox, the
-/// layer that takes the mouse and draws regions, and the threads on its
-/// frame. While comparing, one pane per side.
 struct StagePane: View {
     let model: WindowModel
     let engine: PlayerEngine
-    /// The compare side it shows; nil for the window's one video.
     var side: CompareSide?
-    /// How much of its width, from its leading edge, takes the mouse;
-    /// nil for all of it. Slider's left side takes it up to the handle.
     var hitWidth: CGFloat?
     @Environment(\.palette) private var palette
 
@@ -69,36 +50,22 @@ struct StagePane: View {
             ZStack(alignment: .topLeading) {
                 palette[.letterbox]
                 PlayerSurface(player: engine.player)
-                // Above the picture, which takes no events itself.
                 RegionOverlay(model: model, geometry: geometry, engine: engine, side: side, hitWidth: hitWidth)
-                // The threads on this frame: outlines and badges.
                 FrameMarks(model: model, geometry: geometry, side: side)
             }
         }
     }
 }
 
-/// The popover over the stage while a message is written or a thread is
-/// open, on the active picture: where the person left its thread's
-/// popover, else beside the region, else above the playhead.
 struct StagePopoverLayer: View {
     let model: WindowModel
 
-    /// The popover's size as it was last laid out, for placing it beside a
-    /// region, and as the size a first drag or resize starts from.
     @State private var boxSize = CGSize(width: CommentPopover.width, height: 150)
-    /// The drag on the popover's header, an edge or a corner under way,
-    /// and the thread whose popover it drags: nil for a new message's.
     @State private var drag: (thread: ThreadID?, drag: ThreadPopover.Drag)?
-    /// The box the person resized a new message's popover to, on the
-    /// stage, and the draft's moment and region it holds for. No thread
-    /// keeps it yet, so it goes when the popover closes.
     @State private var sized: (time: Double, region: Region?, box: CGRect)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// How far the popover travels as it comes and goes.
     private static let arrivalDistance: CGFloat = 8
-    /// The space under the notch's tip, at the stage's foot.
     private static let foot: CGFloat = 4
 
     var body: some View {
@@ -117,28 +84,18 @@ struct StagePopoverLayer: View {
         }
     }
 
-    /// Where the popover sits and how it comes in.
     private struct Placement {
         var origin: CGPoint
-        /// The size the person gave the box, without its notch; nil for its own size.
         var size: CGSize?
         var notch: CGFloat?
-        /// Whether it stands on the foot of the stage, above the playhead.
         var onFoot = false
         var arrival: CGSize = .zero
-        /// Where the playhead is across the stage, for a popover on a
-        /// moment; nil for one beside a region.
         var playhead: CGFloat?
     }
 
-    /// The popover where it belongs: where the person left its thread's
-    /// popover, else beside the region for a message on one, else above
-    /// the playhead at the foot of the stage. One view in every place, so
-    /// a drag that starts from where it opened keeps going.
     private func commentPopover(_ draft: WindowModel.Draft, geometry: VideoFrameGeometry, stage: CGSize) -> some View {
         let thread = model.draftThread
         let place = placement(draft, thread: thread, geometry: geometry, stage: stage)
-        // The box as it shows now, without its notch: where a drag starts.
         let shown = CGRect(
             origin: place.origin,
             size: place.size ?? CGSize(width: boxSize.width, height: boxSize.height - (place.notch == nil ? 0 : CommentPopover.notchHeight))
@@ -161,13 +118,6 @@ struct StagePopoverLayer: View {
         .transition(arrival(from: place.arrival))
     }
 
-    /// A step of a drag on the popover of `thread`, or of a new message
-    /// when it's nil: on the header when `handle` is nil, else on that edge
-    /// or corner. The drag's first step keeps `shown`, the box as it was,
-    /// and every later step is measured from it, never from the size the
-    /// drag gave the box. At its end the thread keeps the popover's frame
-    /// in the video area, and a new message's popover keeps its box while
-    /// it is open; a drag that came back to where it started keeps nothing.
     private func follow(
         _ handle: FrameResizePosition?, _ translation: CGSize, ended: Bool, thread: ThreadID?, draft: WindowModel.Draft,
         from shown: CGRect, place: Placement, stage: CGSize
@@ -192,10 +142,6 @@ struct StagePopoverLayer: View {
         }
     }
 
-    /// A new message's box for the resize `drag` on a stage `stage` in
-    /// size, by `CommentPopover.rules`. On a moment, at `playhead`,
-    /// the box stays above the notch's room at the stage's foot, and its
-    /// sides never pass the notch, which stays on the bottom edge.
     private static func newMessageBox(_ drag: ThreadPopover.Drag, playhead: CGFloat?, stage: CGSize) -> CGRect {
         guard let handle = drag.handle else { return drag.start }
         guard let playhead else {
@@ -215,7 +161,6 @@ struct StagePopoverLayer: View {
         _ draft: WindowModel.Draft, thread: ReviewThread?, geometry: VideoFrameGeometry, stage: CGSize
     ) -> Placement {
         let natural: Placement
-        // A thread opened from its pin or badge sits beside its first region.
         if let region = draft.region ?? thread?.messages.lazy.compactMap(\.region).first {
             let rect = geometry.rect(of: region)
             let origin = CommentPopover.placement(beside: rect, box: boxSize, stage: stage)
@@ -226,7 +171,6 @@ struct StagePopoverLayer: View {
             let place = CommentPopover.placement(playhead: playhead, stageWidth: stage.width)
             natural = Placement(
                 origin: CGPoint(x: place.leading, y: stage.height - Self.foot - boxSize.height), notch: place.notch, onFoot: true,
-                // Up from the playhead its notch points at.
                 arrival: CGSize(width: 0, height: Self.arrivalDistance), playhead: playhead
             )
         }
@@ -238,15 +182,12 @@ struct StagePopoverLayer: View {
             let rect = ThreadPopover.rect(of: frame, in: stage)
             return Placement(origin: rect.origin, size: rect.size)
         }
-        // A new message's box, kept as it becomes a thread.
         if let sized, sized.time == draft.time, sized.region == draft.region {
             return Self.sized(sized.box, natural)
         }
         return natural
     }
 
-    /// A popover `natural` would place, at the box `box` instead: on a
-    /// moment its notch stays on the bottom edge, at the playhead.
     private static func sized(_ box: CGRect, _ natural: Placement) -> Placement {
         let notch = natural.playhead.map {
             min(max($0 - box.minX, CommentPopover.notchInset), max(box.width - CommentPopover.notchInset, CommentPopover.notchInset))
@@ -254,15 +195,10 @@ struct StagePopoverLayer: View {
         return Placement(origin: box.origin, size: box.size, notch: notch, arrival: natural.arrival, playhead: natural.playhead)
     }
 
-    /// The popover comes in from `offset` towards where it sits, and leaves
-    /// the same way, so it grows out of what it's about. With reduced motion
-    /// it only fades.
     private func arrival(from offset: CGSize) -> AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .offset(offset))
     }
 
-    /// The direction from the box at `origin` back towards the rectangle
-    /// `rect` it's beside, `arrivalDistance` long.
     private static func side(of rect: CGRect, from origin: CGPoint, box: CGSize) -> CGSize {
         if origin.x >= rect.maxX { return CGSize(width: -arrivalDistance, height: 0) }
         if origin.x + box.width <= rect.minX { return CGSize(width: arrivalDistance, height: 0) }

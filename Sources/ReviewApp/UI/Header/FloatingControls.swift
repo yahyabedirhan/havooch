@@ -1,25 +1,13 @@
 import SwiftUI
 
-/// "Finish setup" on its own while setup isn't finished, then
-/// the floating group at the top right of the window, from left to
-/// right: the agent-control icon (only while an agent holds the lease),
-/// Connect an Agent, "Open a Video…", Context, and the sidebar toggle;
-/// the last four in the player only, since home has its own "Open a
-/// Video…" and the Connect view is in the sidebar. They are toolbar items,
-/// so the system draws them as one floating group.
 struct FloatingControls: ToolbarContent {
     let model: WindowModel
     let lease: AgentControlIcon
     let stopLease: () -> Void
-    /// Whether the agent-control icon shows: an agent holds the lease, and
-    /// no screenshot leaves it out.
     let isControlled: Bool
 
     var body: some ToolbarContent {
-        // Pushes the group to the trailing edge: beside the header's title,
-        // primary actions would otherwise sit at the leading end.
         ToolbarSpacer(.flexible)
-        // Separate from the connect button, in a capsule of its own.
         if model.showsFinishSetup {
             ToolbarItem(placement: .primaryAction) {
                 FinishSetupButton(model: model)
@@ -40,9 +28,6 @@ struct FloatingControls: ToolbarContent {
     }
 }
 
-/// Connect an Agent: opens the Connect view in the sidebar, and goes back
-/// to the threads when it shows. A dot shows while setup isn't fully
-/// detected and no agent has ever connected.
 private struct ConnectButton: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -75,9 +60,6 @@ private struct ConnectButton: View {
     }
 }
 
-/// "Finish setup" with the count of setup items left: opens the setup
-/// tour over the stage, and closes it while it shows. From
-/// connect-flow V6's tour button.
 private struct FinishSetupButton: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
@@ -114,8 +96,6 @@ private struct FinishSetupButton: View {
     }
 }
 
-/// The sidebar toggle. The root view animates the column in and out with
-/// one spring (`SidebarColumn.animation`), whatever opens it.
 private struct SidebarToggle: View {
     let model: WindowModel
 
@@ -130,8 +110,6 @@ private struct SidebarToggle: View {
     }
 }
 
-/// "Open a Video…" in the header: the Open panel, without going home
-/// first. On an in-app demo the video opens on the person's data.
 private struct OpenVideoButton: View {
     let model: WindowModel
 

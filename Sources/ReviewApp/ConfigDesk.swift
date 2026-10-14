@@ -4,70 +4,36 @@ import ReviewConfig
 import ReviewCore
 import ReviewStore
 
-/// `config.toml` as the app runs it: the last valid settings,
-/// the verdict of the last reload, and the targeted writes. It watches the
-/// file and applies each valid save at once; a save with a problem keeps
-/// the last valid settings. After every reload it writes the verdict to
-/// `config-status.json` in the support folder, for agents.
-///
-/// On its first run on a support folder it moves what older builds kept
-/// there: the pinned theme of `settings.json` into the file, the person's
-/// themes into `themes/` beside it. Token overrides are dropped, with a
-/// note.
-///
-/// What the person needs to know shows as a notice in the window, which
-/// never blocks: what the move did, and a new set of problems. Its close
-/// button and `havooch config close-notice` close it.
 @Observable
 final class ConfigDesk {
-    /// The settings notice in the window.
     struct Notice: Equatable {
         enum Kind: String, Equatable {
-            /// What the move from an older build did.
             case moved
-            /// The last save has problems; the last valid settings stay.
             case rejected
         }
 
         var kind: Kind
         var title: String
-        /// One sentence or problem per line.
         var lines: [String]
     }
 
-    /// What a reload did to the settings.
     enum Outcome: Equatable {
-        /// The file read as other settings, which replaced the last ones.
         case changed
-        /// The file read as the settings the app already runs with.
         case unchanged
-        /// The file has a problem: the last valid settings stay.
         case rejected
     }
 
     let location: ConfigLocation
-    /// The last settings the file read as: every default until a reload
-    /// accepts the file.
     private(set) var config = ConfigFile()
-    /// The verdict of the last reload.
     private(set) var verdict: ConfigVerdict
-    /// What the move from an older build did that the person needs to
-    /// know, one sentence each; empty when nothing moved.
     private(set) var notes: [String] = []
-    /// The notice in the window; nil while none is up.
     private(set) var notice: Notice?
 
-    /// Called after a reload replaced the settings, the theme desk first.
     @ObservationIgnored var applied: [@MainActor () -> Void] = []
-    /// The folder `config-status.json` goes to: the support folder.
     @ObservationIgnored private let support: URL
     @ObservationIgnored private var watcher: ConfigWatcher?
-    /// How many times the file was read.
     @ObservationIgnored private(set) var reloads = 0
 
-    /// The settings at `location`: a missing file is made from the header,
-    /// what older builds kept in the support folder `layout` moves into it
-    /// once, and the file is read. Nothing is watched until `startWatching`.
     init(location: ConfigLocation, layout: SupportLayout) {
         self.location = location
         support = layout.root
@@ -84,23 +50,17 @@ final class ConfigDesk {
         reload()
     }
 
-    /// `line 4: …` as a sentence: a capital first, a full stop last.
     static func sentence(_ problem: ConfigIssue) -> String {
         let text = problem.description.prefix(1).uppercased() + problem.description.dropFirst()
         return text.hasSuffix(".") ? text : text + "."
     }
 
-    /// Closes the notice; false when none was up.
     @discardableResult
     func dismissNotice() -> Bool {
         defer { notice = nil }
         return notice != nil
     }
 
-    // MARK: - Reading
-
-    /// Reads the file again, writes the verdict, and applies the settings
-    /// when they read and differ from the ones the app runs with.
     @discardableResult
     func reload() -> Outcome {
         reloads += 1
@@ -122,7 +82,6 @@ final class ConfigDesk {
             }
             return .rejected
         }
-        // A file that reads again takes its problems' notice with it.
         if notice?.kind == .rejected { notice = nil }
         guard decoded.config != config else { return .unchanged }
         config = decoded.config
@@ -130,11 +89,6 @@ final class ConfigDesk {
         return .changed
     }
 
-    // MARK: - Writing
-
-    /// Pins the theme `name` in the file, or takes the pin out for nil,
-    /// then reads the file again. Refused when the file has a problem: it
-    /// is never written over.
     func setTheme(_ name: String?) throws(AppRefusal) {
         do throws(ConfigWriteFailure) {
             try location.setTheme(name)
@@ -144,9 +98,6 @@ final class ConfigDesk {
         reload()
     }
 
-    /// Appends the project `slug` with `firstVersion` as v1 (`project
-    /// new`), then reads the file again. Refused when the file has a
-    /// problem, or a project has the slug already.
     func addProject(slug: String, title: String?, firstVersion: ProjectEntry.Version) throws(AppRefusal) {
         do throws(ConfigWriteFailure) {
             try location.addProject(slug: slug, title: title, firstVersion: firstVersion)
@@ -156,8 +107,6 @@ final class ConfigDesk {
         reload()
     }
 
-    /// Appends `version` to the project `slug` (`project add`), then reads
-    /// the file again. Refused when the file has a problem.
     func addVersion(_ version: ProjectEntry.Version, toProject slug: String) throws(AppRefusal) {
         do throws(ConfigWriteFailure) {
             try location.addVersion(version, toProject: slug)
@@ -167,14 +116,10 @@ final class ConfigDesk {
         reload()
     }
 
-    /// The project `slug` as the review's rules read it: its title, and
-    /// each version's path made absolute (a `~` is the home folder); nil
-    /// for a slug the settings don't have.
     func outline(_ slug: String) -> ProjectOutline? {
         config.project(slug).map { outline(of: $0) }
     }
 
-    /// `project` as the review's rules read it.
     func outline(of project: ProjectEntry) -> ProjectOutline {
         ProjectOutline(
             slug: project.slug, title: project.displayTitle,
@@ -184,15 +129,6 @@ final class ConfigDesk {
         )
     }
 
-    // MARK: - Moving an older build's settings
-
-    /// Moves what builds before `config.toml` kept in the support folder:
-    /// the person's themes from `Themes/` to `themes/` beside the file, and
-    /// the pinned theme from `settings.json` into the file, unless the file
-    /// pins one already. The token overrides are dropped. `settings.json`
-    /// then keeps only the sidebar width, so this happens once. While the
-    /// file has a problem, `settings.json` waits for the next launch.
-    /// Returns the notes for the person.
     private func moveFormerSettings(from layout: SupportLayout) -> [String] {
         var notes = moveFormerThemes(from: layout.formerThemesFolder)
         let former: Settings.Former?
@@ -221,16 +157,12 @@ final class ConfigDesk {
                     + " write a theme that extends another in \(location.themesFolder.path)."
             )
         }
-        // Read again, written without the theme and the overrides.
         if let kept = try? Settings.load(layout) {
             try? kept.save(layout)
         }
         return notes
     }
 
-    /// Moves each file of `former` into the themes folder, and the folder
-    /// goes once it's empty. A file whose name the themes folder has
-    /// already stays where it is.
     private func moveFormerThemes(from former: URL) -> [String] {
         let fileManager = FileManager.default
         guard let files = try? fileManager.contentsOfDirectory(at: former, includingPropertiesForKeys: nil) else { return [] }
@@ -261,9 +193,6 @@ final class ConfigDesk {
         return notes
     }
 
-    // MARK: - Watching
-
-    /// Watches the file: a save applies at once.
     func startWatching() {
         let watcher = ConfigWatcher(file: location.file) { [weak self] in self?.reload() }
         watcher.start()
@@ -275,9 +204,6 @@ final class ConfigDesk {
         watcher = nil
     }
 
-    // MARK: - Reports
-
-    /// The settings file as `state` reports it.
     var report: StateReport.Config {
         StateReport.Config(
             path: location.file.path, themes: location.themesFolder.path,
@@ -288,25 +214,9 @@ final class ConfigDesk {
     }
 }
 
-/// Watches the settings file and calls `onChange` once changes have been
-/// quiet for 200 ms. After Swift Lab's `ConfigurationWatcher`
-/// (yahyabedirhan/swift-lab at ccb82cb), itself after Shipyard's.
-///
-/// Editors and agents usually save by writing a new file and renaming it
-/// over the old one, which leaves a watch on the old file's descriptor
-/// looking at a file that is gone. So the file's folder is watched, which
-/// sees every create, rename and delete in it. An in-place write (`>>`)
-/// does not touch the folder, so the file itself is watched too, and both
-/// watches open again after every change. When the folder does not exist
-/// yet, its nearest existing ancestor is watched instead.
-///
-/// Nothing the app writes on each reload may sit in the watched folder, or
-/// each write would start another reload: the verdict goes to the support
-/// folder.
 final class ConfigWatcher {
     private let file: URL
     private let onChange: @MainActor () -> Void
-    // Written on the main actor only; `deinit` cancels them, which closes the descriptors.
     nonisolated(unsafe) private var folderSource: (any DispatchSourceFileSystemObject)?
     nonisolated(unsafe) private var fileSource: (any DispatchSourceFileSystemObject)?
     private var pending: Task<Void, Never>?
@@ -334,7 +244,6 @@ final class ConfigWatcher {
         fileSource = nil
     }
 
-    /// Opens both watches again on whatever is at the paths now.
     private func watch() {
         folderSource?.cancel()
         fileSource?.cancel()
@@ -354,7 +263,6 @@ final class ConfigWatcher {
         return source
     }
 
-    /// Something changed: wait for the burst of events a save makes to end.
     private func changed() {
         pending?.cancel()
         pending = Task { [weak self] in
@@ -366,7 +274,6 @@ final class ConfigWatcher {
         }
     }
 
-    /// `url`, or its closest ancestor that exists.
     private static func nearestExisting(_ url: URL) -> URL {
         var candidate = url.standardizedFileURL
         while !FileManager.default.fileExists(atPath: candidate.path), candidate.path != "/" {

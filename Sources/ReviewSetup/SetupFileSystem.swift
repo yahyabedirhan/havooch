@@ -69,8 +69,6 @@ public struct LocalFileSystem: SetupFileSystem {
         info.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) ? .folder : .file
     }
 
-    /// A path that isn't there is missing; any other failure (no
-    /// permission, a loop of links) means Havooch can't know.
     private static func failure(_ code: Int32) -> FileItem {
         code == ENOENT || code == ENOTDIR ? .missing : .unreadable
     }

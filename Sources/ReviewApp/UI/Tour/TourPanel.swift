@@ -1,16 +1,9 @@
 import SwiftUI
 
-/// The setup tour's coach panel, over the foot of the stage: first-run
-/// V3's coach panel as connect-flow V6 draws it
-/// (`docs/prototypes/2026-10-08-lab/agent-onboarding/`). Its dots and "Step
-/// N of 5", the step's title and words, and its buttons: Skip Tour, Next or
-/// Later, Write an Example, Finish. The close button keeps the step. Each
-/// step rings the part of the window it is about (`WindowModel.tourRings`).
 struct TourPanel: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
 
-    /// How wide the panel is.
     static let width: CGFloat = 380
 
     private var setup: SetupDesk { model.app.setup }
@@ -52,7 +45,6 @@ struct TourPanel: View {
         .padding(14)
         .frame(width: Self.width, alignment: .topLeading)
         .background {
-            // The theme's popover surface, so the panel reads over any frame.
             RoundedRectangle(cornerRadius: 12, style: .continuous).fill(palette[.popover])
             RoundedRectangle(cornerRadius: 12, style: .continuous).fill(palette[.accent].opacity(0.06))
         }
@@ -61,9 +53,6 @@ struct TourPanel: View {
         .animation(.smooth(duration: 0.25), value: step)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Setup tour, step \(step.number) of \(TourStep.allCases.count)")
-        // Both tools turned detected: the tools step moves on a moment
-        // later, so the two checks show first. Tools detected before the
-        // tour opened leave Next to the person.
         .onChange(of: setup.isDetected) { _, detected in
             guard detected, step == .tools else { return }
             Task {
@@ -126,7 +115,6 @@ struct TourPanel: View {
         }
     }
 
-    /// A code name in the panel's words, in monospace.
     private func code(_ name: String) -> AttributedString {
         var text = AttributedString(name)
         text.font = .callout.monospaced()

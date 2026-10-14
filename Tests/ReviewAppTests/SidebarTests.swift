@@ -6,9 +6,6 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// The sidebar through the app's model, on the fixture video: the order of
-/// the threads, the thread list's groups and a row's words, the thread view
-/// with Back, Previous and Next, the commands that show a view, and the kept width.
 @Suite("The sidebar of threads", .serialized)
 struct SidebarTests {
     let support = FileManager.default.temporaryDirectory
@@ -28,7 +25,6 @@ struct SidebarTests {
         try #require(model.threads.first { $0.number == number })
     }
 
-    /// Waits until `condition` holds: a click moves the player in a task.
     private func eventually(_ condition: () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(60)
         while !condition(), ContinuousClock.now < deadline {
@@ -75,7 +71,6 @@ struct SidebarTests {
         _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(doneID, .done) }
         _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.setState(failedID, .failed) }
         _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: askedID, question: "Which part?", now: Date()) }
-        // Queued after the send: a new thread, a follow-up on a sent one, and General.
         _ = try await model.addMessage(text: "Queued one", at: 12)
         _ = try await model.addMessage(text: "And this", at: nil, thread: "4")
         _ = try await model.addMessage(text: "Whole video", at: nil, thread: "0")
@@ -88,7 +83,6 @@ struct SidebarTests {
         #expect(sections.map(\.group.hint) == [nil, nil, "⌘↩ sends them all", nil])
         #expect(ThreadListSummary.line(threads: model.threads, queued: model.queuedCount) == "7 threads · 1 needs you · 3 queued")
 
-        // An answer moves the thread out of Needs you; an empty group goes.
         _ = try model.answer("3", text: "The intro")
         #expect(model.threadGroups.map(\.group) == [.withAgent, .queued, .done])
         #expect(model.threadGroups.first?.threads.map(\.number) == [2, 3, 4])
@@ -151,7 +145,6 @@ struct SidebarTests {
         #expect(RelativeTime.short(now.addingTimeInterval(-180), now: now) == "3m")
         #expect(RelativeTime.short(now.addingTimeInterval(-7_300), now: now) == "2h")
         #expect(RelativeTime.short(now.addingTimeInterval(-4 * 86_400), now: now) == "4d")
-        // A clock that went back is no time ago.
         #expect(RelativeTime.short(now.addingTimeInterval(60), now: now) == "now")
     }
 
@@ -162,7 +155,6 @@ struct SidebarTests {
         _ = try await model.addMessage(text: "One", at: 5)
         _ = try await model.addMessage(text: "Two", at: 15)
         let (one, two) = (try thread(1, model).id, try thread(2, model).id)
-        // A message written picks out its thread's pin; the sidebar stays on the list.
         #expect(model.selection == two)
         #expect(model.shown == nil)
         #expect(model.state().sidebar?.thread == nil)
@@ -186,7 +178,6 @@ struct SidebarTests {
         #expect(model.selection == one)
         #expect(model.engine.time == 5)
 
-        // Escape goes back too, once nothing else takes it.
         model.showThread(two)
         await eventually { model.engine.time == 15 }
         #expect(model.escape())
@@ -209,7 +200,6 @@ struct SidebarTests {
         #expect(model.selection == one)
         #expect(model.shown == nil)
 
-        // Space or Return on a focused row opens it the same way.
         model.focusControl(UUID()) { model.perform(.open, on: two) }
         #expect(model.pressFocusedControl())
         #expect(model.shown == two)
@@ -260,13 +250,11 @@ struct SidebarTests {
         _ = try await model.sendQueue()
         let (first, second, third) = (try id(one.thread.id), try thread(2, model).id, try id(three.thread.id))
 
-        // A pin or a badge opens the thread's popover and shows its view.
         model.openThread(first)
         #expect(model.shown == first)
         #expect(model.state().popover?.thread == 1)
         model.closePopover(.discard)
 
-        // A notice of the agent's shows its thread's view.
         model.raise(Notice(thread: second, kind: .message, agent: "Claude Code", text: "Done", at: Date()))
         model.openNotice(try #require(model.notices.last).id)
         #expect(model.shown == second)
@@ -277,7 +265,6 @@ struct SidebarTests {
         model.jumpToMarker(forward: true)
         #expect(model.shown == third)
 
-        // Questions on #1 and #3: Back in #3 counts #1 only.
         for thread in [first, third] {
             _ = try model.desk.change(model.reviewKey!) { review throws(ReviewRefusal) in try review.ask(on: thread, question: "Which?", now: Date()) }
         }
@@ -318,11 +305,9 @@ struct SidebarTests {
         let layout = SupportLayout(root: support)
         #expect(try Settings.load(layout).sidebarWidth == 390)
 
-        // The next run opens at that width.
         let again = AppModel(environment: [SupportFolder.overrideVariable: support.path, MutedRun.variable: "1"]).makeWindow()
         #expect(again.sidebarWidth == 390)
 
-        // A drag past a limit is kept at the limit.
         model.keepSidebarWidth(9000)
         #expect(try Settings.load(layout).sidebarWidth == Double(Metrics.sidebarWidthRange.upperBound))
     }
@@ -357,7 +342,6 @@ struct SidebarTests {
         let printed = try #require(JSONSerialization.jsonObject(with: Data(await send(.threadShow(thread: "0"), json: true).output.utf8)) as? [String: Any])
         let shown = try #require(printed["sidebar"] as? [String: Any])
         #expect(shown["thread"] as? String == (try thread(0, model)).id.text)
-        // General has no frame: the player stays.
         #expect(model.engine.time == 5)
 
         #expect(await send(.threadList) == .done("the sidebar shows the thread list\n"))

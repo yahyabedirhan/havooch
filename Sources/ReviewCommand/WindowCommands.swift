@@ -1,10 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch window list | new | close | resize`: the app's windows. Each window
-/// holds one video, or none and shows the home screen. `list` names them
-/// (`w1`, `w2`…) for `--window`; `new` makes an empty one, as File › New
-/// Window does; `close` closes one, as its close button does.
 enum WindowCommands {
     static let group = CommandGroup(
         name: "window", summary: "list, open, close and resize windows", section: .drive, commands: [

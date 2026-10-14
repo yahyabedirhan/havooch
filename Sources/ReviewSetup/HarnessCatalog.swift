@@ -59,7 +59,6 @@ public enum PromptTarget: Hashable, Sendable {
     case video(fileName: String)
     case project(slug: String)
 
-    /// The words the prompt ends with: `cut2.mp4`, `project launch-video`.
     var words: String {
         switch self {
         case .video(let fileName): fileName
@@ -81,15 +80,12 @@ public enum HarnessCatalog {
     /// source, and this one is small where Havooch's own is 269 MB.
     public static let source = "yahyabedirhan/havooch-mate"
 
-    /// Where a command line tool is usually installed, for presence hints.
     private static let commandFolders = [".local/bin", "/opt/homebrew/bin", "/usr/local/bin", ".bun/bin", ".npm-global/bin"]
 
-    /// `command` in each usual command folder.
     private static func command(_ name: String) -> [String] {
         commandFolders.map { "\($0)/\(name)" }
     }
 
-    /// `name.app` in the system's and the person's Applications folders.
     private static func app(_ name: String) -> [String] {
         ["/Applications/\(name).app", "Applications/\(name).app"]
     }

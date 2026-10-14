@@ -8,14 +8,8 @@ import ReviewStore
 import ReviewWire
 import Testing
 
-/// App control's server: how it answers each request (with a fake app), and
-/// the real socket, from the command's client to the server and back, in a
-/// temporary folder.
 @Suite("The control server")
 struct ControlServerTests {
-    /// A player with a 21.233 s video open (or none), which records each
-    /// call and refuses all of them with `refusal` when it's set. It is the
-    /// app and its one window, `w1`.
     final class FakeApp: AppControlling, WindowControlling {
         let id = "w1"
         var nsWindow: NSWindow? { nil }
@@ -25,7 +19,6 @@ struct ControlServerTests {
         var time = 0.0
         var playing = false
 
-        /// The open video's content hash, and its review, kept in memory.
         static let hash = "abcdef0123"
         static let layout = SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true))
         var review = Review(video: VideoInfo(contentHash: hash, title: "sample", duration: 21.233, path: "/videos/sample.mp4"))
@@ -180,7 +173,6 @@ struct ControlServerTests {
             return StateReport.Popover(thread: id.number, time: time, text: "", region: nil)
         }
 
-        /// The thread the sidebar shows; nil for the thread list.
         var shown: String?
 
         func showThread(_ thread: String) async throws(AppRefusal) -> (sidebar: StateReport.Sidebar, number: Int) {
@@ -199,7 +191,6 @@ struct ControlServerTests {
             return StateReport.Sidebar(thread: nil, width: 340)
         }
 
-        /// A plain video: the thread list has no versions.
         static let plainVideo = AppRefusal("the thread list shows versions only in a project; this window holds a plain video")
 
         func openVersionMenu(search: String?) throws(AppRefusal) -> StateReport.Sidebar {
@@ -260,7 +251,6 @@ struct ControlServerTests {
             return "Codex"
         }
 
-        /// The fake's tour: open on its step, or closed.
         var tour = StateReport.Tour(
             open: false, step: "tools", stepNumber: 1, steps: 5, title: "Give your agent two tools", rings: [],
             replied: false, finishSetup: true, setupItemsLeft: 3
@@ -350,7 +340,6 @@ struct ControlServerTests {
             hasVideo = true
         }
 
-        /// Whether the app is in front, as `openInFront` leaves it.
         var active = false
 
         func open(_ url: URL, project: String?) async throws(AppRefusal) {
@@ -365,7 +354,6 @@ struct ControlServerTests {
             return self
         }
 
-        /// A `wait` listens to the open video's review, or to the one its path names.
         func listenedReview(video: String?, project: String?) async throws(AppRefusal) -> ReviewKey {
             project.map { .project(slug: $0) } ?? .video(contentHash: video ?? Self.hash)
         }
@@ -431,8 +419,6 @@ struct ControlServerTests {
         ControlServer(socket: socket, app: app, listeners: Self.noListeners(), screenshotter: screenshotter, quit: quit)
     }
 
-    /// Listeners nobody sends to, the same ones at each request: the fake
-    /// app has no reviews on disk.
     static func noListeners() -> @MainActor () -> ListenerHub {
         let hub = ListenerHub(
             desk: ReviewDesk(library: Library(layout: SupportLayout(root: URL(fileURLWithPath: "/demo", isDirectory: true)))),
@@ -481,7 +467,6 @@ struct ControlServerTests {
     @Test("open answers once the video plays in front, and --json reports the app, the video and the player")
     func openInFront() async throws {
         app.hasVideo = false
-        // The reply names the app's process, for the command to bring to the front.
         #expect(await answer(.open(path: "/videos/sample.mp4")).reply
             == ControlReply(ok: true, output: "opened sample (0:21.233) in w1, playing\n", pid: ProcessInfo.processInfo.processIdentifier))
         #expect(app.calls == ["open in front /videos/sample.mp4"])
@@ -504,7 +489,6 @@ struct ControlServerTests {
         #expect(server.lease.status(at: Date())?.holder == other)
         #expect(app.calls == ["open in front /videos/sample.mp4"])
 
-        // With no lease held, an open takes none: the icon stays hidden.
         let free = self.server()
         _ = await free.reply(to: ControlMessage(.open(path: "/videos/sample.mp4"), holder: Self.holder).encoded())
         #expect(free.lease.status(at: Date()) == nil)
@@ -635,7 +619,6 @@ struct ControlServerTests {
         #expect(popover["thread"] as? Int == 1)
         #expect(popover["text"] as? String == "Again")
         #expect(popover["region"] is NSNull)
-        // Numbers that aren't a region are refused before the app is asked.
         let outside = ControlRequest.Rectangle(x: 0.9, y: 0, w: 0.5, h: 0.5)
         #expect(await answer(.commentOpen(text: "", region: outside)).reply.ok == false)
         #expect(app.calls == ["comment open ", "comment open This box on 0.25,0.2,0.3,0.25", "comment open Again"])
@@ -654,7 +637,6 @@ struct ControlServerTests {
         #expect(composer["general"] as? Bool == true)
         #expect(composer["text"] as? String == "Overall")
         #expect(composer["time"] is NSNull)
-        // Numbers that aren't a region are refused before the app is asked.
         #expect(await answer(.commentCompose(text: "", region: .init(x: 0.9, y: 0, w: 0.5, h: 0.5))).reply.ok == false)
         #expect(app.calls == ["comment compose Too fast", "comment compose  on 0.25,0.2,0.3,0.25", "comment compose Overall general"])
     }
@@ -875,9 +857,6 @@ struct ControlServerTests {
 
     @Test("the command's client reaches the server over the real socket, which only its user can open")
     func realSocket() async throws {
-        // A folder as deep as a worktree's: its socket's path is longer than
-        // a socket's address holds. The same folder on every run, so the
-        // short link to it is reused, not left behind once per run.
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("havooch-tests-socket", isDirectory: true)
             .appendingPathComponent(String(repeating: "deep-", count: 12), isDirectory: true)
