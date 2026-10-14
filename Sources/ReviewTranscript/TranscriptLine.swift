@@ -13,8 +13,6 @@ public struct TranscriptLine: Codable, Equatable, Sendable {
         self.text = text
     }
 
-    /// `seconds` to the millisecond, as every source gives its times: a
-    /// scene's frames and a subtitle's cue then name the same moment.
     static func milliseconds(_ seconds: TimeInterval) -> TimeInterval {
         (seconds * 1000).rounded() / 1000
     }

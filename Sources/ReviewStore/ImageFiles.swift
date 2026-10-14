@@ -1,4 +1,3 @@
-// ImageIO exists on Apple platforms only; elsewhere the module builds without images.
 #if canImport(ImageIO)
 import CoreGraphics
 import Foundation

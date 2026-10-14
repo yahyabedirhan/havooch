@@ -1,4 +1,3 @@
-// Apple's speech frameworks exist on macOS only; elsewhere the module builds without them.
 #if canImport(Speech)
 import AVFoundation
 import Foundation
@@ -41,7 +40,6 @@ public struct AppleSpeechRecognizer: SpeechRecognizing {
 
     @concurrent
     private static func transcribe(_ file: URL, locale: Locale, line: @escaping @Sendable (TranscriptLine) -> Void) async throws {
-        // A video with no sound has no speech: done, with no lines.
         guard try await !AVURLAsset(url: file).loadTracks(withMediaType: .audio).isEmpty else { return }
         guard SpeechTranscriber.isAvailable else {
             throw Problem("on-device speech transcription isn't available on this Mac")
@@ -55,7 +53,6 @@ public struct AppleSpeechRecognizer: SpeechRecognizing {
         let transcriber = SpeechTranscriber(
             locale: supported, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange]
         )
-        // The language's model is downloaded once per Mac, by the system.
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()
         }

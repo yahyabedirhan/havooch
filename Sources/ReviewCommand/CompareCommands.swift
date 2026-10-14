@@ -1,10 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch compare open | find | set | swap | start | exit`: the compare
-/// control's own actions in a project's window. Each is the operator's, as
-/// the person's clicks on the Compare button, a side, the swap button and
-/// Exit Compare are.
 enum CompareCommands {
     static let group = CommandGroup(
         name: "compare", summary: "compare two versions", section: .drive, commands: [
@@ -80,13 +76,11 @@ enum CompareCommands {
         ].map { $0.onAWindow() }
     )
 
-    /// `versionNumber`, refused in words.
     private static func version(_ text: String) throws(UsageError) -> Int {
         guard let number = VersionCommands.versionNumber(text) else { throw UsageError("`\(text)` isn't a version; write its number, `3` or `v3`") }
         return number
     }
 
-    /// The side `text` names, in any case.
     private static func side(_ text: String) throws(UsageError) -> CompareSide {
         guard let side = CompareSide(rawValue: text.lowercased()) else {
             throw UsageError("`\(text)` isn't a side; write `left` or `right`")

@@ -1,11 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch setup status | link | install | cancel`: what the Connect
-/// view's setup steps show and do. `status` is free: it changes nothing a
-/// person sees. `link`, `install` and `cancel` are the operator's, as Link,
-/// Run Command and Cancel are the person's. The app reads the disk and runs the
-/// install, so each asks it.
 enum SetupCommands {
     static let group = CommandGroup(
         name: "setup", summary: "link the command and install the skill", section: .drive, commands: [

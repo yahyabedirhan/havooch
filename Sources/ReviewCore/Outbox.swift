@@ -46,25 +46,13 @@ public enum Presence: String, Codable, Sendable, CaseIterable {
 /// in flight and when the listener was last heard belong to one run of the
 /// app.
 public struct Outbox: Codable, Equatable, Sendable {
-    /// Sent and not yet delivered, first in, first out.
     public private(set) var pending: [SendRef] = []
-    /// Delivered and not finished.
     public private(set) var taken: [SendRef] = []
-    /// The sends handed to a `wait` whose reply is being written, each with
-    /// the key of the listener session it went to. They stay in `pending`
-    /// and no other `wait` gets them.
     public private(set) var inFlight: [SendRef: String] = [:]
-    /// The listener of the last `wait`; nil until the first one.
     public private(set) var session: ListenerSession?
-    /// Whether a `wait` is open now.
     public private(set) var isWaitOpen = false
-    /// How many `ask`s are open now: the listener waits for an answer.
     public private(set) var openAsks = 0
-    /// When the listener last sent a command or closed its `wait`.
     public private(set) var lastHeard: Date?
-    /// The context this listener session has, by its review's
-    /// `contextKey` (a plain video's content hash, or `project-<slug>`):
-    /// the digest of the text it last got. Empty for a new session.
     public private(set) var contextSent: [String: String] = [:]
 
     /// How long a listener with a taken send counts as alive after its
@@ -159,11 +147,9 @@ public struct Outbox: Codable, Equatable, Sendable {
             requeued = taken
             pending.insert(contentsOf: taken, at: 0)
             taken = []
-            // The new session has read no video's context yet.
             contextSent = [:]
         }
         var listener = listener
-        // The same session keeps the time it started; a new one starts now.
         listener.since = (session?.key == listener.key ? session?.since : nil) ?? listener.since ?? now
         session = listener
         isWaitOpen = true
@@ -224,7 +210,6 @@ public struct Outbox: Codable, Equatable, Sendable {
     /// got it. It never left the line, so it's first in line again.
     public mutating func undelivered(_ ref: SendRef) {
         inFlight[ref] = nil
-        // The context that payload may have carried was lost with it.
         contextSent[ref.review.contextKey] = nil
     }
 
@@ -240,8 +225,6 @@ public struct Outbox: Codable, Equatable, Sendable {
         pending.removeAll { $0 == ref }
         inFlight[ref] = nil
     }
-
-    // MARK: - The video context
 
     /// The payload's `context` for a send of the review whose
     /// `contextKey` is `key` (a plain video's content hash), whose context
@@ -263,9 +246,6 @@ public struct Outbox: Codable, Equatable, Sendable {
         return contextSent[key] != Self.digest(text)
     }
 
-    /// A short name for `text` that's the same in every run of the app:
-    /// its length and its 64-bit FNV-1a hash. It tells a changed text from
-    /// the one a session has; it keeps no secret.
     static func digest(_ text: String) -> String {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         var count = 0

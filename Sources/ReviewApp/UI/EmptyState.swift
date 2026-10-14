@@ -1,18 +1,11 @@
 import SwiftUI
 
-/// No video is open: the native empty state, with "Open a Video" and "Try
-/// the Demo". The whole stage takes a dropped video; a
-/// dashed outline over it shows while a file is dragged over it. The demo
-/// is the launch video bundled in the app, on demo data (`DemoRun`); a
-/// build with no bundled demo leaves the button out.
 struct EmptyState: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
 
     var body: some View {
         ContentUnavailableView {
-            // The cat mark in place of a symbol: the first screen is the
-            // app's own.
             VStack(spacing: 14) {
                 HavoochMark(size: 76)
                 Text("Drop a Video Here")
@@ -35,9 +28,6 @@ struct EmptyState: View {
     }
 }
 
-/// The stage with no video takes a dropped video: the empty state and the
-/// home screen alike. A dashed outline over it shows while a file is
-/// dragged over it.
 private struct VideoDropTarget: ViewModifier {
     let model: WindowModel
     @State private var isTargeted = false
@@ -54,7 +44,6 @@ private struct VideoDropTarget: ViewModifier {
             } isTargeted: { isTargeted = $0 }
     }
 
-    /// The drop target, over the stage while a file is over it.
     @ViewBuilder private var dropOutline: some View {
         if isTargeted {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -69,7 +58,6 @@ private struct VideoDropTarget: ViewModifier {
 }
 
 extension View {
-    /// Takes a video dropped anywhere on this view, with the drop outline.
     func videoDropTarget(_ model: WindowModel) -> some View {
         modifier(VideoDropTarget(model: model))
     }

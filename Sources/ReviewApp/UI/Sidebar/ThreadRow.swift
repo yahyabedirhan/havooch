@@ -3,40 +3,20 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The words of a thread's row in the thread list: its name, its
-/// frame's time, its state, how fresh it is and its last message.
 struct ThreadSummary: Hashable {
-    /// `#3`, or `General`.
     var title: String
-    /// The frame's time as the player bar shows it (`0:12`); nil for General.
     var time: String?
-    /// In a project, the version the thread was raised on: `v2`, or
-    /// `Removed version`; nil on a plain video and for General.
     var version: String?
     var state: MessageState?
-    /// Who wrote the last message: `You`, `Asks` for the agent's question,
-    /// or the agent's name. Nil with no message.
     var writer: String?
-    /// Whether the agent wrote the last message: its logo leads the preview.
     var byAgent = false
-    /// The harness of the session that wrote the last message, for its
-    /// logo; nil for the person's message or a name no agent has.
     var writerAgent: KnownAgent?
-    /// The last message's words on one line. General with no message says
-    /// what it is for.
     var words: String
-    /// When the last message was written; nil with no message.
     var lastAt: Date?
-    /// Whether the agent waits for the person's answer on the thread.
     var waitsForAnswer: Bool
-    /// Whether an agent message came after the person last opened the
-    /// thread's view: the row shows the unread dot.
     var isUnread: Bool
-    /// The name of the agent that wrote the last message, for VoiceOver's
-    /// reading of a question.
     private var agent: String
 
-    /// `agent` names a message of the agent's kept with no session name.
     init(_ thread: ReviewThread, agent: String, version: VersionTag? = nil) {
         self.agent = agent
         title = thread.isGeneral ? "General" : "#\(thread.number)"
@@ -62,14 +42,10 @@ struct ThreadSummary: Hashable {
         }
     }
 
-    /// The last message with its writer: `You: Too fast here`.
     var preview: String {
         writer.map { "\($0): \(words)" } ?? words
     }
 
-    /// The row as one line, for VoiceOver: unread first when it is, the
-    /// number, the time, the state and the preview. A question is read as
-    /// the agent asking.
     var text: String {
         let state = waitsForAnswer ? "waiting for your answer" : self.state.map(StateLook.name)
         let preview = writer == "Asks" ? "\(agent) asks: \(words)" : self.preview
@@ -77,14 +53,9 @@ struct ThreadSummary: Hashable {
     }
 }
 
-/// What a row's menu offers; `WindowModel.rowActions` says which
-/// apply to a thread.
 enum RowAction: Identifiable {
-    /// Shows the thread's view, as a click on the row does.
     case open
-    /// Moves the player to the thread's frame and leaves the list showing.
     case showOnVideo
-    /// Deletes the thread's queued messages.
     case deleteQueued
 
     var id: Self { self }
@@ -106,8 +77,6 @@ enum RowAction: Identifiable {
     }
 }
 
-/// How long ago a thread's last message was written, as a row shows it:
-/// `now`, `3m`, `2h`, `4d`.
 enum RelativeTime {
     static func short(_ date: Date, now: Date) -> String {
         let seconds = max(now.timeIntervalSince(date), 0)
@@ -120,28 +89,11 @@ enum RelativeTime {
     }
 }
 
-/// One thread in the thread list: its keyframe thumbnail with its
-/// regions, its number and time, its state, how fresh it is, and a
-/// two-line preview of its last message. General has a symbol in the
-/// keyframe's place. A click shows the thread's view and moves the player
-/// to its frame. The row of the thread on the stage sits in a `well`.
-/// An unread row  has an 8 pt dot in the accent colour at its left,
-/// its title bold, its preview in the primary text colour and its time in
-/// the accent colour.
-/// Keyboard navigation reaches the row, with the system focus ring, and
-/// Space or Return opens it as a click does.
 struct ThreadRow: View {
     let model: WindowModel
     let thread: ReviewThread
-    /// Whether the thread's frame is on the stage.
     let isOnStage: Bool
-    /// Whether the row shows its version's tag; a version section of a
-    /// project's list names the version in its header instead.
-    /// VoiceOver reads the version either way.
     var showsVersion = true
-    /// Whether the thread was raised on another version than the one on
-    /// screen: its keyframe and its title are quieter, nothing else
-    /// changes (thread-list V5).
     var isOffVersion = false
 
     @State private var isHovered = false
@@ -149,17 +101,12 @@ struct ThreadRow: View {
     @Environment(\.colorScheme) private var colorScheme
 
     static let thumbnail = CGSize(width: 88, height: 50)
-    /// The space between the thumbnail and the words.
     static let spacing: CGFloat = 11
-    /// The row's inner padding at either side.
     static let padding: CGFloat = 10
-    /// The unread dot's diameter.
     static let unreadDot: CGFloat = 8
 
     var body: some View {
         let summary = ThreadSummary(thread, agent: model.agentName, version: model.versionTag(of: thread))
-        // A button, so keyboard navigation reaches the row and the system
-        // draws its focus ring; the style keeps the row's own look.
         Button { model.perform(.open, on: thread.id) } label: {
             HStack(alignment: .top, spacing: Self.spacing) {
                 picture
@@ -203,10 +150,8 @@ struct ThreadRow: View {
         }
     }
 
-    /// The row's outline: its fill, and the focus ring around it.
     private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
-    /// The thread on the stage, else the one under the pointer.
     private var fill: Color {
         if isOnStage { return palette[.well] }
         return isHovered ? palette[.controlHover] : .clear
@@ -218,7 +163,6 @@ struct ThreadRow: View {
                 .font(.body.weight(summary.isUnread ? .bold : .semibold).monospacedDigit())
                 .foregroundStyle(palette[isOffVersion ? .textSecondary : .textPrimary])
             if showsVersion, let version = summary.version {
-                // The version's tag: a soft fill, no edge (look rules).
                 Text(version)
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(palette[.textSecondary])
@@ -245,7 +189,6 @@ struct ThreadRow: View {
             }
             Spacer(minLength: 4)
             if let at = summary.lastAt {
-                // The relative time moves on while the row shows.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text(RelativeTime.short(at, now: context.date))
                         .font(.subheadline.monospacedDigit())
@@ -260,8 +203,6 @@ struct ThreadRow: View {
         .frame(height: 18)
     }
 
-    /// The last message on two lines, its writer in a quieter colour; the
-    /// agent's logo leads a message of the agent's.
     private func preview(_ summary: ThreadSummary) -> some View {
         let writer = summary.writer.map { Text("\($0): ").foregroundStyle(palette[.textTertiary]) } ?? Text("")
         let mark = summary.byAgent ? Text("\(agentMark(summary.writerAgent)) ") : Text("")
@@ -273,20 +214,14 @@ struct ThreadRow: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// The unread dot, centred in the gap at the row's left and on its
-    /// first line; it straddles the row's edge so the thumbnail keeps its
-    /// place.
     private var unreadDot: some View {
         Circle()
             .fill(palette[.accent])
             .frame(width: Self.unreadDot, height: Self.unreadDot)
-            // The first line is 18 pt high, under the row's 8 pt top padding.
             .offset(x: -Self.unreadDot / 2 + 1, y: 8 + (18 - Self.unreadDot) / 2)
             .accessibilityHidden(true)
     }
 
-    /// The agent's logo at the size of the preview's text, inside the
-    /// line; the sparkle of an agent with no logo (`AgentAvatar`'s symbol).
     private func agentMark(_ agent: KnownAgent?) -> Text {
         guard let agent, let logo = AgentLogoImage.image(for: agent, dark: colorScheme == .dark),
               let small = logo.copy() as? NSImage
@@ -315,9 +250,6 @@ struct ThreadRow: View {
     }
 }
 
-/// A thread row's button: the row as it is drawn, with no button chrome
-/// and no look of its own while pressed. The system focus ring still goes
-/// around it under keyboard navigation.
 private struct RowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

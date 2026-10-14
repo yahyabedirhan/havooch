@@ -1,8 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch player load | play | pause | seek | mute | unmute | volume |
-/// sound`.
 enum PlayerCommands {
     static let group = CommandGroup(
         name: "player", summary: "load, play, seek and set the sound", section: .drive, commands: [
@@ -11,7 +9,6 @@ enum PlayerCommands {
                 description: "Unlike open, it is the operator's: the video stays paused and the app stays where it is.",
                 examples: ["~/Movies/launch.mp4", "fixtures/sample.mp4 --window w2"], role: .operator
             ) { arguments, environment throws(UsageError) in
-                // Made absolute here: the app runs in another folder.
                 let path = try arguments.one("<path>")
                 return .send(.playerOpen(path: URL(fileURLWithPath: path, relativeTo: environment.workingDirectory).standardizedFileURL.path))
             },

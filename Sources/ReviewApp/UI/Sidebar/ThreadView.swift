@@ -2,11 +2,6 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The sidebar's view of one thread: a top bar with Back, the
-/// thread's number and time, and Previous and Next; then the conversation.
-/// No keyframe: the stage shows the thread's frame. Under the conversation,
-/// the live line says what the agent does now (`ThreadActivity`). The
-/// composer under it (`Composer`) writes on the thread.
 struct ThreadView: View {
     let model: WindowModel
     let thread: ReviewThread
@@ -27,9 +22,7 @@ struct ThreadView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 16 + MessageBubble.gap)
             }
-            // A conversation reads from its newest message, as in a chat.
             .defaultScrollAnchor(.bottom)
-            // Each thread opens at its newest message.
             .id(thread.id)
         }
         .accessibilityElement(children: .contain)
@@ -37,9 +30,6 @@ struct ThreadView: View {
     }
 }
 
-/// A thread's messages as a chat, in the order written: in the
-/// thread view and in the thread popover alike. The thread view offers the
-/// open question's quick replies under it.
 struct Conversation: View {
     let model: WindowModel
     let thread: ReviewThread
@@ -58,9 +48,6 @@ struct Conversation: View {
     }
 }
 
-/// The top bar of a thread view: Back with the count of the other threads
-/// that need the person, the thread's number and time in the middle, and
-/// Previous and Next at the trailing end.
 private struct ThreadViewBar: View {
     let model: WindowModel
     let thread: ReviewThread
@@ -141,8 +128,6 @@ private struct ThreadViewBar: View {
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
-        // A native borderless button: it dims while pressed and when
-        // disabled, and takes the focus ring with keyboard navigation.
         .buttonStyle(.borderless)
         .pressedByKeys(in: model) { model.showNeighbour(forward: forward) }
         .disabled(model.neighbour(forward: forward) == nil)
@@ -151,7 +136,6 @@ private struct ThreadViewBar: View {
     }
 }
 
-/// General with no message yet: what it is for.
 private struct GeneralIntro: View {
     @Environment(\.palette) private var palette
 

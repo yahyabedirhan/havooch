@@ -1,37 +1,20 @@
 import Foundation
 import ReviewSetup
 
-/// Setup as `state`, `setup status`, `setup link`, `setup install` and
-/// `setup cancel` report it. Each detection is `detected`, `notDetected`
-/// or `cannotKnow`: never "missing".
 extension StateReport {
     nonisolated struct Setup: Encodable, Equatable {
         var commandLine: CommandLine
-        /// One per harness Havooch knows, in the catalog's order.
         var harnesses: [HarnessEntry]
-        /// The running install or the last one; `null` before the first.
         var install: Install?
-        /// Whether an agent's `wait` ever opened on this Mac's data.
         var agentConnectedOnce = false
-        /// Whether setup still needs the person: the command line or the
-        /// skill isn't detected, and no agent has ever connected. The
-        /// connect button shows its dot while it does.
         var needsFinishing = false
 
-        /// The `havooch` command's link in `~/.local/bin`.
         struct CommandLine: Encodable, Equatable {
             var detection: String
-            /// The link file.
             var path: String
-            /// Where the link points; `null` with no link.
             var destination: String?
-            /// The command in this app's bundle that Link links; `null` in
-            /// a build that isn't bundled.
             var command: String?
-            /// Why the last Link failed; `null` once one works.
             var failure: String?
-            /// The line that makes the link in a terminal, shown when Link
-            /// failed; `null` otherwise.
             var fallback: String?
 
             func encode(to encoder: any Encoder) throws {
@@ -49,19 +32,12 @@ extension StateReport {
             }
         }
 
-        /// One harness: whether it looks installed, whether its skill is
-        /// detected, and its prompt.
         struct HarnessEntry: Encodable, Equatable {
             var name: String
-            /// The harness's name for `setup install --harness` and `-a`.
             var installName: String
-            /// A best guess from its app and command folders.
             var presence: String
             var skill: String
-            /// The skill's folder when it's detected; else `null`.
             var skillFolder: String?
-            /// The prompt that makes its agent listen to the open video;
-            /// `null` with no video open.
             var prompt: String?
 
             func encode(to encoder: any Encoder) throws {
@@ -79,20 +55,12 @@ extension StateReport {
             }
         }
 
-        /// One skill install.
         struct Install: Encodable, Equatable {
-            /// `running`, `done`, `failed`, `cancelled` or `noNode`;
-            /// `planned` in a `setup install --dry-run`'s answer.
             var state: String
-            /// The install names of the harnesses it is for.
             var harnesses: [String]
-            /// The command it runs.
             var command: String
-            /// The same install into one repository, for the person to copy.
             var repositoryCommand: String
-            /// `npx`'s exit status once it ended; else `null`.
             var exitStatus: Int?
-            /// The lines it wrote, the oldest first.
             var log: [String]
 
             func encode(to encoder: any Encoder) throws {
@@ -122,7 +90,6 @@ extension StateReport {
                 self.log = log
             }
 
-            /// `install: running for Codex, Pi: npx skills add …`.
             var line: String {
                 let names = harnesses.compactMap { HarnessCatalog.harness(named: $0)?.name }.joined(separator: ", ")
                 let status = exitStatus.map { " (exit status \($0))" } ?? ""
@@ -149,7 +116,6 @@ extension StateReport {
             self.install = install
         }
 
-        /// `setup` as the desk has it now; prompts name `target`.
         @MainActor init(_ desk: SetupDesk, target: PromptTarget?, agentConnectedOnce: Bool = false) {
             self.agentConnectedOnce = agentConnectedOnce
             needsFinishing = !desk.isDetected && !agentConnectedOnce
@@ -168,8 +134,6 @@ extension StateReport {
             install = desk.install.map(Install.init)
         }
 
-        /// `setup: command line detected; skill detected for Claude Code`,
-        /// the one line `state` prints.
         var line: String {
             let skills = harnesses.filter { $0.skill == Detection.detected.rawValue }.map(\.name)
             let skillWords = skills.isEmpty ? "skill not detected for any harness" : "skill detected for \(skills.joined(separator: ", "))"
@@ -177,8 +141,6 @@ extension StateReport {
             return "setup: command line \(Self.words(commandLine.detection)); \(skillWords)\(installWords)"
         }
 
-        /// What `setup status` prints: the link, a row per harness, and the
-        /// install with its last lines.
         var lines: String {
             var lines = ["command line: \(Self.words(commandLine.detection)), \(commandLine.path)"
                 + (commandLine.destination.map { " links to \($0)" } ?? "")]
@@ -199,11 +161,8 @@ extension StateReport {
             return lines.joined(separator: "\n") + "\n"
         }
 
-        /// How many of the install's last lines `setup status` prints;
-        /// `--json` has them all.
         static let logLinesShown = 20
 
-        /// A detection as words: `not detected`, `cannot know`.
         static func words(_ detection: String) -> String {
             switch Detection(rawValue: detection) {
             case .detected: "detected"

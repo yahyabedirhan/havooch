@@ -2,14 +2,6 @@ import Foundation
 import ReviewConfig
 import ReviewWire
 
-/// `havooch project new | add | list`. A
-/// project holds the versions of one video in `config.toml`. The agent
-/// makes one the first time a send asks for a change (`new`, whose v1 is
-/// the video under review, with its threads), and appends each new render
-/// (`add`, which shows it and brings the window forward). Both go through
-/// the app, which moves the review and opens the window without a lease.
-/// The app launches when it isn't running. `list` reads the file
-/// itself and needs no app.
 enum ProjectCommands {
     static let group = CommandGroup(
         name: "project", summary: "make projects and add versions to them", section: .feedback, commands: [
@@ -48,7 +40,6 @@ enum ProjectCommands {
         ]
     )
 
-    /// `path` made absolute here: the app runs in another folder.
     private static func absolute(_ path: String, _ environment: CommandEnvironment) -> URL {
         URL(fileURLWithPath: path, relativeTo: environment.workingDirectory).standardizedFileURL
     }
@@ -59,19 +50,14 @@ enum ProjectCommands {
         }
     }
 
-    /// `project new`: the app makes the project, launched in the
-    /// background when it doesn't run.
     static func new(slug: String, video: URL, title: String?, _ context: AppCommands.Context) -> CommandResult {
         OpenCommand.ask(.projectNew(slug: slug, path: video.path, title: title), about: video, named: "project new", inFront: false, context)
     }
 
-    /// `project add`: the app appends the version and shows it in front.
     static func add(slug: String, video: URL, label: String?, _ context: AppCommands.Context) -> CommandResult {
         OpenCommand.ask(.projectAdd(slug: slug, path: video.path, label: label), about: video, named: "project add", inFront: true, context)
     }
 
-    /// `project list`: each project with its versions, read from the file
-    /// with no app; exit 1 when the file doesn't read.
     static func list(json: Bool, environment: CommandEnvironment) -> CommandResult {
         let location = ConfigCommands.location(environment)
         let projects: [ProjectEntry]
@@ -100,7 +86,6 @@ enum ProjectCommands {
         return CommandResult(output: lines.joined(separator: "\n") + "\n")
     }
 
-    /// One project as `project list --json` prints it.
     private struct Listed: Encodable {
         var slug: String
         var title: String

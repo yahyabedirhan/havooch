@@ -2,19 +2,12 @@ import ReviewCore
 import ReviewWire
 import SwiftUI
 
-/// The threads on the frame on screen: each one's region outlines,
-/// and one number badge per thread at its first region's top-left corner,
-/// or the picture's top-left corner for a thread on the whole frame. A
-/// click on a badge opens its thread popover. Nothing opens by itself.
 struct FrameMarks: View {
     let model: WindowModel
     let geometry: VideoFrameGeometry
-    /// While comparing, the side whose frame it marks; nil for the
-    /// window's one video.
     var side: CompareSide?
 
     static let badgeSize: CGFloat = 20
-    /// How far a whole-frame badge sits in from the picture's corner.
     private static let inset: CGFloat = 10
 
     var body: some View {
@@ -34,15 +27,11 @@ struct FrameMarks: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// Where `mark`'s badge is centred: its first region's corner, else the
-    /// picture's corner, beside the badges of the threads before it there.
     private func anchor(of mark: WindowModel.FrameMark, index: Int, in marks: [WindowModel.FrameMark]) -> CGPoint {
         if let region = mark.regions.first {
             let rect = geometry.rect(of: region)
             return CGPoint(x: rect.minX, y: rect.minY)
         }
-        // On one frame, only one thread can be on the whole frame; the
-        // offset only keeps two from covering each other if that changes.
         let before = marks[..<index].filter(\.regions.isEmpty).count
         return CGPoint(
             x: geometry.frame.minX + Self.inset + Self.badgeSize / 2 + CGFloat(before) * (Self.badgeSize + 4),
@@ -51,8 +40,6 @@ struct FrameMarks: View {
     }
 }
 
-/// A thread's number on the frame: a rounded square for a thread with a
-/// region, a circle for one on the whole frame, as its pin on the bar.
 private struct FrameBadge: View {
     let number: Int
     let hasRegion: Bool
@@ -60,8 +47,6 @@ private struct FrameBadge: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // Drawn by SwiftUI alone, with no tooltip: a tooltip makes the badge
-        // an AppKit view, which the popover's text view then hides.
         Text("\(number)")
             .font(.system(size: number > 99 ? 8.5 : 11, weight: .bold, design: .rounded))
             .monospacedDigit()

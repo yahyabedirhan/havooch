@@ -1,20 +1,10 @@
 import ReviewCore
 import SwiftUI
 
-/// The words of the footer's presence pill: one word
-/// on the pill, and on hover who the agent is and what happens to a send
-/// made now. A click on the pill opens the Connect view.
 struct PresencePill: Equatable {
-    /// "Listening", "Working", "Reconnecting" or "No agent".
     var title: String
-    /// The hover line, which names the agent: "Claude Code is listening".
     var help: String
-    /// The agent whose logo the pill shows in place of its glyph: the
-    /// listener's harness while it listens, works or reconnects. Nil with
-    /// no listener, or for a name no known agent has: the pill shows its glyph.
     var logo: KnownAgent?
-    /// Whether the agent from the last run is reconnecting after a relaunch.
-    /// The pill uses the working colour and its logo turns grey.
     var isReconnecting = false
 
     init(presence: Presence, session: String?, pendingSends: Int) {
@@ -34,7 +24,6 @@ struct PresencePill: Equatable {
         }
     }
 
-    /// The pill while `agent`, the last run's listener, reconnects.
     static func reconnecting(_ agent: String, pendingSends: Int) -> PresencePill {
         var pill = PresencePill(presence: .absent, session: agent, pendingSends: pendingSends)
         pill.title = "Reconnecting"
@@ -44,7 +33,6 @@ struct PresencePill: Equatable {
         return pill
     }
 
-    /// The pill for `phase`, with `pendingSends` in line.
     static func of(_ phase: ListenerQueue.Phase, presence: Presence, pendingSends: Int) -> PresencePill {
         switch phase {
         case .reconnecting(let session, _): reconnecting(session.name, pendingSends: pendingSends)
@@ -57,8 +45,6 @@ struct PresencePill: Equatable {
         pendingSends > 0 ? " \(pendingSends) \(pendingSends == 1 ? "send waits" : "sends wait") for it." : ""
     }
 
-    /// The pill's glyph, an SF Symbol: the shape says the presence
-    /// as well as the colour.
     static func glyph(_ presence: Presence) -> String {
         switch presence {
         case .listening: "antenna.radiowaves.left.and.right"
@@ -68,14 +54,9 @@ struct PresencePill: Equatable {
     }
 }
 
-/// The presence chip: the agent's harness logo, or a glyph, and a word in a
-/// soft capsule of the presence's colour, with a chevron that turns while
-/// the Connect view shows. The glyph pulses while the agent works, unless
-/// motion is reduced; the word says it beside a logo. Hover names the agent.
 struct PresenceChip: View {
     let presence: Presence
     let pill: PresencePill
-    /// Whether the Connect view shows: the chevron points down.
     var isOpen = false
 
     @State private var hover = false

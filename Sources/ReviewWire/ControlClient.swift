@@ -30,7 +30,6 @@ public struct UnixSocketTransport: ControlTransport {
     public init() {}
 
     public func exchange(_ request: Data, socket: URL, timeout: TimeInterval?) throws(ControlTransportFailure) -> Data {
-        // No file is no app, whatever the path's length.
         guard FileManager.default.fileExists(atPath: socket.path) else { throw .notRunning }
         guard let address = UnixSocket.address(socket.path) else { throw .failed(UnixSocket.tooLong(socket.path)) }
         let descriptor = UnixSocket.make()
@@ -39,7 +38,6 @@ public struct UnixSocketTransport: ControlTransport {
         UnixSocket.configure(descriptor, timeout: timeout)
         guard UnixSocket.connectSocket(descriptor, to: address) == 0 else {
             let code = errno
-            // No file, or a file nobody listens on (left by an app that crashed).
             if code == ENOENT || code == ECONNREFUSED { throw .notRunning }
             throw .failed("couldn't reach \(socket.path): \(UnixSocket.reason(code))")
         }
@@ -107,8 +105,6 @@ public struct ControlClient: Sendable {
             case .failed(let why): return .failure(.failed(why))
             }
         }
-        // An app that goes away while it holds a request closes with no
-        // reply, after its heartbeat's spaces at most.
         if data.allSatisfy({ $0 == UInt8(ascii: " ") }) { return .failure(.notRunning) }
         do throws(ControlProtocolError) {
             return .success(try ControlReply.decode(data))

@@ -55,7 +55,6 @@ public struct ControlReply: Codable, Equatable, Sendable {
     public func encoded() -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        // Encoding a struct of strings, numbers and booleans can't fail.
         return try! encoder.encode(self)
     }
 

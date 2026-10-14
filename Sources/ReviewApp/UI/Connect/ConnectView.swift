@@ -1,26 +1,14 @@
 import SwiftUI
 
-/// The Connect view: the sidebar's view for connecting an agent,
-/// in place of the threads, with Back. From connect-flow V6 and
-/// connect-view V2 (`docs/prototypes/2026-10-08-lab/agent-onboarding/`):
-/// numbered steps, 1 the `havooch` command line, 2 the `/havooch-mate`
-/// skill, 3 your agent, joined by a thin line. The first step not done is
-/// open; a done step folds to one line, and a click on its title opens it.
-/// While an agent listens, or reconnects, the listener card leads and the
-/// setup steps fold to one "Set up" line.
 struct ConnectView: View {
     let model: WindowModel
 
-    /// nil follows the timeline (the step not done is open); a click on a
-    /// step's title pins it open or shut.
     @State private var commandLinePinned: Bool?
     @State private var skillPinned: Bool?
-    /// While an agent listens, whether the setup steps show under "Set up".
     @State private var setupOpen = false
     @Environment(\.palette) private var palette
 
     private var setup: SetupDesk { model.app.setup }
-    /// The first step not done: 1, 2 or 3.
     private var activeStep: Int { !setup.isLinked ? 1 : !setup.isSkillDetected ? 2 : 3 }
 
     var body: some View {
@@ -42,8 +30,6 @@ struct ConnectView: View {
             .padding(.horizontal, Metrics.sidebarPadding)
             .padding(.top, 10)
             .padding(.bottom, 4)
-            // Each second: a listener that goes, or a reconnect that runs
-            // out, changes the view with no event.
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 content(phase: model.listenerPhase(at: context.date), at: context.date)
             }
@@ -72,12 +58,9 @@ struct ConnectView: View {
                                 model: model, open: skillOpen, isLast: listening, toggle: { skillPinned = !skillOpen }
                             )
                         }
-                        // The tour's tools step rings the two setup steps.
                         .coachRing(model.tourRings(.setupSteps), radius: 6)
                     }
                     if !listening {
-                        // The line runs on between the setup steps and the
-                        // agent step, leaving room for the tour's rings.
                         Rectangle()
                             .fill(setup.isSkillDetected ? palette[.stateDone].opacity(0.5) : palette[.track])
                             .frame(width: 1.5, height: 30)
@@ -114,8 +97,6 @@ struct ConnectView: View {
     }
 }
 
-/// The banner over the steps after Send with no agent: the messages
-/// wait, then they were delivered.
 struct OutboxBannerLine: View {
     let banner: OutboxBanner
     @Environment(\.palette) private var palette
@@ -140,14 +121,10 @@ struct OutboxBannerLine: View {
     }
 }
 
-// MARK: - The step timeline
-
-/// How a step looks on the timeline.
 enum StepLook {
     case todo, active, done, failed
 }
 
-/// A step's circle: its number, or a check once it's done.
 struct StepDot: View {
     let number: Int
     let look: StepLook
@@ -179,9 +156,6 @@ struct StepDot: View {
     }
 }
 
-/// One step: the dot and the line down to the next step, a title line
-/// with a status word, and the body while it's open. A step with `toggle`
-/// opens and folds on a click on its title line.
 struct Step<Content: View>: View {
     let number: Int
     let title: CodeLabel
@@ -189,7 +163,6 @@ struct Step<Content: View>: View {
     let status: String
     let statusColor: Color
     var isLast = false
-    /// The space under the step, where the line runs on to the next one.
     var gap: CGFloat = 18
     let open: Bool
     var toggle: (() -> Void)?
@@ -249,10 +222,7 @@ struct Step<Content: View>: View {
     }
 }
 
-/// A one-line label with a code name on a soft chip: "`havooch` command
-/// line".
 struct CodeLabel: View {
-    /// The code name, in monospace: `havooch`, `/havooch-mate`.
     var code: String?
     let rest: String
     @Environment(\.palette) private var palette
@@ -271,7 +241,6 @@ struct CodeLabel: View {
         .fixedSize()
     }
 
-    /// The label as words, for VoiceOver.
     var text: String { [code, rest].compactMap(\.self).joined(separator: " ") }
 
     static let commandLine = CodeLabel(code: "havooch", rest: "command line")
@@ -279,7 +248,6 @@ struct CodeLabel: View {
     static let agent = CodeLabel(rest: "Your agent")
 }
 
-/// Secondary words under a step's title.
 struct StepDetail: View {
     let text: String
     @Environment(\.palette) private var palette
@@ -292,7 +260,6 @@ struct StepDetail: View {
     }
 }
 
-/// A quiet note under a step.
 struct StepNote: View {
     let text: String
     @Environment(\.palette) private var palette

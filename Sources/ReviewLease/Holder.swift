@@ -32,8 +32,6 @@ public struct Holder: Codable, Hashable, Sendable {
         ("PI_SESSION_ID", "Pi", ["pi"]),
     ]
 
-    /// The shells a command runs through, which never identify an agent:
-    /// the holder is the nearest ancestor that isn't one.
     static let shells: Set<String> = ["sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "tcsh", "csh", "nu"]
 
     /// The variable that names the holder's key for every command run with
@@ -58,7 +56,6 @@ public struct Holder: Codable, Hashable, Sendable {
         return holder
     }
 
-    /// The holder its session, else its process, makes it.
     private static func automatic(variables: [String: String], place: String, processes: any ProcessTable) -> Holder {
         let sessions = sessionVariables.filter { !(variables[$0.variable] ?? "").isEmpty }
         if let first = sessions.first {
@@ -72,8 +69,6 @@ public struct Holder: Codable, Hashable, Sendable {
         return Holder(key: "process:\(agent.pid)@\(started)", name: agent.name, place: place)
     }
 
-    /// Of `sessions`, the one whose harness runs as the nearest ancestor of
-    /// `processes.currentPID`; nil when none of them is found.
     private static func nearestHarness(
         of sessions: [(variable: String, agent: String, processes: Set<String>)], _ processes: any ProcessTable
     ) -> (variable: String, agent: String, processes: Set<String>)? {
@@ -86,12 +81,9 @@ public struct Holder: Codable, Hashable, Sendable {
         return nil
     }
 
-    /// The nearest ancestor of `processes.currentPID` that isn't a shell;
-    /// the farthest shell when every readable ancestor up to launchd is one.
     private static func ancestor(_ processes: any ProcessTable) -> ProcessRecord? {
         guard var pid = processes.process(processes.currentPID)?.parent else { return nil }
         var farthest: ProcessRecord?
-        // A process table is a tree, but never trust it not to loop.
         for _ in 0..<64 where pid > 1 {
             guard let process = processes.process(pid) else { break }
             let name = process.name.hasPrefix("-") ? String(process.name.dropFirst()) : process.name

@@ -1,8 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch context set`: the open video's context note, which goes to the
-/// agent with the next send.
 enum ContextCommands {
     static let group = CommandGroup(
         name: "context", summary: "set the open video's context note", section: .drive, commands: [

@@ -2,20 +2,11 @@ import AppKit
 import ReviewWire
 import SwiftUI
 
-/// One player window's scene: the `WindowGroup`'s content for a target.
-/// As it appears, it takes the `WindowModel` made for it, or a
-/// new empty one, and its scene value follows what the window holds. It
-/// hands SwiftUI's `openWindow` to the registry, so the app can open a
-/// window from a control command, and tells the app which AppKit window
-/// shows the model.
 struct WindowScene: View {
-    /// The scene's id in `HavoochApp`.
     static let sceneID = "player"
 
     let app: AppModel
-    /// What the window holds, as SwiftUI keeps it for the scene.
     @Binding var target: WindowTarget?
-    /// The lease as the header's agent-control icon draws it, and its Stop.
     let lease: AgentControlIcon
     let stopLease: () -> Void
 
@@ -49,8 +40,6 @@ struct WindowScene: View {
     }
 }
 
-/// The player window that has the keys, for the menus: File › Close Video
-/// and the Playback menu act on it.
 extension FocusedValues {
     var playerWindow: WindowModel? {
         get { self[PlayerWindowKey.self] }
@@ -62,7 +51,6 @@ private struct PlayerWindowKey: FocusedValueKey {
     typealias Value = WindowModel
 }
 
-/// Tells `found` the AppKit window a view is in, once it's in one.
 private struct WindowReader: NSViewRepresentable {
     let found: (NSWindow) -> Void
 

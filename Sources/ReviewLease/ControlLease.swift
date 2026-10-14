@@ -107,30 +107,21 @@ public struct ControlLease: Equatable, Sendable {
         }
     }
 
-    /// A `take` waiting in line: who, and until when it waits.
     struct Waiter: Equatable, Sendable {
         var holder: Holder
         var until: Date
     }
 
-    /// A holder the person stopped, refused until `until`.
     struct Bar: Equatable, Sendable {
         var holder: Holder
         var until: Date
     }
 
-    /// The lease as of the last call; it may have ended since, so it's
-    /// read through `current(at:)`.
     private var term: LeaseTerm?
-    /// The `take`s waiting for the lease, first come first: one place per
-    /// holder key.
     private var queue: [Waiter] = []
-    /// The holders the person stopped: one per holder key.
     private var bars: [Bar] = []
 
     public init() {}
-
-    // MARK: - A relaunch's handover
 
     /// The launch environment's variable a relaunch hands the lease over in.
     public static let handoverVariable = "HAVOOCH_CONTROL_LEASE"
@@ -152,11 +143,8 @@ public struct ControlLease: Equatable, Sendable {
     public static func handover(_ term: LeaseTerm) -> [String: String] {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        // Encoding strings and numbers can't fail.
         return [handoverVariable: String(decoding: try! encoder.encode(term), as: UTF8.self)]
     }
-
-    // MARK: - Reading
 
     /// The lease held at `now`, or nil when it's free.
     public func current(at now: Date) -> LeaseTerm? {
@@ -184,8 +172,6 @@ public struct ControlLease: Equatable, Sendable {
         ([current(at: now)?.ends].compactMap(\.self) + bars.filter { now < $0.until }.map(\.until)).min()
     }
 
-    // MARK: - Requests
-
     /// Lifts the bars that have ended by `now`, ends a lease that has run
     /// out by then, and hands a free lease to the first waiter whose wait
     /// hasn't run out, as a `take` does: the transitions, none when nothing
@@ -199,7 +185,6 @@ public struct ControlLease: Equatable, Sendable {
             transitions.append(.ended(term.holder, term.ends >= term.capped ? .capped : .expired))
         }
         guard term == nil else { return transitions }
-        // A wait that ran out leaves the line; its `take` is refused as such.
         queue.removeAll { now >= $0.until }
         guard !queue.isEmpty else { return transitions }
         let next = queue.removeFirst()
@@ -214,14 +199,12 @@ public struct ControlLease: Equatable, Sendable {
     /// or while `holder` is barred.
     public mutating func use(by holder: Holder, at now: Date) -> Decision {
         var transitions = settle(at: now)
-        // A barred holder never holds the lease: Stop ended it.
         guard !isBarred(holder) else { return Decision(answer: .failure(.stopped), transitions: transitions) }
         if var term {
             guard term.holder.key == holder.key else {
                 return Decision(answer: .failure(.inUse(term)), transitions: transitions)
             }
             term.ends = min(max(term.ends, now.addingTimeInterval(Self.renewal)), term.capped)
-            // The holder's name and place are as its latest request says.
             term.holder = holder
             self.term = term
             transitions.append(.renewed(holder))
@@ -310,13 +293,10 @@ public struct ControlLease: Equatable, Sendable {
         return Decision(answer: .success(term), transitions: transitions)
     }
 
-    /// Whether `holder` is barred: asked after `settle`, so a bar listed is
-    /// in force.
     private func isBarred(_ holder: Holder) -> Bool {
         bars.contains { $0.holder.key == holder.key }
     }
 
-    /// `date` as the agent reads it in `timeZone`: `12:05:00`.
     static func clock(_ date: Date, _ timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

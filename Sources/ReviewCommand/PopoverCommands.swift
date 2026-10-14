@@ -1,11 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch popover open`: the comment popover on the player's frame. With
-/// no `--thread` it opens for a new message, as C or a drawn rectangle
-/// does; with `--thread` it opens on that thread's frame, as a click on its
-/// pin or its badge does. The two take different words, so one command
-/// refuses the other's.
 enum PopoverCommands {
     static let group = CommandGroup(
         name: "popover", summary: "open the comment popover", section: .drive, commands: [

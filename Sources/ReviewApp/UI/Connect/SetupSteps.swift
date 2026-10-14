@@ -1,9 +1,6 @@
 import ReviewSetup
 import SwiftUI
 
-/// Step 1, the `havooch` command line: Link puts it in
-/// `~/.local/bin`, and done reads "Linked". A failed link shows the line
-/// to run in a terminal. Only a detected link counts.
 struct CommandLineStep: View {
     let model: any SetupSteering
     let open: Bool
@@ -41,24 +38,17 @@ struct CommandLineStep: View {
         }
     }
 
-    /// `path` with the home folder written `~`.
     static func home(_ path: String) -> String {
         let home = NSHomeDirectory()
         return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }
 }
 
-/// Step 2, the `/havooch-mate` skill: a row per harness with what is
-/// detected, the install command for every harness found without it in a
-/// `RunBox` with Run Command, its live log and Cancel, and the command for
-/// one repository. A ✓ only for what is detected; anything else is a
-/// neutral "Not detected".
 struct SkillStep: View {
     let model: any SetupSteering
     let open: Bool
     var isLast = false
     let toggle: () -> Void
-    /// Whether the command for one repository shows.
     @State private var repoOpen = false
     @Environment(\.palette) private var palette
 
@@ -113,7 +103,6 @@ struct SkillStep: View {
                 StepNote(text: "The install stopped with exit status \(install.exitStatus.map(String.init) ?? "unknown")"
                     + (install.log.last.map { ": \($0)" } ?? "."))
             }
-            // While it runs, the box shows the install that runs; else the one Run Command starts.
             let harnesses = isRunning ? install?.install.harnesses ?? lacking : lacking
             if !harnesses.isEmpty {
                 StepDetail(text: "Run Command installs it for \(Self.list(harnesses.map(\.name))) in your login shell:")
@@ -136,15 +125,12 @@ struct SkillStep: View {
         }
     }
 
-    /// "Codex", "Codex and Pi", "Claude Code, Codex and Pi".
     static func list(_ names: [String]) -> String {
         guard let last = names.last else { return "" }
         return names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
     }
 }
 
-/// A check and a word for what is detected, else a neutral "Not detected"
-/// with an open circle: never a cross.
 struct DetectionWord: View {
     let detected: Bool
     let word: String
@@ -160,8 +146,6 @@ struct DetectionWord: View {
     }
 }
 
-/// While an agent listens, the setup steps folded to one line: "Set
-/// up" with a check, or an open circle, for each step. A click shows them.
 struct SetupLine: View {
     let setup: SetupDesk
     @Binding var open: Bool

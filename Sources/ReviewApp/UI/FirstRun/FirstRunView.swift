@@ -2,18 +2,9 @@ import ReviewCore
 import ReviewSetup
 import SwiftUI
 
-/// The first-run window's content, from first-run V1 "Step wizard
-/// (first launch)" (`docs/prototypes/2026-10-08-lab/agent-onboarding/
-/// first-run-V1/`): a progress bar of four steps, Welcome, Tools, Connect
-/// and Try it, then Skip Setup, Back and the next step in a footer. Tools
-/// and Connect show the Connect view's own steps (`CommandLineStep`,
-/// `SkillStep`, `HarnessPicker`, `HarnessReadiness`) on the first run's
-/// model, whose prompt is the demo prompt. Nothing waits on the
-/// person: each step can be passed with nothing done.
 struct FirstRunView: View {
     let app: AppModel
 
-    /// The window's size, as first-run V1 draws it.
     static let size = CGSize(width: 760, height: 540)
 
     private var firstRun: FirstRun { app.firstRun }
@@ -49,7 +40,6 @@ struct FirstRunView: View {
         .environment(\.palette, palette)
     }
 
-    /// Whether a step's work is done, for its check on the progress bar.
     private func isDone(_ step: FirstRunStep) -> Bool {
         switch step {
         case .welcome: firstRun.step.index > 0
@@ -58,8 +48,6 @@ struct FirstRunView: View {
         case .tryIt: false
         }
     }
-
-    // MARK: Footer
 
     @ViewBuilder private var footer: some View {
         FirstRunFooter(app: app, nextTitle: nextTitle, hint: hint)
@@ -89,8 +77,6 @@ struct FirstRunView: View {
     }
 }
 
-/// The footer: Skip Setup, a hint, Back, and the step's main button. A
-/// problem with Link, Install or the demo shows in place of the hint.
 private struct FirstRunFooter: View {
     let app: AppModel
     let nextTitle: String
@@ -143,10 +129,6 @@ private struct FirstRunFooter: View {
     }
 }
 
-// MARK: - Progress
-
-/// Four segments, the reached ones filled, each with its title and a
-/// check once its work is done. A click on one shows that step.
 private struct FirstRunProgress: View {
     let firstRun: FirstRun
     let isDone: (FirstRunStep) -> Bool
@@ -184,7 +166,6 @@ private struct FirstRunProgress: View {
     }
 }
 
-/// A step's heading: a title and a line under it.
 private struct FirstRunHeader: View {
     let title: String
     let detail: String
@@ -202,10 +183,6 @@ private struct FirstRunHeader: View {
     }
 }
 
-// MARK: - Welcome
-
-/// What Havooch is, as one loop: pause and write, the agent works, it
-/// answers here; and that it works with the agent the person already uses.
 private struct FirstRunWelcome: View {
     @Environment(\.palette) private var palette
 
@@ -290,10 +267,6 @@ private struct FirstRunWelcome: View {
     }
 }
 
-// MARK: - Tools
-
-/// The command line and the skill: the Connect view's steps 1 and 2. A
-/// step not done is open; a done one folds, and a click on its title opens it.
 private struct FirstRunTools: View {
     let firstRun: FirstRun
     @State private var commandLinePinned: Bool?
@@ -328,11 +301,6 @@ private struct FirstRunTools: View {
     private var skillOpen: Bool { skillPinned ?? (setup.isLinked && !setup.isSkillDetected) }
 }
 
-// MARK: - Connect
-
-/// The harness picker and what Havooch detects of the picked one, from the
-/// Connect view's step 3, with the demo prompt to paste, and whether
-/// an agent listens. There is no "waiting for you" state.
 private struct FirstRunConnect: View {
     let firstRun: FirstRun
     let agentConnected: Bool
@@ -385,10 +353,6 @@ private struct FirstRunConnect: View {
     }
 }
 
-// MARK: - Try it
-
-/// How the loop goes, on a picture of the demo video: pause, point and
-/// write, send. Open the Demo in the footer opens it.
 private struct FirstRunTryIt: View {
     let agentConnected: Bool
     @Environment(\.palette) private var palette
@@ -457,10 +421,6 @@ private struct FirstRunTryIt: View {
     }
 }
 
-// MARK: - A picture of the demo video
-
-/// A drawn frame of the demo video, a landing page on the letterbox, with
-/// the dimmed region a message points at when `region` asks. Decoration.
 private struct DemoFramePicture: View {
     var region = false
     @Environment(\.palette) private var palette
@@ -468,7 +428,6 @@ private struct DemoFramePicture: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width, height = geometry.size.height
-            // What the video shows, light on its dark ground, as a label on the frame is.
             let mark = palette[.sizeLabel]
             ZStack(alignment: .topLeading) {
                 palette[.letterbox]

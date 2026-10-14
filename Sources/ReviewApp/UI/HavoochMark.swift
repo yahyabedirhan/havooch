@@ -1,13 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// The cat mark: the head of Havuç folded from paper, the app's logo (logo v3,
-/// `assets/images/logo/v3-paper-cat/`), as the vector PDFs `make logo` draws
-/// into `Packaging/Logo/`. At 24 points and under it's the small cut:
-/// cropped tight, with bigger eyes and a bolder face, so the catchlights,
-/// the nose and the mouth still read at 16 points. From 32 points it's the
-/// full mark. The app icon follows the same rule. Decoration: the app's
-/// name beside it says what it is.
 struct HavoochMark: View {
     let size: CGFloat
 
@@ -27,11 +20,7 @@ struct HavoochMark: View {
     }
 }
 
-/// Loads the cat mark's PDFs: from the app bundle's `Logo` resources
-/// (`make bundle` copies `Packaging/Logo/` there), or from the source
-/// tree's `Packaging/Logo/` for a build that isn't bundled.
 enum HavoochMarkImage {
-    /// The largest size, in points, that shows the small cut.
     static let smallCutLimit: CGFloat = 24
 
     static let folder: URL? = {
@@ -43,7 +32,6 @@ enum HavoochMarkImage {
         return FileManager.default.fileExists(atPath: source.path) ? source : nil
     }()
 
-    /// The full mark, or the small cut; nil when the folder lacks the file.
     static func image(small: Bool) -> NSImage? {
         let name = small ? "havooch-mark-small" : "havooch-mark"
         if let cached = cache[name] { return cached }

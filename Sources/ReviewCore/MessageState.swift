@@ -35,7 +35,6 @@ public enum MessageState: String, Codable, Sendable, CaseIterable {
         self == .working || isFinal
     }
 
-    /// The state's place on the way; `done` and `failed` share the end.
     private var step: Int {
         switch self {
         case .queued: 0

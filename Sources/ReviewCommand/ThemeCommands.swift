@@ -1,9 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch theme list | set <name>`. `list` is free: it changes
-/// nothing a person sees. `set` is the operator's: it pins a theme, or
-/// unpins with `system`. The app knows the themes, so both ask it.
 enum ThemeCommands {
     static let group = CommandGroup(
         name: "theme", summary: "list and set themes", section: .drive, commands: [

@@ -1,9 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch tour open | next | skip | close`: the operator can use the
-/// same tour actions as the person uses with "Finish setup" and the tour
-/// panel. Write an Example is `composer set`.
 enum TourCommands {
     static let group = CommandGroup(
         name: "tour", summary: "step through the setup tour", section: .drive, commands: [

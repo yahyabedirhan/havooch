@@ -1,8 +1,6 @@
 import Foundation
 import ReviewWire
 
-/// `havooch thread answer | choose`: the person's answer to the agent's
-/// open question on a thread, typed or clicked.
 enum ThreadCommands {
     static let group = CommandGroup(
         name: "thread", summary: "answer the agent on a thread", section: .drive, commands: [

@@ -30,14 +30,10 @@ public struct VideoInfo: Codable, Equatable, Sendable {
 /// messages and sends is here. The review makes every id from its own
 /// counters, which never give a number twice, so a test knows its ids.
 public struct Review: Codable, Equatable, Sendable {
-    /// Whose review it is: a plain video's or a project's.
     public private(set) var key: ReviewKey
     /// The video on screen: a plain video's one video; in a project, the
     /// version last opened.
     public var video: VideoInfo
-    /// In a project, each version's video as it was last opened, one per
-    /// path: the content hash of each version is app state, not
-    /// configuration. Empty on a plain video.
     public private(set) var versions: [VideoInfo]
     /// The id prefix every id of the review carries. Fixed when the review
     /// is made and never changed, so ids stay valid when a plain video's
@@ -46,14 +42,10 @@ public struct Review: Codable, Equatable, Sendable {
     /// The person's context note for the agent, added to the sidecar's
     /// text; empty for none.
     public var note = ""
-    /// General first, then the threads in time order.
     public private(set) var threads: [ReviewThread]
-    /// The sends, in the order they were sent.
     public private(set) var sends: [Send]
     private var counters: Counters
 
-    /// The next number of each kind of id. Numbers are never reused, so a
-    /// deleted thread's number never points at another frame.
     private struct Counters: Codable, Equatable, Sendable {
         var thread = 1
         var message = 1
@@ -118,8 +110,6 @@ public struct Review: Codable, Equatable, Sendable {
         if case .project = key { try container.encode(versions, forKey: .versions) }
     }
 
-    // MARK: - Projects
-
     /// The review as the project `slug`'s when a plain video becomes a
     /// project: the same threads, messages, sends and ids, each thread on a
     /// frame anchored to `anchor`, the video's path, which is v1. General
@@ -175,8 +165,6 @@ public struct Review: Codable, Equatable, Sendable {
         public var removedThread: Bool
     }
 
-    // MARK: - Finding
-
     public func thread(_ id: ThreadID) -> ReviewThread? {
         threads.first { $0.id == id }
     }
@@ -231,8 +219,6 @@ public struct Review: Codable, Equatable, Sendable {
     public func isFinished(_ id: SendID) -> Bool {
         messages(of: id).allSatisfy { $0.message.state?.isFinal ?? true }
     }
-
-    // MARK: - The person and the operator
 
     /// Queues the person's message. On `thread` it joins that thread; then
     /// a `time` must be the thread's own frame. Without `thread`, a `time`
@@ -363,8 +349,6 @@ public struct Review: Codable, Equatable, Sendable {
         return choices[number - 1]
     }
 
-    // MARK: - The listener
-
     /// The listener has the send `id`: each of its messages still `sent`
     /// moves to `acknowledged`, and one further on stays where it is.
     /// Words that come with it are the agent's message on General, under
@@ -459,9 +443,6 @@ public struct Review: Codable, Equatable, Sendable {
         return requeued
     }
 
-    // MARK: - Helpers
-
-    /// A new id of `kind` from its counter.
     private mutating func nextID(_ kind: ItemID.Kind) -> ItemID {
         switch kind {
         case .thread:
@@ -476,8 +457,6 @@ public struct Review: Codable, Equatable, Sendable {
         }
     }
 
-    /// A time as the review keeps it: to the millisecond, which is what
-    /// its file holds, so a review reads back as it was.
     private static func kept(_ time: Date) -> Date {
         Date(timeIntervalSince1970: (time.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
     }
@@ -488,8 +467,6 @@ public struct Review: Codable, Equatable, Sendable {
         return index
     }
 
-    /// A thread the listener can write on: General, or one with something
-    /// sent.
     private func answerableIndex(_ id: ThreadID) throws(ReviewRefusal) -> Int {
         let index = try threadIndex(id)
         guard threads[index].isGeneral || threads[index].wasSent else { throw .notSent(id) }
@@ -511,7 +488,6 @@ public struct Review: Codable, Equatable, Sendable {
         return (thread, index)
     }
 
-    /// `text` without the space around it; `refusal` when nothing is left.
     private static func trimmed(_ text: String, or refusal: ReviewRefusal) throws(ReviewRefusal) -> String {
         let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !words.isEmpty else { throw refusal }

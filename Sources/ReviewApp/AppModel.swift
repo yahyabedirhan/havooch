@@ -7,103 +7,39 @@ import ReviewTranscript
 import ReviewWire
 import UniformTypeIdentifiers
 
-/// The app: its windows, the data the run is on, the theme and the recent
-/// videos, and every action that is the app's and not one window's. A
-/// window's own actions are its `WindowModel`'s. Opening a video for the
-/// person finds its window here: the window that holds it comes forward,
-/// else an empty key window takes it, else a new window does.
 @Observable
 final class AppModel: AppControlling {
-    /// The data the run is on now: the support folder it started on, or
-    /// the demo folder while an in-app demo runs. Every window is on it.
     private(set) var data: DataFolder
-    /// The reviews of every window, and the one path for changing them.
     var desk: ReviewDesk { data.desk }
-    /// The listeners, one per review: each window's video has its own
-    /// sends in line and its own agent.
     var listeners: ListenerHub { data.listeners }
-    /// The transcripts of the videos opened on this data in this run.
     var transcripts: TranscriptDesk { data.transcripts }
-    /// `config.toml`: the settings a person or an agent sets on purpose,
-    /// beside the folder the run started on (`ConfigLocation`), also during
-    /// an in-app demo. App-wide: its notice shows in every window.
     let config: ConfigDesk
-    /// The active theme and the pin `config.toml` names.
     let themes: ThemeDesk
-    /// What Havooch detects of the person's setup, Link and the skill
-    /// install: app-wide, whatever data the run is on.
     let setup: SetupDesk
-    /// The sidebar's width the person left, in `settings.json` on the
-    /// folder the run started on: app state, not a setting, the same in
-    /// every window.
     private(set) var keptSidebarWidth: Double?
-    /// Whether an agent ever connected on the person's data, kept in
-    /// `settings.json`: setup then counts as working, whatever was
-    /// detected.
     private(set) var agentConnectedOnce = false
-    /// Whether the person used the app on their data, kept in
-    /// `settings.json`: Get Started or a later step, Skip Setup, a video
-    /// opened, or an agent connected. Until then the first-run window shows
-    /// by itself at each launch.
     private(set) var firstRunDone = false
-    /// The first-run window: Welcome, Tools, Connect, Try it.
     let firstRun: FirstRun
-    /// The sound: one level for every window and both players of a
-    /// comparison, kept in `settings.json` on the folder the run started
-    /// on. Silent in a run muted for an agent's check (`HAVOOCH_MUTED=1`).
     let sound: Sound
-    /// Whether `settings.json` read at launch: one that doesn't is never
-    /// written over.
     @ObservationIgnored private let settingsRead: Bool
-    /// Where the run keeps its data now: the person's own, or a demo's.
     var support: URL { data.support }
-    /// The folder the run started on: the person's, or the one
-    /// `app open --demo` named. The control socket and the theme stay on
-    /// it, and leaving an in-app demo comes back to it.
     let launchSupport: URL
-    /// Where "Try the Demo" keeps the demo's data.
     let demoFolder: URL
-    /// The video "Try the Demo" opens: the one bundled in the app, nil in
-    /// a build that has none.
     let demoVideo: URL?
-    /// Whether the run started on demo data (`app open --demo`).
     let isDemoRun: Bool
-    /// Whether an in-app demo runs: "Try the Demo" switched the run to
-    /// the demo folder.
     private(set) var isInAppDemo = false
-    /// Whether the run is on demo data: started there, or in an in-app
-    /// demo. The header's demo words follow it.
     var isDemo: Bool { isDemoRun || isInAppDemo }
-    /// The windows, which one is key, and which one holds which video.
     let windows = WindowRegistry()
-    /// Brings the app to the front once a window is forward, as `havooch
-    /// open` does; the app sets it.
     @ObservationIgnored var bringToFront: (WindowModel) -> Void = { _ in }
-    /// The content hashes of the files opened in this run, so opening one
-    /// again skips reading it whole.
     @ObservationIgnored let hashes = ContentHashCache()
-    /// Turns a video's sound into lines, on every data folder of the run.
     @ObservationIgnored let speech: any SpeechRecognizing
-    /// The recent videos' thumbnails, made as their cards first show and
-    /// kept in memory for this run.
     let thumbnails = Thumbnails()
-    /// Files Finder handed over before the launch's first scene appeared:
-    /// they open as it appears.
     @ObservationIgnored private var filesWaiting: [URL] = []
-    /// The latest files from Finder opening, so the next ones wait for them.
     @ObservationIgnored private var finderOpens: Task<Void, Never>?
-    /// The notifications that tell which window is key and which closed.
     @ObservationIgnored private var watching: [any NSObjectProtocol] = []
 
-    /// The files the Open panel offers: what the spec names.
     static let videoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, UTType("com.apple.m4v-video")].compactMap(\.self)
 
-    /// The run on the support folder `environment` names: demo data when
-    /// `app open --demo` launched it (`SupportFolder.isDemoRun`). `speech`
-    /// turns a video's sound into lines when it has no sidecar, and
-    /// `demoFolder` is where "Try the Demo" keeps its data and
-    /// `demoVideo` the video it opens; tests give their own, and their own
-    /// `setup` on a fake file system.
     init(
         environment: [String: String], speech: any SpeechRecognizing = AppleSpeechRecognizer(),
         demoFolder: URL = DemoRun.folder(), demoVideo: URL? = DemoRun.video(), setup: SetupDesk? = nil
@@ -138,15 +74,11 @@ final class AppModel: AppControlling {
         firstRun.used = { [weak self] in self?.markFirstRunDone() }
     }
 
-    /// The settings notice's close button, in any window, and `config close-notice`.
     @discardableResult
     func dismissConfigNotice() -> Bool {
         config.dismissNotice()
     }
 
-    /// What an agent says on the data the run is on, and a takeover, shows
-    /// as a notice in the window that holds its video; a bare thread
-    /// number is the key window's.
     private func listenToAgent() {
         listeners.announce = { [weak self] key, notice in self?.windows.holding(key)?.raise(notice) }
         listeners.keyReview = { [weak self] in self?.windows.key?.reviewKey }
@@ -154,10 +86,6 @@ final class AppModel: AppControlling {
         listeners.connected = { [weak self] key in self?.agentConnected(to: key) }
     }
 
-    /// An agent's `wait` opened on the review `key`: setup works, so the
-    /// connect button's dot goes for good. An agent on the in-app demo
-    /// counts too: it runs in the person's own harness. The tour of the
-    /// window that holds the review moves on from its connect step.
     private func agentConnected(to key: ReviewKey) {
         windows.holding(key)?.tourNoticedAgent()
         markFirstRunDone()
@@ -166,14 +94,6 @@ final class AppModel: AppControlling {
         saveSettings()
     }
 
-    // MARK: - Listeners
-
-    /// The review a `wait` listens to: the review the video at `path`
-    /// (`--video`) opens in, as `open` resolves it (its project, else the
-    /// plain video), open in a window or not; the project `project`
-    /// (`--project`); with neither, the key window's. Refused for a
-    /// path with no file, a project `config.toml` doesn't have, and with
-    /// neither when the key window holds no video.
     func listenedReview(video path: String?, project: String? = nil) async throws(AppRefusal) -> ReviewKey {
         if let project {
             try needProject(project)
@@ -193,11 +113,6 @@ final class AppModel: AppControlling {
         return key
     }
 
-    // MARK: - Windows
-
-    /// A new window, holding nothing, among the app's windows. A scene
-    /// that appears with no window waiting for it shows one; tests use it
-    /// with no scene.
     @discardableResult
     func makeWindow() -> WindowModel {
         let window = WindowModel(app: self, id: windows.nextID())
@@ -205,8 +120,6 @@ final class AppModel: AppControlling {
         return window
     }
 
-    /// File › New Window, the Dock icon with no window, and `window new`:
-    /// a new empty window, which shows the home screen.
     @discardableResult
     func newWindow() -> WindowModel {
         let window = makeWindow()
@@ -214,9 +127,6 @@ final class AppModel: AppControlling {
         return window
     }
 
-    /// A window's scene appeared with `target`: the window made for it,
-    /// else a new empty one. Files Finder handed over before any scene
-    /// could open (a launch by Open With) open now (`openFromFinder`).
     func sceneAppeared(target: WindowTarget?) -> WindowModel {
         let window = windows.place(target) ?? makeWindow()
         if !filesWaiting.isEmpty, windows.openScene != nil {
@@ -227,28 +137,22 @@ final class AppModel: AppControlling {
         return window
     }
 
-    /// `nsWindow` shows `window` now.
     func attach(_ nsWindow: NSWindow, to window: WindowModel) {
         guard window.nsWindow !== nsWindow else { return }
         window.nsWindow = nsWindow
         if nsWindow.isKeyWindow { windows.becameKey(window) }
     }
 
-    /// `window` closed: its video pauses, keeps its position for its
-    /// recent-video entry, and the window is gone. The app keeps running.
     func windowClosed(_ window: WindowModel) {
         window.closed()
         windows.remove(window)
     }
 
-    /// `window` comes forward and becomes key.
     func focus(_ window: WindowModel) {
         window.nsWindow?.makeKeyAndOrderFront(nil)
         windows.becameKey(window)
     }
 
-    /// Starts following which window is key and which closes, for as
-    /// long as the app runs.
     func watchWindows() {
         let center = NotificationCenter.default
         watching.append(center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
@@ -267,9 +171,6 @@ final class AppModel: AppControlling {
         })
     }
 
-    /// The window an operator command acts on: the one `id` names, else
-    /// the key window. With `making`, a command that shows something (a
-    /// video, home, the demo) makes a new window when there is none.
     func window(_ id: String?, making: Bool = false) throws(AppRefusal) -> WindowModel {
         if let id {
             guard let window = windows.window(id) else {
@@ -286,25 +187,20 @@ final class AppModel: AppControlling {
         try window(id, making: making)
     }
 
-    /// `window list`: every window, in the order they were made.
     func windowList() -> [StateReport.Window] {
         let key = windows.key
         return windows.windows.map { $0.report(isKey: $0 === key) }
     }
 
-    /// `window new`.
     func openWindow() -> StateReport.Window {
         let window = newWindow()
         return window.report(isKey: window === windows.key)
     }
 
-    /// `window close`: the window `id` names, else the key window, closes
-    /// as its close button closes it. Its report, as it was.
     func closeWindow(_ id: String?) throws(AppRefusal) -> StateReport.Window {
         let window = try window(id)
         let report = window.report(isKey: window === windows.key)
         window.nsWindow?.close()
-        // A window with no scene, or one that didn't close, goes all the same.
         if windows.window(window.id) != nil {
             window.nsWindow?.orderOut(nil)
             windowClosed(window)
@@ -312,8 +208,6 @@ final class AppModel: AppControlling {
         return report
     }
 
-    /// `state`: the window `id` names, else the key window, with every
-    /// window. With no window open, the app with no video.
     func state(window id: String?) throws(AppRefusal) -> StateReport {
         if id == nil, windows.windows.isEmpty {
             var report = StateReport(
@@ -332,51 +226,30 @@ final class AppModel: AppControlling {
         return try window(id).state()
     }
 
-    /// The app as `state` reports it.
     var appReport: StateReport.App {
         StateReport.App(version: Version.app, demo: isDemo, support: support.path, active: NSApp?.isActive ?? false)
     }
 
-    // MARK: - Opening a video for the person
-
-    /// `havooch open`, and Finder's Open With (`openFromFinder`): opens `url`
-    /// for the person, playing, in front. The window that holds the video
-    /// comes forward; else the key window takes it when it's empty; else a
-    /// new window does. A file that doesn't play is refused before anything
-    /// changes: an in-app demo stays, and every window stays as it was. No
-    /// lease: it's the person's open, whoever asks for it.
     @discardableResult
     func openInFront(_ url: URL, project: String? = nil) async throws(AppRefusal) -> any WindowControlling {
         let url = url.standardizedFileURL
         try Self.needFile(url)
         if let project { try needProject(project) }
         try await PlayerEngine.checkPlayable(url)
-        // The person's video, on their own data, as the Open panel opens it.
         await leaveDemo()
         let window = try await windowFor(url, project: project, from: nil)
-        // Play is a change of the moment: words in a popover of the window
-        // that held the video already are queued first.
         try window.play()
         focus(window)
         bringToFront(window)
         return window
     }
 
-    /// Finder's Open With, a drop on the Dock icon and `open -a Havooch
-    /// <file>`: each file opens as `havooch open` opens it
-    /// (`openInFront`), one after the other, so the first fills an empty
-    /// key window and the next ones open in new windows. A file that
-    /// doesn't play shows why in the key window, or in a new one with
-    /// none. Before the launch's first scene appears no window can show,
-    /// so the files wait for it (`sceneAppeared`). Returns the opens, for
-    /// tests to wait on; nil while the files wait.
     @discardableResult
     func openFromFinder(_ urls: [URL]) -> Task<Void, Never>? {
         guard windows.openScene != nil else {
             filesWaiting += urls
             return nil
         }
-        // Opens one after another, also across two handovers in a row.
         let previous = finderOpens
         let opens = Task {
             await previous?.value
@@ -394,10 +267,6 @@ final class AppModel: AppControlling {
         return opens
     }
 
-    /// The Open panel, a drop and a recent video's card in `window` (nil
-    /// with no window): opens `url` for the person, who is shown why when
-    /// it doesn't play. An in-app demo is left first. The window that
-    /// holds the video comes forward; else `window` opens it.
     func openForPerson(_ url: URL, from window: WindowModel?) {
         Task {
             await leaveDemo()
@@ -410,8 +279,6 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// Cmd+O and the Open button, in `window` or with none: the file the
-    /// person picks.
     func openFromPanel(from window: WindowModel?) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = Self.videoTypes
@@ -422,10 +289,6 @@ final class AppModel: AppControlling {
         openForPerson(url, from: window)
     }
 
-    /// The window `url` opens in, with it open there, in the project
-    /// `project` when it's set, else in the review `resolveTarget` picks:
-    /// the window that holds that video or project, showing `url`; else
-    /// `from`; else the key window when it holds nothing; else a new window.
     private func windowFor(_ url: URL, project: String? = nil, from: WindowModel?) async throws(AppRefusal) -> WindowModel {
         try Self.needFile(url)
         guard let hash = await WindowModel.contentHash(of: url, in: hashes) else {
@@ -434,7 +297,6 @@ final class AppModel: AppControlling {
         let target = try resolveTarget(url, contentHash: hash, project: project)
         let slug = target.reviewKey.slug
         if let holder = windows.holding(target.reviewKey) {
-            // A project's window shows the version asked for.
             if slug != nil, holder.video?.url != url { try await holder.open(url, project: slug) }
             return holder
         }
@@ -453,13 +315,6 @@ final class AppModel: AppControlling {
         return window
     }
 
-    // MARK: - Projects
-
-    /// What the video at `url` with `contentHash` opens as:
-    /// the project `project` when it's set, which must list the file; else
-    /// the most recently opened project that lists it; else the plain
-    /// video. Refused for a project `config.toml` doesn't have, or that
-    /// doesn't list the file.
     func resolveTarget(_ url: URL, contentHash: String, project: String?) throws(AppRefusal) -> WindowTarget {
         let path = url.standardizedFileURL.path
         if let project {
@@ -474,7 +329,6 @@ final class AppModel: AppControlling {
         let listing = config.config.projects.map(config.outline(of:)).filter { $0.number(of: path) != nil }
         guard !listing.isEmpty else { return .video(contentHash: contentHash, path: path) }
         let used = desk.library.projectsUsed()
-        // The most recently opened first; one never opened, in the file's order, after.
         let latest = listing.enumerated().max { first, second in
             let (a, b) = (used[first.element.slug], used[second.element.slug])
             if a != b { return (a ?? .distantPast) < (b ?? .distantPast) }
@@ -483,10 +337,7 @@ final class AppModel: AppControlling {
         return .project(slug: latest?.element.slug ?? listing[0].slug)
     }
 
-    /// The projects as the home screen shows them: the most recently
-    /// opened first, then the others in the file's order.
     var homeProjects: [StateReport.HomeProject] {
-        // Read so a view that shows the list follows a project opened.
         _ = recentsRevision
         let used = desk.library.projectsUsed()
         let projects = config.config.projects.map(config.outline(of:)).enumerated().sorted { first, second in
@@ -503,9 +354,6 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// A click on a project's card on the home screen, in `window`: its
-    /// latest version opens in its window, as `havooch open <path>
-    /// --project <slug>` opens it.
     func openProject(_ slug: String, from window: WindowModel?) {
         guard let latest = config.outline(slug)?.versions.last else { return }
         Task {
@@ -519,15 +367,6 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// `havooch project new <slug> --from <path> [--title]`: the project
-    /// goes into `config.toml` with the video as v1.
-    /// When no other project lists the video, its plain review moves into
-    /// the project with every thread anchored to v1, its ids unchanged;
-    /// its listener keeps listening, now to the project, and a window that
-    /// holds the video holds the project. When another project lists it,
-    /// the new project starts with fresh threads. Refused for a slug
-    /// in use, a path with no file, a file that doesn't play, and a
-    /// `config.toml` with a problem; nothing changes then.
     func projectNew(_ slug: String, from url: URL, title: String?) async throws(AppRefusal) -> StateReport.Project {
         let url = url.standardizedFileURL
         try Self.needFile(url)
@@ -538,7 +377,6 @@ final class AppModel: AppControlling {
         guard let hash = await WindowModel.contentHash(of: url, in: hashes) else { throw AppRefusal("can't read \(url.path)") }
         let elsewhere = !config.config.projects.map(config.outline(of:)).filter { $0.number(of: url.path) != nil }.isEmpty
         let video = ReviewKey.video(contentHash: hash)
-        // A review that doesn't read stops the project before the file changes.
         if !elsewhere { _ = try desk.readable(video) }
         try config.addProject(slug: slug, title: title, firstVersion: .init(path: url.path))
         guard let outline = config.outline(slug) else { throw unknownProject(slug) }
@@ -552,12 +390,6 @@ final class AppModel: AppControlling {
         return StateReport.Project(outline, onScreen: url.path)
     }
 
-    /// `havooch project add <slug> <path> [--label]`: the
-    /// video goes into `config.toml` as the project's next version, and
-    /// shows in the project's window (else the empty key window, else a new
-    /// one), which comes forward. Refused for a project `config.toml`
-    /// doesn't have, a path with no file or one the project lists already,
-    /// and a file that doesn't play; nothing changes then.
     @discardableResult
     func projectAdd(_ slug: String, video url: URL, label: String?) async throws(AppRefusal) -> any WindowControlling {
         let url = url.standardizedFileURL
@@ -575,12 +407,10 @@ final class AppModel: AppControlling {
         return window
     }
 
-    /// Refused for a project `config.toml` doesn't have.
     private func needProject(_ slug: String) throws(AppRefusal) {
         guard config.config.project(slug) != nil else { throw unknownProject(slug) }
     }
 
-    /// `no project x; the projects are a, b`.
     private func unknownProject(_ slug: String) -> AppRefusal {
         let known = config.config.projects.map(\.slug)
         return AppRefusal(
@@ -590,7 +420,6 @@ final class AppModel: AppControlling {
         )
     }
 
-    /// Refused when there's no file at `url`.
     static func needFile(_ url: URL) throws(AppRefusal) {
         var isFolder: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
@@ -598,10 +427,6 @@ final class AppModel: AppControlling {
         }
     }
 
-    // MARK: - The demo
-
-    /// "Try the Demo" and `app demo` in `window`: the bundled launch video
-    /// on demo data (`enterDemo`). Refused in a build with no bundled video.
     func openDemo(in window: WindowModel) async throws(AppRefusal) {
         guard let demoVideo else {
             throw AppRefusal("this build has no bundled demo video; run `make bundle`")
@@ -609,12 +434,6 @@ final class AppModel: AppControlling {
         try await enterDemo(demoVideo, in: window)
     }
 
-    /// Enters the demo: the run switches to the demo folder and `window`
-    /// opens `video` there, so demo threads never mix with the person's data.
-    /// Every window is on the run's data, so the other windows
-    /// go home. A run already on demo data (an in-app demo, or `app open
-    /// --demo`) opens it where it is. When the video doesn't open, the
-    /// demo this call entered is left again.
     func enterDemo(_ video: URL, in window: WindowModel) async throws(AppRefusal) {
         let entered = isDemo ? false : await switchData(to: demoFolder)
         do throws(AppRefusal) {
@@ -625,20 +444,11 @@ final class AppModel: AppControlling {
         }
     }
 
-    /// Leaves an in-app demo: every window's video closes and the run is
-    /// back on the folder it started on. Nothing changes otherwise, so a
-    /// run started with `app open --demo` stays on its folder.
     func leaveDemo() async {
         guard isInAppDemo else { return }
         await switchData(to: launchSupport)
     }
 
-    /// Puts the run on the data in `folder`. In every window, words in the
-    /// popover are first queued on the video they were written on, on that
-    /// video's data; then the video closes. The listener's held `wait` and
-    /// `ask`s end as when the app quits, so their commands connect again
-    /// and reach the new data. Returns whether this call switched: another
-    /// one may have switched to `folder` while the words were queued.
     @discardableResult
     private func switchData(to folder: URL) async -> Bool {
         for window in windows.windows { await window.settle() }
@@ -648,54 +458,34 @@ final class AppModel: AppControlling {
         data = DataFolder(support: folder, speech: speech)
         isInAppDemo = folder != launchSupport
         listenToAgent()
-        // The home screen shows the recent videos of the new data.
         recentsRevision += 1
         left.listeners.announce = nil
         left.listeners.stop()
         return true
     }
 
-    // MARK: - Recent videos
-
-    /// The recent videos of this run's data folder, the newest first, with
-    /// whether each file is there now: the home screen's cards.
     var recents: [StateReport.Recent] {
-        // Read so a view that shows the list follows its changes.
         _ = recentsRevision
         return desk.library.recents().map(StateReport.Recent.init)
     }
 
-    /// Grows each time the recent videos change: `recents` reads the
-    /// library, which observation doesn't follow.
     private var recentsRevision = 0
 
-    /// Has the home screen read the recent videos again, with whether each
-    /// file is there now: going home, a window's position kept and the app
-    /// coming to the front call it, since nothing tells the app that a file moved.
     func refreshRecents() {
         recentsRevision += 1
     }
 
-    /// Takes the video with `contentHash` off the recent videos. Its review
-    /// stays on disk.
     func removeRecent(_ contentHash: String) {
         desk.library.removeRecent(contentHash)
         recentsRevision += 1
     }
 
-    /// Keeps where every window's playhead is, as the app quits.
     func savePositions() {
         for window in windows.windows { window.savePosition() }
     }
 
-    // MARK: - The sidebar's width, the same in every window
-
-    /// The sidebar's width: the kept one, inside the limits, else the
-    /// default.
     var sidebarWidth: CGFloat { WindowModel.sidebarWidth(kept: keptSidebarWidth) }
 
-    /// The person let go of a sidebar's edge at `width`: it is kept in
-    /// the settings, inside the limits, for every window, this run and the next.
     func keepSidebarWidth(_ width: CGFloat) {
         let width = WindowModel.sidebarWidth(kept: Double(width.rounded()))
         guard width != sidebarWidth else { return }
@@ -703,9 +493,6 @@ final class AppModel: AppControlling {
         saveSettings()
     }
 
-    /// Writes the app state `settings.json` keeps. A settings file that
-    /// doesn't read is left as it is: a width and a dot are comforts, not
-    /// the person's work, so they're only lost.
     private func saveSettings() {
         guard settingsRead else { return }
         try? Settings(
@@ -715,45 +502,31 @@ final class AppModel: AppControlling {
         .save(SupportLayout(root: launchSupport))
     }
 
-    // MARK: - The sound, the same in every window
-
-    /// The volume capsule and `player volume`: the level, 0 to 1, in every
-    /// window; 0 mutes. A drag changes it at once and keeps it in the
-    /// settings as it ends (`keep`). A run muted for a check plays
-    /// nothing and keeps nothing of it.
     func setVolume(_ level: Double, keep: Bool = true) {
         sound.set(level)
         if keep { keepSound() }
     }
 
-    /// `player mute`: level 0.
     func mute() {
         sound.mute()
         keepSound()
     }
 
-    /// `player unmute`: the last level above 0.
     func unmute() {
         sound.unmute()
         keepSound()
     }
 
-    /// Mutes, or unmutes when muted.
     func toggleMute() {
         sound.toggleMute()
         keepSound()
     }
 
-    /// The mute key and the Playback menu: `toggleMute`, except in a run
-    /// muted for a check, where the person can't change the sound.
     func toggleMuteForPerson() {
         guard !sound.isMutedForCheck else { return }
         toggleMute()
     }
 
-    /// `player mute`, `player unmute` and `player volume`: the sound in
-    /// every window, kept as the person's would be; in a run muted for a
-    /// check, the run's level only, which plays nothing.
     func changeSound(_ change: SoundChange) -> StateReport.Sound {
         switch change {
         case .mute: mute()
@@ -763,20 +536,16 @@ final class AppModel: AppControlling {
         return windows.key?.soundReport ?? StateReport.Sound(sound, panelOpen: false)
     }
 
-    /// The sound's level is kept, unless the run is muted for a check.
     private func keepSound() {
         guard !sound.isMutedForCheck else { return }
         saveSettings()
     }
 
-    /// The person used the app: the first-run window never shows by itself again.
     func markFirstRunDone() {
         guard !firstRunDone else { return }
         firstRunDone = true
         saveSettings()
     }
 
-    /// Whether `settings.json` read at launch, so what is kept in it can be
-    /// kept: the first run shows by itself only then.
     var keepsSettings: Bool { settingsRead }
 }

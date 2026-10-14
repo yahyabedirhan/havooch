@@ -43,7 +43,6 @@ public struct SystemProcessTable: ProcessTable {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-        // A pid nobody has is no error: the answer is just empty.
         guard sysctl(&name, u_int(name.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
         let start = info.kp_proc.p_un.__p_starttime
         let command = withUnsafeBytes(of: info.kp_proc.p_comm) { bytes in
@@ -58,9 +57,6 @@ public struct SystemProcessTable: ProcessTable {
     }
     #else
     public func process(_ pid: Int32) -> ProcessRecord? {
-        // `pid (name) state parent …`, the start in clock ticks after boot
-        // as the 22nd field. The name may hold spaces and parentheses, so
-        // the fields are read after its last `)`.
         guard let stat = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8),
               let open = stat.firstIndex(of: "("), let close = stat.lastIndex(of: ")")
         else { return nil }
@@ -76,7 +72,6 @@ public struct SystemProcessTable: ProcessTable {
         )
     }
 
-    /// When the system started, in seconds since 1970: `btime` in `/proc/stat`.
     private static var bootTime: TimeInterval? {
         guard let stat = try? String(contentsOfFile: "/proc/stat", encoding: .utf8) else { return nil }
         let line = stat.split(separator: "\n").first { $0.hasPrefix("btime ") }

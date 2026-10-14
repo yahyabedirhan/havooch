@@ -46,7 +46,6 @@ public struct SendPayload: Codable, Equatable, Sendable {
             contentHash = try container.decode(String.self, forKey: .contentHash)
             duration = try container.decode(Double.self, forKey: .duration)
             title = try container.decode(String.self, forKey: .title)
-            // A payload from a build before the flag isn't the demo's.
             demo = try container.decodeIfPresent(Bool.self, forKey: .demo) ?? false
         }
 
@@ -273,7 +272,6 @@ public struct SendPayload: Codable, Equatable, Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
-        // Strings, numbers and booleans: encoding can't fail.
         return String(decoding: try! encoder.encode(self), as: UTF8.self) + "\n"
     }
 }

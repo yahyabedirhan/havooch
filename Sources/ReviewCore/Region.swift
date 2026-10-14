@@ -19,8 +19,6 @@ public struct Region: Codable, Equatable, Sendable {
         (self.x, self.y, self.w, self.h) = (x, y, w, h)
     }
 
-    /// What a sum of two decimal fractions may be over 1 by: 0.7 + 0.3
-    /// isn't exactly 1 in binary.
     private static let slack = 1e-9
 
     public init(from decoder: any Decoder) throws {

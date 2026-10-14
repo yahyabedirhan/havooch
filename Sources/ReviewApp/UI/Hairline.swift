@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// A hairline in the theme's `separator`, one pixel thick on the screen it
-/// shows on. It separates two parts of the window's one surface.
 struct Hairline: View {
     let axis: Axis
     @Environment(\.palette) private var palette

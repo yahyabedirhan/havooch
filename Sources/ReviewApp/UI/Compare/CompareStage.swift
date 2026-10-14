@@ -1,19 +1,11 @@
 import ReviewWire
 import SwiftUI
 
-/// The stage while the window compares two versions (compare-control
-/// V4's comparison window), over the `PlayerPair`: side by side, two
-/// pictures; Flip, one picture and the bar that flips it; Slider, the
-/// right side under the left one, wiped at the handle. Each picture is
-/// labelled with its side and version; the active side's label is
-/// filled, since new messages go to it. A click or a drag on the
-/// other side makes it active.
 struct CompareStage: View {
     let model: WindowModel
     let pair: PlayerPair
     let session: CompareSession
 
-    /// Each side's pane in the window, side by side.
     @State private var paneAreas: [CompareSide: CGRect] = [:]
 
     var body: some View {
@@ -24,12 +16,9 @@ struct CompareStage: View {
             case .slider: slider
             }
         }
-        // What the agent just said, over both pictures.
         .overlay { Notices(model: model) }
         .onChange(of: model.activeSide) { keepArea() }
     }
-
-    // MARK: - Side by side
 
     private var sideBySide: some View {
         HStack(spacing: 6) {
@@ -49,20 +38,15 @@ struct CompareStage: View {
         }
     }
 
-    /// Side by side, the active side's pane is where a click is on the
-    /// stage, and the popover's playhead is measured from it.
     private func keepArea() {
         guard session.layout == .sideBySide, let side = model.activeSide, let area = paneAreas[side] else { return }
         model.stageArea = area
     }
 
-    // MARK: - Flip
-
     private var flip: some View {
         ZStack(alignment: .topLeading) {
             ForEach(CompareSide.allCases, id: \.self) { side in
                 let shows = session.showing == side
-                // Both play; only the one showing is seen and takes the mouse.
                 StagePane(model: model, engine: pair.engine(side), side: side)
                     .opacity(shows ? 1 : 0)
                     .allowsHitTesting(shows)
@@ -75,8 +59,6 @@ struct CompareStage: View {
                 .padding(10)
         }
     }
-
-    // MARK: - Slider
 
     private var slider: some View {
         GeometryReader { proxy in
@@ -94,9 +76,6 @@ struct CompareStage: View {
         }
     }
 
-    // MARK: - Labels
-
-    /// `LEFT v3 tighter intro` over a side's picture.
     private func label(_ side: CompareSide) -> some View {
         let number = session.number(side)
         return SideLabel(
@@ -107,8 +86,6 @@ struct CompareStage: View {
     }
 }
 
-/// A side's name, its version and its label, over its picture; filled
-/// with the accent on the side new messages go to.
 private struct SideLabel: View {
     let side: String
     let number: Int
@@ -139,8 +116,6 @@ private struct SideLabel: View {
     }
 }
 
-/// Flip's bar at the foot of the picture: both versions, the one showing
-/// in bold, and the key that flips. A click on it flips too.
 private struct FlipBar: View {
     let model: WindowModel
     let session: CompareSession
@@ -170,15 +145,12 @@ private struct FlipBar: View {
     }
 }
 
-/// Slider's handle: a line down the picture at the split and a knob on
-/// it; a drag moves the split.
 private struct SliderHandle: View {
     let model: WindowModel
     let split: CGFloat
     let width: CGFloat
     @Environment(\.palette) private var palette
 
-    /// The width either side of the line that takes the drag.
     private static let grip: CGFloat = 14
 
     var body: some View {
@@ -223,7 +195,6 @@ private struct SliderHandle: View {
     private static let space = "compare-slider"
 }
 
-/// A key on the keyboard, as the hints in the popovers draw it.
 struct CompareKeyCap: View {
     let text: String
     @Environment(\.palette) private var palette

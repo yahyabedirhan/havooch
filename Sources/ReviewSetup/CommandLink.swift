@@ -106,16 +106,12 @@ public struct CommandLink: Sendable {
         Failure(reason: reason, fallback: Self.fallback(to: command))
     }
 
-    /// `written` as an absolute path: a relative link points from the
-    /// link's folder.
     private func resolved(_ written: String) -> String {
         guard !written.hasPrefix("/") else { return written }
         return URL(fileURLWithPath: "\(home)/\(Self.folder)", isDirectory: true)
             .appendingPathComponent(written).standardizedFileURL.path
     }
 
-    /// Whether `path` is the command inside an app bundle:
-    /// `…/<name>.app/Contents/Helpers/havooch`.
     static func isInBundle(_ path: String) -> Bool {
         guard path.hasSuffix("/" + bundlePath) else { return false }
         let bundle = path.dropLast(bundlePath.count + 1)
@@ -123,7 +119,6 @@ public struct CommandLink: Sendable {
     }
 }
 
-/// `text` as one shell word: in single quotes when it needs them.
 func shellQuoted(_ text: String) -> String {
     let plain = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "/._-+:@%="))
     if !text.isEmpty, text.unicodeScalars.allSatisfy(plain.contains) { return text }

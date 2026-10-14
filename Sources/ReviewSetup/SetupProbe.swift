@@ -90,8 +90,6 @@ public struct SetupProbe: Sendable {
         return HarnessSetup(harness: harness, presence: presence, skill: skill, skillFolder: skillFolder)
     }
 
-    /// Detected when any path exists; can't know when none does and one
-    /// doesn't read; else not detected.
     private static func any(_ paths: [String], _ item: (String) -> FileItem) -> Detection {
         var answer = Detection.notDetected
         for path in paths {
@@ -104,7 +102,6 @@ public struct SetupProbe: Sendable {
         return answer
     }
 
-    /// `relative` from the home folder, or itself when it's absolute.
     func path(_ relative: String) -> String {
         relative.hasPrefix("/") ? relative : "\(home)/\(relative)"
     }

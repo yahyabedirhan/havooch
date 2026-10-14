@@ -1,8 +1,6 @@
 import ReviewWire
 import SwiftUI
 
-/// What the stage shows: the player with a video open; with none, the home
-/// screen when there are recent videos or projects, else the empty state.
 enum StageContent: Equatable {
     case player, home, empty
 
@@ -10,30 +8,19 @@ enum StageContent: Equatable {
         self = hasVideo ? .player : hasRecents ? .home : .empty
     }
 
-    /// What the stage of `model` shows now.
     init(_ model: WindowModel) {
         self.init(hasVideo: model.video != nil, hasRecents: !model.recents.isEmpty || !model.homeProjects.isEmpty)
     }
 
-    /// The sidebar shows beside the player only: never on the home screen
-    /// or the empty state.
     var showsSidebar: Bool { self == .player }
 
-    /// The screen `state` reports: the player, or home for the home
-    /// screen and the empty state alike, the screens with no video.
     var screen: StateReport.Screen { self == .player ? .player : .home }
 }
 
-/// No video is open and there are recent videos or projects: the cat mark
-/// and the app's name, "Open a Video…" and "Try the Demo", then the
-/// projects (story 48), the most recently opened first, then the recent
-/// videos, each as a gallery of cards, the newest first, as Finder shows
-/// files in icon view. The whole screen takes a dropped video, as the empty state does.
 struct HomeScreen: View {
     let model: WindowModel
     @Environment(\.palette) private var palette
 
-    /// Adaptive columns of 16:9 cards.
     private static let columns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 20, alignment: .top)]
 
     var body: some View {
@@ -92,7 +79,6 @@ struct HomeScreen: View {
                 .font(.headline)
                 .foregroundStyle(palette[.textSecondary])
                 .accessibilityAddTraits(.isHeader)
-            // The relative times move on with the clock.
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 20) {
                     ForEach(model.recents, id: \.contentHash) { recent in

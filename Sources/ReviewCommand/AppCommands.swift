@@ -2,11 +2,6 @@ import Foundation
 import ReviewLease
 import ReviewWire
 
-/// `havooch app status | open [--demo <folder>] | home | demo | quit`.
-/// `home` and `demo` are plain requests to the running app.
-/// `status` answers without the app; `open` launches it (through
-/// `AppLaunching`) when it doesn't run on the data asked for; `quit` waits
-/// until it's gone.
 enum AppCommands {
     static let group = CommandGroup(
         name: "app", summary: "start, quit and check the app", section: .drive, commands: [
@@ -52,21 +47,13 @@ enum AppCommands {
         ]
     )
 
-    /// What running an `app` command needs.
     struct Context {
-        /// The normal support folder, where `app open --demo` leaves its
-        /// `DemoPointer`.
         var support: URL
-        /// The client asking the app at the socket `ControlSocket.locate`
-        /// found.
         var client: ControlClient
         var launcher: any AppLaunching
         var pause: @Sendable (TimeInterval) -> Void
-        /// Whether the command runs with `HAVOOCH_MUTED=1`: an agent's
-        /// check, whose demo starts muted.
         var muted = false
 
-        /// The same client, asking at the socket in `support`.
         func client(in support: URL) -> ControlClient {
             var client = client
             client.socket = ControlSocket.url(in: support)
@@ -74,35 +61,22 @@ enum AppCommands {
         }
     }
 
-    /// How long `open` waits for a launched app to answer, and `quit` for
-    /// the app to go, in looks a quarter second apart.
     static let wait: TimeInterval = 10
     static let interval: TimeInterval = 0.25
-    /// How long one look at a starting or quitting app waits for an answer:
-    /// such an app may accept a connection before (or after) it can answer.
     static let lookTimeout: TimeInterval = 1
     private static var looks: Int { Int(wait / interval) }
 
-    // MARK: - status
-
-    /// The app's status, or `not running` (exit 0) when nothing listens.
     static func status(_ context: Context) -> CommandResult {
         let answer = context.client.send(.appStatus)
         guard case .failure(.notRunning) = answer else { return HavoochCLI.result(of: answer) }
         return CommandResult(output: context.client.json ? "{\"running\":false}\n" : "not running\n")
     }
 
-    // MARK: - open
-
     static func open(demo: URL?, _ context: Context) -> CommandResult {
         if let demo { return openDemo(demo, context) }
         return openNormal(context)
     }
 
-    /// The normal app's status when it runs. Otherwise it's launched and
-    /// asked until it answers. A demo left running is quit first and its
-    /// pointer removed; the lease its quit renewed is handed to the app
-    /// launched.
     private static func openNormal(_ context: Context) -> CommandResult {
         var handover: [String: String] = [:]
         if let demo = DemoPointer.recorded(in: context.support) {
@@ -119,17 +93,10 @@ enum AppCommands {
         let normal = context.client(in: context.support)
         switch normal.send(.appOpen) {
         case .failure(.notRunning): return launch(environment: handover, answeringAt: normal, context)
-        // It runs (or is there but failing): no second launch.
         case let answer: return HavoochCLI.result(of: answer)
         }
     }
 
-    /// Runs the app on the demo's support folder `demo`, made when it's
-    /// missing. A demo already running there just answers. Otherwise the
-    /// pointer is written, whatever app answers (the normal one, or another
-    /// demo) is quit, and the app is launched on the demo, with the lease
-    /// the quit renewed, so the operator keeps it across the relaunch. The
-    /// pointer is removed again when no demo comes to run.
     private static func openDemo(_ demo: URL, _ context: Context) -> CommandResult {
         do {
             try FileManager.default.createDirectory(at: demo, withIntermediateDirectories: true)
@@ -149,7 +116,6 @@ enum AppCommands {
         }
         var outcome: CommandResult?
         var environment = [SupportFolder.overrideVariable: demo.path, SupportFolder.demoRunVariable: "1"]
-        // An agent's check started muted runs the demo muted too.
         if context.muted { environment[MutedRun.variable] = "1" }
         for other in [context.support, previous].compactMap(\.self) where outcome == nil {
             switch quitIfRunning(context.client(in: other), context) {
@@ -159,14 +125,11 @@ enum AppCommands {
         }
         let result = outcome ?? launch(environment: environment, answeringAt: demoClient, context)
         if result.exitCode != 0 {
-            // No demo runs: later commands look for the normal app again.
             try? DemoPointer.remove(in: context.support)
         }
         return result
     }
 
-    /// Launches the app with `environment`, then asks `client` every quarter
-    /// second until it answers, or exit 1 after about 10 seconds.
     private static func launch(
         environment: [String: String], answeringAt client: ControlClient, _ context: Context
     ) -> CommandResult {
@@ -175,8 +138,6 @@ enum AppCommands {
         } catch {
             return .refused("havooch app open: \(error.reason)")
         }
-        // A starting app may accept a connection before it can answer, so
-        // each look waits briefly and a slow one is looked at again.
         var look = client
         look.timeout = lookTimeout
         for _ in 0..<looks {
@@ -189,8 +150,6 @@ enum AppCommands {
         return .refused("\(AppIdentity.appName) didn't answer within \(Int(wait)) seconds of launching")
     }
 
-    // MARK: - quit
-
     static func quit(_ context: Context) -> CommandResult {
         switch quitAndWait(context.client, context) {
         case .gone(let reply): CommandResult(output: reply?.output ?? "", error: reply?.error ?? "")
@@ -198,29 +157,20 @@ enum AppCommands {
         }
     }
 
-    /// How a quit went: the app is gone, with its last reply (none when it
-    /// never ran), or what to exit with.
     private enum Quit {
         case gone(ControlReply?)
         case stayed(CommandResult)
     }
 
-    /// What a relaunch adds to the launched app's environment: the lease
-    /// the quit's `reply` carries, when it carries one.
     private static func handover(_ reply: ControlReply?) -> [String: String] {
         reply?.lease.map(ControlLease.handover) ?? [:]
     }
 
-    /// Quits the app answering `client` and waits until it's gone. An app
-    /// that never ran is gone, with no reply.
     private static func quitIfRunning(_ client: ControlClient, _ context: Context) -> Quit {
         if case .failure(.notRunning) = client.send(.appStatus) { return .gone(nil) }
         return quitAndWait(client, context)
     }
 
-    /// Asks the app to quit; once it said it will, waits until nothing
-    /// answers on the socket, so a following `app open` launches a new app
-    /// instead of finding the old one.
     private static func quitAndWait(_ client: ControlClient, _ context: Context) -> Quit {
         let answer = client.send(.appQuit)
         guard case .success(let reply) = answer, reply.ok else { return .stayed(HavoochCLI.result(of: answer)) }

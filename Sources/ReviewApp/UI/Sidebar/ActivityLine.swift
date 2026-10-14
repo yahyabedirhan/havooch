@@ -1,21 +1,14 @@
 import ReviewCore
 import SwiftUI
 
-/// The activity, what the agent does now (`message state working` with a text):
-/// a quiet line with the working glyph, under the last message of the
-/// thread view's conversation, where the agent's next message will come.
-/// It shows while an agent is there and the line's message works; `done`
-/// or `failed` clears it.
 struct ThreadActivity: View {
     let model: WindowModel
     let thread: ThreadID
 
     var body: some View {
-        // Each second: an agent that stops answering takes its line with it.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             if let activity = model.listener?.activity(on: thread, at: context.date) {
                 ActivityLine(text: activity.text, agent: model.agentName)
-                    // Under the agent's bubbles, past the avatar's column.
                     .padding(.leading, MessageBubble.avatar + 8)
                     .padding(.trailing, MessageBubble.agentInset)
                     .padding(.top, MessageBubble.gap)
@@ -25,8 +18,6 @@ struct ThreadActivity: View {
     }
 }
 
-/// The live line itself: the working glyph, pulsing unless motion is
-/// reduced, and the agent's words in the secondary colour.
 struct ActivityLine: View {
     let text: String
     let agent: String
@@ -51,7 +42,6 @@ struct ActivityLine: View {
         .accessibilityLabel(Self.voice(agent: agent, text: text))
     }
 
-    /// What VoiceOver reads for an activity: `Claude Code now: Rendering`.
     static func voice(agent: String, text: String) -> String {
         "\(agent) now: \(text)"
     }

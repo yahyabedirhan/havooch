@@ -1,21 +1,12 @@
 import ReviewCore
 import SwiftUI
 
-/// The quick replies under a thread's open question in the thread view: a
-/// "Quick reply" label, then one chip button per choice the agent gave with
-/// its `ask`. A click answers with the choice at once, as Return in the
-/// answer field does. The row hides while the person points at a region:
-/// while a rectangle is drawn, and while a drawn one waits in the composer,
-/// since the composer's words then go as a message, not an answer.
 struct QuickReplies: View {
     let model: WindowModel
     let thread: ThreadID
     let choices: [String]
     @Environment(\.palette) private var palette
 
-    /// The choices to show under `thread`'s open question: none when it has
-    /// no open question, when the question has none, or while the person
-    /// points at a region.
     static func choices(of thread: ReviewThread, isPointingAtRegion: Bool) -> [String] {
         guard !isPointingAtRegion else { return [] }
         return thread.openQuestion?.choices ?? []
@@ -41,8 +32,6 @@ struct QuickReplies: View {
     }
 }
 
-/// One quick reply: the choice's words in a capsule tinted with `question`,
-/// filled on hover.
 private struct QuickReplyChip: View {
     let model: WindowModel
     let title: String
@@ -73,8 +62,6 @@ private struct QuickReplyChip: View {
     }
 }
 
-/// Lays its views out in rows, left to right, starting a new row when the
-/// next one doesn't fit the width offered.
 private struct ChipFlow: Layout {
     var spacing: CGFloat
 

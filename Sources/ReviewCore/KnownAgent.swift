@@ -9,8 +9,6 @@ import Foundation
 public enum KnownAgent: String, CaseIterable, Hashable, Sendable {
     case claude, codex, opencode, cursor, pi, gemini, copilot, amp, droid
 
-    /// The one table: each agent's names as a session may be named
-    /// (lowercase, without spaces or dashes), and its logo.
     private var entry: (aliases: Set<String>, logo: AgentLogo) {
         switch self {
         case .claude: (["claude", "claudecode"], AgentLogo("claude"))
@@ -37,7 +35,6 @@ public enum KnownAgent: String, CaseIterable, Hashable, Sendable {
         let words = sender.lowercased()
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
             .map(String.init)
-        // The longest run of leading words that names an agent.
         for count in stride(from: words.count, through: 1, by: -1) {
             let name = words.prefix(count).joined()
             if let agent = Self.allCases.first(where: { $0.entry.aliases.contains(name) }) {

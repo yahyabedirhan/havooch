@@ -38,21 +38,14 @@ public struct AppLaunchFailure: Error, Equatable, Sendable {
 /// Launches through Launch Services (`NSWorkspace`), without bringing the
 /// app forward unless asked: the agent's terminal keeps the focus.
 public struct WorkspaceLauncher: AppLaunching {
-    /// The `havooch` executable that runs, when it's known.
     var command: URL?
-    /// How long to wait for Launch Services to say the app started.
     var timeout: TimeInterval = 10
-    /// How long to wait for a copy of the app to end before launching.
     var quitGrace: TimeInterval = 5
 
     public init(command: URL?) {
         self.command = command
     }
 
-    /// The app to launch: the bundle this command ships in
-    /// (`<app>/Contents/Helpers/havooch`), so each build's command
-    /// starts its own app; else the installed app with this build's bundle
-    /// id.
     static func bundle(of command: URL?) -> URL? {
         if let command {
             let bundle = command.resolvingSymlinksInPath()
@@ -66,17 +59,7 @@ public struct WorkspaceLauncher: AppLaunching {
         guard let url = Self.bundle(of: command) else {
             throw AppLaunchFailure("\(AppIdentity.appName) isn't installed (no app with the bundle id \(AppIdentity.bundleID)); run `make install`")
         }
-        // A launch in front (`havooch open`) never waits for a copy, and
-        // never quits one: a copy that runs is the person's app, which
-        // Launch Services brings forward as it is.
-        // An app just asked to quit removes its socket before its process
-        // ends; Launch Services would hand that process back instead of
-        // starting one with this environment, so let it finish first.
         if !inFront { waitWhileRunning() }
-        // A copy still there isn't quitting: it's starting (`make install`
-        // just opened it) or it runs without app control. Launch Services
-        // would hand it back as it is, on its own data, so when the launch
-        // needs an environment that copy is asked to quit first.
         if !inFront, !environment.isEmpty, !Self.running.isEmpty {
             for app in Self.running { app.terminate() }
             waitWhileRunning()
@@ -108,12 +91,10 @@ public struct WorkspaceLauncher: AppLaunching {
         NSRunningApplication(processIdentifier: pid)?.activate() ?? false
     }
 
-    /// The copies of this build's app that run.
     private static var running: [NSRunningApplication] {
         NSRunningApplication.runningApplications(withBundleIdentifier: AppIdentity.bundleID).filter { !$0.isTerminated }
     }
 
-    /// Waits until no copy of the app runs, `quitGrace` at most.
     private func waitWhileRunning() {
         let deadline = Date().addingTimeInterval(quitGrace)
         while Date() < deadline, !Self.running.isEmpty {
@@ -121,9 +102,6 @@ public struct WorkspaceLauncher: AppLaunching {
         }
     }
 
-    /// The completion handler's answer, read after the semaphore. Launch
-    /// Services calls the handler on its own queue, so the answer crosses
-    /// threads behind a lock.
     private final class LaunchOutcome: Sendable {
         let error = Mutex<String?>(nil)
     }

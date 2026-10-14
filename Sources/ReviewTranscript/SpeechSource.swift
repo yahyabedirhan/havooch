@@ -30,7 +30,6 @@ public final class SpeechSource: Transcriber {
 
     private let recognizer: any SpeechRecognizing
     private let cache: Cache
-    /// The transcripts of this run, by content hash.
     private let known = Mutex<[String: Transcript]>([:])
 
     public init(recognizer: any SpeechRecognizing, cache: Cache = .none) {
@@ -46,7 +45,6 @@ public final class SpeechSource: Transcriber {
         if let transcript = known.withLock({ $0[video.contentHash] }) { return transcript }
         guard let kept = cache.load(video), kept.complete, kept.source == .speech else { return Self.empty }
         return known.withLock { known in
-            // A transcription that started meanwhile has the say.
             if let transcript = known[video.contentHash] { return transcript }
             known[video.contentHash] = kept
             return kept
@@ -67,8 +65,6 @@ public final class SpeechSource: Transcriber {
         Task(priority: .utility) { [self] in await transcribe(video) }
     }
 
-    /// Off the caller's actor: the recognizer's stream and the cache's file
-    /// are slow.
     @concurrent
     private func transcribe(_ video: VideoFile) async {
         if let cached = cache.load(video), cached.complete, cached.source == .speech {
@@ -84,13 +80,11 @@ public final class SpeechSource: Transcriber {
                 )
                 known.withLock { $0[video.contentHash]?.lines.append(line) }
             }
-            // Kept first: a transcript that reads as complete is on disk.
             guard var done = known.withLock({ $0[video.contentHash] }) else { return }
             done.complete = true
             cache.save(done, video)
             known.withLock { $0[video.contentHash] = done }
         } catch {
-            // The lines that arrived stay; the rest never comes.
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             known.withLock { $0[video.contentHash]?.problem = reason }
         }

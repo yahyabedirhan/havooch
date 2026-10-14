@@ -55,7 +55,6 @@ public struct Settings: Codable, Equatable, Sendable {
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            // Present as null is not absent: the file still has the key to retire.
             theme = container.contains(.theme) ? .some(try container.decodeIfPresent(String.self, forKey: .theme)) : nil
             overrides = try container.decodeIfPresent([String: String].self, forKey: .overrides)
         }

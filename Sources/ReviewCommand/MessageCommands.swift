@@ -1,13 +1,7 @@
 import Foundation
 import ReviewWire
 
-/// `havooch message add | edit | delete | send | state`: the queue of
-/// messages on the open video, as the person writes, changes, removes and
-/// sends them, under the lease; and the listener's state of a message,
-/// with no lease.
 enum MessageCommands {
-    /// The listener's word for a message's state, which the top help lists
-    /// with the listener's loop: its name lives here alone.
     static let state = Command(
         name: "message state", arguments: "<message-id> working|done|failed [<text>]",
         summary: "say a message is working, done or failed",
@@ -22,7 +16,6 @@ enum MessageCommands {
         guard let state = ControlRequest.Status(rawValue: words[1]) else {
             throw UsageError("`\(words[1])` isn't a state; write `working`, `done` or `failed`")
         }
-        // Only work in progress has a "now": done and failed clear the line.
         let most = state == .working ? 3 : 2
         guard words.count <= most else { throw UsageError("unexpected `\(words[most])`") }
         return .send(.status(messageID: words[0], state: state, text: words.count == 3 ? words[2] : nil))
@@ -74,8 +67,6 @@ enum MessageCommands {
         ]
     )
 
-    /// The `--region x,y,w,h` written, if any: a message's, the popover's
-    /// or the composer's region on the frame.
     static func region(_ arguments: Arguments) throws(UsageError) -> ControlRequest.Rectangle? {
         guard let numbers = arguments.options["--region"] else { return nil }
         guard let rectangle = ControlRequest.Rectangle(numbers) else {
