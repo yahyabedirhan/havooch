@@ -21,24 +21,24 @@ enum Shortcuts {
         keyCode: UInt16, modifiers: NSEvent.ModifierFlags, isTyping: Bool = false, isControlFocused: Bool = false
     ) -> Action? {
         let held = modifiers.intersection([.command, .option, .control, .shift])
-        if held == .command, keyCode == 36 || keyCode == 76 { return .send }
+        if held == .command, keyCode == KeyCode.returnKey || keyCode == KeyCode.keypadEnter { return .send }
         guard !isTyping, held.isDisjoint(with: [.command, .option, .control]) else { return nil }
-        if isControlFocused, held.isEmpty, [49, 36, 76].contains(keyCode) { return .pressControl }
+        if isControlFocused, held.isEmpty, [KeyCode.space, KeyCode.returnKey, KeyCode.keypadEnter].contains(keyCode) { return .pressControl }
         let shift = modifiers.contains(.shift)
         switch keyCode {
-        case 49, 40: return shift ? nil : .togglePlay
-        case 123: return shift ? .step(frames: -1) : .skip(seconds: -skip)
-        case 124: return shift ? .step(frames: 1) : .skip(seconds: skip)
-        case 38: return shift ? nil : .skip(seconds: -longSkip)
-        case 37: return shift ? nil : .skip(seconds: longSkip)
-        case 43: return shift ? nil : .step(frames: -1)
-        case 47: return shift ? nil : .step(frames: 1)
-        case 126: return shift ? nil : .marker(forward: false)
-        case 125: return shift ? nil : .marker(forward: true)
-        case 8, 36, 76: return shift ? nil : .startMessage
-        case 53: return .cancel
-        case 42: return shift ? nil : .flip
-        case 46: return shift ? nil : .toggleMute
+        case KeyCode.space, KeyCode.k: return shift ? nil : .togglePlay
+        case KeyCode.leftArrow: return shift ? .step(frames: -1) : .skip(seconds: -skip)
+        case KeyCode.rightArrow: return shift ? .step(frames: 1) : .skip(seconds: skip)
+        case KeyCode.j: return shift ? nil : .skip(seconds: -longSkip)
+        case KeyCode.l: return shift ? nil : .skip(seconds: longSkip)
+        case KeyCode.comma: return shift ? nil : .step(frames: -1)
+        case KeyCode.period: return shift ? nil : .step(frames: 1)
+        case KeyCode.upArrow: return shift ? nil : .marker(forward: false)
+        case KeyCode.downArrow: return shift ? nil : .marker(forward: true)
+        case KeyCode.c, KeyCode.returnKey, KeyCode.keypadEnter: return shift ? nil : .startMessage
+        case KeyCode.escape: return .cancel
+        case KeyCode.backslash: return shift ? nil : .flip
+        case KeyCode.m: return shift ? nil : .toggleMute
         default: return nil
         }
     }

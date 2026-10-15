@@ -133,9 +133,9 @@ struct SoundTests {
 
     @Test("M mutes and unmutes, and is no key while the person types")
     func muteKey() {
-        #expect(Shortcuts.action(keyCode: 46, modifiers: []) == .toggleMute)
-        #expect(Shortcuts.action(keyCode: 46, modifiers: .shift) == nil)
-        #expect(Shortcuts.action(keyCode: 46, modifiers: [], isTyping: true) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.m, modifiers: []) == .toggleMute)
+        #expect(Shortcuts.action(keyCode: KeyCode.m, modifiers: .shift) == nil)
+        #expect(Shortcuts.action(keyCode: KeyCode.m, modifiers: [], isTyping: true) == nil)
     }
 
     @Test("the capsule's level is where the pointer is on it: the top 1, the middle 0.5, the bottom few points 0", arguments: [
