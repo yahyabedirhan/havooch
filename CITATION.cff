@@ -8,7 +8,7 @@ authors:
     given-names: "Yahya Bedirhan"
 repository-code: "https://github.com/yahyabedirhan/havooch"
 url: "https://github.com/yahyabedirhan/havooch"
-license: MIT
+license: Apache-2.0
 keywords:
   - macos
   - video player
