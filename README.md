@@ -112,6 +112,8 @@ make install   # build, replace /Applications/Havooch.app and open it
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+The code is licensed under the [Apache License 2.0](LICENSE). See [LICENSE](LICENSE) and [NOTICE](NOTICE). If you use or adapt it, please credit Yahya Bedirhan Pak with a link to [yahyapak.dev](https://yahyapak.dev).
+
+The project name, the logo in `assets/images/logo/` and the screenshots in `assets/screenshots/` are not covered by this license and are all rights reserved. The bundled agent logos and theme colours are their owners'; see `Packaging/AgentLogos/NOTICE.md` and `Packaging/Themes/NOTICE.md`.
 
 If you use Havooch, or build on its code or its ideas, please cite it. GitHub's **Cite this repository** button gives you the reference, from [`CITATION.cff`](CITATION.cff).
